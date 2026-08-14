@@ -1,0 +1,381 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import propertyService from '../services/propertyService';
+
+const LandownerContext = createContext();
+
+// Mock IDs to filter out so dummy data is completely removed
+const MOCK_IDS = ['p_1', 'p_2', 'inv_1', 'inv_2', 'h_op_1', 'h_op_2', 'hr_1', 'tl_1'];
+const filterOutMockData = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.filter(item => item && !MOCK_IDS.includes(item.id) && !MOCK_IDS.includes(item._id));
+};
+
+export const LandownerProvider = ({ children }) => {
+    // 1. Initial Properties State (Only user added or DB properties)
+    const [properties, setProperties] = useState(() => {
+        try {
+            const stored = localStorage.getItem('treeconnect_properties');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                return filterOutMockData(parsed);
+            }
+        } catch (e) {
+            console.warn("Could not load properties from localStorage:", e);
+        }
+        return [];
+    });
+
+    // 2. Initial Tree Inventories State (Only user added inventories)
+    const [inventories, setInventories] = useState(() => {
+        try {
+            const stored = localStorage.getItem('treeconnect_inventories');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                return filterOutMockData(parsed);
+            }
+        } catch (e) {
+            console.warn("Could not load tree inventories from localStorage:", e);
+        }
+        return [];
+    });
+
+    // 3. Initial Completed Harvesting Operations State
+    const [completedHarvests, setCompletedHarvests] = useState(() => {
+        try {
+            const stored = localStorage.getItem('treeconnect_completed_harvests');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                return filterOutMockData(parsed);
+            }
+        } catch (e) {
+            console.warn("Could not load completed harvests from localStorage:", e);
+        }
+        return [];
+    });
+
+    // 4. Initial Harvest Requests State
+    const [harvestRequests, setHarvestRequests] = useState(() => {
+        try {
+            const stored = localStorage.getItem('treeconnect_harvest_requests');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                return filterOutMockData(parsed);
+            }
+        } catch (e) {
+            console.warn("Could not load harvest requests from localStorage:", e);
+        }
+        return [];
+    });
+
+    // 5. Initial Timber Listings State
+    const [timberListings, setTimberListings] = useState(() => {
+        try {
+            const stored = localStorage.getItem('treeconnect_timber_listings');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                return filterOutMockData(parsed);
+            }
+        } catch (e) {
+            console.warn("Could not load timber listings from localStorage:", e);
+        }
+        return [];
+    });
+
+    // Sync properties with backend database on mount
+    useEffect(() => {
+        const fetchDBProperties = async () => {
+            try {
+                const data = await propertyService.getProperties();
+                if (data && data.properties && data.properties.length > 0) {
+                    const cleanDBProps = filterOutMockData(data.properties);
+                    setProperties(prev => {
+                        const propMap = new Map();
+
+                        // Start with current local user properties
+                        prev.forEach(p => {
+                            const key = p.id || p._id;
+                            if (key) propMap.set(key, p);
+                        });
+
+                        // Merge in backend DB properties
+                        cleanDBProps.forEach(p => {
+                            const key = p.id || p._id;
+                            const existing = propMap.get(key);
+                            propMap.set(key, {
+                                ...p,
+                                approxTreesCount: existing?.approxTreesCount || p.approxTreesCount || 0,
+                                mainSpecies: existing?.mainSpecies || p.mainSpecies || 'Timber Trees'
+                            });
+                        });
+
+                        const merged = Array.from(propMap.values());
+                        try {
+                            localStorage.setItem('treeconnect_properties', JSON.stringify(merged));
+                        } catch (e) {}
+                        return merged;
+                    });
+                }
+            } catch (err) {
+                console.warn("Could not load properties from backend database, using local state:", err);
+            }
+        };
+
+        fetchDBProperties();
+    }, []);
+
+    // Persist properties to localStorage whenever updated
+    useEffect(() => {
+        try {
+            localStorage.setItem('treeconnect_properties', JSON.stringify(properties));
+        } catch (e) {}
+    }, [properties]);
+
+    // Persist inventories to localStorage whenever updated
+    useEffect(() => {
+        try {
+            localStorage.setItem('treeconnect_inventories', JSON.stringify(inventories));
+        } catch (e) {}
+    }, [inventories]);
+
+    // Persist completed harvest operations
+    useEffect(() => {
+        try {
+            localStorage.setItem('treeconnect_completed_harvests', JSON.stringify(completedHarvests));
+        } catch (e) {}
+    }, [completedHarvests]);
+
+    // Persist harvest requests
+    useEffect(() => {
+        try {
+            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(harvestRequests));
+        } catch (e) {}
+    }, [harvestRequests]);
+
+    // Persist timber listings
+    useEffect(() => {
+        try {
+            localStorage.setItem('treeconnect_timber_listings', JSON.stringify(timberListings));
+        } catch (e) {}
+    }, [timberListings]);
+
+    // Handlers
+    const addProperty = async (newProp) => {
+        const photosList = newProp.photos || [];
+        const videosList = newProp.videos || [];
+
+        let savedProp;
+        try {
+            // Save to MongoDB database via propertyService
+            const res = await propertyService.registerProperty({
+                ...newProp,
+                photos: photosList,
+                videos: videosList
+            });
+
+            savedProp = res.property || {
+                ...newProp,
+                id: `p_${Date.now()}`,
+                _id: `p_${Date.now()}`,
+                status: 'Active Estate',
+                createdAt: new Date().toISOString().split('T')[0],
+                photos: photosList,
+                videos: videosList
+            };
+        } catch (err) {
+            console.error("Error storing property in database:", err);
+            savedProp = {
+                ...newProp,
+                id: `p_${Date.now()}`,
+                _id: `p_${Date.now()}`,
+                status: 'Active Estate',
+                createdAt: new Date().toISOString().split('T')[0],
+                photos: photosList,
+                videos: videosList
+            };
+        }
+
+        setProperties(prev => {
+            const updated = [savedProp, ...prev.filter(p => p.id !== savedProp.id && p._id !== savedProp._id)];
+            try {
+                localStorage.setItem('treeconnect_properties', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+
+        return savedProp;
+    };
+
+    const addInventory = (newInv) => {
+        const createdInv = {
+            ...newInv,
+            id: `inv_${Date.now()}`,
+            updatedAt: new Date().toISOString().split('T')[0]
+        };
+
+        const updatedInventories = [createdInv, ...inventories];
+        setInventories(updatedInventories);
+        try {
+            localStorage.setItem('treeconnect_inventories', JSON.stringify(updatedInventories));
+        } catch (e) {
+            console.warn("Failed to persist tree inventories to localStorage:", e);
+        }
+
+        // Calculate tree count and primary species to update property summary state
+        let addedTreesCount = 0;
+        let primarySpecies = '';
+        if (newInv.speciesList && newInv.speciesList.length > 0) {
+            primarySpecies = newInv.speciesList[0].treeSpecies || newInv.speciesList[0].species || 'Teak';
+            newInv.speciesList.forEach(sp => {
+                addedTreesCount += Number(sp.numberOfTrees || sp.count || 0);
+            });
+        }
+
+        // Update target property summary fields in properties state
+        setProperties(prevProps => {
+            const updatedProps = prevProps.map(p => {
+                const isMatch = p.id === newInv.propertyId ||
+                                p._id === newInv.propertyId ||
+                                String(p.id) === String(newInv.propertyId) ||
+                                String(p._id) === String(newInv.propertyId);
+                if (isMatch) {
+                    const currentCount = typeof p.approxTreesCount === 'number'
+                        ? p.approxTreesCount
+                        : parseInt(p.approxTreesCount) || 0;
+                    return {
+                        ...p,
+                        mainSpecies: primarySpecies || p.mainSpecies || 'Timber Trees',
+                        approxTreesCount: currentCount + addedTreesCount
+                    };
+                }
+                return p;
+            });
+            try {
+                localStorage.setItem('treeconnect_properties', JSON.stringify(updatedProps));
+            } catch (e) {}
+            return updatedProps;
+        });
+
+        return createdInv;
+    };
+
+    const addHarvestRequest = (newReq) => {
+        const createdReq = {
+            ...newReq,
+            id: `hr_${Date.now()}`,
+            status: 'Pending Contractor Response',
+            submittedAt: new Date().toISOString().split('T')[0]
+        };
+        setHarvestRequests(prev => {
+            const updated = [createdReq, ...prev];
+            try {
+                localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+        return createdReq;
+    };
+
+    const addTimberListing = (newListing) => {
+        const createdListing = {
+            ...newListing,
+            id: `tl_${Date.now()}`,
+            status: newListing.status || 'Published',
+            createdAt: new Date().toISOString().split('T')[0],
+            images: newListing.images || []
+        };
+        setTimberListings(prev => {
+            const updated = [createdListing, ...prev];
+            try {
+                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+        return createdListing;
+    };
+
+    const updateListingStatus = (id, newStatus) => {
+        setTimberListings(prev => {
+            const updated = prev.map(l => l.id === id ? { ...l, status: newStatus } : l);
+            try {
+                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+    };
+
+    const updateProperty = async (id, updatedFields) => {
+        try {
+            await propertyService.updateProperty(id, updatedFields);
+        } catch (err) {
+            console.error("Error updating property in DB:", err);
+        }
+
+        setProperties(prev => {
+            const updated = prev.map(p => {
+                if (p.id === id || p._id === id) {
+                    const photosList = updatedFields.photos || p.photos || [];
+                    return {
+                        ...p,
+                        ...updatedFields,
+                        image: photosList.length > 0 ? photosList[0] : (updatedFields.image || p.image)
+                    };
+                }
+                return p;
+            });
+            try {
+                localStorage.setItem('treeconnect_properties', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+    };
+
+    const deleteProperty = async (id) => {
+        try {
+            await propertyService.deleteProperty(id);
+        } catch (err) {
+            console.error("Error deleting property from DB:", err);
+        }
+
+        setProperties(prev => {
+            const updated = prev.filter(p => p.id !== id && p._id !== id);
+            try {
+                localStorage.setItem('treeconnect_properties', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+
+        // Also clean up inventories for deleted property
+        setInventories(prev => {
+            const updated = prev.filter(inv => inv.propertyId !== id && String(inv.propertyId) !== String(id));
+            try {
+                localStorage.setItem('treeconnect_inventories', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+        });
+    };
+
+    return (
+        <LandownerContext.Provider
+            value={{
+                properties,
+                inventories,
+                completedHarvests,
+                harvestRequests,
+                timberListings,
+                addProperty,
+                registerPropertyRecord: addProperty,
+                updateProperty,
+                deleteProperty,
+                addInventory,
+                addHarvestRequest,
+                addTimberListing,
+                updateListingStatus
+            }}
+        >
+            {children}
+        </LandownerContext.Provider>
+    );
+};
+
+export const useLandowner = () => useContext(LandownerContext);
+

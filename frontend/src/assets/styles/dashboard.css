@@ -1,0 +1,4 @@
+/* Supplemental dashboard stylesheet importable into index.css or individual components */
+.dashboard-custom-accent {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+}
