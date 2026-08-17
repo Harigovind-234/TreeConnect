@@ -154,7 +154,7 @@ const FileUploadCard = ({
   };
 
   return (
-    <div className="w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-6 sm:p-7 shadow-lg transition-all duration-200 hover:border-emerald-500/30">
+    <div className="w-full bg-[#0e1612] rounded-2xl border border-emerald-500/15 p-6 sm:p-7 shadow-lg transition-all duration-200 hover:border-emerald-500/35">
       {/* Header Section */}
       <div className="mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
@@ -163,31 +163,31 @@ const FileUploadCard = ({
             {isRequired ? (
               <span className="text-emerald-400 font-extrabold text-base">*</span>
             ) : (
-              <span className="text-emerald-300 text-xs font-bold uppercase tracking-wider bg-emerald-950 px-3 py-1 rounded-md border border-emerald-800">
+              <span className="text-emerald-300 text-xs font-bold uppercase tracking-wider bg-emerald-500/15 px-3 py-1 rounded-md border border-emerald-500/30">
                 Optional
               </span>
             )}
           </label>
         </div>
         {activeHelperText && (
-          <p className="text-sm sm:text-base text-slate-300 font-medium leading-relaxed mt-2.5">{activeHelperText}</p>
+          <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed mt-2">{activeHelperText}</p>
         )}
       </div>
 
       {/* Select Document Type Dropdown (If provided e.g. for Govt ID) */}
       {docTypes.length > 0 && (
         <div className="mb-6 mt-2 pt-2">
-          <label className="block text-xs sm:text-sm font-bold text-slate-200 uppercase tracking-wider mb-3">
+          <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
             Select Document Type <span className="text-emerald-400">*</span>
           </label>
           <select
             value={selectedDocType || ''}
             onChange={(e) => onDocTypeChange && onDocTypeChange(e.target.value)}
-            className="w-full form-input-56 bg-slate-950 border-slate-700 text-white font-semibold text-sm sm:text-base rounded-xl focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-sm"
+            className="w-full form-input-56 bg-[#0a0f0d] border-emerald-500/20 text-white font-semibold text-sm rounded-xl focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-sm"
           >
-            <option value="" disabled className="bg-slate-900 text-slate-400">-- Select Identity Document Type --</option>
+            <option value="" disabled className="bg-[#0a0f0d] text-slate-400">-- Select Identity Document Type --</option>
             {docTypes.map((type) => (
-              <option key={type} value={type} className="bg-slate-900 text-white font-medium">
+              <option key={type} value={type} className="bg-[#0a0f0d] text-white font-medium">
                 {type}
               </option>
             ))}
@@ -197,15 +197,15 @@ const FileUploadCard = ({
 
       {/* Optional Document Examples List */}
       {examples.length > 0 && (
-        <div className="mb-6 mt-2 p-4 rounded-xl bg-slate-950/80 border border-slate-800">
-          <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-3">
+        <div className="mb-6 mt-2 p-4 rounded-xl bg-[#0a0f0d] border border-emerald-500/15">
+          <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-2.5">
             Recommended Examples:
           </span>
           <div className="flex flex-wrap gap-2">
             {examples.map((ex, idx) => (
               <span
                 key={idx}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 text-slate-200 border border-slate-700 inline-flex items-center gap-1.5 shadow-sm"
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#18241e] text-slate-200 border border-emerald-500/20 inline-flex items-center gap-1.5 shadow-sm"
               >
                 <span className="text-emerald-400 font-bold">•</span> {ex}
               </span>
@@ -223,8 +223,8 @@ const FileUploadCard = ({
           onClick={() => fileInputRef.current?.click()}
           className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer group flex flex-col items-center justify-center ${
             isDragging
-              ? 'border-emerald-500 bg-emerald-950/30 scale-[0.99]'
-              : 'border-slate-700 hover:border-emerald-500/60 bg-slate-950/60 hover:bg-slate-950/90'
+              ? 'border-emerald-500 bg-emerald-500/15 scale-[0.99]'
+              : 'border-emerald-500/25 hover:border-emerald-500/60 bg-[#0a0f0d] hover:bg-[#0e1612]'
           }`}
         >
           <input
@@ -236,7 +236,7 @@ const FileUploadCard = ({
             className="hidden"
           />
 
-          <div className="w-12 h-12 rounded-2xl bg-emerald-950/80 border border-emerald-800/60 text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-emerald-900/80 transition-all shadow-md">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-emerald-500/25 transition-all shadow-md">
             <UploadCloud size={24} />
           </div>
 
@@ -257,7 +257,7 @@ const FileUploadCard = ({
               e.stopPropagation();
               fileInputRef.current?.click();
             }}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-emerald-600 hover:text-white text-white text-xs font-bold transition-all border border-slate-700 hover:border-emerald-500 shadow-sm flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-[#18241e] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 text-xs font-bold transition-all border border-emerald-500/30 shadow-sm flex items-center gap-2 cursor-pointer"
           >
             <UploadCloud size={14} />
             <span>Browse Files</span>
@@ -265,7 +265,7 @@ const FileUploadCard = ({
         </div>
       ) : uploadProgress !== null ? (
         /* Uploading Progress State */
-        <div className="border border-emerald-500/40 rounded-xl p-5 bg-emerald-950/30 text-center">
+        <div className="border border-emerald-500/40 rounded-xl p-5 bg-emerald-500/10 text-center">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-emerald-300 flex items-center gap-2">
               <UploadCloud size={16} className="animate-bounce text-emerald-400" />
@@ -273,7 +273,7 @@ const FileUploadCard = ({
             </span>
             <span className="text-xs font-bold text-emerald-400">{uploadProgress}%</span>
           </div>
-          <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-emerald-900">
+          <div className="w-full bg-[#0a0f0d] rounded-full h-2 overflow-hidden border border-emerald-500/20">
             <div
               className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-150 ease-out"
               style={{ width: `${uploadProgress}%` }}
@@ -282,10 +282,10 @@ const FileUploadCard = ({
         </div>
       ) : (
         /* Uploaded File Preview State */
-        <div className="border border-emerald-500/40 rounded-xl p-4 bg-slate-950/90 flex items-center justify-between gap-4 shadow-inner">
+        <div className="border border-emerald-500/30 rounded-xl p-4 bg-[#0a0f0d] flex items-center justify-between gap-4 shadow-inner">
           <div className="flex items-center gap-3 overflow-hidden">
             {activeFileData?.isImage && activeFileData?.previewUrl ? (
-              <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-700 flex-shrink-0 bg-slate-900 group">
+              <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-[#0e1612] group">
                 <img
                   src={activeFileData.previewUrl}
                   alt={activeFileData.name}
@@ -296,7 +296,7 @@ const FileUploadCard = ({
                 </div>
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-emerald-950 border border-emerald-800 text-emerald-400 flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center flex-shrink-0">
                 <FileText size={22} />
               </div>
             )}
@@ -321,7 +321,7 @@ const FileUploadCard = ({
             <button
               type="button"
               onClick={handleRemoveFile}
-              className="p-2 rounded-lg bg-slate-800/80 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all border border-slate-700 hover:border-red-500/40 cursor-pointer"
+              className="p-2 rounded-lg bg-[#18241e] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all border border-emerald-500/20 hover:border-rose-500/40 cursor-pointer"
               title="Remove file"
             >
               <X size={16} />
@@ -332,7 +332,7 @@ const FileUploadCard = ({
 
       {/* Error Displays */}
       {(localError || error) && (
-        <div className="mt-2.5 p-2.5 rounded-xl bg-red-950/40 border border-red-800/50 flex items-center gap-2 text-red-400 text-xs font-medium">
+        <div className="mt-2.5 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-rose-300 text-xs font-medium">
           <AlertCircle size={15} className="flex-shrink-0" />
           <span>{localError || error}</span>
         </div>

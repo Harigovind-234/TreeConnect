@@ -29,7 +29,11 @@ import {
   CheckCircle2,
   Package,
   Sparkles,
-  ChevronRight as ChevronRightIcon
+  Search,
+  Database,
+  Building2,
+  Mail,
+  Loader2
 } from 'lucide-react';
 
 const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=1200&q=80';
@@ -37,6 +41,10 @@ const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-
 const PropertiesPage = () => {
   const navigate = useNavigate();
   const { properties, inventories, updateProperty, deleteProperty } = useLandowner();
+
+  // Search & District Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [districtFilter, setDistrictFilter] = useState('all');
 
   // Modal States
   const [activeMediaModal, setActiveMediaModal] = useState(null); // { photos: [], videos: [], title: '', index: 0, activeTab: 'photos' }
@@ -140,11 +148,34 @@ const PropertiesPage = () => {
     };
   };
 
-  // Summary Metrics across all landowner properties
+  // Summary Metrics & Filtered Properties
   const normalizedProperties = (properties || []).map(getNormalizedProperty);
   const totalEstatesCount = normalizedProperties.length;
   const totalTreesLogged = normalizedProperties.reduce((acc, p) => acc + p.totalTrees, 0);
   const totalHazardsFlagged = normalizedProperties.filter(p => p.hasSafetyHazard).length;
+
+  const filteredProperties = normalizedProperties.filter((p) => {
+    const matchesSearch =
+      !searchQuery ||
+      p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.ownerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.district?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.state?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.localBody?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.village?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.pinCode?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesDistrict =
+      districtFilter === 'all' || p.district?.toLowerCase() === districtFilter.toLowerCase();
+
+    return matchesSearch && matchesDistrict;
+  });
+
+  const districtsList = Array.from(
+    new Set(normalizedProperties.map((p) => p.district).filter(Boolean))
+  );
 
   // Handlers for Edit Modal
   const openEditModal = (normProp) => {
@@ -224,326 +255,383 @@ const PropertiesPage = () => {
   };
 
   return (
-    <div className="dashboard-layout min-h-screen bg-[#070b09] text-slate-100 flex flex-col font-sans">
+    <div className="landowner-dashboard-page">
       <Navbar />
-      <div className="dashboard-body flex flex-1 overflow-hidden">
+      <div className="landowner-dashboard-container">
         <Sidebar />
 
-        <div className="dashboard-workspace flex-1 overflow-y-auto">
-          <main className="dashboard-content max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <div className="landowner-dashboard-workspace">
+          <main className="w-full flex flex-col gap-8">
             
-            {/* 1. PAGE HEADER REDESIGN */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-800/80">
-              <div className="space-y-1.5 max-w-2xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-800/50 text-emerald-400 text-xs font-bold tracking-widest uppercase">
-                  <Trees size={14} className="text-emerald-400" />
-                  <span>Landowner Portal</span>
+            {/* Header Section styled after Landowner Dashboard */}
+            <section className="ld-card ld-hero-card">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="ld-hero-tag">
+                    <Trees size={14} /> FORESTRY ESTATE PORTFOLIO
+                  </div>
+                  <h1 className="ld-hero-heading mt-1">My Registered Properties</h1>
+                  <p className="ld-hero-subtext mt-1">
+                    Directory of your forest estates, plots, and land parcels registered for tree inventory and harvest management.
+                  </p>
                 </div>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                  My Properties
-                </h1>
-                <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
-                  Manage your registered properties, tree inventories, and timber operations.
-                </p>
+                
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="ld-pill">
+                    <Database size={13} className="text-emerald-400" /> <strong>{filteredProperties.length}</strong> Registered
+                  </span>
+
+                  <button
+                    onClick={() => navigate('/landowner/register-property')}
+                    className="ld-btn-green"
+                    style={{ padding: '10px 20px', fontSize: '13.5px', width: 'auto' }}
+                  >
+                    <Plus size={16} /> Register Property
+                  </button>
+                </div>
               </div>
 
-              {/* Primary Action Button */}
-              <button
-                onClick={() => navigate('/landowner/register-property')}
-                className="inline-flex items-center justify-center gap-2.5 h-12 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-sm shadow-lg shadow-emerald-950/50 hover:shadow-emerald-900/60 transition-all duration-200 w-full md:w-auto cursor-pointer group shrink-0"
-              >
-                <Plus size={18} className="group-hover:scale-110 transition-transform duration-200" />
-                <span>Register Property</span>
-              </button>
-            </div>
+              {/* Controls Bar: District Filter & Search Input */}
+              <div className="prop-controls-bar">
+                <div className="prop-filter-group">
+                  <span className="prop-filter-label">District:</span>
+                  <select
+                    value={districtFilter}
+                    onChange={(e) => setDistrictFilter(e.target.value)}
+                    className="prop-filter-select"
+                  >
+                    <option value="all">All Districts</option>
+                    {districtsList.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* 2. PROPERTY SUMMARY / CONTEXT BAR (Shown when properties exist) */}
+                <div className="prop-search-box">
+                  <Search size={18} className="prop-search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search by property name, village, local body, district, PIN..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="prop-search-input"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="prop-search-clear"
+                      title="Clear search"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Active Filter Metrics Sub-bar */}
+              {(searchQuery || districtFilter !== 'all') && (
+                <div className="flex items-center justify-between text-xs pt-3 mt-3 border-t border-emerald-500/10 text-slate-300">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    Showing <strong className="text-emerald-400 font-bold">{filteredProperties.length}</strong> of <strong>{normalizedProperties.length}</strong> properties
+                    {districtFilter !== 'all' && <span> in <strong className="text-white">{districtFilter}</strong></span>}
+                    {searchQuery && <span> matching "<strong className="text-white">{searchQuery}</strong>"</span>}
+                  </span>
+                  <button
+                    onClick={() => { setSearchQuery(''); setDistrictFilter('all'); }}
+                    className="text-emerald-400 hover:text-emerald-300 hover:underline text-[11px] font-bold flex items-center gap-1 cursor-pointer ml-2 shrink-0"
+                  >
+                    <X size={12} /> Reset Filters
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* KPI Summary Context Cards */}
             {normalizedProperties.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900/50 border border-slate-800/80 backdrop-blur-sm">
-                <div className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-800/40 border border-slate-700/40">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Layers size={20} />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Registered Estates</div>
-                    <div className="text-lg font-bold text-white">{totalEstatesCount} {totalEstatesCount === 1 ? 'Estate' : 'Estates'}</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-800/40 border border-slate-700/40">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Trees size={20} />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Trees Logged</div>
-                    <div className="text-lg font-bold text-emerald-400">{totalTreesLogged} Trees</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-800/40 border border-slate-700/40">
-                  <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                    <ShieldAlert size={20} />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Safety Risks</div>
-                    <div className="text-lg font-bold text-amber-300">{totalHazardsFlagged} Flagged</div>
-                  </div>
-                </div>
-
-                <div className="col-span-2 sm:col-span-3 lg:col-span-1 flex items-center gap-3.5 p-3 rounded-xl bg-slate-800/40 border border-slate-700/40">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Sparkles size={20} />
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Portal Status</div>
-                    <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mt-0.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Verified Landowner
+              <div className="ld-kpi-grid">
+                <div className="ld-kpi-box">
+                  <div className="ld-kpi-header">
+                    <span className="ld-kpi-label">Registered Estates</span>
+                    <div className="ld-kpi-icon">
+                      <Layers size={18} />
                     </div>
+                  </div>
+                  <div className="ld-kpi-number">{totalEstatesCount} {totalEstatesCount === 1 ? 'Estate' : 'Estates'}</div>
+                </div>
+
+                <div className="ld-kpi-box">
+                  <div className="ld-kpi-header">
+                    <span className="ld-kpi-label">Trees Logged</span>
+                    <div className="ld-kpi-icon">
+                      <Trees size={18} />
+                    </div>
+                  </div>
+                  <div className="ld-kpi-number" style={{ color: '#34d399' }}>{totalTreesLogged} Trees</div>
+                </div>
+
+                <div className="ld-kpi-box">
+                  <div className="ld-kpi-header">
+                    <span className="ld-kpi-label">Safety Risks</span>
+                    <div className="ld-kpi-icon" style={{ color: '#fbbf24', background: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.28)' }}>
+                      <ShieldAlert size={18} />
+                    </div>
+                  </div>
+                  <div className="ld-kpi-number" style={{ color: '#fbbf24' }}>{totalHazardsFlagged} Flagged</div>
+                </div>
+
+                <div className="ld-kpi-box">
+                  <div className="ld-kpi-header">
+                    <span className="ld-kpi-label">Portal Status</span>
+                    <div className="ld-kpi-icon">
+                      <Sparkles size={18} />
+                    </div>
+                  </div>
+                  <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mt-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Verified Landowner
                   </div>
                 </div>
               </div>
             )}
 
-            {/* 3. PROPERTY CARDS GRID OR EMPTY STATE */}
-            {normalizedProperties.length === 0 ? (
-              /* 12. EMPTY STATE */
-              <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-8 sm:p-14 text-center max-w-xl mx-auto my-8 space-y-6 shadow-2xl backdrop-blur-md">
-                <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto shadow-inner">
-                  <Trees size={40} />
+            {/* Properties Grid or Empty State */}
+            {filteredProperties.length === 0 ? (
+              <div className="ld-card text-center py-16 space-y-4">
+                <Trees size={48} className="text-emerald-500/40 mx-auto" />
+                <h3 className="font-bold text-white text-lg">No Registered Properties Found</h3>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  {normalizedProperties.length === 0
+                    ? 'Register your first property to begin managing standing trees, tree inventories, and timber harvesting operations.'
+                    : 'No registered properties match your search or filter criteria. Try resetting your search query.'}
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => navigate('/landowner/register-property')}
+                    className="ld-btn-green inline-flex items-center gap-2 py-2.5 px-5 text-xs"
+                    style={{ width: 'auto' }}
+                  >
+                    <Plus size={16} />
+                    <span>Register Property</span>
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-white">No properties registered yet</h3>
-                  <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                    Register your first property to begin managing trees, tree inventories, and timber harvesting operations.
-                  </p>
-                </div>
-                <button
-                  onClick={() => navigate('/landowner/register-property')}
-                  className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-950/60 transition-all cursor-pointer"
-                >
-                  <Plus size={18} />
-                  <span>Register Property</span>
-                </button>
               </div>
             ) : (
-              /* DESKTOP 2-COLUMN GRID / TABLET & MOBILE 1-COLUMN */
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                {normalizedProperties.map((prop) => (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {filteredProperties.map((prop) => (
                   <div
                     key={prop.id}
-                    className="bg-slate-900/90 border border-slate-800/90 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700/80 hover:shadow-2xl hover:shadow-emerald-950/20 transition-all duration-300 flex flex-col group"
+                    className="ld-card p-6 flex flex-col justify-between space-y-5 transition-all duration-200 hover:border-emerald-500/40 shadow-xl"
                   >
-                    {/* 4. PROPERTY HERO IMAGE */}
-                    <div className="h-[200px] sm:h-[230px] w-full relative overflow-hidden bg-slate-950">
-                      <img
-                        src={prop.heroImage}
-                        alt={prop.name}
-                        className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500 ease-out"
-                        onError={(e) => {
-                          e.target.src = DEFAULT_PROPERTY_IMAGE;
-                        }}
-                      />
-                      {/* Gradient overlay at bottom so badges remain readable */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/30 to-transparent pointer-events-none" />
+                    <div className="space-y-4">
+                      {/* Property Hero Image Cover */}
+                      <div className="relative h-52 rounded-xl overflow-hidden bg-[#0e1612] border border-emerald-500/15 group">
+                        <img
+                          src={prop.heroImage}
+                          alt={prop.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            e.target.src = DEFAULT_PROPERTY_IMAGE;
+                          }}
+                        />
+                        {/* Gradient Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0d]/90 via-transparent to-[#0a0f0d]/30" />
 
-                      {/* Property Type Badge (Top Right Pill) */}
-                      <div className="absolute top-3 right-3 bg-slate-900/85 backdrop-blur-md border border-slate-700/60 text-emerald-400 text-xs px-3 py-1 rounded-full font-semibold shadow-md z-10 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                        <span>{prop.type}</span>
-                      </div>
+                        {/* Top Left Status Badge */}
+                        <div className="absolute top-3 left-3 z-10">
+                          <span className="ld-badge-green shadow-md backdrop-blur-md">
+                            ACTIVE ESTATE
+                          </span>
+                        </div>
 
-                      {/* Compact Glass-Style Media Indicators (Bottom Left) */}
-                      <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10">
-                        {prop.photos.length > 0 && (
-                          <button
-                            onClick={() => openMediaModal(prop, 'photos')}
-                            className="bg-slate-900/80 hover:bg-slate-900 backdrop-blur-md border border-slate-700/60 text-slate-200 hover:text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-                            title="Click to view photos"
-                          >
-                            <Camera size={13} className="text-emerald-400" />
-                            <span>{prop.photos.length} {prop.photos.length === 1 ? 'Photo' : 'Photos'}</span>
-                          </button>
+                        {/* Top Right Land Area Badge */}
+                        {prop.totalArea && (
+                          <div className="absolute top-3 right-3 z-10">
+                            <span className="ld-pill text-[11px] py-1 px-3 bg-[#0a0f0d]/80 backdrop-blur-md border-emerald-500/30">
+                              <Ruler size={12} className="text-emerald-400" />
+                              {prop.totalArea} {prop.areaUnit || 'Acres'}
+                            </span>
+                          </div>
                         )}
 
-                        {prop.videos.length > 0 && (
-                          <button
-                            onClick={() => openMediaModal(prop, 'videos')}
-                            className="bg-slate-900/80 hover:bg-slate-900 backdrop-blur-md border border-slate-700/60 text-slate-200 hover:text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
-                            title="Click to view videos"
-                          >
-                            <Video size={13} className="text-emerald-400" />
-                            <span>{prop.videos.length} {prop.videos.length === 1 ? 'Video' : 'Videos'}</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* CARD BODY CONTENT */}
-                    <div className="p-5 sm:p-6 space-y-5 flex-1 flex flex-col">
-                      
-                      {/* 5. PROPERTY INFORMATION */}
-                      <div className="space-y-2">
-                        <h2 className="text-xl sm:text-[22px] font-bold text-white tracking-tight line-clamp-2 leading-snug">
-                          {prop.name}
-                        </h2>
-                        
-                        <div className="text-xs sm:text-sm text-slate-400 flex items-start gap-2 leading-relaxed min-w-0 break-words">
-                          <MapPin size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                          <span className="min-w-0 break-words">{prop.address}</span>
+                        {/* Media Buttons bottom-left */}
+                        <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10">
+                          {prop.photos.length > 0 && (
+                            <button
+                              onClick={() => openMediaModal(prop, 'photos')}
+                              className="ld-pill text-[11px] py-1 px-2.5 bg-[#0a0f0d]/80 backdrop-blur-md border-emerald-500/30 hover:text-white cursor-pointer"
+                              title="Click to view photos"
+                            >
+                              <Camera size={12} className="text-emerald-400" />
+                              <span>{prop.photos.length} Photos</span>
+                            </button>
+                          )}
+                          {prop.videos.length > 0 && (
+                            <button
+                              onClick={() => openMediaModal(prop, 'videos')}
+                              className="ld-pill text-[11px] py-1 px-2.5 bg-[#0a0f0d]/80 backdrop-blur-md border-emerald-500/30 hover:text-white cursor-pointer"
+                              title="Click to view videos"
+                            >
+                              <Video size={12} className="text-emerald-400" />
+                              <span>{prop.videos.length} Videos</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {/* 6. GPS / MAP LOCATION ROW */}
-                      <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-xl px-3.5 py-2.5 text-xs font-medium flex items-center justify-between gap-2 text-emerald-300/90">
-                        <div className="flex items-center gap-2 truncate">
-                          <Compass size={14} className="text-emerald-400 shrink-0" />
-                          <span className="truncate font-mono">◎ {prop.lat}°, {prop.lng}°</span>
-                        </div>
-                        <a
-                          href={prop.mapUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-semibold underline underline-offset-2 shrink-0 transition-colors"
-                        >
-                          <span>View Map</span>
-                          <ExternalLink size={12} />
-                        </a>
-                      </div>
-
-                      {/* 7. LAND AREA / TREE INVENTORY METRICS */}
-                      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                        <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3.5 sm:p-4 hover:border-slate-600/50 transition-colors">
-                          <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-1">
-                            Land Area
-                          </div>
-                          <div className="text-lg sm:text-xl font-extrabold text-white">
-                            {prop.totalArea} <span className="text-xs sm:text-sm font-normal text-slate-400">{prop.areaUnit}</span>
-                          </div>
-                        </div>
-
-                        <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3.5 sm:p-4 hover:border-slate-600/50 transition-colors">
-                          <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-1">
-                            Tree Inventory
-                          </div>
-                          <div className="text-lg sm:text-xl font-extrabold text-emerald-400">
-                            {prop.totalTrees} {prop.totalTrees === 1 ? 'Tree' : 'Trees'} <span className="text-xs font-semibold text-emerald-500/80">Logged</span>
-                          </div>
+                      {/* Title & Category Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-xl font-extrabold text-white tracking-tight leading-snug">
+                            {prop.name}
+                          </h3>
+                          <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-1">
+                            <Building2 size={13} className="text-emerald-400 shrink-0" />
+                            <span>{prop.type || 'Residential Property'}</span>
+                          </p>
                         </div>
                       </div>
 
-                      {/* 8. SAFETY & HAZARD SECTION */}
+                      {/* Spacious 2-Column Info Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {/* Owner Details Card */}
+                        <div className="ld-subcard space-y-2 text-xs">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-emerald-500/10 pb-1 flex items-center justify-between">
+                            <span>Owner Details</span>
+                            <User size={12} className="text-emerald-400" />
+                          </div>
+                          
+                          <div className="flex justify-between items-center pt-0.5">
+                            <span className="text-slate-400 text-[11px]">Owner Name:</span>
+                            <span className="font-bold text-white truncate max-w-[130px]">{prop.ownerName || 'Landowner'}</span>
+                          </div>
+
+                          {prop.contactNumber && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-400 text-[11px]">Contact Phone:</span>
+                              <span className="font-bold text-slate-200">{prop.contactNumber}</span>
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center pt-1 border-t border-emerald-500/10">
+                            <span className="text-slate-400 text-[11px]">Tree Count:</span>
+                            <span className="font-extrabold text-emerald-400 flex items-center gap-1">
+                              <Trees size={12} /> {prop.totalTrees} Trees
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Location Details Card */}
+                        <div className="ld-subcard space-y-2 text-xs">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-emerald-500/10 pb-1 flex items-center justify-between">
+                            <span>Property Location</span>
+                            <MapPin size={12} className="text-emerald-400" />
+                          </div>
+
+                          <p className="font-bold text-white text-[12px] line-clamp-1 pt-0.5">
+                            {prop.address}
+                          </p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            {prop.village ? `${prop.village}, ` : ''}{prop.district || 'Kottayam'}, {prop.state || 'Kerala'} {prop.pinCode ? `- ${prop.pinCode}` : ''}
+                          </p>
+
+                          {prop.lat && prop.lng && (
+                            <div className="pt-1 border-t border-emerald-500/10 flex justify-between items-center">
+                              <span className="text-[10px] text-slate-400">GPS Map:</span>
+                              <a
+                                href={prop.mapUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
+                              >
+                                📍 {Number(prop.lat).toFixed(3)}, {Number(prop.lng).toFixed(3)}
+                                <ExternalLink size={11} />
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Safety & Hazard Callout (if flagged) */}
                       {prop.hasSafetyHazard && (
-                        <div className="bg-amber-950/30 border border-amber-500/35 rounded-xl p-3.5 sm:p-4 space-y-2 text-amber-200/90 text-xs sm:text-sm">
-                          <div className="text-[11px] font-bold tracking-wider text-amber-400 uppercase flex items-center gap-1.5">
-                            <AlertTriangle size={14} className="text-amber-400 shrink-0" />
-                            <span>Safety & Hazard</span>
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1 text-amber-200 text-xs">
+                          <div className="text-[10px] font-bold tracking-wider text-amber-400 uppercase flex items-center gap-1.5">
+                            <AlertTriangle size={13} className="text-amber-400 shrink-0" />
+                            <span>Safety Hazard Flagged</span>
                           </div>
-                          <div className="font-semibold text-amber-200">
-                            {prop.safetyHazardText}
-                          </div>
-                          <div className="text-[11px] text-amber-300/80 leading-relaxed pt-0.5">
-                            <span className="font-bold">Action Required:</span> Safety hazard flagged. Requires cautious felling and trained arborists.
-                          </div>
+                          <p className="text-[11.5px] text-amber-300 font-medium">{prop.safetyHazardText}</p>
                         </div>
                       )}
 
-                      {/* 9. TREE INVENTORY SECTION */}
-                      <div className="space-y-3 pt-1">
-                        <div className="flex items-center justify-between">
-                          <div className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                            <Trees size={14} className="text-emerald-400" />
-                            <span>Tree Inventory</span>
-                          </div>
-                          <span className="text-[11px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                      {/* Tree Inventory Groups Breakdown */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <Trees size={12} className="text-emerald-400" /> Inventory Species Groups
+                          </span>
+                          <span className="ld-pill text-[10px] py-0.5 px-2">
                             {prop.inventoryGroups.length} {prop.inventoryGroups.length === 1 ? 'Group' : 'Groups'}
                           </span>
                         </div>
 
-                        {prop.inventoryGroups.length === 0 ? (
-                          <div className="bg-slate-950/40 border border-slate-800/80 rounded-xl p-3.5 text-center text-xs text-slate-400">
-                            No trees recorded for this estate yet.
-                          </div>
-                        ) : (
-                          <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                        {prop.inventoryGroups.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-0.5">
                             {prop.inventoryGroups.map((group, idx) => (
                               <div
                                 key={idx}
-                                className="bg-slate-950/60 border border-slate-800 rounded-xl p-3 space-y-1.5 text-xs hover:border-slate-700 transition-colors"
+                                className="px-3 py-1.5 rounded-lg bg-[#0e1612] border border-emerald-500/20 text-xs flex items-center gap-2"
                               >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-bold text-slate-100 text-xs sm:text-sm">
-                                    {group.species} <span className="text-slate-400 font-normal">({group.count} {group.count === 1 ? 'Tree' : 'Trees'})</span>
-                                  </span>
-                                  <span
-                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                      group.health?.toLowerCase().includes('healthy')
-                                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/50'
-                                        : group.health?.toLowerCase().includes('damage')
-                                        ? 'bg-amber-950/80 text-amber-300 border-amber-800/50'
-                                        : 'bg-rose-950/80 text-rose-300 border-rose-800/50'
-                                    }`}
-                                  >
-                                    {group.health}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                                  <div className="flex items-center gap-1 truncate max-w-[200px]">
-                                    <MapPin size={11} className="text-emerald-400 shrink-0" />
-                                    <span className="truncate">{group.location}</span>
-                                  </div>
-                                  <span className="shrink-0 font-medium text-slate-400">{group.age}</span>
-                                </div>
+                                <span className="font-bold text-white">{group.species}</span>
+                                <span className="text-emerald-400 font-extrabold">{group.count} trees</span>
+                                <span className="text-[10px] text-slate-400">({group.health})</span>
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
-
                     </div>
 
-                    {/* 10. ACTION BUTTONS & 11. CARD FOOTER */}
-                    <div className="border-t border-slate-800/80 bg-slate-950/60 p-4 sm:p-5 rounded-b-2xl mt-auto space-y-3">
-                      {/* Primary Actions Row */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Card Actions Bar */}
+                    <div className="pt-4 border-t border-emerald-500/15 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <button
                           onClick={() => navigate(`/landowner/inventory?propertyId=${prop.id}`)}
-                          className="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-950/40 cursor-pointer"
+                          className="ld-btn-green py-2 px-3.5 text-xs"
+                          style={{ width: 'auto' }}
                         >
-                          <Package size={16} />
-                          <span>View Inventory ({prop.totalTrees})</span>
+                          <Package size={14} /> View Inventory
                         </button>
-
                         <button
                           onClick={() => navigate(`/landowner/request-harvest?propertyId=${prop.id}`)}
-                          className="bg-slate-800 hover:bg-slate-700 active:bg-slate-800 border border-slate-700 text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                          className="ld-btn-outline py-2 px-3.5 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                          style={{ width: 'auto' }}
                         >
-                          <Axe size={16} className="text-amber-400" />
-                          <span>Request Harvest</span>
+                          <Axe size={14} /> Request Harvest
                         </button>
                       </div>
 
-                      {/* Secondary Actions Row */}
-                      <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => openEditModal(prop)}
-                          className="bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/50 text-slate-300 hover:text-white font-medium py-2 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          className="ld-btn-outline py-2 px-3 text-xs"
+                          style={{ width: 'auto' }}
+                          title="Edit Property"
                         >
-                          <Edit3 size={14} />
-                          <span>Edit Details</span>
+                          <Edit3 size={13} /> Edit
                         </button>
-
                         <button
                           onClick={() => openDeleteModal(prop)}
-                          className="bg-rose-950/30 hover:bg-rose-900/50 border border-rose-800/40 text-rose-300 hover:text-rose-200 font-medium py-2 px-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          className="ld-btn-outline py-2 px-3 text-xs text-rose-400 border-rose-500/30 hover:bg-rose-500/10"
+                          style={{ width: 'auto' }}
+                          title="Delete Property"
                         >
-                          <Trash2 size={14} />
-                          <span>Delete</span>
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </div>
-
                   </div>
                 ))}
               </div>
@@ -555,10 +643,10 @@ const PropertiesPage = () => {
 
       {/* 13. MEDIA VIEWER LIGHTBOX MODAL */}
       {activeMediaModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-[#0a0f0d]/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
+          <div className="bg-[#121a16] border border-emerald-500/25 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-emerald-500/15 bg-[#0e1612]">
               <div>
                 <h3 className="text-lg font-bold text-white">{activeMediaModal.title}</h3>
                 <p className="text-xs text-slate-400">Media Gallery & Attachments</p>
@@ -572,7 +660,7 @@ const PropertiesPage = () => {
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                       activeMediaModal.activeTab === 'photos'
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-800 text-slate-300 hover:text-white'
+                        : 'bg-[#0e1612] text-slate-300 hover:text-white border border-emerald-500/20'
                     }`}
                   >
                     Photos ({activeMediaModal.photos.length})
@@ -584,7 +672,7 @@ const PropertiesPage = () => {
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                       activeMediaModal.activeTab === 'videos'
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-800 text-slate-300 hover:text-white'
+                        : 'bg-[#0e1612] text-slate-300 hover:text-white border border-emerald-500/20'
                     }`}
                   >
                     Videos ({activeMediaModal.videos.length})
@@ -593,7 +681,7 @@ const PropertiesPage = () => {
 
                 <button
                   onClick={() => setActiveMediaModal(null)}
-                  className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors ml-2 cursor-pointer"
+                  className="p-1.5 rounded-lg bg-[#0e1612] border border-emerald-500/20 text-slate-400 hover:text-white transition-colors ml-2 cursor-pointer"
                 >
                   <X size={20} />
                 </button>
@@ -601,14 +689,14 @@ const PropertiesPage = () => {
             </div>
 
             {/* Modal Viewer Body */}
-            <div className="p-6 flex-1 flex flex-col items-center justify-center bg-slate-950 relative overflow-hidden">
+            <div className="p-6 flex-1 flex flex-col items-center justify-center bg-[#0a0f0d] relative overflow-hidden">
               {activeMediaModal.activeTab === 'photos' ? (
                 activeMediaModal.photos.length > 0 ? (
                   <div className="relative w-full flex items-center justify-center">
                     <img
                       src={activeMediaModal.photos[activeMediaModal.index]}
                       alt="Property media"
-                      className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-2xl border border-slate-800"
+                      className="max-h-[60vh] max-w-full object-contain rounded-xl shadow-2xl border border-emerald-500/20"
                     />
 
                     {/* Prev / Next controls */}
@@ -619,7 +707,7 @@ const PropertiesPage = () => {
                             ...prev,
                             index: (prev.index - 1 + prev.photos.length) % prev.photos.length
                           }))}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 shadow-xl transition-all cursor-pointer"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-[#0a0f0d]/80 hover:bg-[#121a16] text-white border border-emerald-500/30 shadow-xl transition-all cursor-pointer"
                         >
                           <ChevronLeft size={22} />
                         </button>
@@ -628,7 +716,7 @@ const PropertiesPage = () => {
                             ...prev,
                             index: (prev.index + 1) % prev.photos.length
                           }))}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 shadow-xl transition-all cursor-pointer"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-[#0a0f0d]/80 hover:bg-[#121a16] text-white border border-emerald-500/30 shadow-xl transition-all cursor-pointer"
                         >
                           <ChevronRight size={22} />
                         </button>
@@ -645,7 +733,7 @@ const PropertiesPage = () => {
                       src={activeMediaModal.videos[activeMediaModal.index]}
                       controls
                       autoPlay
-                      className="max-h-[60vh] max-w-full rounded-xl shadow-2xl border border-slate-800"
+                      className="max-h-[60vh] max-w-full rounded-xl shadow-2xl border border-emerald-500/20"
                     />
                   </div>
                 ) : (
@@ -656,13 +744,13 @@ const PropertiesPage = () => {
 
             {/* Thumbnail Strip */}
             {activeMediaModal.activeTab === 'photos' && activeMediaModal.photos.length > 1 && (
-              <div className="flex items-center justify-center gap-2 p-3 bg-slate-900 border-t border-slate-800 overflow-x-auto">
+              <div className="flex items-center justify-center gap-2 p-3 bg-[#0e1612] border-t border-emerald-500/15 overflow-x-auto">
                 {activeMediaModal.photos.map((src, i) => (
                   <button
                     key={i}
                     onClick={() => setActiveMediaModal(prev => ({ ...prev, index: i }))}
                     className={`w-14 h-14 rounded-lg overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
-                      i === activeMediaModal.index ? 'border-emerald-500 scale-105' : 'border-slate-800 opacity-60 hover:opacity-100'
+                      i === activeMediaModal.index ? 'border-emerald-500 scale-105' : 'border-emerald-500/20 opacity-60 hover:opacity-100'
                     }`}
                   >
                     <img src={src} alt="thumb" className="w-full h-full object-cover" />
@@ -676,17 +764,17 @@ const PropertiesPage = () => {
 
       {/* 13. EDIT PROPERTY MODAL */}
       {editingProperty && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-[#0a0f0d]/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
+          <div className="bg-[#121a16] border border-emerald-500/25 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-emerald-500/15 bg-[#0e1612]">
               <div>
                 <h3 className="text-lg font-bold text-white">Edit Property Details</h3>
                 <p className="text-xs text-slate-400">Update property information, metrics, and safety flags.</p>
               </div>
               <button
                 onClick={() => setEditingProperty(null)}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg bg-[#0e1612] border border-emerald-500/20 text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -698,7 +786,7 @@ const PropertiesPage = () => {
                 
                 {/* Section 1: Property Information */}
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-emerald-500/15 pb-1.5">
                     <FileText size={14} />
                     <span>Property Information</span>
                   </h4>
@@ -710,7 +798,7 @@ const PropertiesPage = () => {
                         type="text"
                         value={editFormData.propertyName || ''}
                         onChange={(e) => setEditFormData({ ...editFormData, propertyName: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                         required
                       />
                     </div>
@@ -720,13 +808,13 @@ const PropertiesPage = () => {
                       <select
                         value={editFormData.propertyType || 'Residential Property'}
                         onChange={(e) => setEditFormData({ ...editFormData, propertyType: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                       >
-                        <option value="Residential Property">Residential Property</option>
-                        <option value="Commercial Timber Estate">Commercial Timber Estate</option>
-                        <option value="Rubber Plantation">Rubber Plantation</option>
-                        <option value="Forest Plantation">Forest Plantation</option>
-                        <option value="Agricultural Land">Agricultural Land</option>
+                        <option value="Residential Property" className="bg-[#0e1612] text-white">Residential Property</option>
+                        <option value="Commercial Timber Estate" className="bg-[#0e1612] text-white">Commercial Timber Estate</option>
+                        <option value="Rubber Plantation" className="bg-[#0e1612] text-white">Rubber Plantation</option>
+                        <option value="Forest Plantation" className="bg-[#0e1612] text-white">Forest Plantation</option>
+                        <option value="Agricultural Land" className="bg-[#0e1612] text-white">Agricultural Land</option>
                       </select>
                     </div>
                   </div>
@@ -734,7 +822,7 @@ const PropertiesPage = () => {
 
                 {/* Section 2: Owner Information */}
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-emerald-500/15 pb-1.5">
                     <User size={14} />
                     <span>Owner Information</span>
                   </h4>
@@ -746,7 +834,7 @@ const PropertiesPage = () => {
                         type="text"
                         value={editFormData.ownerName || ''}
                         onChange={(e) => setEditFormData({ ...editFormData, ownerName: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                       />
                     </div>
 
@@ -756,7 +844,7 @@ const PropertiesPage = () => {
                         type="text"
                         value={editFormData.contactNumber || ''}
                         onChange={(e) => setEditFormData({ ...editFormData, contactNumber: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                       />
                     </div>
                   </div>
@@ -764,7 +852,7 @@ const PropertiesPage = () => {
 
                 {/* Section 3: Land Information */}
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-emerald-500/15 pb-1.5">
                     <Ruler size={14} />
                     <span>Land Information</span>
                   </h4>
@@ -776,7 +864,7 @@ const PropertiesPage = () => {
                         type="text"
                         value={editFormData.totalArea || ''}
                         onChange={(e) => setEditFormData({ ...editFormData, totalArea: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                       />
                     </div>
 
@@ -785,12 +873,12 @@ const PropertiesPage = () => {
                       <select
                         value={editFormData.areaUnit || 'Acres'}
                         onChange={(e) => setEditFormData({ ...editFormData, areaUnit: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                       >
-                        <option value="Acres">Acres</option>
-                        <option value="Cents">Cents</option>
-                        <option value="Hectares">Hectares</option>
-                        <option value="Sq. Feet">Sq. Feet</option>
+                        <option value="Acres" className="bg-[#0e1612] text-white">Acres</option>
+                        <option value="Cents" className="bg-[#0e1612] text-white">Cents</option>
+                        <option value="Hectares" className="bg-[#0e1612] text-white">Hectares</option>
+                        <option value="Sq. Feet" className="bg-[#0e1612] text-white">Sq. Feet</option>
                       </select>
                     </div>
                   </div>
@@ -798,7 +886,7 @@ const PropertiesPage = () => {
 
                 {/* Section 4: Location */}
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-emerald-500/15 pb-1.5">
                     <MapPin size={14} />
                     <span>Location</span>
                   </h4>
@@ -809,7 +897,7 @@ const PropertiesPage = () => {
                       rows={2}
                       value={editFormData.address || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                     />
                   </div>
 
@@ -820,7 +908,7 @@ const PropertiesPage = () => {
                         type="text"
                         value={editFormData.village || ''}
                         onChange={(e) => setEditFormData({ ...editFormData, village: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                       />
                     </div>
 
@@ -830,7 +918,7 @@ const PropertiesPage = () => {
                         type="text"
                         value={editFormData.district || ''}
                         onChange={(e) => setEditFormData({ ...editFormData, district: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                        className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                       />
                     </div>
                   </div>
@@ -838,7 +926,7 @@ const PropertiesPage = () => {
 
                 {/* Section 5: Description & Safety */}
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-emerald-500/15 pb-1.5">
                     <AlertTriangle size={14} />
                     <span>Description & Safety Hazards</span>
                   </h4>
@@ -850,7 +938,7 @@ const PropertiesPage = () => {
                       placeholder="e.g. Close to House / Roof Structure"
                       value={editFormData.safetyHazardText || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, safetyHazardText: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                     />
                   </div>
 
@@ -860,14 +948,14 @@ const PropertiesPage = () => {
                       rows={3}
                       value={editFormData.description || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-400 transition-colors"
                     />
                   </div>
                 </div>
 
                 {/* Section 6: Media URLs */}
                 <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 border-b border-emerald-500/15 pb-1.5">
                     <Camera size={14} />
                     <span>Media Links</span>
                   </h4>
@@ -878,7 +966,7 @@ const PropertiesPage = () => {
                       rows={2}
                       value={editFormData.photosText || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, photosText: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-white text-xs font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2 text-white text-xs font-mono focus:outline-none focus:border-emerald-400 transition-colors"
                     />
                   </div>
 
@@ -888,7 +976,7 @@ const PropertiesPage = () => {
                       rows={2}
                       value={editFormData.videosText || ''}
                       onChange={(e) => setEditFormData({ ...editFormData, videosText: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-white text-xs font-mono focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full bg-[#0e1612] border border-emerald-500/20 rounded-xl px-3.5 py-2 text-white text-xs font-mono focus:outline-none focus:border-emerald-400 transition-colors"
                     />
                   </div>
                 </div>
@@ -896,17 +984,19 @@ const PropertiesPage = () => {
               </div>
 
               {/* Modal Footer */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-800 bg-slate-950/60">
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-emerald-500/15 bg-[#0e1612]">
                 <button
                   type="button"
                   onClick={() => setEditingProperty(null)}
-                  className="px-5 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-medium text-sm transition-colors cursor-pointer"
+                  className="ld-btn-outline py-2 px-4 text-xs"
+                  style={{ width: 'auto' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm shadow-md shadow-emerald-950/50 transition-colors cursor-pointer"
+                  className="ld-btn-green py-2 px-5 text-xs"
+                  style={{ width: 'auto' }}
                 >
                   Save Changes
                 </button>
@@ -918,8 +1008,8 @@ const PropertiesPage = () => {
 
       {/* 14. DELETE CONFIRMATION MODAL */}
       {propertyToDelete && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-[#0a0f0d]/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#121a16] border border-rose-500/30 rounded-2xl w-full max-w-md p-6 space-y-6 shadow-2xl">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
                 <AlertTriangle size={24} />
@@ -937,13 +1027,15 @@ const PropertiesPage = () => {
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 onClick={() => setPropertyToDelete(null)}
-                className="px-4 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 font-medium text-sm transition-colors cursor-pointer"
+                className="ld-btn-outline py-2 px-4 text-xs"
+                style={{ width: 'auto' }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm shadow-md shadow-rose-950/50 transition-colors cursor-pointer"
+                className="ld-btn-outline py-2 px-5 text-xs text-rose-400 border-rose-500/40 hover:bg-rose-500/20"
+                style={{ width: 'auto' }}
               >
                 Delete Property
               </button>
