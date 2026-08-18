@@ -12,35 +12,14 @@ router = APIRouter()
 SECRET_KEY = "treeconnect_secret_key_forestry_platform_2026"
 ALGORITHM = "HS256"
 
-# Demo Mock Accounts for fallback testing
+# Primary Admin Account for fallback testing
 MOCK_USERS = {
     "admintc@gmail.com": {
         "id": "usr_admin_01",
-        "name": "Eleanor Vance",
+        "name": "TreeConnect Admin",
         "email": "admintc@gmail.com",
         "role": "admin",
         "title": "Platform Administrator"
-    },
-    "landowner@treeconnect.com": {
-        "id": "usr_land_01",
-        "name": "Robert Pine",
-        "email": "landowner@treeconnect.com",
-        "role": "landowner",
-        "title": "Forest Estate Owner"
-    },
-    "contractor@treeconnect.com": {
-        "id": "usr_contract_01",
-        "name": "Apex Harvesting Co.",
-        "email": "contractor@treeconnect.com",
-        "role": "contractor",
-        "title": "Licensed Timber Harvesting Contractor"
-    },
-    "buyer@treeconnect.com": {
-        "id": "usr_buyer_01",
-        "name": "Pacific Lumber Mills",
-        "email": "buyer@treeconnect.com",
-        "role": "buyer",
-        "title": "Timber Procurement Manager"
     }
 }
 
@@ -57,7 +36,13 @@ def login_user(credentials: UserLogin):
 
         # 1. Search in MongoDB Database
         if db is not None:
-            existing_user = db.users.find_one({"email": clean_email})
+            existing_user = None
+            try:
+                existing_user = db.users.find_one({"email": clean_email}, max_time_ms=1500)
+            except Exception as mongo_err:
+                print(f"[MONGODB WARNING] login db query error: {mongo_err}")
+                existing_user = None
+
             if existing_user:
                 stored_hashed_pass = existing_user.get("password", "")
                 is_valid = False
@@ -266,6 +251,88 @@ def request_password_reset(payload: RequestResetPayload):
                 content={"message": "No account registered with this email address. Please check your email or create an account."}
             )
 
+import threading
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+
+def send_real_password_reset_email(to_email: str, reset_token: str):
+    def _async_send():
+        full_reset_url = f"http://localhost:5173/reset-password?token={reset_token}&email={to_email}"
+        smtp_user = os.getenv("SMTP_USER", "").strip()
+        smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+
+        print(f"\n=======================================================")
+        print(f"DISPATCHING PASSWORD RESET EMAIL TO: {to_email}")
+        print(f"RESET URL: {full_reset_url}")
+        print(f"=======================================================\n")
+
+        if not smtp_user or not smtp_password:
+            print("[INFO] SMTP credentials not set in .env; email link logged above.")
+            return
+
+        smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        sender_email = os.getenv("SENDER_EMAIL", smtp_user)
+
+        subject = "TreeConnect Password Reset Link"
+        body_text = f"Hello,\n\nYou requested a password reset for {to_email}.\nClick the link below:\n{full_reset_url}\n"
+
+        html_content = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px;">
+            <div style="max-width: 500px; margin: 0 auto; background-color: #1e293b; padding: 30px; border-radius: 16px;">
+              <h2 style="color: #34d399; margin-top: 0;">TreeConnect Password Reset</h2>
+              <p style="color: #cbd5e1;">You requested a password reset for <strong>{to_email}</strong>.</p>
+              <p><a href="{full_reset_url}" style="background-color: #059669; color: #ffffff; padding: 12px 24px; font-weight: bold; border-radius: 10px; text-decoration: none; display: inline-block;">Set New Password &rarr;</a></p>
+            </div>
+          </body>
+        </html>
+        """
+
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"TreeConnect <{sender_email}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(body_text, "plain"))
+            msg.attach(MIMEText(html_content, "html"))
+
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(sender_email, [to_email], msg.as_string())
+            server.quit()
+            print(f"[SMTP SUCCESS] Real reset email sent to {to_email}")
+        except Exception as err:
+            print(f"[SMTP WARNING] Failed to send email via SMTP: {err}")
+
+    threading.Thread(target=_async_send, daemon=True).start()
+
+@router.post("/request-password-reset")
+def request_password_reset(payload: RequestResetPayload):
+    try:
+        clean_email = payload.email.strip().lower()
+        user_exists = False
+
+        if db is not None:
+            try:
+                existing_user = db.users.find_one({"email": clean_email}, max_time_ms=1500)
+                if existing_user:
+                    user_exists = True
+            except Exception as mongo_err:
+                print(f"[MONGODB WARNING] db query error: {mongo_err}")
+
+        if not user_exists and clean_email in MOCK_USERS:
+            user_exists = True
+
+        if not user_exists:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"message": "No account registered with this email address. Please check your email or create an account."}
+            )
+
         # Generate a secure reset token
         reset_token = f"rst_{secrets.token_hex(16)}"
         reset_link = f"/reset-password?token={reset_token}&email={clean_email}"
@@ -275,6 +342,9 @@ def request_password_reset(payload: RequestResetPayload):
                 {"email": clean_email},
                 {"$set": {"resetToken": reset_token, "resetTokenCreatedAt": datetime.now(timezone.utc).isoformat()}}
             )
+
+        # Send email via SMTP (or print to log if SMTP credentials not configured)
+        send_real_password_reset_email(clean_email, reset_token)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,

@@ -87,9 +87,9 @@ const ForgotPassword = () => {
           ) : (
             <div className="space-y-4 text-center">
               <div className="p-4 bg-emerald-950/90 border border-emerald-700 rounded-xl text-xs text-emerald-300 font-medium space-y-2">
-                <p className="text-sm font-bold text-white">Password Reset Link Sent!</p>
-                <p className="text-slate-300 text-xs">
-                  We sent an email to <span className="font-bold text-emerald-400">{sentData.email || email}</span> with instructions to reset your password. Please check your inbox.
+                <p className="text-sm font-bold text-white">Password Reset Email Sent!</p>
+                <p className="text-slate-300 text-xs leading-relaxed">
+                  We sent a password reset link to <span className="font-bold text-emerald-400">{sentData.email || email}</span>. Please check your inbox and click the link to set your new password.
                 </p>
               </div>
 

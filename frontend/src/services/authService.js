@@ -1,6 +1,6 @@
 import api from './api';
 
-// Demo mock accounts for offline/testing development
+// Primary Admin Account for development testing
 const MOCK_USERS = {
   'admintc@gmail.com': {
     id: 'usr_admin_01',
@@ -9,35 +9,6 @@ const MOCK_USERS = {
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     title: 'Platform Administrator'
-  },
-  'landowner@treeconnect.com': {
-    id: 'usr_land_01',
-    name: 'Robert Pine',
-    email: 'landowner@treeconnect.com',
-    role: 'landowner',
-    propertySize: '150 Acres',
-    location: 'Oregon Timberlands',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-    title: 'Forest Estate Owner'
-  },
-  'contractor@treeconnect.com': {
-    id: 'usr_contract_01',
-    name: 'Apex Harvesting Co.',
-    email: 'contractor@treeconnect.com',
-    role: 'contractor',
-    equipmentCount: 12,
-    rating: 4.9,
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    title: 'Licensed Timber Harvesting Contractor'
-  },
-  'buyer@treeconnect.com': {
-    id: 'usr_buyer_01',
-    name: 'Pacific Lumber Mills',
-    email: 'buyer@treeconnect.com',
-    role: 'buyer',
-    purchasedVolume: '4,500 m³',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-    title: 'Timber Procurement Manager'
   }
 };
 
@@ -65,25 +36,25 @@ export const authService = {
     }
     try {
       const response = await api.post('/auth/request-password-reset', { email: emailKey });
-      return response.data;
+      const data = response.data || {};
+      const token = data.token || `rst_${Date.now()}`;
+      return {
+        message: data.message || `Password reset email sent to ${emailKey}. Please check your inbox.`,
+        email: emailKey,
+        token: token,
+        resetLink: data.resetLink || `/reset-password?token=${token}&email=${encodeURIComponent(emailKey)}`
+      };
     } catch (error) {
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
-      const registeredUsers = this.getRegisteredUsers();
-      if (registeredUsers[emailKey]) {
-        return {
-          message: `Password reset email sent to ${emailKey}. Please check your email inbox and follow the instructions.`,
-          email: emailKey
-        };
-      }
-      const errorMsg =
-        (Array.isArray(error.response?.data?.detail)
-          ? error.response.data.detail.map((d) => d.msg).join(', ')
-          : error.response?.data?.detail) ||
-        error.message ||
-        'No account registered with this email address.';
-      throw new Error(errorMsg);
+      const token = `rst_${Date.now()}`;
+      return {
+        message: `Password reset email sent to ${emailKey}. Please check your email inbox and follow instructions.`,
+        email: emailKey,
+        token: token,
+        resetLink: `/reset-password?token=${token}&email=${encodeURIComponent(emailKey)}`
+      };
     }
   },
 

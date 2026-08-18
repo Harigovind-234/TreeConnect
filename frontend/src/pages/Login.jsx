@@ -55,9 +55,10 @@ const Login = () => {
   // Get only approved/active registered users for autofill suggestions
   const registeredUsersObj = authService.getRegisteredUsers();
   const registeredUsersList = Object.values(registeredUsersObj).filter(u => {
-    // Exclude unapproved / pending verification contractors
-    if (u.role === 'contractor') {
-      return u.status !== 'Pending' && u.isVerified !== false;
+    if (!u || !u.email) return false;
+    // Exclude unapproved or pending verification accounts
+    if (u.status === 'Pending' || u.isVerified === false || u.status === 'Unapproved' || u.status === 'Inactive') {
+      return false;
     }
     return true;
   });
