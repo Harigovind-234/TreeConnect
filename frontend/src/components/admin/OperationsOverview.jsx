@@ -14,19 +14,19 @@ const OperationsOverview = ({
       {/* 2-column grid for Harvest Operations & Timber Marketplace */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Harvest Operations */}
-        <section className="dashboard-section card border border-slate-800/90 bg-slate-950/90 backdrop-blur-md rounded-2xl p-5 shadow-xl space-y-4">
+        <section className="admin-card space-y-4">
           <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-amber-950/80 text-amber-400 border border-amber-800/80">
-                  <Truck size={16} />
+              <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5">
+                <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                  <Truck size={18} />
                 </span>
                 <span>HARVEST OPERATIONS</span>
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Status pipeline across active logging operations</p>
+              <p className="text-xs text-slate-400 mt-1">Status pipeline across active logging operations</p>
             </div>
             <button
-              className="text-xs text-emerald-400 font-bold hover:underline flex items-center gap-1 cursor-pointer bg-slate-900 hover:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700/80 transition-all"
+              className="text-xs text-emerald-400 font-bold hover:underline flex items-center gap-1 cursor-pointer bg-[#1e293b] hover:bg-[#334155] px-3.5 py-1.5 rounded-xl border border-slate-700/80 transition-all"
               onClick={onViewHarvests}
             >
               <span>View Harvests</span>

@@ -27,14 +27,16 @@ const PropertyTypeSelector = ({ value, onChange, error }) => {
   ];
 
   return (
-    <div className="card p-7 border border-color rounded-[16px] bg-card space-y-6 shadow-sm">
-      <div>
-        <h2 className="text-[22px] font-bold text-main tracking-tight">
-          1. Select Property Type <span className="text-red-400">*</span>
-        </h2>
-        <p className="text-[15px] text-muted mt-1">
-          Choose the category that best describes where your trees are located.
-        </p>
+    <div className="ld-card p-6 sm:p-8 space-y-6 shadow-xl">
+      <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-emerald-500/15">
+        <div>
+          <h2 className="text-xl font-extrabold text-white flex items-center gap-2.5">
+            1. Select Property Type <span className="text-rose-400">*</span>
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-300 mt-1">
+            Choose the category that best describes where your trees are located.
+          </p>
+        </div>
       </div>
 
       {/* 3 EQUAL DESKTOP COLUMNS */}
@@ -46,15 +48,15 @@ const PropertyTypeSelector = ({ value, onChange, error }) => {
             <div
               key={type.id}
               onClick={() => onChange(type.id)}
-              className={`relative min-h-[185px] p-6 rounded-[16px] border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between select-none ${
+              className={`relative p-6 sm:p-7 rounded-2xl cursor-pointer transition-all duration-300 flex flex-col justify-between space-y-4 select-none shadow-md ${
                 isSelected
-                  ? 'bg-emerald/10 border-emerald shadow-glow ring-1 ring-emerald/30 -translate-y-0.5'
-                  : 'bg-surface/80 border-color hover:border-emerald/40 hover:bg-card-hover'
+                  ? 'bg-emerald-500/15 border-2 border-emerald-500 shadow-emerald-500/10 ring-1 ring-emerald-500/30 transform -translate-y-0.5'
+                  : 'bg-[#0e1612] border border-emerald-500/20 hover:border-emerald-500/50 hover:bg-[#141d18]'
               }`}
             >
               {/* Selected Checkmark */}
               {isSelected && (
-                <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-emerald text-dark flex items-center justify-center shadow">
+                <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center shadow-lg font-bold">
                   <Check size={14} strokeWidth={3} />
                 </div>
               )}
@@ -62,26 +64,26 @@ const PropertyTypeSelector = ({ value, onChange, error }) => {
               <div className="space-y-3">
                 {/* Title with Emoji */}
                 <div className="flex items-center gap-3 pr-6">
-                  <span className="text-2xl">{type.emoji}</span>
-                  <h3 className={`text-[19px] font-bold tracking-tight transition-colors ${
-                    isSelected ? 'text-emerald' : 'text-main'
+                  <span className="text-3xl">{type.emoji}</span>
+                  <h3 className={`text-base sm:text-lg font-bold tracking-tight transition-colors ${
+                    isSelected ? 'text-emerald-400' : 'text-white'
                   }`}>
                     {type.title}
                   </h3>
                 </div>
 
                 {/* Description */}
-                <p className="text-[14px] text-muted leading-relaxed">
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-medium">
                   {type.description}
                 </p>
               </div>
 
               {/* Simple Readable Examples Line (Dot Separated) */}
-              <div className="pt-4 mt-3 border-t border-color/40 text-[13px]">
-                <span className="font-semibold text-muted">
+              <div className="pt-3.5 border-t border-emerald-500/15 text-xs">
+                <span className="font-semibold text-slate-400">
                   Examples:{' '}
                 </span>
-                <span className="text-main font-medium">
+                <span className="text-slate-200 font-semibold leading-relaxed">
                   {type.examples.join(' · ')}
                 </span>
               </div>
@@ -90,7 +92,7 @@ const PropertyTypeSelector = ({ value, onChange, error }) => {
         })}
       </div>
 
-      {error && <p className="text-[14px] text-red-400 font-medium mt-1">{error}</p>}
+      {error && <p className="text-xs sm:text-sm text-rose-400 font-medium mt-1">{error}</p>}
     </div>
   );
 };

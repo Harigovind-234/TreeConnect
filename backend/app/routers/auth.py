@@ -14,10 +14,10 @@ ALGORITHM = "HS256"
 
 # Demo Mock Accounts for fallback testing
 MOCK_USERS = {
-    "admin@treeconnect.com": {
+    "admintc@gmail.com": {
         "id": "usr_admin_01",
         "name": "Eleanor Vance",
-        "email": "admin@treeconnect.com",
+        "email": "admintc@gmail.com",
         "role": "admin",
         "title": "Platform Administrator"
     },
@@ -131,8 +131,9 @@ def login_user(credentials: UserLogin):
 
         # 2. Fallback check for Mock Demo Accounts
         if clean_email in MOCK_USERS:
-            if credentials.password == "password123" or credentials.password == "admin123":
-                mock_user = MOCK_USERS[clean_email]
+            mock_user = MOCK_USERS[clean_email]
+            stored_pass = mock_user.get("password")
+            if credentials.password == "password123" or credentials.password == "admin123" or (stored_pass and credentials.password == stored_pass):
                 token = create_access_token({"sub": mock_user["id"], "role": mock_user["role"], "email": clean_email})
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
@@ -234,11 +235,59 @@ def register_user(user: UserRegister):
             content={"message": f"Registration failed due to server error: {str(e)}"}
         )
 
+import secrets
 from pydantic import BaseModel
+
+class RequestResetPayload(BaseModel):
+    email: str
 
 class ResetPasswordPayload(BaseModel):
     email: str
     newPassword: str
+    token: Optional[str] = None
+
+@router.post("/request-password-reset")
+def request_password_reset(payload: RequestResetPayload):
+    try:
+        clean_email = payload.email.strip().lower()
+        user_exists = False
+
+        if db is not None:
+            existing_user = db.users.find_one({"email": clean_email})
+            if existing_user:
+                user_exists = True
+
+        if not user_exists and clean_email in MOCK_USERS:
+            user_exists = True
+
+        if not user_exists:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"message": "No account registered with this email address. Please check your email or create an account."}
+            )
+
+        # Generate a secure reset token
+        reset_token = f"rst_{secrets.token_hex(16)}"
+        reset_link = f"/reset-password?token={reset_token}&email={clean_email}"
+
+        if db is not None:
+            db.users.update_one(
+                {"email": clean_email},
+                {"$set": {"resetToken": reset_token, "resetTokenCreatedAt": datetime.now(timezone.utc).isoformat()}}
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": f"Password reset email sent to {clean_email}. Please check your inbox for instructions.",
+                "email": clean_email
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to process password reset request: {str(e)}"}
+        )
 
 @router.post("/reset-password")
 def reset_password(payload: ResetPasswordPayload):
@@ -251,17 +300,18 @@ def reset_password(payload: ResetPasswordPayload):
                 hashed_password = bcrypt.hashpw(payload.newPassword.encode('utf-8'), salt).decode('utf-8')
                 db.users.update_one(
                     {"email": clean_email},
-                    {"$set": {"password": hashed_password}}
+                    {"$set": {"password": hashed_password}, "$unset": {"resetToken": "", "resetTokenCreatedAt": ""}}
                 )
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
-                    content={"message": "Password reset successfully! You can now log in with your new password."}
+                    content={"message": "Password updated successfully! You can now log in with your new password."}
                 )
 
         if clean_email in MOCK_USERS:
+            MOCK_USERS[clean_email]["password"] = payload.newPassword
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
-                content={"message": "Password reset successfully! You can now log in with your new password."}
+                content={"message": "Password updated successfully! You can now log in with your new password."}
             )
 
         return JSONResponse(

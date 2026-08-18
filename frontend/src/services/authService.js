@@ -2,10 +2,10 @@ import api from './api';
 
 // Demo mock accounts for offline/testing development
 const MOCK_USERS = {
-  'admin@treeconnect.com': {
+  'admintc@gmail.com': {
     id: 'usr_admin_01',
     name: 'TreeConnect Admin',
-    email: 'admin@treeconnect.com',
+    email: 'admintc@gmail.com',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     title: 'Platform Administrator'
@@ -56,6 +56,35 @@ export const authService = {
     if (!email) return false;
     const users = this.getRegisteredUsers();
     return Boolean(users[email.trim().toLowerCase()]);
+  },
+
+  async requestPasswordReset(email) {
+    const emailKey = email?.trim().toLowerCase();
+    if (!emailKey || !/\S+@\S+\.\S+/.test(emailKey)) {
+      throw new Error('Please enter a valid registered email address.');
+    }
+    try {
+      const response = await api.post('/auth/request-password-reset', { email: emailKey });
+      return response.data;
+    } catch (error) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      const registeredUsers = this.getRegisteredUsers();
+      if (registeredUsers[emailKey]) {
+        return {
+          message: `Password reset email sent to ${emailKey}. Please check your email inbox and follow the instructions.`,
+          email: emailKey
+        };
+      }
+      const errorMsg =
+        (Array.isArray(error.response?.data?.detail)
+          ? error.response.data.detail.map((d) => d.msg).join(', ')
+          : error.response?.data?.detail) ||
+        error.message ||
+        'No account registered with this email address.';
+      throw new Error(errorMsg);
+    }
   },
 
   async login(credentials) {
@@ -197,29 +226,39 @@ export const authService = {
     }
   },
 
-  async resetPassword(email, newPassword) {
+  async resetPassword(email, newPassword, code) {
     const emailKey = email?.trim().toLowerCase();
     try {
-      const response = await api.post('/auth/reset-password', { email: emailKey, newPassword });
+      const response = await api.post('/auth/reset-password', { email: emailKey, newPassword, code });
       const stored = localStorage.getItem('treeconnect_registered_users');
       const customUsers = stored ? JSON.parse(stored) : {};
-      if (customUsers[emailKey]) {
-        customUsers[emailKey].password = newPassword;
-        localStorage.setItem('treeconnect_registered_users', JSON.stringify(customUsers));
-      }
+      const baseUser = customUsers[emailKey] || MOCK_USERS[emailKey] || { email: emailKey, role: 'landowner', name: emailKey.split('@')[0] };
+      customUsers[emailKey] = {
+        ...baseUser,
+        password: newPassword
+      };
+      localStorage.setItem('treeconnect_registered_users', JSON.stringify(customUsers));
       return response.data;
     } catch (error) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
       const stored = localStorage.getItem('treeconnect_registered_users');
       const customUsers = stored ? JSON.parse(stored) : {};
-      if (customUsers[emailKey] || MOCK_USERS[emailKey]) {
-        if (customUsers[emailKey]) {
-          customUsers[emailKey].password = newPassword;
-          localStorage.setItem('treeconnect_registered_users', JSON.stringify(customUsers));
-        }
+      const baseUser = customUsers[emailKey] || MOCK_USERS[emailKey];
+      if (baseUser) {
+        customUsers[emailKey] = {
+          ...baseUser,
+          password: newPassword
+        };
+        localStorage.setItem('treeconnect_registered_users', JSON.stringify(customUsers));
         return { message: 'Password reset successfully!' };
       }
       const errorMsg =
-        error.response?.data?.message ||
+        (Array.isArray(error.response?.data?.detail)
+          ? error.response.data.detail.map((d) => d.msg).join(', ')
+          : error.response?.data?.detail) ||
+        error.message ||
         'Password reset failed. Please ensure the email is registered.';
       throw new Error(errorMsg);
     }

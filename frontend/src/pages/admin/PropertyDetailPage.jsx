@@ -93,23 +93,23 @@ const PropertyDetailPage = () => {
         ) : (
           <div className="space-y-6">
             {/* Header Banner & Title Card */}
-            <div className="card p-6 bg-slate-950 border border-slate-800 rounded-2xl shadow-xl space-y-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800/80 pb-5">
+            <div className="admin-card admin-hero-card p-6 sm:p-8 space-y-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-emerald-500/15 pb-5">
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-3 py-1 rounded-lg text-xs font-extrabold uppercase bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="admin-badge-emerald text-xs font-extrabold uppercase">
                       {property.status || 'Active Estate'}
                     </span>
-                    <span className="px-3 py-1 rounded-lg text-xs font-bold bg-slate-900 text-slate-300 border border-slate-800 flex items-center gap-1">
-                      <Building2 size={13} className="text-slate-400" />
+                    <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#0e1612] text-slate-200 border border-emerald-500/20 flex items-center gap-1.5">
+                      <Building2 size={14} className="text-emerald-400" />
                       {property.propertyType || 'Residential Property'}
                     </span>
                   </div>
-                  <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-2.5">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-3">
                     {property.propertyName}
                   </h1>
-                  <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
-                    <MapPin size={14} className="text-emerald-400" />
+                  <p className="text-xs sm:text-sm text-slate-300 flex items-center gap-1.5 mt-1 font-medium">
+                    <MapPin size={15} className="text-emerald-400" />
                     <span>
                       {property.district || 'Kottayam'}, {property.state || 'Kerala'} {property.pinCode ? `(PIN: ${property.pinCode})` : ''}
                     </span>
@@ -117,10 +117,10 @@ const PropertyDetailPage = () => {
                 </div>
 
                 {property.totalArea && (
-                  <div className="bg-slate-900 border border-slate-800 rounded-2xl px-5 py-3 text-right shrink-0">
+                  <div className="bg-[#0e1612] border border-emerald-500/25 rounded-2xl px-6 py-3.5 text-right shrink-0 shadow-md">
                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Land Area</span>
-                    <span className="text-xl font-black text-emerald-400 flex items-center gap-1 justify-end">
-                      <Ruler size={18} />
+                    <span className="text-2xl font-black text-emerald-400 flex items-center gap-1.5 justify-end mt-0.5">
+                      <Ruler size={20} />
                       {property.totalArea} {property.areaUnit || 'Acres'}
                     </span>
                   </div>
@@ -128,7 +128,7 @@ const PropertyDetailPage = () => {
               </div>
 
               {/* Main Banner Image / Photo Gallery */}
-              <div className="relative h-72 sm:h-96 rounded-2xl overflow-hidden bg-slate-900 border border-slate-800">
+              <div className="relative h-72 sm:h-96 rounded-2xl overflow-hidden bg-[#0a0f0d] border border-emerald-500/20 shadow-2xl">
                 <img
                   src={property.image || property.photos?.[0] || 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80'}
                   alt={property.propertyName}
@@ -136,34 +136,34 @@ const PropertyDetailPage = () => {
                 />
                 {property.createdAt && (
                   <div className="absolute bottom-4 left-4">
-                    <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-950/90 text-slate-300 border border-slate-800 backdrop-blur-md flex items-center gap-1.5">
-                      <Calendar size={13} className="text-emerald-400" />
+                    <span className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0a0f0d]/90 text-slate-200 border border-emerald-500/30 backdrop-blur-md flex items-center gap-2 shadow-lg">
+                      <Calendar size={14} className="text-emerald-400" />
                       Registered on {property.createdAt.split('T')[0]}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Registered Landowner Card */}
-              <div className="p-5 bg-slate-900/60 rounded-2xl border border-slate-800/80 space-y-3">
-                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
-                  <User size={15} className="text-emerald-400" /> Registered Landowner Profile
+              {/* Registered Landowner Profile Card */}
+              <div className="admin-subcard p-6 space-y-4 bg-[#0e1612] border border-emerald-500/20">
+                <h3 className="text-xs font-bold uppercase text-slate-300 tracking-wider flex items-center gap-2">
+                  <User size={16} className="text-emerald-400" /> Registered Landowner Profile
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Owner Name</span>
-                    <span className="font-bold text-white text-sm">{property.ownerName || 'Landowner'}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                  <div className="p-4 bg-[#0a0f0d] rounded-xl border border-emerald-500/15">
+                    <span className="text-[11px] text-slate-400 font-bold uppercase block mb-1">Owner Name</span>
+                    <span className="font-bold text-white text-base block">{property.ownerName || 'Landowner'}</span>
                   </div>
 
-                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Contact Email</span>
-                    <span className="font-bold text-slate-200 truncate block">{property.userEmail || 'N/A'}</span>
+                  <div className="p-4 bg-[#0a0f0d] rounded-xl border border-emerald-500/15">
+                    <span className="text-[11px] text-slate-400 font-bold uppercase block mb-1">Contact Email</span>
+                    <span className="font-bold text-slate-200 text-sm break-all block">{property.userEmail || 'N/A'}</span>
                   </div>
 
-                  <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Contact Phone</span>
-                    <span className="font-bold text-slate-200">{property.contactNumber || 'N/A'}</span>
+                  <div className="p-4 bg-[#0a0f0d] rounded-xl border border-emerald-500/15">
+                    <span className="text-[11px] text-slate-400 font-bold uppercase block mb-1">Contact Phone</span>
+                    <span className="font-bold text-slate-200 text-sm block">{property.contactNumber || 'N/A'}</span>
                   </div>
                 </div>
 
@@ -171,9 +171,9 @@ const PropertyDetailPage = () => {
                   <div className="pt-2 flex justify-end">
                     <button
                       onClick={() => navigate(`/admin/users/${encodeURIComponent(property.userEmail)}`)}
-                      className="btn btn-xs bg-emerald-950 hover:bg-emerald-900 text-emerald-400 font-bold border border-emerald-800 px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer text-xs"
+                      className="admin-btn-emerald text-xs sm:text-sm font-bold py-2.5 px-5"
                     >
-                      <User size={13} /> View Full User Profile & Verification Status ↗
+                      <User size={15} /> View Full User Profile &amp; Verification Status ↗
                     </button>
                   </div>
                 )}
@@ -181,13 +181,13 @@ const PropertyDetailPage = () => {
             </div>
 
             {/* Dedicated Location & Geographic Details Section */}
-            <div className="card p-6 bg-slate-950 border border-slate-800 rounded-2xl shadow-xl space-y-5">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4">
+            <div className="admin-card p-6 sm:p-8 space-y-6 shadow-xl">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-emerald-500/15 pb-4">
                 <div>
-                  <h2 className="text-lg font-black text-white flex items-center gap-2">
-                    <Compass className="text-emerald-400" size={20} /> Dedicated Property Location &amp; Geographic Details
+                  <h2 className="text-xl font-extrabold text-white flex items-center gap-2.5">
+                    <Compass className="text-emerald-400" size={22} /> Dedicated Property Location &amp; Geographic Details
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs sm:text-sm text-slate-300 mt-1">
                     Complete address, local administration details, and GIS mapping coordinates added for site survey
                   </p>
                 </div>
@@ -197,27 +197,27 @@ const PropertyDetailPage = () => {
                     href={`https://www.google.com/maps?q=${property.latitude},${property.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn btn-sm bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer text-xs shadow-lg transition-all"
+                    className="admin-btn-emerald text-xs sm:text-sm font-bold py-2.5 px-5 shrink-0"
                   >
-                    <Navigation size={14} /> Open in Google Maps <ExternalLink size={12} />
+                    <Navigation size={15} /> Open in Google Maps <ExternalLink size={13} />
                   </a>
                 )}
               </div>
 
               {/* Structured Grid for Location Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {/* 1. Address */}
-                <div className="md:col-span-2 lg:col-span-3 p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                <div className="md:col-span-2 lg:col-span-3 admin-subcard p-5 space-y-1">
+                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
                     House / Plot Address
                   </span>
-                  <p className="text-white font-bold text-sm leading-relaxed">
+                  <p className="text-white font-bold text-base leading-relaxed">
                     {property.address || `${property.village || ''}, ${property.district}, ${property.state}`}
                   </p>
                 </div>
 
                 {/* 2. Local Body */}
-                <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800 space-y-1">
+                <div className="admin-subcard p-5 space-y-1">
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
                     Local Body (Panchayat / Municipality)
                   </span>

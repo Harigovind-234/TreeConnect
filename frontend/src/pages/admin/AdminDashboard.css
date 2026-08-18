@@ -1,0 +1,217 @@
+/* TreeConnect Admin Portal CSS Design System - Matching Sidebar Dark Forest Green Palette */
+
+.admin-dashboard-page {
+  min-height: 100vh;
+  background-color: #0a0f0d !important;
+  color: #f8fafc !important;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-dashboard-container {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  position: relative;
+  background-color: #0a0f0d !important;
+}
+
+.admin-dashboard-container .sidebar-container {
+  position: sticky !important;
+  top: 64px !important;
+  height: calc(100vh - 64px) !important;
+  background: #0a0f0d !important;
+  border-right: 1px solid rgba(16, 185, 129, 0.15) !important;
+  z-index: 40;
+}
+
+.admin-dashboard-workspace {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 84px 32px 48px 32px;
+  background: #0a0f0d !important;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .admin-dashboard-workspace {
+    padding: 16px 16px 32px 16px;
+  }
+}
+
+/* Main Cards & Panels matching Sidebar Theme */
+.admin-card {
+  background: #121a16 !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+  border-radius: 18px !important;
+  padding: 24px !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-card:hover {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.admin-hero-card {
+  background: linear-gradient(135deg, #121a16 0%, #0e1612 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.6) !important;
+}
+
+.admin-subcard {
+  background: #0e1612 !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  border-radius: 14px !important;
+  padding: 18px !important;
+  transition: all 0.2s ease;
+}
+
+.admin-subcard:hover {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  background: #141d18 !important;
+}
+
+/* Badges & Pills */
+.admin-badge-emerald,
+.admin-badge-blue {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.admin-badge-amber {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  color: #fbbf24 !important;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+/* Action Buttons */
+.admin-btn-emerald,
+.admin-btn-blue {
+  background: #10b981 !important;
+  color: #022c22 !important;
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+  padding: 10px 20px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: background 0.2s ease, transform 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-btn-emerald:hover,
+.admin-btn-blue:hover {
+  background: #34d399 !important;
+  transform: translateY(-1px);
+}
+
+.admin-btn-outline {
+  background: #0e1612 !important;
+  color: #cbd5e1 !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+  padding: 10px 20px !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-btn-outline:hover {
+  background: #18241e !important;
+  color: #ffffff !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+/* Tables & Controls */
+.admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.admin-table th {
+  background: #0a0f0d;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+  text-align: left;
+}
+
+.admin-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.12);
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.admin-table tr:hover td {
+  background: rgba(24, 36, 30, 0.7);
+}
+
+/* Input Fields */
+.admin-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #0a0f0d;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  transition: border-color 0.2s ease;
+}
+
+.admin-input:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+/* Sidebar Theme Matching Overrides */
+.admin-dashboard-page .sidebar {
+  background: #0a0f0d !important;
+  border-right: 1px solid rgba(16, 185, 129, 0.15) !important;
+}
+
+.admin-dashboard-page .sidebar-role-badge {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+.admin-dashboard-page .sidebar-item.active {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border-left: 3px solid #10b981 !important;
+}
+
+.admin-dashboard-page .sidebar-item.active .sidebar-icon {
+  color: #34d399 !important;
+}
+
+.admin-dashboard-page .sidebar-item:hover:not(.active) {
+  background: rgba(24, 36, 30, 0.7) !important;
+  color: #f8fafc !important;
+}
+
+.admin-dashboard-page .sidebar-group-title {
+  color: #64748b !important;
+}

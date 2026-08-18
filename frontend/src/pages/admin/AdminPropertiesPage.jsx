@@ -74,19 +74,19 @@ const AdminPropertiesPage = () => {
   return (
     <AdminLayout user={user} onLogout={logout}>
       <div className="space-y-6 pb-12">
-        {/* Header Section */}
-        <section className="dashboard-section card">
-          <div className="card-header pb-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        {/* Header Bar */}
+        <section className="admin-card space-y-5">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-800/80">
             <div>
-              <h1 className="section-heading flex items-center gap-2.5">
-                <Trees className="text-emerald-400" size={22} />
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+                <Trees className="text-blue-400" size={24} />
                 <span>Registered Landowner Properties</span>
               </h1>
-              <p className="section-subtext">
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
                 Live database directory of all forest estates, plots, and land parcels registered by landowners
               </p>
             </div>
-            <span className="status-pill status-green font-bold flex items-center gap-1.5">
+            <span className="admin-badge-blue text-xs font-bold flex items-center gap-1.5 shrink-0">
               {loading ? (
                 <>
                   <Loader2 size={13} className="animate-spin" /> Fetching DB...
@@ -145,29 +145,29 @@ const AdminPropertiesPage = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
             {filteredProperties.map((p) => (
               <div
                 key={p.id || p._id}
-                className="card p-5 bg-slate-950/90 border border-slate-800 hover:border-emerald-500/50 transition-all rounded-2xl space-y-4 shadow-xl flex flex-col justify-between"
+                className="admin-card p-6 space-y-5 flex flex-col justify-between shadow-2xl transition-all hover:border-emerald-500/40"
               >
-                <div className="space-y-3">
-                  {/* Property Image & Badge */}
-                  <div className="relative h-44 rounded-xl overflow-hidden bg-slate-900 border border-slate-800">
+                <div className="space-y-4">
+                  {/* Property Image & Status Badges */}
+                  <div className="relative h-52 sm:h-56 rounded-2xl overflow-hidden bg-[#0a0f0d] border border-emerald-500/20 shadow-md">
                     <img
                       src={p.image || p.photos?.[0] || 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80'}
                       alt={p.propertyName}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-2.5 left-2.5">
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase bg-slate-950/90 text-emerald-400 border border-emerald-800/80 backdrop-blur-md">
+                    <div className="absolute top-3 left-3">
+                      <span className="px-3 py-1.5 rounded-xl text-xs font-extrabold uppercase bg-[#0a0f0d]/90 text-emerald-300 border border-emerald-500/40 backdrop-blur-md shadow-lg">
                         {p.status || 'Active Estate'}
                       </span>
                     </div>
                     {p.totalArea && (
-                      <div className="absolute bottom-2.5 right-2.5">
-                        <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-950/90 text-slate-300 border border-slate-800 backdrop-blur-md flex items-center gap-1">
-                          <Ruler size={11} className="text-emerald-400" />
+                      <div className="absolute bottom-3 right-3">
+                        <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#0a0f0d]/90 text-slate-200 border border-emerald-500/30 backdrop-blur-md flex items-center gap-1.5 shadow-lg">
+                          <Ruler size={13} className="text-emerald-400" />
                           {p.totalArea} {p.areaUnit || 'Acres'}
                         </span>
                       </div>
@@ -175,99 +175,89 @@ const AdminPropertiesPage = () => {
                   </div>
 
                   {/* Title & Type */}
-                  <div>
-                    <h3 className="text-base font-extrabold text-white tracking-tight">
+                  <div className="pb-1 border-b border-emerald-500/15">
+                    <h3 className="text-xl font-extrabold text-white tracking-tight">
                       {p.propertyName}
                     </h3>
-                    <p className="text-xs text-slate-400 font-medium flex items-center gap-1 mt-0.5">
-                      <Building2 size={12} className="text-slate-500" />
+                    <p className="text-xs sm:text-sm text-emerald-400 font-semibold flex items-center gap-1.5 mt-1">
+                      <Building2 size={14} className="text-emerald-400 shrink-0" />
                       <span>{p.propertyType || 'Residential / Forest Estate'}</span>
                     </p>
                   </div>
 
-                  {/* Landowner Info */}
-                  <div className="p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 space-y-1.5">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400 text-[11px] font-semibold flex items-center gap-1">
-                        <User size={12} className="text-slate-500" /> Registered Owner
-                      </span>
-                      <span className="font-bold text-white">{p.ownerName || 'Landowner'}</span>
+                  {/* Registered Owner Details Subcard */}
+                  <div className="admin-subcard p-4 space-y-2 rounded-xl bg-[#0e1612] border border-emerald-500/15">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                      REGISTERED LANDOWNER CONTACT
+                    </span>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm font-bold text-white">
+                        <User size={15} className="text-emerald-400 shrink-0" />
+                        <span>{p.ownerName || 'Landowner'}</span>
+                      </div>
+
+                      {p.userEmail && (
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-300 font-medium">
+                          <Mail size={14} className="text-slate-400 shrink-0" />
+                          <span className="break-all">{p.userEmail}</span>
+                        </div>
+                      )}
+
+                      {p.contactNumber && (
+                        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-300 font-medium">
+                          <Phone size={14} className="text-slate-400 shrink-0" />
+                          <span>{p.contactNumber}</span>
+                        </div>
+                      )}
                     </div>
-
-                    {p.userEmail && (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400 text-[11px] font-semibold flex items-center gap-1">
-                          <Mail size={12} className="text-slate-500" /> Email
-                        </span>
-                        <span className="font-bold text-slate-300 truncate max-w-[160px]">{p.userEmail}</span>
-                      </div>
-                    )}
-
-                    {p.contactNumber && (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-400 text-[11px] font-semibold flex items-center gap-1">
-                          <Phone size={12} className="text-slate-500" /> Phone
-                        </span>
-                        <span className="font-bold text-slate-300">{p.contactNumber}</span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Complete Location Details Section */}
-                  <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/60 space-y-2 text-xs">
-                    <div className="flex items-start gap-1.5 text-slate-300">
-                      <MapPin size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                      <div className="space-y-0.5">
-                        <p className="font-bold text-white text-[12px]">
+                  {/* Location & Boundary Details Subcard */}
+                  <div className="admin-subcard p-4 space-y-2 rounded-xl bg-[#0e1612] border border-emerald-500/15">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                      ESTATE LOCATION &amp; BOUNDARIES
+                    </span>
+
+                    <div className="flex items-start gap-2 text-xs sm:text-sm text-white font-semibold">
+                      <MapPin size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="leading-relaxed">
                           {p.address || (p.village ? `${p.village}, ${p.district}` : `${p.district}, ${p.state}`)}
                         </p>
-                        <p className="text-[11px] text-slate-400">
-                          {p.village ? `${p.village}, ` : ''}{p.district || 'Kottayam'}, {p.state || 'Kerala'} {p.pinCode ? `- ${p.pinCode}` : ''}
+                        <p className="text-xs text-slate-400 font-medium mt-1">
+                          {p.village ? `${p.village}, ` : ''}{p.district || 'Kottayam'}, {p.state || 'Kerala'} {p.pinCode ? `— PIN: ${p.pinCode}` : ''}
                         </p>
+                        {p.localBody && (
+                          <p className="text-xs text-emerald-300 font-medium mt-1">
+                            🏛️ Local Body: {p.localBody}
+                          </p>
+                        )}
+                        {p.latitude && p.longitude && (
+                          <p className="text-xs font-mono text-emerald-400 font-medium mt-1">
+                            📍 GPS Coords: {Number(p.latitude).toFixed(4)}, {Number(p.longitude).toFixed(4)}
+                          </p>
+                        )}
                       </div>
-                    </div>
-
-                    {/* Additional Location Pills */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
-                      {p.localBody && (
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-emerald-300 border border-slate-800 font-medium">
-                          🏛️ {p.localBody}
-                        </span>
-                      )}
-                      {p.village && (
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800 font-medium">
-                          🏡 {p.village}
-                        </span>
-                      )}
-                      {p.pinCode && (
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 font-medium">
-                          📮 PIN: {p.pinCode}
-                        </span>
-                      )}
-                      {p.latitude && p.longitude && (
-                        <span className="px-2 py-0.5 rounded bg-slate-900 text-emerald-400 border border-slate-800 font-mono">
-                          📍 {Number(p.latitude).toFixed(3)}, {Number(p.longitude).toFixed(3)}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Card Footer Actions */}
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <div className="pt-4 border-t border-emerald-500/15 flex items-center justify-between flex-wrap gap-3">
                   <button
                     onClick={() => navigate(`/admin/properties/${p.id || p._id}`, { state: { property: p } })}
-                    className="btn btn-xs bg-slate-900 hover:bg-slate-800 text-slate-200 font-bold border border-slate-700/80 rounded-xl px-3 py-1.5 flex items-center gap-1 cursor-pointer text-xs"
+                    className="admin-btn-outline text-xs sm:text-sm font-bold py-2.5 px-4"
                   >
-                    <Eye size={13} /> View Specs & Location ↗
+                    <Eye size={15} /> View Specs &amp; Location ↗
                   </button>
 
                   {p.userEmail && (
                     <button
                       onClick={() => navigate(`/admin/users/${encodeURIComponent(p.userEmail)}`)}
-                      className="btn btn-xs bg-emerald-950/80 hover:bg-emerald-900 text-emerald-400 font-bold border border-emerald-800/80 rounded-xl px-3 py-1.5 flex items-center gap-1 cursor-pointer text-xs"
+                      className="admin-btn-emerald text-xs sm:text-sm font-bold py-2.5 px-5"
                     >
-                      <User size={13} /> Inspect Landowner
+                      <User size={15} /> Inspect Landowner
                     </button>
                   )}
                 </div>

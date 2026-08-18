@@ -31,7 +31,7 @@ const RecentActivity = () => {
   }, []);
 
   return (
-    <section className="dashboard-section card space-y-4">
+    <section className="admin-card space-y-4">
       {/* Header Bar matching User Management header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-800/80 pb-4">
         <div>
@@ -114,8 +114,8 @@ const RecentActivity = () => {
                   </span>
                 </div>
 
-                <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-md border border-slate-800">
-                  <Calendar size={10} />
+                <span className="text-[10px] font-semibold text-slate-300 flex items-center gap-1 bg-[#0e1612] px-2.5 py-1 rounded-lg border border-emerald-500/15">
+                  <Calendar size={11} className="text-emerald-400" />
                   {p.createdAt ? p.createdAt.split('T')[0] : 'Recent'}
                 </span>
               </div>

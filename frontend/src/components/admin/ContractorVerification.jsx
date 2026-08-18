@@ -84,18 +84,18 @@ const ContractorVerification = () => {
   };
 
   return (
-    <section className="dashboard-section card">
-      <div className="card-header pb-2 flex justify-between items-center">
+    <section className="admin-card space-y-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-800/80">
         <div>
-          <h2 className="section-heading flex items-center gap-2">
-            <ShieldCheck size={18} className="text-amber-400" /> Contractor Verification
+          <h2 className="text-xl font-extrabold text-white flex items-center gap-2.5">
+            <ShieldCheck size={20} className="text-amber-400" /> Contractor Verification
           </h2>
-          <p className="section-subtext">
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Review identity proofs and professional harvesting credentials for pending contractors
           </p>
         </div>
-        <span className="badge badge-amber font-bold flex items-center gap-1.5">
-          {loading ? <Loader2 size={12} className="animate-spin" /> : `${contractors.length} Pending Review`}
+        <span className="admin-badge-amber text-xs font-bold flex items-center gap-1.5 shrink-0">
+          {loading ? <Loader2 size={13} className="animate-spin" /> : `${contractors.length} Pending Review`}
         </span>
       </div>
 
@@ -107,19 +107,19 @@ const ContractorVerification = () => {
       )}
 
       {loading ? (
-        <div className="p-8 text-center bg-slate-900/50 rounded-xl border border-slate-800 text-slate-400 text-xs flex items-center justify-center gap-2">
+        <div className="p-8 text-center bg-[#0e1612] rounded-xl border border-emerald-500/15 text-slate-300 text-xs flex items-center justify-center gap-2">
           <Loader2 size={16} className="animate-spin text-emerald-400" />
           <span>Fetching pending contractors from database...</span>
         </div>
       ) : contractors.length === 0 ? (
-        <div className="p-8 text-center bg-slate-900/50 rounded-xl border border-slate-800">
-          <CheckCircle size={36} className="text-emerald-400 mx-auto mb-2" />
+        <div className="p-8 text-center bg-[#0e1612] rounded-xl border border-emerald-500/15 space-y-2">
+          <CheckCircle size={36} className="text-emerald-400 mx-auto" />
           <p className="font-bold text-white text-sm">All Contractor Verifications Complete</p>
-          <p className="text-xs text-slate-400 mt-1">There are no pending contractor approval requests in the queue.</p>
+          <p className="text-xs text-slate-300">There are no pending contractor approval requests in the queue.</p>
         </div>
       ) : (
         <div className="table-wrapper pt-2">
-          <table className="data-table">
+          <table className="admin-table">
             <thead>
               <tr>
                 <th>Contractor Name</th>
@@ -143,14 +143,14 @@ const ContractorVerification = () => {
                   <td className="text-emerald-400 font-semibold">{c.experience || '3+ Years'}</td>
                   <td className="text-slate-400 text-xs">{c.submittedDate || c.date}</td>
                   <td>
-                    <span className="status-pill status-yellow font-bold text-[10px]">
+                    <span className="admin-badge-amber text-xs font-bold flex items-center gap-1.5 w-max">
                       <Clock size={12} /> {c.status || 'Pending'}
                     </span>
                   </td>
                   <td className="text-center">
                     <div className="flex items-center justify-center gap-2 whitespace-nowrap">
                       <button
-                        className="btn btn-xs bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer px-3 py-1 rounded-lg transition-all"
+                        className="admin-btn-outline text-xs py-1.5 px-3"
                         onClick={() => {
                           setSelectedContractor(c);
                           setShowReviewModal(true);
@@ -159,10 +159,10 @@ const ContractorVerification = () => {
                         Review Details
                       </button>
                       <button
-                        className="btn btn-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black cursor-pointer px-3 py-1 rounded-lg transition-all flex items-center gap-1"
+                        className="admin-btn-emerald text-xs py-1.5 px-3"
                         onClick={() => handleApprove(c.id)}
                       >
-                        <UserCheck size={12} /> Approve
+                        <UserCheck size={13} /> Approve
                       </button>
                     </div>
                   </td>
@@ -175,23 +175,23 @@ const ContractorVerification = () => {
 
       {/* Contractor Review Modal */}
       {showReviewModal && selectedContractor && (
-        <div className="modal-overlay z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="modal-content card max-w-xl w-full p-6 border border-slate-700/80 rounded-2xl bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 space-y-4 shadow-2xl animate-fade-in text-xs">
-            <div className="modal-header flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="modal-overlay z-50 flex items-center justify-center p-4 bg-[#0a0f0d]/90 backdrop-blur-md">
+          <div className="modal-content admin-card max-w-xl w-full p-6 space-y-4 shadow-2xl animate-fade-in text-xs bg-[#121a16] border border-emerald-500/25">
+            <div className="flex items-center justify-between border-b border-emerald-500/15 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <ShieldCheck size={18} className="text-amber-400" />
                 <span>Contractor Verification Review</span>
               </h3>
               <button
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-[#18241e] rounded-xl transition-all cursor-pointer"
                 onClick={() => setShowReviewModal(false)}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="modal-body space-y-4 pt-2 text-xs">
-              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+            <div className="space-y-4 pt-2 text-xs">
+              <div className="bg-[#0e1612] p-4 rounded-xl border border-emerald-500/15 space-y-2">
                 <p className="font-bold text-white text-base">{selectedContractor.contractorName || selectedContractor.name}</p>
                 <p className="text-slate-300">Contact: {selectedContractor.contactPerson || selectedContractor.name} ({selectedContractor.phone || 'N/A'})</p>
                 <p className="text-slate-300">Email: {selectedContractor.email}</p>
@@ -200,41 +200,41 @@ const ContractorVerification = () => {
                 <p className="text-slate-300">Machinery / Fleet: {selectedContractor.equipment || 'Logging Equipment'}</p>
               </div>
 
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+              <div className="bg-[#0a0f0d] p-4 rounded-xl border border-emerald-500/15 space-y-2">
                 <p className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Submitted Documents / Verification Evidence:</p>
-                <div className="flex items-center gap-2 p-2.5 bg-slate-900 rounded-lg border border-slate-800 text-slate-200">
+                <div className="flex items-center gap-2 p-2.5 bg-[#0e1612] rounded-lg border border-emerald-500/15 text-slate-200">
                   <FileText size={16} className="text-emerald-400" />
                   <span className="font-medium">{selectedContractor.docType || 'Government ID & Business License'}</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-amber-950/40 border border-amber-800/60 rounded-xl text-amber-300 text-[11px] leading-relaxed">
+              <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl text-amber-200 text-xs leading-relaxed">
                 <strong className="block text-amber-400 mb-0.5">Verification Designation:</strong>
                 Approving this contractor grants authorization status: <strong>"Verified by TreeConnect Admin"</strong>.
               </div>
 
               {infoRequestedMessage && (
-                <div className="p-2.5 bg-blue-950/80 border border-blue-800 rounded-lg text-blue-300 font-semibold animate-pulse">
+                <div className="p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-lg text-emerald-300 font-semibold animate-pulse">
                   Request for additional evidence sent to contractor.
                 </div>
               )}
 
               {/* Admin Notes Textarea */}
               <div className="space-y-1">
-                <label className="text-slate-400 font-semibold">Admin Internal Notes:</label>
+                <label className="text-slate-300 font-semibold">Admin Internal Notes:</label>
                 <textarea
                   rows={2}
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
                   placeholder="Record internal compliance notes..."
-                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white text-xs"
+                  className="w-full p-2.5 bg-[#0a0f0d] border border-emerald-500/25 rounded-xl text-white text-xs"
                 />
               </div>
 
-              <div className="modal-actions flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-slate-800">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 border-t border-emerald-500/15">
                 <button
                   type="button"
-                  className="btn btn-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold cursor-pointer px-3 py-1.5 rounded-lg transition-all w-full sm:w-auto"
+                  className="admin-btn-outline text-xs py-2 px-4 w-full sm:w-auto"
                   onClick={handleRequestMoreInfo}
                 >
                   Request More Info
@@ -243,14 +243,14 @@ const ContractorVerification = () => {
                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                   <button
                     type="button"
-                    className="btn btn-xs bg-red-950/80 text-red-400 hover:bg-red-900 border border-red-800/80 font-bold cursor-pointer px-3 py-1.5 rounded-lg transition-all"
+                    className="px-3.5 py-2 rounded-xl bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 font-bold cursor-pointer text-xs transition-all"
                     onClick={() => handleReject(selectedContractor.id)}
                   >
                     Reject Registration
                   </button>
                   <button
                     type="button"
-                    className="btn btn-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black cursor-pointer px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1"
+                    className="admin-btn-emerald text-xs py-2 px-4"
                     onClick={() => handleApprove(selectedContractor.id)}
                   >
                     <UserCheck size={14} /> Approve Contractor

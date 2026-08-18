@@ -178,20 +178,20 @@ const UsersPage = () => {
 
   return (
     <AdminLayout user={user} onLogout={logout}>
-      <div className="space-y-6">
+      <div className="w-full flex flex-col gap-8">
         {/* Top Header Section */}
-        <section className="dashboard-section card">
-          <div className="card-header pb-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <section className="admin-card space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-emerald-500/15">
             <div>
-              <h1 className="section-heading flex items-center gap-2.5">
-                <Users className="text-emerald-400" size={22} />
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+                <Users className="text-emerald-400" size={24} />
                 <span>System Stakeholder Directory</span>
               </h1>
-              <p className="section-subtext">
+              <p className="text-xs sm:text-sm text-slate-300 mt-1">
                 Live database directory of registered landowners, contractors, and timber buyers
               </p>
             </div>
-            <span className="status-pill status-green font-bold flex items-center gap-1.5">
+            <span className="admin-badge-emerald text-xs font-bold flex items-center gap-1.5 shrink-0">
               {loading ? (
                 <>
                   <Loader2 size={13} className="animate-spin" /> Fetching DB...
@@ -205,63 +205,69 @@ const UsersPage = () => {
           </div>
 
           {/* 3 Ecosystem Stakeholder Summary KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <div
-              className={`kpi-card cursor-pointer transition-all ${
-                roleFilter === 'landowner' ? 'border-emerald-500/80 bg-emerald-950/20' : 'hover:border-emerald-500/40'
+              className={`admin-subcard cursor-pointer transition-all ${
+                roleFilter === 'landowner' ? 'border-emerald-500/80 bg-[#18241e]' : 'hover:border-emerald-500/50'
               }`}
               onClick={() => setRoleFilter(roleFilter === 'landowner' ? 'all' : 'landowner')}
             >
-              <div className="kpi-card-header flex justify-between items-center mb-2">
-                <span className="kpi-icon-box icon-emerald"><Trees size={18} /></span>
-                <span className="kpi-label font-bold text-slate-400">Landowners</span>
+              <div className="flex justify-between items-center mb-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold">
+                  <Trees size={20} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Landowners</span>
               </div>
-              <div className="kpi-card-body">
-                <div className="kpi-value text-2xl font-black text-emerald-400">{counts.landowners}</div>
-                <div className="text-[11px] font-semibold text-emerald-400 mt-1">Database registered owners</div>
+              <div>
+                <div className="text-3xl font-black text-emerald-400">{counts.landowners}</div>
+                <div className="text-xs font-bold text-emerald-300 mt-1">Database registered owners</div>
               </div>
             </div>
 
             <div
-              className={`kpi-card cursor-pointer transition-all ${
-                roleFilter === 'contractor' ? 'border-amber-500/80 bg-amber-950/20' : 'hover:border-amber-500/40'
+              className={`admin-subcard cursor-pointer transition-all ${
+                roleFilter === 'contractor' ? 'border-amber-500/80 bg-amber-500/10' : 'hover:border-amber-500/50'
               }`}
               onClick={() => setRoleFilter(roleFilter === 'contractor' ? 'all' : 'contractor')}
             >
-              <div className="kpi-card-header flex justify-between items-center mb-2">
-                <span className="kpi-icon-box icon-amber"><Truck size={18} /></span>
-                <span className="kpi-label font-bold text-slate-400">Contractors</span>
+              <div className="flex justify-between items-center mb-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold">
+                  <Truck size={20} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Contractors</span>
               </div>
-              <div className="kpi-card-body">
-                <div className="kpi-value text-2xl font-black text-amber-400">{counts.contractors}</div>
-                <div className="text-[11px] font-semibold text-amber-400 mt-1">Registered service providers</div>
+              <div>
+                <div className="text-3xl font-black text-amber-400">{counts.contractors}</div>
+                <div className="text-xs font-bold text-amber-300 mt-1">Registered service providers</div>
               </div>
             </div>
 
             <div
-              className={`kpi-card cursor-pointer transition-all ${
-                roleFilter === 'buyer' ? 'border-blue-500/80 bg-blue-950/20' : 'hover:border-blue-500/40'
+              className={`admin-subcard cursor-pointer transition-all ${
+                roleFilter === 'buyer' ? 'border-emerald-500/80 bg-emerald-500/10' : 'hover:border-emerald-500/50'
               }`}
               onClick={() => setRoleFilter(roleFilter === 'buyer' ? 'all' : 'buyer')}
             >
-              <div className="kpi-card-header flex justify-between items-center mb-2">
-                <span className="kpi-icon-box icon-blue"><ShoppingBag size={18} /></span>
-                <span className="kpi-label font-bold text-slate-400">Buyers</span>
+              <div className="flex justify-between items-center mb-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold">
+                  <ShoppingBag size={20} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Buyers</span>
               </div>
-              <div className="kpi-card-body">
-                <div className="kpi-value text-2xl font-black text-blue-400">{counts.buyers}</div>
-                <div className="text-[11px] font-semibold text-blue-400 mt-1">Timber mills & registered buyers</div>
+              <div>
+                <div className="text-3xl font-black text-emerald-400">{counts.buyers}</div>
+                <div className="text-xs font-bold text-emerald-300 mt-1">Timber mills &amp; registered buyers</div>
               </div>
             </div>
           </div>
         </section>
 
         {/* Main Users Directory Table Section */}
-        <section className="dashboard-section card space-y-5">
+        <section className="admin-card space-y-6">
           {/* Card Title Header */}
-          <div className="border-b border-slate-800/80 pb-4">
+          <div className="border-b border-emerald-500/15 pb-4">
             <h2 className="section-heading text-xl font-extrabold text-white">Registered Stakeholders Directory</h2>
-            <p className="section-subtext text-xs text-slate-400 mt-1">
+            <p className="section-subtext text-xs text-slate-300 mt-1">
               Live user database query results from MongoDB
             </p>
           </div>
@@ -313,10 +319,10 @@ const UsersPage = () => {
 
           {/* Clean Scrollable Table with Separating Borders */}
           <div className="table-wrapper">
-            <table className="data-table">
+            <table className="admin-table">
               <thead>
                 <tr>
-                  <th>User & Contact</th>
+                  <th>User &amp; Contact</th>
                   <th>Role</th>
                   <th>District / Location</th>
                   <th>Registration Date</th>
@@ -328,7 +334,7 @@ const UsersPage = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
+                    <td colSpan={7} className="py-12 text-center text-slate-300 text-xs">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 size={16} className="animate-spin text-emerald-400" />
                         <span>Querying registered users from MongoDB...</span>
@@ -337,11 +343,11 @@ const UsersPage = () => {
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
+                    <td colSpan={7} className="py-12 text-center text-slate-300 text-xs">
                       <div className="flex flex-col items-center justify-center gap-1.5">
-                        <Database size={24} className="text-slate-600 mb-1" />
-                        <span className="font-bold text-slate-300 text-sm">No DB Stakeholders Found</span>
-                        <span className="text-slate-500 text-xs max-w-sm">
+                        <Database size={24} className="text-emerald-500/60 mb-1" />
+                        <span className="font-bold text-white text-sm">No DB Stakeholders Found</span>
+                        <span className="text-slate-400 text-xs max-w-sm">
                           No registered users match your search and filter criteria in MongoDB. Newly registered users will appear here live.
                         </span>
                       </div>
@@ -357,16 +363,16 @@ const UsersPage = () => {
                         </div>
                       </td>
                       <td>
-                        <span className={`status-pill ${getRoleStatusClass(u.role)} font-bold text-[11px]`}>
-                          {u.role.toUpperCase()}
+                        <span className={`admin-badge-emerald font-bold text-xs uppercase`}>
+                          {u.role}
                         </span>
                       </td>
                       <td className="text-slate-300 text-xs">{u.location}</td>
                       <td className="text-slate-400 text-xs">{u.date}</td>
                       <td>
                         <span
-                          className={`status-pill ${
-                            u.verification.includes('Verified') ? 'status-green' : 'status-yellow'
+                          className={`px-3 py-1 rounded-xl text-xs font-bold border flex items-center gap-1.5 w-max ${
+                            u.verification.includes('Verified') ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                           }`}
                         >
                           {u.verification.includes('Verified') ? (
@@ -380,7 +386,7 @@ const UsersPage = () => {
                       <td>
                         <span
                           className={`font-bold text-xs ${
-                            u.status === 'Active' ? 'text-emerald-400' : 'text-red-400'
+                            u.status === 'Active' ? 'text-emerald-400' : 'text-rose-400'
                           }`}
                         >
                           {u.status}
@@ -389,7 +395,7 @@ const UsersPage = () => {
                       <td className="text-center">
                         <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                           <button
-                            className="btn btn-xs bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer transition-all flex items-center gap-1 px-3 py-1.5 rounded-lg"
+                            className="admin-btn-outline text-xs py-1.5 px-3"
                             onClick={() => {
                               const targetId = u.id || encodeURIComponent(u.email || u.name);
                               navigate(`/admin/users/${targetId}`, { state: { user: u } });

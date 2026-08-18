@@ -52,9 +52,15 @@ const Login = () => {
   const isEmailValidFormat = watchEmail && /\S+@\S+\.\S+/.test(watchEmail);
   const isRegisteredUser = isEmailValidFormat && authService.isUserRegistered(watchEmail);
 
-  // Get all registered users for autofill suggestions
+  // Get only approved/active registered users for autofill suggestions
   const registeredUsersObj = authService.getRegisteredUsers();
-  const registeredUsersList = Object.values(registeredUsersObj);
+  const registeredUsersList = Object.values(registeredUsersObj).filter(u => {
+    // Exclude unapproved / pending verification contractors
+    if (u.role === 'contractor') {
+      return u.status !== 'Pending' && u.isVerified !== false;
+    }
+    return true;
+  });
 
   // Suggestions dropdown state
   const [isEmailFocused, setIsEmailFocused] = useState(false);
@@ -116,15 +122,6 @@ const Login = () => {
             </div>
           )}
 
-          {/* HTML5 Datalist for browser email autocomplete popover */}
-          <datalist id="registered-emails-list">
-            {registeredUsersList.map((u) => (
-              <option key={u.email} value={u.email}>
-                {u.name} ({u.role})
-              </option>
-            ))}
-          </datalist>
-
           <form onSubmit={handleSubmit(onSubmit)} method="post" action="#" autoComplete="on" className="auth-form">
             {/* Email Field with Live Registered User Validation */}
             <div className="form-group relative">
@@ -135,7 +132,6 @@ const Login = () => {
                   id="email"
                   name="email"
                   type="email"
-                  list="registered-emails-list"
                   autoComplete="email"
                   placeholder="name@company.com"
                   className={errors.email ? 'form-input-error' : ''}
@@ -145,29 +141,32 @@ const Login = () => {
                 />
               </div>
 
-              {/* Interactive Email Auto-Suggestions Dropdown */}
-              {isEmailFocused && matchingEmails.length > 0 && watchEmail.length < 20 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden max-h-52 overflow-y-auto">
-                  <div className="px-3 py-1.5 bg-slate-950 border-b border-slate-800 text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-                    Registered Accounts:
+              {/* Interactive Email Auto-Suggestions Dropdown (Only Approved Accounts) */}
+              {isEmailFocused && matchingEmails.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-50 overflow-hidden max-h-56 overflow-y-auto animate-fade-in">
+                  <div className="px-4 py-2.5 bg-slate-950/90 border-b border-slate-800/80 text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Approved Registered Accounts:</span>
+                    <span className="text-[10px] text-slate-400 font-normal">{matchingEmails.length} available</span>
                   </div>
                   {matchingEmails.map((u) => (
                     <button
                       key={u.email}
                       type="button"
-                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-800 flex items-center justify-between gap-2 border-b border-slate-800/50 last:border-0 cursor-pointer transition-colors"
+                      className="w-full text-left px-4 py-3 bg-slate-900/60 hover:bg-slate-800/90 flex items-center justify-between gap-3 border-b border-slate-800/50 last:border-0 cursor-pointer transition-all group"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setValue('email', u.email, { shouldValidate: true });
-                        setValue('password', 'password123', { shouldValidate: true });
+                        setValue('password', u.password || 'password123', { shouldValidate: true });
                         setIsEmailFocused(false);
                       }}
                     >
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-white">{u.name || u.email}</span>
-                        <span className="text-[11px] text-slate-400">{u.email}</span>
+                      <div className="flex flex-col min-w-0 pr-1">
+                        <span className="text-xs font-bold text-white group-hover:text-emerald-400 truncate transition-colors">
+                          {u.email}
+                        </span>
+                        <span className="text-[11px] text-slate-400 truncate">{u.name || u.email}</span>
                       </div>
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
                         u.role === 'admin' ? 'bg-amber-950/80 text-amber-300 border-amber-800' :
                         u.role === 'contractor' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
                         u.role === 'buyer' ? 'bg-blue-950/80 text-blue-300 border-blue-800' :

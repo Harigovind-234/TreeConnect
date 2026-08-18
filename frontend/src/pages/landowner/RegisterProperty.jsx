@@ -191,14 +191,13 @@ const RegisterProperty = () => {
   };
 
   return (
-    <div className="dashboard-layout min-h-screen bg-dark">
+    <div className="landowner-dashboard-page">
       <Navbar />
-      <div className="dashboard-body">
+      <div className="landowner-dashboard-container">
         <Sidebar />
 
-        <div className="dashboard-workspace flex-1">
-          {/* Centered Page Container (max-width 1200px desktop, comfortable padding) */}
-          <main className="dashboard-content max-w-[1200px] w-[min(100%-48px,1200px)] mx-auto py-8 px-4 sm:px-6 space-y-9">
+        <div className="landowner-dashboard-workspace">
+          <main className="w-full flex flex-col gap-8">
 
             {/* If Registered, Show Success State */}
             {registeredResult ? (
@@ -206,47 +205,31 @@ const RegisterProperty = () => {
             ) : (
               <>
                 {/* 1. PAGE HEADER */}
-                <div className="space-y-4">
-                  <button
-                    onClick={() => navigate('/landowner/dashboard')}
-                    className="btn btn-secondary btn-sm flex items-center gap-1.5 text-muted hover:text-main text-[14px]"
-                  >
-                    <ArrowLeft size={16} /> Back to Dashboard
-                  </button>
-
-                  <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b border-color/50">
-                    <div className="space-y-1.5 max-w-3xl">
-                      <h1 className="text-[32px] sm:text-[36px] font-extrabold text-main tracking-tight leading-tight">
-                        Register Your Property
-                      </h1>
-                      <p className="text-[17px] font-semibold text-emerald">
-                        Add the property where your trees are located to TreeConnect.
-                      </p>
-                      <p className="text-[15px] text-muted leading-relaxed">
-                        Provide basic property and location information. You can add detailed tree information and connect with contractors after registration.
-                      </p>
-                    </div>
+                <section className="ld-card ld-hero-card">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <button
+                      onClick={() => navigate('/landowner/dashboard')}
+                      className="ld-pill hover:text-white cursor-pointer"
+                    >
+                      <ArrowLeft size={14} /> Back to Dashboard
+                    </button>
 
                     {/* Compact Workflow Progress Indicator */}
-                    <div className="card px-4 py-2.5 border border-color rounded-[12px] bg-card text-[13px] shadow-sm">
-                      <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-1">
-                        Workflow Progress
-                      </span>
-                      <div className="flex items-center gap-2 text-[13px] font-medium">
-                        <span className="text-emerald font-bold flex items-center gap-1.5">
-                          1 Property <span className="w-2 h-2 rounded-full bg-emerald shadow-glow"></span>
-                        </span>
-                        <span className="text-muted/70">• 2 Trees</span>
-                        <span className="text-muted/70">• 3 Contractor</span>
-                        <span className="text-muted/70">• 4 Survey</span>
-                        <span className="text-muted/70">• 5 Harvest</span>
-                      </div>
-                    </div>
+                    <span className="ld-hero-tag">
+                      <span className="ld-dot ld-dot-green"></span> Workflow Progress: Step 1: Register Property
+                    </span>
                   </div>
-                </div>
 
-                {/* FORM SECTIONS (Well-spaced 28-36px vertical hierarchy) */}
-                <form onSubmit={(e) => e.preventDefault()} className="space-y-9">
+                  <div className="mt-3">
+                    <h1 className="ld-hero-heading">Register Your Property</h1>
+                    <p className="ld-hero-subtext mt-1">
+                      Add the property where your trees are located to TreeConnect to start logging inventory &amp; connecting with contractors.
+                    </p>
+                  </div>
+                </section>
+
+                {/* FORM SECTIONS (Spacious 32px vertical flex gap between cards) */}
+                <form onSubmit={(e) => e.preventDefault()} className="w-full flex flex-col gap-8">
 
                   {/* 1. PROPERTY TYPE */}
                   <PropertyTypeSelector

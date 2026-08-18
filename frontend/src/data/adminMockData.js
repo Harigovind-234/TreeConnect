@@ -61,7 +61,7 @@ export const allUsersList = [
   { id: 'usr_7', name: 'Robert Pine', email: 'landowner@treeconnect.com', phone: '+91 98471 99887', role: 'landowner', location: 'Wayanad, Kerala', status: 'Active', verification: 'Verified', date: 'Jul 12, 2026' },
   { id: 'usr_8', name: 'Apex Harvesting Co.', email: 'contractor@treeconnect.com', phone: '+91 94471 98765', role: 'contractor', location: 'Palakkad, Kerala', status: 'Active', verification: 'Verified by TreeConnect Admin', date: 'Jul 15, 2026' },
   { id: 'usr_9', name: 'Green Harvest Team', email: 'greenharvest@outlook.com', phone: '+91 94473 11223', role: 'contractor', location: 'Wayanad, Kerala', status: 'Active', verification: 'Pending Verification', date: 'Aug 06, 2026' },
-  { id: 'usr_10', name: 'TreeConnect Admin', email: 'admin@treeconnect.com', phone: '+91 94470 00111', role: 'admin', location: 'Thiruvananthapuram, Kerala', status: 'Active', verification: 'Verified', date: 'Jul 01, 2026' }
+  { id: 'usr_10', name: 'TreeConnect Admin', email: 'admintc@gmail.com', phone: '+91 94470 00111', role: 'admin', location: 'Thiruvananthapuram, Kerala', status: 'Active', verification: 'Verified', date: 'Jul 01, 2026' }
 ];
 
 export const attentionRequiredItems = [

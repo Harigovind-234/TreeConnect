@@ -238,28 +238,28 @@ const UserDetailPage = () => {
         ) : (
           <>
             {/* Header Banner Profile Card */}
-            <div className="card p-6 sm:p-8 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl shadow-xl space-y-4">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-900 to-emerald-950 text-emerald-400 border border-emerald-700/60 flex items-center justify-center font-black text-2xl shadow-inner shrink-0">
+            <div className="admin-card admin-hero-card p-6 sm:p-8 space-y-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-5">
+                <div className="flex items-center gap-5">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-black text-2xl shadow-lg shrink-0">
                     {userData.name ? userData.name.charAt(0).toUpperCase() : 'U'}
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-3 flex-wrap">
-                      <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                      <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                         {userData.name}
                       </h1>
 
-                      <span className="px-3 py-1 rounded-lg text-xs font-extrabold uppercase bg-emerald-950/90 text-emerald-400 border border-emerald-800/80">
+                      <span className="admin-badge-emerald text-xs uppercase font-extrabold">
                         {userData.role}
                       </span>
 
                       <span
-                        className={`px-3 py-1 rounded-lg text-xs font-bold border ${
+                        className={`px-3 py-1 rounded-xl text-xs font-bold border ${
                           isSuspended
-                            ? 'bg-red-950/80 text-red-400 border-red-800/80'
-                            : 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
+                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                         }`}
                       >
                         {userData.status || 'Active'}
@@ -268,9 +268,9 @@ const UserDetailPage = () => {
 
                     <a
                       href={`mailto:${userData.email}`}
-                      className="text-xs sm:text-sm text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1.5 font-medium"
+                      className="text-xs sm:text-sm text-slate-300 hover:text-emerald-400 transition-colors flex items-center gap-2 font-medium"
                     >
-                      <Mail size={14} className="text-slate-500" />
+                      <Mail size={15} className="text-slate-400" />
                       <span>{userData.email}</span>
                     </a>
                   </div>
@@ -281,7 +281,7 @@ const UserDetailPage = () => {
                   {userData.role === 'contractor' && !isVerified && (
                     <button
                       onClick={handleVerify}
-                      className="btn btn-xs bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black cursor-pointer px-4 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-1.5 text-xs"
+                      className="admin-btn-emerald text-xs sm:text-sm font-bold py-2.5 px-5"
                     >
                       <UserCheck size={16} /> Verify Contractor
                     </button>
@@ -292,10 +292,10 @@ const UserDetailPage = () => {
                       if (isSuspended) handleToggleSuspend();
                       else setShowSuspendConfirm(true);
                     }}
-                    className={`btn btn-xs cursor-pointer flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold transition-all text-xs ${
+                    className={`px-4 py-2.5 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-2 cursor-pointer shadow-md ${
                       isSuspended
-                        ? 'bg-emerald-950/90 text-emerald-400 hover:bg-emerald-900 border border-emerald-800'
-                        : 'bg-red-950/80 text-red-400 hover:bg-red-900 border border-red-800/80'
+                        ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/40'
+                        : 'bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40'
                     }`}
                   >
                     {isSuspended ? (
@@ -313,93 +313,93 @@ const UserDetailPage = () => {
             </div>
 
             {/* 2-Column Page Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-7">
               {/* Left Column (2/3 width) - Account Info, Verification, Activity */}
-              <div className="lg:col-span-2 space-y-6">
+              <div className="lg:col-span-2 space-y-7">
                 {/* ACCOUNT INFORMATION */}
-                <section className="card p-6 bg-slate-950/90 border border-slate-800 rounded-2xl space-y-4">
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-2 border-b border-slate-800/80 pb-3">
-                    <ShieldCheck size={16} className="text-emerald-400" />
+                <section className="admin-card space-y-5">
+                  <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-200 flex items-center gap-2 border-b border-emerald-500/15 pb-3">
+                    <ShieldCheck size={18} className="text-emerald-400" />
                     <span>ACCOUNT INFORMATION</span>
                   </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 pt-1">
-                    <div className="flex justify-between items-center pb-2.5 border-b border-slate-800/60">
-                      <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
-                        <Phone size={13} className="text-slate-500" /> Phone Number
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
+                    <div className="admin-subcard p-4 space-y-1">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Phone size={13} className="text-slate-400" /> Phone Number
                       </span>
-                      <span className="font-bold text-white text-xs">{userData.phone || '+91 98765 43210'}</span>
+                      <span className="font-bold text-white text-sm sm:text-base block">{userData.phone || '+91 98765 43210'}</span>
                     </div>
 
-                    <div className="flex justify-between items-center pb-2.5 border-b border-slate-800/60">
-                      <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
-                        <MapPin size={13} className="text-slate-500" /> Location
+                    <div className="admin-subcard p-4 space-y-1">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin size={13} className="text-slate-400" /> Location
                       </span>
-                      <span className="font-bold text-white text-xs">{userData.location || 'Kerala'}</span>
+                      <span className="font-bold text-white text-sm sm:text-base block">{userData.location || 'Kerala'}</span>
                     </div>
 
-                    <div className="flex justify-between items-center pb-2.5 border-b border-slate-800/60">
-                      <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
-                        <Globe size={13} className="text-slate-500" /> District
+                    <div className="admin-subcard p-4 space-y-1">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Globe size={13} className="text-slate-400" /> District
                       </span>
-                      <span className="font-bold text-white text-xs">{getDistrict(userData.location)}</span>
+                      <span className="font-bold text-white text-sm sm:text-base block">{getDistrict(userData.location)}</span>
                     </div>
 
-                    <div className="flex justify-between items-center pb-2.5 border-b border-slate-800/60">
-                      <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
-                        <Calendar size={13} className="text-slate-500" /> Registration Date
+                    <div className="admin-subcard p-4 space-y-1">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Calendar size={13} className="text-slate-400" /> Registration Date
                       </span>
-                      <span className="font-bold text-white text-xs">{userData.date || 'Aug 04, 2026'}</span>
+                      <span className="font-bold text-white text-sm sm:text-base block">{userData.date || 'Aug 04, 2026'}</span>
                     </div>
 
-                    <div className="flex justify-between items-center pb-2.5 border-b border-slate-800/60">
-                      <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
-                        <Clock size={13} className="text-slate-500" /> Last Login
+                    <div className="admin-subcard p-4 space-y-1">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Clock size={13} className="text-slate-400" /> Last Login
                       </span>
-                      <span className="font-bold text-white text-xs">{userData.lastLogin || 'Aug 12, 2026'}</span>
+                      <span className="font-bold text-white text-sm sm:text-base block">{userData.lastLogin || 'Aug 12, 2026'}</span>
                     </div>
 
-                    <div className="flex justify-between items-center pb-2.5 border-b border-slate-800/60">
-                      <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
-                        <Key size={13} className="text-slate-500" /> Login Method
+                    <div className="admin-subcard p-4 space-y-1">
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Key size={13} className="text-slate-400" /> Login Method
                       </span>
-                      <span className="font-bold text-white text-xs">{userData.loginMethod || 'Email & Password'}</span>
+                      <span className="font-bold text-white text-sm sm:text-base block">{userData.loginMethod || 'Email & Password'}</span>
                     </div>
                   </div>
                 </section>
 
                 {/* VERIFICATION STATUS */}
-                <section className="card p-6 bg-slate-950/90 border border-slate-800 rounded-2xl space-y-4">
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-2 border-b border-slate-800/80 pb-3">
-                    <CheckCircle2 size={16} className="text-emerald-400" />
+                <section className="admin-card space-y-5">
+                  <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-200 flex items-center gap-2 border-b border-emerald-500/15 pb-3">
+                    <CheckCircle2 size={18} className="text-emerald-400" />
                     <span>VERIFICATION STATUS</span>
                   </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-                    <div className="px-4 py-3 bg-slate-900/40 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-xs text-slate-300 font-semibold">Email Verification</span>
-                      <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center gap-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                    <div className="admin-subcard p-4 flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-slate-300 font-semibold">Email Verification</span>
+                      <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
                         ✓ Verified
                       </span>
                     </div>
 
-                    <div className="px-4 py-3 bg-slate-900/40 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-xs text-slate-300 font-semibold">Phone Verification</span>
-                      <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center gap-1">
+                    <div className="admin-subcard p-4 flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-slate-300 font-semibold">Phone Verification</span>
+                      <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
                         ✓ Verified
                       </span>
                     </div>
 
-                    <div className="px-4 py-3 bg-slate-900/40 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-xs text-slate-300 font-semibold">Account Verification</span>
-                      <span className={`px-2.5 py-1 rounded-md text-xs font-bold border flex items-center gap-1 ${isVerified ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80' : 'bg-amber-950/80 text-amber-400 border-amber-800/80'}`}>
+                    <div className="admin-subcard p-4 flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-slate-300 font-semibold">Account Verification</span>
+                      <span className={`px-3 py-1 rounded-xl text-xs font-extrabold border flex items-center gap-1 ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'}`}>
                         {isVerified ? '✓ Verified' : '⏳ Pending'}
                       </span>
                     </div>
 
-                    <div className="px-4 py-3 bg-slate-900/40 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <span className="text-xs text-slate-300 font-semibold">Admin Review</span>
-                      <span className={`px-2.5 py-1 rounded-md text-xs font-bold border flex items-center gap-1 ${isVerified ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80' : 'bg-blue-950/80 text-blue-400 border-blue-800/80'}`}>
+                    <div className="admin-subcard p-4 flex justify-between items-center">
+                      <span className="text-xs sm:text-sm text-slate-300 font-semibold">Admin Review</span>
+                      <span className={`px-3 py-1 rounded-xl text-xs font-extrabold border flex items-center gap-1 ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'}`}>
                         {isVerified ? '✓ Completed' : '🔍 Under Review'}
                       </span>
                     </div>
@@ -407,41 +407,41 @@ const UserDetailPage = () => {
                 </section>
 
                 {/* ACTIVITY SUMMARY */}
-                <section className="card p-6 bg-slate-950/90 border border-slate-800 rounded-2xl space-y-4">
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-2 border-b border-slate-800/80 pb-3">
-                    <Activity size={16} className="text-emerald-400" />
+                <section className="admin-card space-y-5">
+                  <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-200 flex items-center gap-2 border-b border-emerald-500/15 pb-3">
+                    <Activity size={18} className="text-emerald-400" />
                     <span>ACTIVITY SUMMARY ({userData.role?.toUpperCase()})</span>
                   </h3>
 
                   {userData.role?.toLowerCase() === 'landowner' && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-1">
-                      <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 pt-1">
+                      <div className="admin-subcard p-5 flex items-center justify-between">
                         <div>
-                          <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Properties</span>
-                          <span className="text-2xl font-black text-emerald-400 mt-0.5 block">{userData.propertiesCount || 3}</span>
+                          <span className="text-slate-400 text-xs font-bold block uppercase tracking-wider">Properties</span>
+                          <span className="text-3xl font-black text-emerald-400 mt-1 block">{userData.propertiesCount || 3}</span>
                         </div>
-                        <span className="p-2.5 rounded-xl bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-                          <Trees size={20} />
+                        <span className="p-3 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                          <Trees size={22} />
                         </span>
                       </div>
 
-                      <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+                      <div className="admin-subcard p-5 flex items-center justify-between">
                         <div>
-                          <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Tree Inventories</span>
-                          <span className="text-2xl font-black text-white mt-0.5 block">{userData.treeInventoriesCount || 12}</span>
+                          <span className="text-slate-400 text-xs font-bold block uppercase tracking-wider">Tree Inventories</span>
+                          <span className="text-3xl font-black text-white mt-1 block">{userData.treeInventoriesCount || 12}</span>
                         </div>
-                        <span className="p-2.5 rounded-xl bg-slate-800 text-slate-300 border border-slate-700">
-                          <Activity size={20} />
+                        <span className="p-3 rounded-xl bg-[#18241e] text-emerald-300 border border-emerald-500/20">
+                          <Activity size={22} />
                         </span>
                       </div>
 
-                      <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+                      <div className="admin-subcard p-5 flex items-center justify-between">
                         <div>
-                          <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Harvest Requests</span>
-                          <span className="text-2xl font-black text-amber-400 mt-0.5 block">{userData.harvestRequestsCount || 4}</span>
+                          <span className="text-slate-400 text-xs font-bold block uppercase tracking-wider">Harvest Requests</span>
+                          <span className="text-3xl font-black text-amber-400 mt-1 block">{userData.harvestRequestsCount || 4}</span>
                         </div>
-                        <span className="p-2.5 rounded-xl bg-amber-950/80 text-amber-400 border border-amber-800/60">
-                          <Truck size={20} />
+                        <span className="p-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                          <Truck size={22} />
                         </span>
                       </div>
 

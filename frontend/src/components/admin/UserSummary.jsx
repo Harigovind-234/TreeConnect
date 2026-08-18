@@ -44,7 +44,7 @@ const UserSummary = ({ onManageUsers }) => {
   };
 
   return (
-    <section className="dashboard-section card space-y-5">
+    <section className="admin-card space-y-5">
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-800/80 pb-4">
         <div>
@@ -60,7 +60,7 @@ const UserSummary = ({ onManageUsers }) => {
         </div>
 
         <div className="flex items-center gap-3 self-end md:self-center pt-1 md:pt-0">
-          <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-emerald-400 flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#0e1612] border border-emerald-500/20 text-emerald-400 flex items-center gap-2">
             {loading ? (
               <>
                 <Loader2 size={13} className="animate-spin" /> Querying Database...
@@ -73,7 +73,7 @@ const UserSummary = ({ onManageUsers }) => {
           </span>
 
           <button
-            className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1.5 cursor-pointer bg-slate-900 hover:bg-slate-800 px-3.5 py-1.5 rounded-xl border border-slate-700/80 transition-all shadow-xs"
+            className="admin-btn-outline text-xs py-1.5 px-3.5"
             onClick={() => handleCardClick('all')}
           >
             <span>View All Users</span>
