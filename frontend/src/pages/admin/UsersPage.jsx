@@ -53,15 +53,37 @@ const UsersPage = () => {
         setLoading(true);
         const res = await api.get('/admin/users');
         if (res.data && Array.isArray(res.data.users)) {
-          // Filter out admin role so directory focuses on ecosystem stakeholders
+          // Filter out admin users so directory strictly displays ecosystem stakeholders from DB
           const dbStakeholders = res.data.users.filter((u) => u.role !== 'admin');
           setUsers(dbStakeholders);
         } else {
           setUsers([]);
         }
-      } catch (err) {
-        console.error('Database fetch error:', err);
-        setUsers([]);
+      } catch (apiErr) {
+        console.warn('Backend API fetch warning, using registered users fallback:', apiErr);
+        // Fallback for offline mode using local storage registered users
+        const localObj = authService.getRegisteredUsers();
+        const localList = Object.values(localObj)
+          .filter((u) => u.role !== 'admin')
+          .map((u) => ({
+            id: u.id || u.email,
+            name: u.name || u.fullName || u.email?.split('@')[0],
+            email: u.email,
+            phone: u.phone || 'N/A',
+            role: u.role || 'landowner',
+            location: u.district || u.location || 'N/A',
+            status: u.status || 'Pending',
+            verification: (u.isVerified && u.status === 'Active') ? 'Verified by TreeConnect Admin' : 'Pending Verification',
+            isVerified: Boolean(u.isVerified && u.status === 'Active'),
+            date: u.date || (u.createdAt ? u.createdAt.split('T')[0] : 'N/A'),
+            submittedDate: u.date || (u.createdAt ? u.createdAt.split('T')[0] : 'N/A'),
+            docType: u.landTaxInvoiceDoc ? 'Land Tax Invoice' : (u.idProofDocument || u.forestLicenceDoc || u.tradeLicenceDoc || 'No Documents'),
+            landTaxInvoiceDoc: u.landTaxInvoiceDoc || '',
+            forestLicenceDoc: u.forestLicenceDoc || '',
+            tradeLicenceDoc: u.tradeLicenceDoc || '',
+            idProofDocument: u.idProofDocument || ''
+          }));
+        setUsers(localList);
       } finally {
         setLoading(false);
       }

@@ -25,12 +25,12 @@ const NextSteps = () => {
   ];
 
   return (
-    <div className="space-y-4 pt-1">
+    <div className="ld-card p-6 sm:p-8 space-y-5 shadow-2xl bg-[#0b1710] border border-emerald-500/20 rounded-xl">
       <div>
-        <h3 className="text-[20px] font-bold text-main tracking-tight">
+        <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
           What Happens After Registration?
         </h3>
-        <p className="text-[14px] text-muted mt-1">
+        <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
           Here is an overview of the simple steps following property registration.
         </p>
       </div>
@@ -39,16 +39,16 @@ const NextSteps = () => {
         {steps.map((step) => (
           <div
             key={step.num}
-            className="p-4 rounded-[12px] bg-surface/70 border border-color/80 flex items-start gap-3 text-xs"
+            className="ld-subcard p-4 flex items-start gap-3 text-xs bg-[#050e08] border border-emerald-600/20 rounded-lg"
           >
-            <div className="w-7 h-7 rounded-lg bg-emerald/15 border border-emerald/30 text-emerald flex items-center justify-center font-bold text-[13px] flex-shrink-0 mt-0.5">
+            <div className="w-7 h-7 rounded-md bg-emerald-950/80 border border-emerald-700/60 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
               {step.num}
             </div>
             <div className="space-y-0.5">
-              <span className="font-bold text-main text-[14px] block">
+              <span className="font-bold text-white text-sm block">
                 {step.title}
               </span>
-              <p className="text-muted text-[13px] leading-relaxed">
+              <p className="text-slate-300 text-xs leading-relaxed">
                 {step.description}
               </p>
             </div>

@@ -113,13 +113,18 @@ def get_properties(
                 content={"message": "Database connection error"}
             )
 
+        target_email = userEmail or get_current_user_email(authorization)
+
         query = {}
-        if userEmail and not all_records:
-            query = {"$or": [{"userEmail": userEmail.strip().lower()}, {"userEmail": userEmail}]}
-        elif not all_records:
-            token_email = get_current_user_email(authorization)
-            if token_email:
-                query = {"$or": [{"userEmail": token_email}, {"userEmail": ""}, {"userEmail": {"$exists": False}}]}
+        if not all_records:
+            if target_email:
+                clean_email = target_email.strip().lower()
+                query = {"$or": [{"userEmail": clean_email}, {"userEmail": target_email.strip()}]}
+            else:
+                return JSONResponse(
+                    status_code=status.HTTP_200_OK,
+                    content={"properties": []}
+                )
 
         properties_cursor = db.properties.find(query).sort("createdAt", -1)
         properties_list = []

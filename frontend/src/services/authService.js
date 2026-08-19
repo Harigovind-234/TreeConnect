@@ -96,10 +96,10 @@ export const authService = {
         throw new Error('Incorrect password for this registered account.');
       }
 
-      // Enforce status & verification checks for mock/offline users
-      if (registeredUser.role === 'contractor' && (registeredUser.status === 'Pending' || registeredUser.isVerified === false)) {
-        this._recordLoginEvent(emailKey, registeredUser.role, registeredUser.name, false, 'Account pending administrator verification');
-        throw new Error('Your contractor account is pending administrator verification. You will be able to log in once your account is reviewed and approved.');
+      // Enforce status & verification checks for all non-admin users
+      if (registeredUser.role !== 'admin' && (registeredUser.status === 'Pending' || registeredUser.status === 'pending' || registeredUser.status === 'Pending Verification' || registeredUser.isVerified === false)) {
+        this._recordLoginEvent(emailKey, registeredUser.role, registeredUser.name, false, 'Account pending administrator approval');
+        throw new Error('Your account is pending administrator approval. You will be able to log in once your registration is reviewed and approved by an admin.');
       }
 
       if (registeredUser.status === 'Rejected') {
@@ -146,8 +146,26 @@ export const authService = {
           pinCode: userData.postalCode || userData.pinCode || '',
           localBody: userData.localBody || '',
           village: userData.village || '',
-          status: isContractor ? 'Pending' : 'Active',
-          isVerified: isContractor ? false : true,
+          businessType: userData.buyerType || userData.businessType || '',
+          buyerType: userData.buyerType || userData.businessType || '',
+          gstNumber: userData.gstNumber || '',
+          forestLicenceDoc: userData.forestLicenceDoc || '',
+          forestLicenceUrl: userData.forestLicenceUrl || '',
+          tradeLicenceDoc: userData.tradeLicenceDoc || '',
+          tradeLicenceUrl: userData.tradeLicenceUrl || '',
+          gstDoc: userData.gstDoc || '',
+          gstUrl: userData.gstUrl || '',
+          businessCertDoc: userData.businessCertDoc || '',
+          businessCertUrl: userData.businessCertUrl || '',
+          landTaxInvoiceDoc: userData.landTaxInvoiceDoc || '',
+          landTaxInvoiceUrl: userData.landTaxInvoiceUrl || '',
+          idProofType: userData.idProofType || '',
+          idProofDocument: userData.idProofDocument || '',
+          idProofUrl: userData.idProofUrl || '',
+          supportingDocument: userData.supportingDocument || '',
+          supportingUrl: userData.supportingUrl || '',
+          status: (userData.role === 'admin') ? 'Active' : 'Pending',
+          isVerified: (userData.role === 'admin') ? true : false,
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.email}`,
           title: `${(userData.role || 'landowner').charAt(0).toUpperCase() + (userData.role || 'landowner').slice(1)} Member`
         };
@@ -159,31 +177,19 @@ export const authService = {
 
     try {
       const response = await api.post('/auth/register', userData);
-      if (response.data?.user && response.data?.token && !isContractor) {
-        localStorage.setItem('treeconnect_token', response.data.token);
-        localStorage.setItem('treeconnect_user', JSON.stringify(response.data.user));
-      }
-      if (isContractor && response.data) {
-        return {
-          user: { ...(response.data.user || {}), status: 'Pending', isVerified: false, role: 'contractor' },
-          token: null,
-          message: 'Registration submitted. Pending administrator verification.'
-        };
-      }
-      return response.data;
+      return {
+        user: { ...(response.data?.user || {}), status: 'Pending', isVerified: false },
+        token: null,
+        message: 'Registration submitted successfully. Your account is pending administrator approval.'
+      };
     } catch (error) {
       const registeredUsers = this.getRegisteredUsers();
       const newCustomUser = registeredUsers[emailKey];
       if (newCustomUser) {
-        const mockToken = isContractor ? null : `mock_jwt_token_${newCustomUser.role}_${Date.now()}`;
-        if (!isContractor) {
-          localStorage.setItem('treeconnect_token', mockToken);
-          localStorage.setItem('treeconnect_user', JSON.stringify(newCustomUser));
-        }
         return {
-          user: newCustomUser,
-          token: mockToken,
-          message: isContractor ? 'Registration submitted. Pending administrator verification.' : 'Registration successful'
+          user: { ...newCustomUser, status: 'Pending', isVerified: false },
+          token: null,
+          message: 'Registration submitted successfully. Your account is pending administrator approval.'
         };
       }
       const errorMessage =
@@ -200,7 +206,7 @@ export const authService = {
   async resetPassword(email, newPassword, code) {
     const emailKey = email?.trim().toLowerCase();
     try {
-      const response = await api.post('/auth/reset-password', { email: emailKey, newPassword, code });
+      const response = await api.post('/auth/reset-password', { email: emailKey, newPassword, code, token: code });
       const stored = localStorage.getItem('treeconnect_registered_users');
       const customUsers = stored ? JSON.parse(stored) : {};
       const baseUser = customUsers[emailKey] || MOCK_USERS[emailKey] || { email: emailKey, role: 'landowner', name: emailKey.split('@')[0] };

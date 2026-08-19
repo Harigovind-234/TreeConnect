@@ -762,3 +762,109 @@
   color: #ffffff;
   background: rgba(255, 255, 255, 0.1);
 }
+
+/* ==================================================== */
+/* GUARANTEED RECTANGULAR FORM FIELD STYLING            */
+/* ==================================================== */
+.ld-input,
+.ld-select,
+.ld-textarea {
+  width: 100% !important;
+  background-color: #050e08 !important;
+  border: 2px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 8px !important; /* RECTANGULAR SHAPE - NO OVAL / PILL */
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  padding: 12px 16px !important;
+  outline: none !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease !important;
+  box-sizing: border-box !important;
+}
+
+.ld-input:focus,
+.ld-select:focus,
+.ld-textarea:focus {
+  border-color: #10b981 !important;
+  background-color: #07150d !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+}
+
+.ld-input::placeholder,
+.ld-textarea::placeholder {
+  color: #6b7280 !important;
+  font-weight: 500 !important;
+}
+
+.ld-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #e2e8f0;
+  margin-bottom: 6px;
+}
+
+.landowner-dashboard-page input[type="text"],
+.landowner-dashboard-page input[type="tel"],
+.landowner-dashboard-page input[type="number"],
+.landowner-dashboard-page input[type="email"],
+.landowner-dashboard-page select,
+.landowner-dashboard-page textarea,
+.ld-card input,
+.ld-card select,
+.ld-card textarea {
+  border-radius: 8px !important;
+}
+
+.ld-risk-card {
+  padding: 14px 16px !important;
+  background-color: #050e08 !important;
+  border: 2px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 8px !important; /* CRISP RECTANGULAR SHAPE - NO OVAL / PILL */
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-sizing: border-box !important;
+}
+
+.ld-risk-card:hover {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  background-color: #07150d !important;
+}
+
+.ld-risk-card.selected {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15) !important;
+}
+
+.ld-risk-checkbox {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 4px !important; /* RECTANGULAR CHECKBOX */
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
+  flex-shrink: 0 !important;
+  transition: all 0.2s ease !important;
+}
+
+.ld-risk-checkbox.checked {
+  background-color: #10b981 !important;
+  border-color: #34d399 !important;
+  color: #050e08 !important;
+}
+
+.ld-risk-button {
+  border-radius: 8px !important;
+}
+
+

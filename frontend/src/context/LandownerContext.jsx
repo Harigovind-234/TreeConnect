@@ -85,38 +85,20 @@ export const LandownerProvider = ({ children }) => {
     useEffect(() => {
         const fetchDBProperties = async () => {
             try {
-                const data = await propertyService.getProperties();
-                if (data && data.properties && data.properties.length > 0) {
+                const storedUserStr = localStorage.getItem('treeconnect_user');
+                const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+                const userEmail = storedUser?.email || '';
+                
+                const data = await propertyService.getProperties(userEmail ? { userEmail } : {});
+                if (data && Array.isArray(data.properties)) {
                     const cleanDBProps = filterOutMockData(data.properties);
-                    setProperties(prev => {
-                        const propMap = new Map();
-
-                        // Start with current local user properties
-                        prev.forEach(p => {
-                            const key = p.id || p._id;
-                            if (key) propMap.set(key, p);
-                        });
-
-                        // Merge in backend DB properties
-                        cleanDBProps.forEach(p => {
-                            const key = p.id || p._id;
-                            const existing = propMap.get(key);
-                            propMap.set(key, {
-                                ...p,
-                                approxTreesCount: existing?.approxTreesCount || p.approxTreesCount || 0,
-                                mainSpecies: existing?.mainSpecies || p.mainSpecies || 'Timber Trees'
-                            });
-                        });
-
-                        const merged = Array.from(propMap.values());
-                        try {
-                            localStorage.setItem('treeconnect_properties', JSON.stringify(merged));
-                        } catch (e) {}
-                        return merged;
-                    });
+                    setProperties(cleanDBProps);
+                    try {
+                        localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
+                    } catch (e) {}
                 }
             } catch (err) {
-                console.warn("Could not load properties from backend database, using local state:", err);
+                console.warn("Could not load properties from backend database:", err);
             }
         };
 

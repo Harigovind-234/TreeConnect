@@ -28,21 +28,28 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
   };
 
   return (
-    <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-7 sm:p-8 space-y-6 shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
-      <div className="border-b border-slate-800/80 pb-4">
-        <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-          <span>2. Basic Property Information</span>
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Provide the essential details and safety indicators for your property.
-        </p>
+    <div className="ld-card p-6 sm:p-8 space-y-6 shadow-2xl bg-[#0b1710] border border-emerald-500/20 rounded-xl">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4 pb-5 border-b border-emerald-500/20">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3 tracking-tight">
+            2. Basic Property Information
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
+            Provide the essential details and safety indicators for your property.
+          </p>
+        </div>
+
+        <span className="text-xs font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-700/60 px-3.5 py-1.5 rounded-md flex items-center gap-2 shrink-0">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span> Step 2 of 5
+        </span>
       </div>
 
       <div className="space-y-5">
         {/* Property Name (Full Width) */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
-            Property Name <span className="text-red-400">*</span>
+        <div className="space-y-2">
+          <label className="ld-label">
+            PROPERTY NAME <span className="text-rose-400 font-bold">*</span>
           </label>
           <input
             type="text"
@@ -50,20 +57,18 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
             value={formData.propertyName || ''}
             onChange={onChange}
             placeholder="My Home / Green Compound / Plantation Stand #1"
-            className={`w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${
-              errors.propertyName ? 'border-red-500 focus:border-red-500' : ''
-            }`}
+            className={`ld-input ${errors.propertyName ? 'border-rose-500' : ''}`}
           />
           {errors.propertyName && (
-            <p className="text-xs text-red-400 font-medium">{errors.propertyName}</p>
+            <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.propertyName}</p>
           )}
         </div>
 
         {/* Owner Name & Contact Number */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
-              Owner Name <span className="text-red-400">*</span>
+          <div className="space-y-2">
+            <label className="ld-label">
+              OWNER NAME <span className="text-rose-400 font-bold">*</span>
             </label>
             <input
               type="text"
@@ -71,18 +76,16 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
               value={formData.ownerName || ''}
               onChange={onChange}
               placeholder="Full legal owner name"
-              className={`w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${
-                errors.ownerName ? 'border-red-500 focus:border-red-500' : ''
-              }`}
+              className={`ld-input ${errors.ownerName ? 'border-rose-500' : ''}`}
             />
             {errors.ownerName && (
-              <p className="text-xs text-red-400 font-medium">{errors.ownerName}</p>
+              <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.ownerName}</p>
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
-              Contact Number <span className="text-red-400">*</span>
+          <div className="space-y-2">
+            <label className="ld-label">
+              CONTACT NUMBER <span className="text-rose-400 font-bold">*</span>
             </label>
             <input
               type="tel"
@@ -90,28 +93,25 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
               value={formData.contactNumber || ''}
               onChange={onChange}
               placeholder="+91 98765 43210"
-              className={`w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${
-                errors.contactNumber ? 'border-red-500 focus:border-red-500' : ''
-              }`}
+              className={`ld-input ${errors.contactNumber ? 'border-rose-500' : ''}`}
             />
             {errors.contactNumber && (
-              <p className="text-xs text-red-400 font-medium">{errors.contactNumber}</p>
+              <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.contactNumber}</p>
             )}
           </div>
         </div>
 
-        {/* Property Area */}
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
-              Approximate Property Area {!isResidential && <span className="text-red-400">*</span>}
-            </label>
-            <span className="text-[11px] text-slate-400 italic">
-              Optional for small residential plots.
-            </span>
-          </div>
-
-          <div className="flex gap-3">
+        {/* Property Area & Area Unit (2-Column Grid matching Owner Name & Contact Number) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <label className="ld-label">
+                APPROXIMATE PROPERTY AREA {!isResidential && <span className="text-rose-400 font-bold">*</span>}
+              </label>
+              <span className="text-[11px] text-slate-400 italic font-normal">
+                Optional for residential
+              </span>
+            </div>
             <input
               type="number"
               step="0.01"
@@ -119,31 +119,37 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
               value={formData.totalArea || ''}
               onChange={onChange}
               placeholder="e.g. 15"
-              className={`w-full flex-1 px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${
-                errors.totalArea ? 'border-red-500' : ''
-              }`}
+              style={{ borderRadius: '8px' }}
+              className={`ld-input ${errors.totalArea ? 'border-rose-500' : ''}`}
             />
+            {errors.totalArea && (
+              <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.totalArea}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="ld-label">
+              AREA UNIT <span className="text-slate-400 font-normal text-xs">(measurement)</span>
+            </label>
             <select
               name="areaUnit"
               value={formData.areaUnit || 'Acres'}
               onChange={onChange}
-              className="w-36 px-3 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-sm font-bold text-emerald-400 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              style={{ borderRadius: '8px' }}
+              className="ld-select font-bold text-emerald-400 cursor-pointer"
             >
-              <option value="Acres">Acres</option>
-              <option value="Cents">Cents</option>
-              <option value="Square Feet">Square Feet</option>
-              <option value="Hectares">Hectares</option>
+              <option value="Acres" className="bg-[#0b1710] text-white">Acres</option>
+              <option value="Cents" className="bg-[#0b1710] text-white">Cents</option>
+              <option value="Square Feet" className="bg-[#0b1710] text-white">Square Feet (sq ft)</option>
+              <option value="Hectares" className="bg-[#0b1710] text-white">Hectares</option>
             </select>
           </div>
-          {errors.totalArea && (
-            <p className="text-xs text-red-400 font-medium">{errors.totalArea}</p>
-          )}
         </div>
 
         {/* Property Description */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
-            Property Description <span className="text-slate-400 font-normal lowercase">(optional)</span>
+        <div className="space-y-2">
+          <label className="ld-label">
+            PROPERTY DESCRIPTION <span className="text-slate-400 font-normal lowercase text-xs">(optional)</span>
           </label>
           <textarea
             name="description"
@@ -151,28 +157,28 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
             value={formData.description || ''}
             onChange={onChange}
             placeholder="Residential compound containing 2 teak trees and 1 coconut tree with direct road access."
-            className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all leading-relaxed min-h-[90px]"
+            className="ld-textarea min-h-[100px]"
           ></textarea>
         </div>
 
-        {/* Risk Factors Sub-Section */}
-        <div className="space-y-4 pt-6 border-t border-slate-800/80">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+        {/* Risk Factors Sub-Section Container */}
+        <div className="ld-subcard space-y-4 p-5 border-2 border-emerald-600/20 bg-[#09150d] mt-4" style={{ borderRadius: '10px' }}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0" style={{ borderRadius: '8px' }}>
                 <ShieldAlert size={20} />
               </div>
               <div>
-                <h3 className="text-sm font-extrabold text-white">
+                <h3 className="text-sm sm:text-base font-extrabold text-white">
                   Safety &amp; Risk Factors
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-300 font-medium mt-0.5">
                   Select hazards near trees to inform harvesting contractors.
                 </p>
               </div>
             </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-full shrink-0">
-              Optional
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-950/60 border border-amber-800/50 px-3 py-1 shrink-0" style={{ borderRadius: '6px' }}>
+              Optional Safety Indicator
             </span>
           </div>
 
@@ -185,21 +191,15 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
                   key={r.id}
                   type="button"
                   onClick={() => handleToggleRisk(r.label)}
-                  className={`p-3.5 rounded-xl text-xs font-semibold text-left transition-all border flex items-center justify-between gap-3 cursor-pointer ${
-                    selected
-                      ? 'bg-emerald-950/60 border-emerald-600 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white'
-                  }`}
+                  className={`ld-risk-card ${selected ? 'selected' : ''}`}
                 >
                   <div className="flex items-center gap-2.5">
                     <IconComp size={18} className={selected ? 'text-emerald-400' : r.accent} />
-                    <span className={selected ? 'font-bold text-white' : 'text-slate-300'}>
+                    <span className={selected ? 'font-bold text-white text-xs sm:text-sm' : 'text-slate-200 font-semibold text-xs sm:text-sm'}>
                       {r.label}
                     </span>
                   </div>
-                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${
-                    selected ? 'border-emerald-500 bg-emerald-500 text-slate-950' : 'border-slate-700 bg-slate-900'
-                  }`}>
+                  <div className={`ld-risk-checkbox ${selected ? 'checked' : ''}`}>
                     {selected ? '✓' : ''}
                   </div>
                 </button>
@@ -207,9 +207,9 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
             })}
           </div>
 
-          <div className="space-y-1.5 pt-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <FileText size={14} className="text-emerald-400" /> Additional Risk Notes
+          <div className="space-y-2 pt-2">
+            <label className="ld-label flex items-center gap-2">
+              <FileText size={15} className="text-emerald-400" /> Additional Risk Notes
             </label>
             <textarea
               name="riskNotes"
@@ -217,7 +217,7 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
               value={formData.riskNotes || ''}
               onChange={onChange}
               placeholder="e.g. Teak tree leaning toward main house roof."
-              className="w-full px-4 py-3 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-all"
+              className="ld-textarea min-h-[70px] text-xs sm:text-sm"
             ></textarea>
           </div>
         </div>

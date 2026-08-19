@@ -205,25 +205,30 @@ const RegisterProperty = () => {
             ) : (
               <>
                 {/* 1. PAGE HEADER */}
-                <section className="ld-card ld-hero-card">
-                  <div className="flex items-center justify-between flex-wrap gap-4">
+                <section className="bg-gradient-to-r from-[#0a1b12] via-[#0d2217] to-[#0a1b12] border border-emerald-500/25 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-4 relative overflow-hidden">
+                  {/* Ambient background glow decoration */}
+                  <div className="absolute -top-24 -right-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                  <div className="flex items-center justify-between flex-wrap gap-4 relative z-10">
                     <button
                       onClick={() => navigate('/landowner/dashboard')}
-                      className="ld-pill hover:text-white cursor-pointer"
+                      className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#050e08] hover:bg-[#0c1810] border border-emerald-600/40 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm"
                     >
-                      <ArrowLeft size={14} /> Back to Dashboard
+                      <ArrowLeft size={14} className="text-emerald-400" /> Back to Dashboard
                     </button>
 
-                    {/* Compact Workflow Progress Indicator */}
-                    <span className="ld-hero-tag">
-                      <span className="ld-dot ld-dot-green"></span> Workflow Progress: Step 1: Register Property
-                    </span>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-950/80 border border-emerald-700/60 rounded-md text-emerald-300 text-xs font-extrabold shadow-sm">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span>Property Registration • Step 1 of 5</span>
+                    </div>
                   </div>
 
-                  <div className="mt-3">
-                    <h1 className="ld-hero-heading">Register Your Property</h1>
-                    <p className="ld-hero-subtext mt-1">
-                      Add the property where your trees are located to TreeConnect to start logging inventory &amp; connecting with contractors.
+                  <div className="space-y-1.5 relative z-10">
+                    <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center gap-3">
+                      Register Your Property
+                    </h1>
+                    <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed max-w-3xl">
+                      Add the estate, home compound, or plantation where your trees are located to TreeConnect. Once registered, you can log tree inventories, dispatch harvest requests, and receive contractor bids.
                     </p>
                   </div>
                 </section>

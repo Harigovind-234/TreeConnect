@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
+import api from '../services/api';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { LogIn, Key, Mail, ShieldAlert, CheckCircle2 } from 'lucide-react';
@@ -14,14 +15,7 @@ const loginSchema = z.object({
   email: z
     .string()
     .min(1, 'Email address is required')
-    .email('Please enter a valid email address')
-    .refine(
-      (val) => {
-        if (!val || !/\S+@\S+\.\S+/.test(val)) return true;
-        return authService.isUserRegistered(val);
-      },
-      { message: 'This email is not registered. Only registered users can log in.' }
-    ),
+    .email('Please enter a valid email address'),
   password: z.string().min(1, 'Password is required')
 });
 
@@ -52,22 +46,56 @@ const Login = () => {
   const isEmailValidFormat = watchEmail && /\S+@\S+\.\S+/.test(watchEmail);
   const isRegisteredUser = isEmailValidFormat && authService.isUserRegistered(watchEmail);
 
-  // Get only approved/active registered users for autofill suggestions
-  const registeredUsersObj = authService.getRegisteredUsers();
-  const registeredUsersList = Object.values(registeredUsersObj).filter(u => {
-    if (!u || !u.email) return false;
-    // Exclude unapproved or pending verification accounts
-    if (u.status === 'Pending' || u.isVerified === false || u.status === 'Unapproved' || u.status === 'Inactive') {
-      return false;
-    }
-    return true;
-  });
+  // State for live approved registered accounts from DB
+  const [approvedUsersList, setApprovedUsersList] = useState([]);
+
+  useEffect(() => {
+    const fetchApprovedUsers = async () => {
+      try {
+        let list = [];
+        try {
+          const res = await api.get('/auth/approved-users');
+          if (res.data && Array.isArray(res.data.users)) {
+            list = res.data.users;
+          }
+        } catch (apiErr) {
+          console.warn('API error fetching approved users, checking local storage fallback:', apiErr);
+          const registeredUsersObj = authService.getRegisteredUsers();
+          list = Object.values(registeredUsersObj).filter(
+            (u) => u && u.email && (u.role === 'admin' || (u.status === 'Active' && u.isVerified))
+          );
+        }
+
+        // Always ensure Primary Admin account is included
+        const hasAdmin = list.some((u) => u.email?.toLowerCase() === 'admintc@gmail.com' || u.role === 'admin');
+        if (!hasAdmin) {
+          list.unshift({
+            id: 'usr_admin_01',
+            name: 'TreeConnect Admin',
+            email: 'admintc@gmail.com',
+            role: 'admin',
+            status: 'Active',
+            isVerified: true
+          });
+        }
+
+        setApprovedUsersList(list);
+      } catch (err) {
+        console.error('Error setting approved users list:', err);
+      }
+    };
+
+    fetchApprovedUsers();
+  }, []);
 
   // Suggestions dropdown state
   const [isEmailFocused, setIsEmailFocused] = useState(false);
 
-  const matchingEmails = registeredUsersList.filter(u =>
-    !watchEmail || u.email.toLowerCase().includes(watchEmail.toLowerCase()) || (u.name && u.name.toLowerCase().includes(watchEmail.toLowerCase()))
+  const matchingEmails = approvedUsersList.filter(
+    (u) =>
+      !watchEmail ||
+      u.email?.toLowerCase().includes(watchEmail.toLowerCase()) ||
+      (u.name && u.name.toLowerCase().includes(watchEmail.toLowerCase()))
   );
 
   useEffect(() => {

@@ -56,26 +56,26 @@ const PropertyMediaUploader = ({ photos = [], videos = [], onChange, compact = f
   };
 
   return (
-    <div className={compact ? "p-5 border border-color rounded-[14px] bg-surface/40 space-y-5" : "card p-7 border border-color rounded-[16px] bg-card space-y-6 shadow-sm"}>
+    <div className={compact ? "ld-subcard space-y-5 bg-[#09150d] border border-emerald-500/20 rounded-xl p-5" : "ld-card p-6 sm:p-8 space-y-6 shadow-2xl bg-[#0b1710] border border-emerald-500/20 rounded-xl"}>
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-emerald-500/20">
         <div>
-          <h2 className={compact ? "text-[18px] font-bold text-main" : "text-[22px] font-bold text-main tracking-tight"}>
+          <h2 className={compact ? "text-base font-bold text-white" : "text-xl sm:text-2xl font-black text-white flex items-center gap-2.5 tracking-tight"}>
             5. Property Photos &amp; Videos
           </h2>
-          <p className="text-[14px] text-muted mt-0.5">
+          <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
             Optionally add photos or short videos showing the property, house compound, plantation or trees.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-surface p-1 rounded-lg border border-color text-[13px]">
+        <div className="flex items-center gap-2 bg-[#050e08] p-1 rounded-lg border border-emerald-600/30 text-xs">
           <button
             type="button"
             onClick={() => setActiveTab('photos')}
-            className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-md font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'photos'
-                ? 'bg-emerald text-dark shadow'
-                : 'text-muted hover:text-main'
+                ? 'bg-emerald-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             <ImageIcon size={14} /> Upload Photos ({photos.length})
@@ -83,10 +83,10 @@ const PropertyMediaUploader = ({ photos = [], videos = [], onChange, compact = f
           <button
             type="button"
             onClick={() => setActiveTab('videos')}
-            className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-md font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'videos'
-                ? 'bg-emerald text-dark shadow'
-                : 'text-muted hover:text-main'
+                ? 'bg-emerald-500 text-slate-950 shadow'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             <Film size={14} /> Upload Videos ({videos.length})
@@ -97,7 +97,7 @@ const PropertyMediaUploader = ({ photos = [], videos = [], onChange, compact = f
       {/* Upload Dropzone */}
       {activeTab === 'photos' ? (
         <div className="space-y-4">
-          <div className={`border-2 border-dashed border-color hover:border-emerald/60 rounded-[14px] ${compact ? 'p-5 min-h-[130px]' : 'p-8 min-h-[170px]'} bg-surface/50 text-center flex flex-col items-center justify-center transition-all`}>
+          <div className={`border-2 border-dashed border-emerald-600/30 hover:border-emerald-500/60 rounded-lg ${compact ? 'p-5 min-h-[130px]' : 'p-8 min-h-[170px]'} bg-[#050e08] text-center flex flex-col items-center justify-center transition-all`}>
             <input
               type="file"
               accept="image/*"
@@ -110,13 +110,13 @@ const PropertyMediaUploader = ({ photos = [], videos = [], onChange, compact = f
               htmlFor={`photo-upload-input-${compact ? 'compact' : 'full'}`}
               className="cursor-pointer flex flex-col items-center justify-center space-y-2"
             >
-              <div className="w-10 h-10 rounded-full bg-emerald/15 border border-emerald/30 flex items-center justify-center text-emerald">
+              <div className="w-10 h-10 rounded-lg bg-emerald-950/80 border border-emerald-700/60 flex items-center justify-center text-emerald-400">
                 <Upload size={20} />
               </div>
-              <span className="text-[15px] font-bold text-main">
+              <span className="text-sm font-bold text-white">
                 Click or drag files here to upload property photos
               </span>
-              <span className="text-[13px] text-muted">
+              <span className="text-xs text-slate-400">
                 Supports JPG, PNG, WEBP files showing land, boundary, or tree stock (Multiple allowed)
               </span>
             </label>

@@ -70,11 +70,11 @@ def login_user(credentials: UserLogin):
                 user_status = existing_user.get("status", "Active")
                 is_verified = existing_user.get("isVerified", True)
 
-                # Enforce Contractor Verification & Status checks
-                if user_role == "contractor" and (user_status in ["Pending", "pending"] or not is_verified):
+                # Enforce Administrator approval & verification checks for all non-admin roles
+                if user_role != "admin" and (user_status in ["Pending", "pending", "Pending Verification"] or not is_verified):
                     return JSONResponse(
                         status_code=status.HTTP_403_FORBIDDEN,
-                        content={"message": "Your contractor account is pending administrator verification. You will be able to log in once your account is reviewed and approved."}
+                        content={"message": "Your account is pending administrator approval. You will be able to log in once your registration is reviewed and approved by an admin."}
                     )
 
                 if user_status in ["Rejected", "rejected"]:
@@ -178,19 +178,32 @@ def register_user(user: UserRegister):
             "postalCode": user.postalCode or "",
             "localBody": user.localBody or "",
             "panchayat": user.localBody or "",
-            "businessType": user.businessType or "",
+            "businessType": user.businessType or user.buyerType or "",
+            "buyerType": user.buyerType or user.businessType or "",
             "yearsOfExperience": user.yearsOfExperience or "",
             "serviceArea": user.serviceArea or "",
-            "licenseNumber": user.licenseNumber or "",
+            "gstNumber": user.gstNumber or "",
             "idProofType": user.idProofType or "",
             "idProofDocument": user.idProofDocument or "",
+            "idProofUrl": user.idProofUrl or "",
             "supportingDocument": user.supportingDocument or "",
+            "supportingUrl": user.supportingUrl or "",
+            "forestLicenceDoc": user.forestLicenceDoc or "",
+            "forestLicenceUrl": user.forestLicenceUrl or "",
+            "tradeLicenceDoc": user.tradeLicenceDoc or "",
+            "tradeLicenceUrl": user.tradeLicenceUrl or "",
+            "gstDoc": user.gstDoc or "",
+            "gstUrl": user.gstUrl or "",
+            "businessCertDoc": user.businessCertDoc or "",
+            "businessCertUrl": user.businessCertUrl or "",
+            "landTaxInvoiceDoc": user.landTaxInvoiceDoc or "",
+            "landTaxInvoiceUrl": user.landTaxInvoiceUrl or "",
             "declarationAccepted": user.declarationAccepted or False,
             "preferredCommunication": user.preferredCommunication or "Email",
             "language": user.language or "English",
             "profilePicture": user.profilePicture or "",
-            "isVerified": True if user.role != "contractor" else False,
-            "status": "Active" if user.role != "contractor" else "Pending",
+            "isVerified": False if user.role != "admin" else True,
+            "status": "Pending" if user.role != "admin" else "Active",
             "createdAt": datetime.now(timezone.utc).isoformat()
         }
 
@@ -199,16 +212,15 @@ def register_user(user: UserRegister):
 
         user_document["id"] = str(result.inserted_id)
         user_document["_id"] = str(result.inserted_id)
-        token = create_access_token({"sub": str(result.inserted_id), "role": user.role, "email": clean_email})
 
         safe_user = {k: v for k, v in user_document.items() if k != "password"}
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             content={
-                "message": "Registration Successful",
+                "message": "Registration submitted successfully. Your account is pending administrator approval.",
                 "user": safe_user,
-                "token": token
+                "token": None
             }
         )
 
@@ -221,6 +233,11 @@ def register_user(user: UserRegister):
         )
 
 import secrets
+import threading
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
 from pydantic import BaseModel
 
 class RequestResetPayload(BaseModel):
@@ -230,32 +247,7 @@ class ResetPasswordPayload(BaseModel):
     email: str
     newPassword: str
     token: Optional[str] = None
-
-@router.post("/request-password-reset")
-def request_password_reset(payload: RequestResetPayload):
-    try:
-        clean_email = payload.email.strip().lower()
-        user_exists = False
-
-        if db is not None:
-            existing_user = db.users.find_one({"email": clean_email})
-            if existing_user:
-                user_exists = True
-
-        if not user_exists and clean_email in MOCK_USERS:
-            user_exists = True
-
-        if not user_exists:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={"message": "No account registered with this email address. Please check your email or create an account."}
-            )
-
-import threading
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import os
+    code: Optional[str] = None
 
 def send_real_password_reset_email(to_email: str, reset_token: str):
     def _async_send():
@@ -299,7 +291,7 @@ def send_real_password_reset_email(to_email: str, reset_token: str):
             msg.attach(MIMEText(body_text, "plain"))
             msg.attach(MIMEText(html_content, "html"))
 
-            server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(sender_email, [to_email], msg.as_string())
@@ -338,10 +330,13 @@ def request_password_reset(payload: RequestResetPayload):
         reset_link = f"/reset-password?token={reset_token}&email={clean_email}"
 
         if db is not None:
-            db.users.update_one(
-                {"email": clean_email},
-                {"$set": {"resetToken": reset_token, "resetTokenCreatedAt": datetime.now(timezone.utc).isoformat()}}
-            )
+            try:
+                db.users.update_one(
+                    {"email": clean_email},
+                    {"$set": {"resetToken": reset_token, "resetTokenCreatedAt": datetime.now(timezone.utc).isoformat()}}
+                )
+            except Exception as mongo_err:
+                print(f"[MONGODB WARNING] failed updating reset token: {mongo_err}")
 
         # Send email via SMTP (or print to log if SMTP credentials not configured)
         send_real_password_reset_email(clean_email, reset_token)
@@ -350,7 +345,9 @@ def request_password_reset(payload: RequestResetPayload):
             status_code=status.HTTP_200_OK,
             content={
                 "message": f"Password reset email sent to {clean_email}. Please check your inbox for instructions.",
-                "email": clean_email
+                "email": clean_email,
+                "resetToken": reset_token,
+                "resetLink": reset_link
             }
         )
     except Exception as e:
@@ -455,5 +452,61 @@ def get_user_profile(email: Optional[str] = None, authorization: Optional[str] =
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to fetch user profile: {str(e)}"}
+        )
+
+@router.get("/approved-users")
+def get_approved_users():
+    try:
+        approved_users = []
+        emails_seen = set()
+
+        # Always include primary platform admin account at the top
+        admin_email = "admintc@gmail.com"
+        approved_users.append({
+            "id": "usr_admin_01",
+            "name": "TreeConnect Admin",
+            "email": admin_email,
+            "role": "admin",
+            "status": "Active",
+            "isVerified": True
+        })
+        emails_seen.add(admin_email)
+
+        if db is not None:
+            db_users = list(db.users.find({
+                "$or": [
+                    {"status": "Active"},
+                    {"role": "admin"}
+                ]
+            }))
+            for u in db_users:
+                email = u.get("email", "").strip().lower()
+                if not email or email in emails_seen:
+                    continue
+                role = u.get("role", "landowner")
+                status_val = u.get("status", "Pending")
+                is_verified = u.get("isVerified", False)
+
+                # Include platform admin or accounts approved by admin
+                if role == "admin" or (status_val == "Active" and is_verified):
+                    name = u.get("fullName") or u.get("companyName") or u.get("contactPerson") or u.get("name") or email.split("@")[0]
+                    approved_users.append({
+                        "id": str(u.get("_id", "")),
+                        "name": name,
+                        "email": email,
+                        "role": role,
+                        "status": status_val,
+                        "isVerified": is_verified
+                    })
+                    emails_seen.add(email)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"users": approved_users}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to fetch approved users: {str(e)}"}
         )
 

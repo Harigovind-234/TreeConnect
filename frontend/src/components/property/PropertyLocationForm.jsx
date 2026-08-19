@@ -33,71 +33,66 @@ const PropertyLocationForm = ({ formData, onChange, errors }) => {
   ])).filter(Boolean);
 
   return (
-    <div className="card p-7 border border-color rounded-[16px] bg-card space-y-6 shadow-sm">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-color/40 pb-4">
+    <div className="ld-card p-6 sm:p-8 space-y-6 shadow-2xl bg-[#0b1710] border border-emerald-500/20 rounded-xl">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4 pb-5 border-b border-emerald-500/20">
         <div>
-          <h2 className="text-[22px] font-bold text-main tracking-tight">
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-3">
             3. Property Location &amp; Address
           </h2>
-          <p className="text-[15px] text-muted mt-1">
-            Provide the property's location so contractors can locate it when a site survey is arranged later.
+          <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
+            Provide the property's location so contractors can locate it when a site survey is arranged.
           </p>
         </div>
 
-        <span className="text-[12px] font-bold text-emerald bg-emerald/10 border border-emerald/20 px-3 py-1.5 rounded-[10px] shrink-0">
+        <span className="text-xs font-extrabold text-emerald-400 bg-emerald-950/80 border border-emerald-700/60 px-3 py-1.5 rounded-md shrink-0">
           ✓ Pre-filled from Account Profile
         </span>
       </div>
 
       <div className="space-y-5">
-        {/* Row 1: State & District (Two equal desktop columns) */}
+        {/* Row 1: State & District */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="space-y-2">
-            <label className="text-[14px] font-semibold text-main block">
-              State <span className="text-red-400">*</span>
+            <label className="ld-label">
+              STATE <span className="text-rose-400 font-bold">*</span>
             </label>
             <select
               name="state"
               value={formData.state || ''}
               onChange={onChange}
-              style={{ height: '50px' }}
-              className={`w-full form-input text-[15px] px-4 rounded-[10px] bg-surface/60 border-color ${
-                errors?.state ? 'border-red-500' : ''
-              }`}
+              className={`ld-select ${errors?.state ? 'border-rose-500' : ''}`}
             >
               {stateOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             {errors?.state && (
-              <p className="text-[14px] text-red-400 font-medium">{errors.state}</p>
+              <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.state}</p>
             )}
           </div>
 
           <div className="space-y-2">
-            <label className="text-[14px] font-semibold text-main block">
-              District <span className="text-red-400">*</span>
+            <label className="ld-label">
+              DISTRICT <span className="text-rose-400 font-bold">*</span>
             </label>
             <select
               name="district"
               value={formData.district || ''}
               onChange={onChange}
-              style={{ height: '50px' }}
-              className={`w-full form-input text-[15px] px-4 rounded-[10px] bg-surface/60 border-color ${
-                errors?.district ? 'border-red-500' : ''
-              }`}
+              className={`ld-select ${errors?.district ? 'border-rose-500' : ''}`}
             >
               {districtOptions.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
             {errors?.district && (
-              <p className="text-[14px] text-red-400 font-medium">{errors.district}</p>
+              <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.district}</p>
             )}
           </div>
         </div>
 
-        {/* Row 2: Local Body (Panchayat) & PIN Code (Two equal desktop columns) */}
+        {/* Row 2: Local Body & PIN Code */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="space-y-2">
-            <label className="text-[14px] font-semibold text-main block">
-              Local Body <span className="text-[13px] text-muted font-normal">(Panchayat / Municipality)</span>
+            <label className="ld-label">
+              LOCAL BODY <span className="text-slate-400 font-normal lowercase text-xs">(Panchayat / Municipality)</span>
             </label>
             <input
               type="text"
@@ -105,14 +100,13 @@ const PropertyLocationForm = ({ formData, onChange, errors }) => {
               value={formData.localBody || ''}
               onChange={onChange}
               placeholder="e.g. Meenadom Panchayat / Pala Municipality"
-              style={{ height: '50px' }}
-              className="w-full form-input text-[15px] px-4 rounded-[10px] bg-surface/60 border-color"
+              className="ld-input"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-[14px] font-semibold text-main block">
-              PIN Code <span className="text-red-400">*</span>
+            <label className="ld-label">
+              PIN CODE <span className="text-rose-400 font-bold">*</span>
             </label>
             <input
               type="text"
@@ -120,21 +114,18 @@ const PropertyLocationForm = ({ formData, onChange, errors }) => {
               value={formData.pinCode || ''}
               onChange={onChange}
               placeholder="e.g. 686516"
-              style={{ height: '50px' }}
-              className={`w-full form-input text-[15px] px-4 rounded-[10px] bg-surface/60 border-color ${
-                errors?.pinCode ? 'border-red-500' : ''
-              }`}
+              className={`ld-input ${errors?.pinCode ? 'border-rose-500' : ''}`}
             />
             {errors?.pinCode && (
-              <p className="text-[14px] text-red-400 font-medium">{errors.pinCode}</p>
+              <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.pinCode}</p>
             )}
           </div>
         </div>
 
-        {/* Row 3: House / Plot Address (Full Width across both columns) */}
+        {/* Row 3: Address */}
         <div className="space-y-2">
-          <label className="text-[14px] font-semibold text-main block">
-            House / Plot Address <span className="text-red-400">*</span>
+          <label className="ld-label">
+            HOUSE / PLOT ADDRESS <span className="text-rose-400 font-bold">*</span>
           </label>
           <input
             type="text"
@@ -142,13 +133,10 @@ const PropertyLocationForm = ({ formData, onChange, errors }) => {
             value={formData.address || ''}
             onChange={onChange}
             placeholder="House Name / No., Street, Landmark"
-            style={{ height: '50px' }}
-            className={`w-full form-input text-[15px] px-4 rounded-[10px] bg-surface/60 border-color ${
-              errors?.address ? 'border-red-500' : ''
-            }`}
+            className={`ld-input ${errors?.address ? 'border-rose-500' : ''}`}
           />
           {errors?.address && (
-            <p className="text-[14px] text-red-400 font-medium">{errors.address}</p>
+            <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.address}</p>
           )}
         </div>
       </div>

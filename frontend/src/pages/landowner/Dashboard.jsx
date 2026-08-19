@@ -69,30 +69,32 @@ const LandownerDashboard = () => {
     }
   ]);
 
-  // Calculate dynamic metrics from user properties and inventories
-  const totalManagedArea = (properties || []).reduce((acc, p) => acc + (parseFloat(p.totalArea) || 0), 0) || 120;
+  // Calculate dynamic metrics strictly from user properties and inventories
+  const totalManagedArea = (properties || []).reduce((acc, p) => acc + (parseFloat(p.totalArea) || 0), 0);
   const totalTimberVolume = (inventories || []).reduce((acc, inv) => {
     const invVol = ((inv && inv.speciesList) || []).reduce((sAcc, sp) => {
       const vol = parseFloat(sp.estimatedVolume) || (parseFloat(sp.numberOfTrees || sp.count || 0) * 0.7);
       return sAcc + vol;
     }, 0);
     return acc + invVol;
-  }, 0) || 840;
+  }, 0);
 
   const estRevenue = Math.round(totalTimberVolume * 115);
 
-  // Latest Active Operation or Request
+  // Latest Active Operation or Request (strictly user records with safe fallback)
   const activeSpotlight = (harvestRequests && harvestRequests.length > 0)
     ? harvestRequests[0]
-    : ((completedHarvests && completedHarvests.length > 0) ? completedHarvests[0] : {
-        propertyName: 'Green Valley Estate - Sector A',
-        location: 'Willamette / Kottayam District',
-        harvestScopeDetail: 'Teak & Cedar Selective Logging',
-        contractor: 'Apex Timber Harvesting Ltd.',
-        estimatedVolume: '320 m³',
-        preferredStartDate: 'Aug 24, 2026',
-        status: 'In Progress (45% Completed)'
-      });
+    : ((completedHarvests && completedHarvests.length > 0) 
+        ? completedHarvests[0] 
+        : {
+            status: 'Operational Ready',
+            propertyName: properties[0]?.propertyName || 'Green Valley Plantation Estate',
+            location: properties[0]?.district || properties[0]?.address || 'Kottayam Sector 4',
+            harvestScopeDetail: 'Teak & Hardwood Selection',
+            preferredStartDate: 'Oct 01, 2026',
+            contractor: 'Apex Timber Harvesting Ltd',
+            estimatedVolume: '240 m³'
+          });
 
   // Quick Calculator state
   const [treesCount, setTreesCount] = useState(250);
@@ -165,19 +167,19 @@ const LandownerDashboard = () => {
             <div className="ld-pills-row">
               <div className="ld-pill">
                 <span className="ld-dot ld-dot-green"></span>
-                <span><strong>{properties.length || 1}</strong> Estates Registered</span>
+                <span><strong>{properties.length}</strong> Estates Registered</span>
               </div>
               <div className="ld-pill">
                 <span className="ld-dot ld-dot-amber"></span>
-                <span><strong>{harvestRequests.length || 1}</strong> Harvest Request Active</span>
+                <span><strong>{harvestRequests.length}</strong> Harvest Requests Active</span>
               </div>
               <div className="ld-pill">
                 <span className="ld-dot ld-dot-blue"></span>
-                <span><strong>${estRevenue || 81}</strong> Est. Revenue Valuation</span>
+                <span><strong>${estRevenue || 0}</strong> Est. Revenue Valuation</span>
               </div>
               <div className="ld-pill">
                 <span className="ld-dot ld-dot-teal"></span>
-                <span><strong>{bids.length || 3}</strong> Offers Received</span>
+                <span><strong>{bids.length}</strong> Offers Received</span>
               </div>
             </div>
 
@@ -352,21 +354,21 @@ const LandownerDashboard = () => {
                 <span className="ld-dot ld-dot-green animate-pulse"></span>
                 <h2 className="text-lg font-extrabold text-white">Active Harvest Operation Spotlight</h2>
               </div>
-              <span className="ld-badge-green">{activeSpotlight.status || 'In Progress'}</span>
+              <span className="ld-badge-green">{activeSpotlight?.status || 'In Progress'}</span>
             </div>
 
             <div className="ld-spotlight-inner">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-white">{activeSpotlight.propertyName}</h3>
+                  <h3 className="text-base font-bold text-white">{activeSpotlight?.propertyName || 'Estate Harvest Operation'}</h3>
                   <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
                     <MapPin size={14} className="text-emerald-400" />
-                    <span>{activeSpotlight.location || 'Estate Plot'} • {activeSpotlight.harvestScopeDetail || 'Timber Operation'}</span>
+                    <span>{activeSpotlight?.location || 'Estate Plot'} • {activeSpotlight?.harvestScopeDetail || 'Timber Operation'}</span>
                   </p>
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-slate-400 block font-semibold">Completion Target</span>
-                  <span className="text-xs font-bold text-emerald-400 mt-0.5 block">{activeSpotlight.preferredStartDate || 'Sep 15, 2026'}</span>
+                  <span className="text-xs font-bold text-emerald-400 mt-0.5 block">{activeSpotlight?.preferredStartDate || 'Sep 15, 2026'}</span>
                 </div>
               </div>
 
@@ -383,11 +385,11 @@ const LandownerDashboard = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-800 text-xs">
                 <div>
                   <span className="text-slate-400 block text-[11px]">Contractor</span>
-                  <span className="font-bold text-white mt-0.5 block">{activeSpotlight.contractor || 'Apex Timber Harvesting'}</span>
+                  <span className="font-bold text-white mt-0.5 block">{activeSpotlight?.contractor || 'Apex Timber Harvesting'}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">Est. Volume</span>
-                  <span className="font-bold text-emerald-400 mt-0.5 block">{activeSpotlight.estimatedVolume || '320 m³'}</span>
+                  <span className="font-bold text-emerald-400 mt-0.5 block">{activeSpotlight?.estimatedVolume || '320 m³'}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">Log Destination</span>
@@ -409,96 +411,72 @@ const LandownerDashboard = () => {
                 <p className="text-xs text-slate-400">Commercial forest stands registered under your portfolio</p>
               </div>
               <button onClick={() => navigate('/landowner/properties')} className="ld-btn-outline py-1.5 px-3 text-xs">
-                View All ({properties.length || 3}) <ChevronRight size={14} />
+                View All ({properties.length}) <ChevronRight size={14} />
               </button>
             </div>
 
-            <div className="ld-estates-grid">
-              {(properties.length > 0 ? properties : [
-                {
-                  id: 'p-101',
-                  propertyName: 'Green Valley Teak Plantation',
-                  district: 'Kottayam',
-                  state: 'Kerala',
-                  totalArea: '45',
-                  areaUnit: 'Acres',
-                  mainSpecies: 'Teak & Mahogany',
-                  approxTreesCount: 850,
-                  status: 'Active Commercial',
-                  photos: ['https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80']
-                },
-                {
-                  id: 'p-102',
-                  propertyName: 'Pine Hill Forest Parcel B',
-                  district: 'Idukki',
-                  state: 'Kerala',
-                  totalArea: '32',
-                  areaUnit: 'Acres',
-                  mainSpecies: 'Pine & Rubber',
-                  approxTreesCount: 620,
-                  status: 'Active Commercial',
-                  photos: ['https://images.unsplash.com/photo-1511497584788-876761465586?auto=format&fit=crop&w=600&q=80']
-                },
-                {
-                  id: 'p-103',
-                  propertyName: 'Cedar Valley Timber Estate',
-                  district: 'Wayanad',
-                  state: 'Kerala',
-                  totalArea: '55',
-                  areaUnit: 'Acres',
-                  mainSpecies: 'Red Cedar',
-                  approxTreesCount: 940,
-                  status: 'Active Commercial',
-                  photos: ['https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=600&q=80']
-                }
-              ]).slice(0, 3).map((p) => {
-                const pId = p.id || p._id;
-                const coverPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : (p.image || 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80');
-                return (
-                  <div key={pId} className="ld-estate-item group">
-                    <div>
-                      <div className="ld-estate-cover">
-                        <img src={coverPhoto} alt={p.propertyName} className="ld-estate-img" />
-                        <span className="absolute top-3 right-3 ld-badge-green shadow">
-                          {p.status || 'Active Estate'}
-                        </span>
-                      </div>
-
-                      <div className="p-4 space-y-3">
-                        <div>
-                          <h4 className="text-base font-bold text-white group-hover:text-emerald-400 transition-colors">{p.propertyName}</h4>
-                          <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><MapPin size={13} className="text-emerald-400 shrink-0" /> {p.district}, {p.state}</p>
+            {properties.length === 0 ? (
+              <div className="text-center py-10 space-y-3 bg-[#0a0f0d]/50 rounded-2xl border border-slate-800/80">
+                <Trees size={40} className="text-emerald-500/40 mx-auto" />
+                <h3 className="font-bold text-white text-sm">No Registered Timber Estates</h3>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  You have not registered any timber estates yet. Click below to add your property.
+                </p>
+                <button onClick={() => navigate('/landowner/register-property')} className="ld-btn-green text-xs py-2 px-4 mx-auto inline-flex items-center gap-1.5" style={{ width: 'auto' }}>
+                  <Plus size={14} /> Register Property
+                </button>
+              </div>
+            ) : (
+              <div className="ld-estates-grid">
+                {properties.slice(0, 3).map((p) => {
+                  const pId = p.id || p._id;
+                  const coverPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : (p.image || 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=600&q=80');
+                  return (
+                    <div key={pId} className="ld-estate-item group">
+                      <div>
+                        <div className="ld-estate-cover">
+                          <img src={coverPhoto} alt={p.propertyName} className="ld-estate-img" />
+                          <span className="absolute top-3 right-3 ld-badge-green shadow">
+                            {p.status || 'Active Estate'}
+                          </span>
                         </div>
 
-                        <div className="bg-[#14171d] border border-slate-800 rounded-xl p-3 grid grid-cols-3 gap-2 text-xs">
+                        <div className="p-4 space-y-3">
                           <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Area</span>
-                            <span className="font-bold text-white mt-0.5 block">{p.totalArea ? `${p.totalArea} ${p.areaUnit || 'Acres'}` : 'Plot'}</span>
+                            <h4 className="text-base font-bold text-white group-hover:text-emerald-400 transition-colors">{p.propertyName}</h4>
+                            <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5"><MapPin size={13} className="text-emerald-400 shrink-0" /> {p.district || p.address || 'Kerala'}, {p.state || 'Kerala'}</p>
                           </div>
-                          <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Species</span>
-                            <span className="font-bold text-white mt-0.5 block truncate">{p.mainSpecies || 'Logged'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-bold">Trees</span>
-                            <span className="font-extrabold text-emerald-400 mt-0.5 block">{p.approxTreesCount || 0}</span>
+
+                          <div className="bg-[#14171d] border border-slate-800 rounded-xl p-3 grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Area</span>
+                              <span className="font-bold text-white mt-0.5 block">{p.totalArea ? `${p.totalArea} ${p.areaUnit || 'Acres'}` : 'Plot'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Type</span>
+                              <span className="font-bold text-white mt-0.5 block truncate">{p.propertyType || p.mainSpecies || 'Estate'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-bold">Trees</span>
+                              <span className="font-extrabold text-emerald-400 mt-0.5 block">{p.approxTreesCount || 0}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="p-4 pt-0 flex items-center gap-2">
-                      <button onClick={() => navigate(`/landowner/add-inventory?propertyId=${pId}`)} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center">
-                        + Inventory
-                      </button>
-                      <button onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center text-amber-400 border-amber-500/30">
-                        Harvest
-                      </button>
+                      <div className="p-4 pt-0 flex items-center gap-2">
+                        <button onClick={() => navigate(`/landowner/add-inventory?propertyId=${pId}`)} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center">
+                          + Inventory
+                        </button>
+                        <button onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center text-amber-400 border-amber-500/30">
+                          Harvest
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* 7. BIDS TABLE & QUICK ESTIMATOR */}

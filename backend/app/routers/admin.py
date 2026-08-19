@@ -33,27 +33,46 @@ def get_all_users():
                         pass
 
                 is_verified = u.get("isVerified", False)
-                status_val = u.get("status", "Active")
+                status_val = u.get("status", "Pending")
                 
-                if is_verified:
+                if is_verified and status_val == "Active":
                     verification = "Verified by TreeConnect Admin"
                 else:
-                    verification = "Pending Verification" if role == "contractor" else "Verified"
+                    verification = "Pending Verification"
 
-                experience = u.get("experience") or u.get("yearsInBusiness") or "3+ Years Harvesting Experience"
-                equipment = u.get("equipment") or u.get("machinery") or "Standard Logging & Transport Machinery"
-                doc_type = u.get("docType") or u.get("idProofType") or "Government Registered Business License & ID Proof"
+                experience = u.get("experience") or u.get("yearsOfExperience") or "N/A"
+                equipment = u.get("equipment") or u.get("machinery") or "N/A"
+                buyer_type = u.get("buyerType") or u.get("businessType") or ""
+                forest_licence = u.get("forestLicenceDoc") or ""
+                trade_licence = u.get("tradeLicenceDoc") or ""
+                gst_doc = u.get("gstDoc") or ""
+                business_cert = u.get("businessCertDoc") or ""
+                land_tax_doc = u.get("landTaxInvoiceDoc") or ""
+                id_proof_doc = u.get("idProofDocument") or ""
+
+                docs_summary_list = []
+                if forest_licence: docs_summary_list.append("Forest Dept Licence")
+                if trade_licence: docs_summary_list.append("Trade Licence")
+                if gst_doc: docs_summary_list.append("GST Registration")
+                if business_cert: docs_summary_list.append("Business Certificate")
+                if land_tax_doc: docs_summary_list.append("Land Tax Invoice")
+                if id_proof_doc: docs_summary_list.append(u.get("idProofType") or "Govt ID")
+
+                doc_type = u.get("docType") or (", ".join(docs_summary_list) if docs_summary_list else "No Verification Documents")
                 contact_person = u.get("contactPerson") or u.get("fullName") or name
 
                 users_list.append({
                     "id": user_id,
                     "name": name,
                     "contractorName": name,
+                    "companyName": u.get("companyName") or name,
                     "contactPerson": contact_person,
                     "email": email,
                     "phone": phone,
                     "role": role,
                     "location": district,
+                    "buyerType": buyer_type,
+                    "businessType": buyer_type,
                     "status": status_val,
                     "isVerified": is_verified,
                     "verification": verification,
@@ -61,7 +80,22 @@ def get_all_users():
                     "submittedDate": date_str,
                     "experience": experience,
                     "equipment": equipment,
-                    "docType": doc_type
+                    "docType": doc_type,
+                    "forestLicenceDoc": forest_licence,
+                    "forestLicenceUrl": u.get("forestLicenceUrl") or "",
+                    "tradeLicenceDoc": trade_licence,
+                    "tradeLicenceUrl": u.get("tradeLicenceUrl") or "",
+                    "gstDoc": gst_doc,
+                    "gstUrl": u.get("gstUrl") or "",
+                    "businessCertDoc": business_cert,
+                    "businessCertUrl": u.get("businessCertUrl") or "",
+                    "landTaxInvoiceDoc": land_tax_doc,
+                    "landTaxInvoiceUrl": u.get("landTaxInvoiceUrl") or "",
+                    "idProofType": u.get("idProofType") or "",
+                    "idProofDocument": id_proof_doc,
+                    "idProofUrl": u.get("idProofUrl") or "",
+                    "supportingDocument": u.get("supportingDocument") or "",
+                    "supportingUrl": u.get("supportingUrl") or ""
                 })
 
         return JSONResponse(

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, ArrowRight, Trees, Truck, ShoppingBag, Loader2, Database } from 'lucide-react';
 import api from '../../services/api';
+import { authService } from '../../services/authService';
 
 const UserSummary = ({ onManageUsers }) => {
   const [users, setUsers] = useState([]);
@@ -12,7 +13,6 @@ const UserSummary = ({ onManageUsers }) => {
         setLoading(true);
         const res = await api.get('/admin/users');
         if (res.data && Array.isArray(res.data.users)) {
-          // Filter out admin users to focus on platform ecosystem stakeholders
           const dbUsers = res.data.users.filter((u) => u.role !== 'admin');
           setUsers(dbUsers);
         } else {

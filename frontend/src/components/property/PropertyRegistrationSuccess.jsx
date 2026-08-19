@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLandowner } from '../../context/LandownerContext';
 import { CheckCircle2, Plus, Trees, LayoutDashboard, MapPin, Camera, Film, ArrowRight, ShieldCheck, Building2, X, ZoomIn, ChevronLeft, ChevronRight, Package } from 'lucide-react';
+import '../../pages/landowner/LandownerDashboard.css';
 
 const PropertyRegistrationSuccess = ({ registeredProperty }) => {
   const navigate = useNavigate();
@@ -40,14 +41,14 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
   return (
     <div className="max-w-[950px] w-full mx-auto space-y-6 animate-fade-in py-2">
       {/* 1. SUCCESS HERO HEADER */}
-      <div className="bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-950 border border-emerald-500/40 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-xl relative overflow-hidden">
+      <div className="ld-card p-6 sm:p-8 text-center space-y-4 shadow-xl border border-emerald-500/30 relative overflow-hidden">
         {/* Success Icon */}
-        <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
           <CheckCircle2 size={36} />
         </div>
 
         <div className="space-y-2 max-w-xl mx-auto">
-          <span className="px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold inline-flex items-center gap-1.5 shadow-sm">
+          <span className="px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold inline-flex items-center gap-1.5 shadow-sm">
             <ShieldCheck size={14} /> Property Successfully Registered
           </span>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-snug break-words">
@@ -60,12 +61,12 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
       </div>
 
       {/* 2. REGISTERED PROPERTY DETAILS & MEDIA CARD */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="ld-card p-6 sm:p-8 space-y-6 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-500/15 pb-4">
           <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2.5">
             <Building2 size={20} className="text-emerald-400" /> Property Registration Summary
           </h3>
-          <span className="px-3 py-1 rounded-full bg-emerald-950 border border-emerald-800 text-emerald-300 text-xs font-bold tracking-wider uppercase">
+          <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold tracking-wider uppercase">
             Active &amp; Registered
           </span>
         </div>
@@ -73,7 +74,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
         {/* 2-Column Balanced Info Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="ld-subcard space-y-1">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Property Name
               </span>
@@ -82,7 +83,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
               </span>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="ld-subcard space-y-1">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Property Category
               </span>
@@ -91,7 +92,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
               </span>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="ld-subcard space-y-1">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Location &amp; Address
               </span>
@@ -107,7 +108,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
           </div>
 
           <div className="space-y-3">
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="ld-subcard space-y-1">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Total Land Area
               </span>
@@ -116,7 +117,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
               </span>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1">
+            <div className="ld-subcard space-y-1">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                 Media Attachments
               </span>
@@ -132,13 +133,13 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
             </div>
 
             {registeredProperty.riskFactors && registeredProperty.riskFactors.length > 0 && (
-              <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 space-y-2">
+              <div className="ld-subcard space-y-2 border-amber-500/20 bg-amber-500/5">
                 <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block flex items-center gap-1.5">
                   <ShieldCheck size={14} className="text-amber-400" /> Flagged Safety &amp; Risk Factors
                 </span>
                 <div className="flex flex-wrap gap-2 pt-0.5">
                   {registeredProperty.riskFactors.map((rf, i) => (
-                    <span key={i} className="px-2.5 py-1 rounded-lg bg-amber-900/50 text-amber-200 text-xs font-semibold border border-amber-700/60 shadow-sm leading-relaxed">
+                    <span key={i} className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 text-xs font-semibold border border-amber-500/20 shadow-sm leading-relaxed">
                       {rf}
                     </span>
                   ))}
@@ -148,7 +149,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
 
             {/* Clickable Photo Gallery Thumbnails */}
             {photoCount > 0 && (
-              <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2.5">
+              <div className="ld-subcard space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                     Attached Property Photos ({photoCount})
@@ -163,7 +164,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
                     <div
                       key={idx}
                       onClick={() => handleOpenPhoto(idx)}
-                      className="relative h-20 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 cursor-pointer group shadow-sm hover:border-emerald-500/60 transition-all"
+                      className="relative h-20 rounded-xl overflow-hidden border border-emerald-500/20 bg-[#080d0a] cursor-pointer group shadow-sm hover:border-emerald-500/60 transition-all"
                       title={`Click to view photo #${idx + 1}`}
                     >
                       <img
@@ -176,7 +177,7 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
                           Cover
                         </span>
                       )}
-                      <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold gap-1">
+                      <div className="absolute inset-0 bg-[#080d0a]/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold gap-1">
                         <ZoomIn size={14} /> View
                       </div>
                     </div>
@@ -189,36 +190,36 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
       </div>
 
       {/* 3. WORKFLOW PROGRESS STAGE */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div className="ld-card p-6 space-y-4 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/15 pb-3">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
             Overall Workflow Progress
           </span>
-          <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-950/80 border border-emerald-800 px-3 py-1 rounded-lg">
+          <span className="text-xs font-mono text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-lg">
             {hasTreeInventory ? 'Step 2 of 5 Completed' : 'Step 1 of 5 Completed'}
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 text-xs text-center font-medium">
-          <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm flex items-center justify-center gap-1.5">
+          <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm flex items-center justify-center gap-1.5">
             <CheckCircle2 size={14} /> 1. Registered
           </div>
           {hasTreeInventory ? (
-            <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm flex items-center justify-center gap-1.5">
+            <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-bold shadow-sm flex items-center justify-center gap-1.5">
               <CheckCircle2 size={14} /> 2. Tree Inventory
             </div>
           ) : (
-            <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/40 text-white font-bold shadow-sm">
+            <div className="p-3 rounded-xl bg-[#0e1612] border border-emerald-500/30 text-white font-bold shadow-sm">
               2. Tree Inventory ⏳
             </div>
           )}
-          <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/80 text-slate-500">
+          <div className="p-3 rounded-xl bg-[#080d0a] border border-slate-800 text-slate-500">
             3. Contractor
           </div>
-          <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/80 text-slate-500">
+          <div className="p-3 rounded-xl bg-[#080d0a] border border-slate-800 text-slate-500">
             4. Site Survey
           </div>
-          <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/80 text-slate-500">
+          <div className="p-3 rounded-xl bg-[#080d0a] border border-slate-800 text-slate-500">
             5. Harvesting
           </div>
         </div>
@@ -229,14 +230,14 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
         {hasTreeInventory ? (
           <button
             onClick={() => navigate(`/landowner/inventory?propertyId=${regPropId}`)}
-            className="w-full py-3.5 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.005] cursor-pointer"
+            className="ld-btn-green w-full py-3.5 px-6 font-extrabold text-base flex items-center justify-center gap-2 cursor-pointer"
           >
             <Package size={20} /> Show Tree Inventory <ArrowRight size={18} />
           </button>
         ) : (
           <button
             onClick={() => navigate(`/landowner/add-inventory?propertyId=${regPropId}`)}
-            className="w-full py-3.5 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.005] cursor-pointer"
+            className="ld-btn-green w-full py-3.5 px-6 font-extrabold text-base flex items-center justify-center gap-2 cursor-pointer"
           >
             <Plus size={20} /> Proceed to Step 2: Add Tree Inventory <ArrowRight size={18} />
           </button>
@@ -245,21 +246,21 @@ const PropertyRegistrationSuccess = ({ registeredProperty }) => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={() => navigate('/landowner/properties')}
-            className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="ld-btn-outline w-full py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer"
           >
             <Trees size={16} /> View My Properties
           </button>
 
           <button
             onClick={() => window.location.reload()}
-            className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="ld-btn-outline w-full py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer"
           >
             <Plus size={16} /> Register Another Property
           </button>
 
           <button
             onClick={() => navigate('/landowner/dashboard')}
-            className="w-full py-3 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="ld-btn-outline w-full py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer"
           >
             <LayoutDashboard size={16} /> Go to Dashboard
           </button>

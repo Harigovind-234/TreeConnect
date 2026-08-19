@@ -31,7 +31,11 @@ import {
   Loader2,
   Database,
   Ruler,
-  Building2
+  Building2,
+  Eye,
+  Download,
+  X,
+  ExternalLink
 } from 'lucide-react';
 
 const UserDetailPage = () => {
@@ -44,6 +48,7 @@ const UserDetailPage = () => {
   const [userData, setUserData] = useState(initialUser);
   const [userProperties, setUserProperties] = useState([]);
   const [loading, setLoading] = useState(!initialUser);
+  const [viewingDoc, setViewingDoc] = useState(null);
   const [notes, setNotes] = useState(
     initialUser?.adminNotesList || [
       { date: 'Aug 12, 2026', text: 'Account verification completed by admin.' },
@@ -58,27 +63,65 @@ const UserDetailPage = () => {
   const fetchUserDetails = async () => {
     try {
       if (!initialUser) setLoading(true);
-      const res = await api.get('/admin/users');
-      if (res.data && Array.isArray(res.data.users)) {
-        const decodedUserId = decodeURIComponent(userId || '');
-        const found = res.data.users.find(
+      const decodedUserId = decodeURIComponent(userId || '').toLowerCase();
+      let found = null;
+
+      try {
+        const res = await api.get('/admin/users');
+        if (res.data && Array.isArray(res.data.users)) {
+          found = res.data.users.find(
+            (u) =>
+              String(u.id).toLowerCase() === decodedUserId ||
+              u.email?.toLowerCase() === decodedUserId ||
+              u.name?.toLowerCase() === decodedUserId
+          );
+        }
+      } catch (apiErr) {
+        console.warn('API error in UserDetailPage, checking registered users fallback:', apiErr);
+      }
+
+      if (!found) {
+        const localUsers = authService.getRegisteredUsers();
+        const localMatch = Object.values(localUsers).find(
           (u) =>
-            String(u.id) === String(decodedUserId) ||
-            u.email?.toLowerCase() === decodedUserId.toLowerCase() ||
-            u.name?.toLowerCase() === decodedUserId.toLowerCase()
+            String(u.id).toLowerCase() === decodedUserId ||
+            u.email?.toLowerCase() === decodedUserId ||
+            u.name?.toLowerCase() === decodedUserId ||
+            u.fullName?.toLowerCase() === decodedUserId
         );
 
-        if (found) {
-          setUserData(found);
-          setNotes(
-            found.adminNotesList || [
-              { date: 'Aug 12, 2026', text: 'Account verification completed by admin.' },
-              { date: 'Aug 10, 2026', text: 'Email and phone verification completed.' }
-            ]
-          );
-        } else if (!initialUser) {
-          setUserData(null);
+        if (localMatch) {
+          found = {
+            id: localMatch.id || localMatch.email,
+            name: localMatch.name || localMatch.fullName || localMatch.email?.split('@')[0],
+            email: localMatch.email,
+            phone: localMatch.phone || 'N/A',
+            role: localMatch.role || 'landowner',
+            location: localMatch.district ? `${localMatch.district}, Kerala` : (localMatch.location || 'Kerala'),
+            status: localMatch.status || 'Pending',
+            verification: (localMatch.isVerified || localMatch.status === 'Active') ? 'Verified by TreeConnect Admin' : 'Pending Verification',
+            isVerified: Boolean(localMatch.isVerified),
+            date: localMatch.date || 'Aug 18, 2026',
+            submittedDate: localMatch.date || 'Aug 18, 2026',
+            docType: localMatch.landTaxInvoiceDoc ? 'Land Tax Invoice' : (localMatch.idProofDocument || localMatch.forestLicenceDoc || localMatch.tradeLicenceDoc || 'Submitted Documents'),
+            landTaxInvoiceDoc: localMatch.landTaxInvoiceDoc || '',
+            forestLicenceDoc: localMatch.forestLicenceDoc || '',
+            tradeLicenceDoc: localMatch.tradeLicenceDoc || '',
+            idProofDocument: localMatch.idProofDocument || ''
+          };
         }
+      }
+
+      if (found) {
+        setUserData(found);
+        setNotes(
+          found.adminNotesList || [
+            { date: 'Aug 18, 2026', text: 'Account registration record loaded.' },
+            { date: 'Aug 10, 2026', text: 'Email and contact verification logged.' }
+          ]
+        );
+      } else if (!initialUser) {
+        setUserData(null);
       }
     } catch (err) {
       console.error('Error fetching user details:', err);
@@ -187,7 +230,7 @@ const UserDetailPage = () => {
     setShowAddNote(false);
   };
 
-  const isVerified = userData?.verification?.includes('Verified') || userData?.isVerified;
+  const isVerified = (userData?.status === 'Active' || userData?.status === 'Verified') && Boolean(userData?.isVerified);
   const isSuspended = userData?.status === 'Suspended';
 
   return (
@@ -404,6 +447,94 @@ const UserDetailPage = () => {
                       </span>
                     </div>
                   </div>
+
+                  {/* GOVERNMENT-ISSUED IDENTITY / BUSINESS IDENTIFICATION CARD */}
+                  {(userData.idProofDocument || userData.idProofType || userData.role?.toLowerCase() === 'landowner' || userData.role?.toLowerCase() === 'contractor' || userData.role?.toLowerCase() === 'buyer') && (
+                    <div className={`admin-subcard p-5 space-y-3 mt-4 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2.5 rounded-xl border ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                            <ShieldCheck size={20} />
+                          </div>
+                          <div>
+                            <span className="text-sm font-extrabold text-white block">Government-Issued Identity / Business Identification</span>
+                            <span className="text-xs text-slate-300 font-mono block mt-0.5">
+                              {userData.idProofDocument || (userData.idProofType ? `${userData.idProofType} Document` : 'govt_identity_proof.pdf')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setViewingDoc({
+                              title: 'Government-Issued Identity / Business Identification',
+                              fileName: userData.idProofDocument || (userData.idProofType ? `${userData.idProofType} Document` : 'govt_identity_proof.pdf'),
+                              type: userData.idProofType || 'Government Identity Proof',
+                              fileUrl: userData.idProofUrl || (userData.idProofDocument && (userData.idProofDocument.startsWith('http') || userData.idProofDocument.startsWith('data:')) ? userData.idProofDocument : '')
+                            })}
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          >
+                            <Eye size={14} /> View Document
+                          </button>
+                          <span className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                            {isVerified ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+                            {isVerified ? 'Identity Verified' : 'Pending Verification'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {isVerified
+                          ? 'Uploaded Government-Issued Identity / Business Identification document verified by TreeConnect Administrator.'
+                          : 'Uploaded Government-Issued Identity / Business Identification document pending review by TreeConnect Administrator.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* PROPERTY OWNERSHIP & LAND TAX INVOICE DETAILS CARD */}
+                  {(userData.role?.toLowerCase() === 'landowner' || userData.landTaxInvoiceDoc) && (
+                    <div className={`admin-subcard p-5 space-y-3 mt-3 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2.5 rounded-xl border ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                            <Trees size={20} />
+                          </div>
+                          <div>
+                            <span className="text-sm font-extrabold text-white block">Property Ownership &amp; Land Tax Invoice Details</span>
+                            <span className="text-xs text-slate-300 font-mono block mt-0.5">
+                              {userData.landTaxInvoiceDoc || 'land_tax_payment_receipt.pdf'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setViewingDoc({
+                              title: 'Property Ownership & Land Tax Invoice Details',
+                              fileName: userData.landTaxInvoiceDoc || 'land_tax_payment_receipt.pdf',
+                              type: 'Land Tax Invoice / Property Tax Document',
+                              fileUrl: userData.landTaxInvoiceUrl || (userData.landTaxInvoiceDoc && (userData.landTaxInvoiceDoc.startsWith('http') || userData.landTaxInvoiceDoc.startsWith('data:')) ? userData.landTaxInvoiceDoc : '')
+                            })}
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          >
+                            <Eye size={14} /> View Document
+                          </button>
+                          <span className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                            {isVerified ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+                            {isVerified ? 'Land Tax Verified' : 'Pending Verification'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {isVerified
+                          ? 'Uploaded Property Tax Invoice / Revenue Payment Receipt verified by TreeConnect Administrator under Kerala Revenue Department and Forest Compliance guidelines.'
+                          : 'Uploaded Property Tax Invoice / Revenue Payment Receipt pending review by TreeConnect Administrator.'}
+                      </p>
+                    </div>
+                  )}
                 </section>
 
                 {/* ACTIVITY SUMMARY */}
@@ -689,6 +820,89 @@ const UserDetailPage = () => {
                 >
                   Suspend User
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* DOCUMENT PREVIEW MODAL */}
+        {viewingDoc && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
+            <div className="relative max-w-3xl w-full bg-slate-900 border border-emerald-500/40 rounded-2xl p-6 space-y-4 shadow-2xl">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <FileText size={22} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-base sm:text-lg">
+                      {viewingDoc.title}
+                    </h4>
+                    <span className="text-xs font-mono text-emerald-400 block mt-0.5">
+                      {viewingDoc.fileName}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingDoc(null)}
+                  className="p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Document Preview Canvas */}
+              <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center justify-center min-h-[320px] text-center space-y-4 relative overflow-hidden">
+                {viewingDoc.fileUrl || (viewingDoc.fileName && (viewingDoc.fileName.endsWith('.png') || viewingDoc.fileName.endsWith('.jpg') || viewingDoc.fileName.endsWith('.jpeg'))) ? (
+                  <img
+                    src={viewingDoc.fileUrl || `https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop&q=60`}
+                    alt={viewingDoc.title}
+                    className="max-h-[350px] w-auto max-w-full object-contain rounded-lg border border-slate-800 shadow-lg"
+                  />
+                ) : (
+                  <div className="space-y-4 py-8 max-w-lg mx-auto">
+                    <div className="w-20 h-20 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg">
+                      <ShieldCheck size={42} />
+                    </div>
+                    <div>
+                      <span className="text-base font-extrabold text-white block">{viewingDoc.fileName}</span>
+                      <span className="text-xs text-emerald-400 font-semibold mt-1 block">Official Verification Attachment ({viewingDoc.type || 'Document Attachment'})</span>
+                    </div>
+                    <div className="p-3.5 bg-emerald-950/60 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 leading-relaxed font-mono">
+                      ✓ Authenticated Document Attachment uploaded for Administrator Review under Kerala Revenue &amp; Forest Department guidelines.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                  <ShieldCheck size={16} className="text-emerald-400" /> Authenticated Document Attachment
+                </span>
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link = document.createElement('a');
+                      link.href = viewingDoc.fileUrl || '#';
+                      link.download = viewingDoc.fileName;
+                      link.click();
+                    }}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                  >
+                    <Download size={15} /> Download Document
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewingDoc(null)}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Close Preview
+                  </button>
+                </div>
               </div>
             </div>
           </div>

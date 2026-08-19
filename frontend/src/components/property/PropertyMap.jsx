@@ -159,26 +159,26 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
   };
 
   return (
-    <div className="card p-7 border border-color rounded-[16px] bg-card space-y-6 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="ld-card p-6 sm:p-8 space-y-6 shadow-2xl bg-[#0b1710] border border-emerald-500/20 rounded-xl">
+      <div className="flex items-center justify-between flex-wrap gap-3 pb-4 border-b border-emerald-500/20">
         <div>
-          <h2 className="text-[22px] font-bold text-main tracking-tight flex items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2.5 tracking-tight">
             4. GIS Map &amp; Location Pin
           </h2>
-          <p className="text-[15px] text-muted mt-1">
+          <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
             Fetch your live GPS coordinates or search your property location to pin exact boundaries.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {locationStatus && (
-            <span className="text-xs text-emerald font-semibold animate-pulse">
+            <span className="text-xs text-emerald-400 font-semibold animate-pulse">
               {locationStatus}
             </span>
           )}
 
           {isPinned && (
-            <span className="px-3 py-1 rounded-full bg-emerald/15 border border-emerald/40 text-emerald text-[13px] font-bold flex items-center gap-1.5 shadow">
+            <span className="px-3 py-1.5 rounded-md bg-emerald-950/80 border border-emerald-700/60 text-emerald-400 text-xs font-bold flex items-center gap-1.5 shadow">
               <CheckCircle2 size={15} /> Location Pinned
             </span>
           )}
@@ -194,15 +194,15 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search town, village, district or landmark"
             style={{ height: '46px' }}
-            className="form-input text-[14px] px-4 rounded-[10px] bg-surface/60 border-color flex-1"
+            className="text-sm px-4 rounded-lg bg-[#050e08] border-2 border-emerald-600/30 text-white placeholder-slate-500 flex-1 focus:outline-none focus:border-emerald-400 font-medium"
           />
           <button
             type="submit"
             style={{ height: '46px' }}
             disabled={isSearching}
-            className="btn btn-secondary text-[14px] px-4 rounded-[10px] flex items-center gap-1.5 font-semibold hover:border-emerald transition-all"
+            className="px-4 bg-[#0a1810] hover:bg-[#0f2418] text-white border border-emerald-600/40 text-sm rounded-lg flex items-center gap-1.5 font-bold cursor-pointer transition-all shrink-0"
           >
-            {isSearching ? <Loader2 size={15} className="animate-spin text-emerald" /> : <Search size={15} />}
+            {isSearching ? <Loader2 size={15} className="animate-spin text-emerald-400" /> : <Search size={15} />}
             Search
           </button>
         </form>
@@ -212,10 +212,10 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
           type="button"
           onClick={handleFetchLiveLocation}
           style={{ height: '46px' }}
-          className="btn btn-primary text-[14px] px-5 rounded-[10px] flex items-center gap-2 font-bold shadow-glow border border-emerald/50"
+          className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-sm px-5 rounded-lg flex items-center gap-2 font-bold shadow-md shadow-emerald-950/80 border border-emerald-400/30 cursor-pointer transition-all shrink-0"
           disabled={isLocating}
         >
-          <Crosshair size={16} className={isLocating ? 'animate-spin text-dark' : 'text-dark'} />
+          <Crosshair size={16} className={isLocating ? 'animate-spin text-white' : 'text-white'} />
           {isLocating ? 'Acquiring GPS...' : 'Fetch Live Location'}
         </button>
 
@@ -224,26 +224,26 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
           type="button"
           onClick={() => setMapMode(prev => prev === 'live' ? 'grid' : 'live')}
           style={{ height: '46px' }}
-          className="btn btn-secondary text-[13px] px-3.5 rounded-[10px] flex items-center gap-1.5 font-semibold text-muted hover:text-main"
+          className="bg-[#0a1810] hover:bg-[#0f2418] text-slate-300 hover:text-white border border-emerald-600/40 text-xs font-bold px-4 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
           title="Toggle between OpenStreetMap and High Contrast Grid"
         >
-          <Layers size={15} className="text-emerald" />
+          <Layers size={15} className="text-emerald-400" />
           {mapMode === 'live' ? 'Map Mode' : 'Grid Mode'}
         </button>
       </div>
 
       {/* Interactive GIS Map Container */}
-      <div className="relative w-full rounded-[14px] overflow-hidden border-2 border-emerald/40 bg-dark shadow-md flex flex-col justify-between" style={{ height: '360px' }}>
+      <div className="relative w-full rounded-xl overflow-hidden border-2 border-emerald-600/40 bg-[#040a06] shadow-2xl flex flex-col justify-between" style={{ height: '360px' }}>
         
         {/* Map Header Overlay */}
-        <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-[12px] text-muted z-20 pointer-events-none">
-          <span className="bg-dark/90 backdrop-blur px-3 py-1.5 rounded-lg border border-color flex items-center gap-1.5 font-semibold text-main shadow pointer-events-auto">
-            <MapPin size={14} className="text-emerald" /> 
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-xs z-20 pointer-events-none">
+          <span className="bg-[#050e08]/90 backdrop-blur px-3 py-1.5 rounded-md border border-emerald-700/60 flex items-center gap-1.5 font-bold text-white shadow pointer-events-auto">
+            <MapPin size={14} className="text-emerald-400" /> 
             {mapMode === 'live' ? 'Live GIS OpenStreetMap View' : 'Interactive Satellite Grid'}
           </span>
 
-          <span className="bg-emerald/20 text-emerald backdrop-blur px-3 py-1.5 rounded-lg text-[12px] font-bold border border-emerald/30 shadow pointer-events-auto flex items-center gap-1">
-            <RefreshCw size={12} className={isLocating ? 'animate-spin' : ''} />
+          <span className="bg-emerald-950/80 text-emerald-300 backdrop-blur px-3 py-1.5 rounded-md text-xs font-extrabold border border-emerald-700/60 shadow pointer-events-auto flex items-center gap-1.5">
+            <RefreshCw size={13} className={isLocating ? 'animate-spin' : ''} />
             {isLocating ? 'Pinning GPS...' : 'Live GPS Ready'}
           </span>
         </div>
@@ -260,7 +260,7 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
               marginHeight="0"
               marginWidth="0"
               src={getEmbedMapUrl()}
-              className="w-full h-full rounded-[12px] filter contrast-[1.05] brightness-[0.95]"
+              className="w-full h-full filter contrast-[1.05] brightness-[0.95]"
             ></iframe>
           </div>
         ) : (
@@ -268,29 +268,29 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
             onClick={handleMapClick}
             className="w-full h-full relative cursor-crosshair flex flex-col justify-between p-4"
             style={{
-              backgroundImage: `radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.18) 0%, rgba(10, 15, 13, 0.96) 80%), linear-gradient(0deg, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)`,
+              backgroundImage: `radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.18) 0%, rgba(5, 14, 8, 0.96) 80%), linear-gradient(0deg, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)`,
               backgroundSize: '100% 100%, 28px 28px, 28px 28px'
             }}
           >
             {/* Center Pin Marker */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center pointer-events-none z-10">
-              <div className="w-12 h-12 rounded-full bg-emerald/20 border-2 border-emerald flex items-center justify-center shadow-glow animate-bounce">
-                <MapPin size={24} className="text-emerald fill-emerald/40" />
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center shadow-lg animate-bounce">
+                <MapPin size={24} className="text-emerald-400 fill-emerald-400/40" />
               </div>
             </div>
           </div>
         )}
 
         {/* Coordinates Details Bar */}
-        <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between text-[13px] text-muted z-20 bg-dark/95 backdrop-blur px-4 py-2.5 rounded-[10px] border border-emerald/30 shadow-lg gap-2">
+        <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between text-xs z-20 bg-[#050e08]/95 backdrop-blur px-4 py-2.5 rounded-lg border border-emerald-700/60 shadow-xl gap-2">
           <div className="flex items-center gap-2 min-w-0 max-w-[70%]">
-            <MapPin size={15} className="text-emerald flex-shrink-0" />
-            <span className="font-semibold text-main truncate text-[13px]">
+            <MapPin size={15} className="text-emerald-400 flex-shrink-0" />
+            <span className="font-semibold text-white truncate text-xs">
               {coords.locationLabel}
             </span>
           </div>
 
-          <div className="flex items-center gap-3 font-mono text-emerald font-bold text-[13px] ml-auto">
+          <div className="flex items-center gap-3 font-mono text-emerald-400 font-extrabold text-xs ml-auto">
             <span>Lat: {coords.lat}°</span>
             <span>Lng: {coords.lng}°</span>
           </div>

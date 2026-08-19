@@ -56,7 +56,7 @@ const googleRegSchema = z.object({
   contactPerson: z.string().optional(),
   yearsOfExperience: z.string().optional(),
   serviceArea: z.string().optional(),
-  licenseNumber: z.string().optional(),
+  landTaxInvoiceDoc: z.string().optional(),
 
   businessType: z.string().optional()
 }).superRefine((data, ctx) => {
@@ -119,7 +119,7 @@ const GoogleCompleteRegistration = () => {
       contactPerson: '',
       yearsOfExperience: '',
       serviceArea: '',
-      licenseNumber: '',
+      landTaxInvoiceDoc: '',
       businessType: ''
     }
   });
@@ -180,15 +180,11 @@ const GoogleCompleteRegistration = () => {
       const res = await completeGoogleRegister(payload);
       sessionStorage.removeItem('treeconnect_google_pending_user');
 
-      if (data.role === 'contractor') {
-        showToast('Account created! Your contractor account is pending administrator review.', 'warning');
-      } else {
-        showToast('Google registration complete! Redirecting to your dashboard...', 'success');
-      }
+      showToast('Registration submitted! Your account is pending administrator approval before you can log in.', 'warning');
 
       setTimeout(() => {
-        navigate(res.redirect || `/${data.role}/dashboard`);
-      }, 1200);
+        navigate('/login');
+      }, 1500);
     } catch (err) {
       showToast(err.message || 'Failed to complete registration. Please try again.', 'error');
     }

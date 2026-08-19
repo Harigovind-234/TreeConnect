@@ -78,9 +78,11 @@ const baseSchema = z.object({
   localBody: z.string().optional(),
   village: z.string().optional(),
   businessType: z.string().optional(),
+  buyerType: z.string().optional(),
+  gstNumber: z.string().optional(),
   yearsOfExperience: z.string().optional(),
   serviceArea: z.string().optional(),
-  licenseNumber: z.string().optional(),
+  landTaxInvoiceDoc: z.string().optional(),
   idProofType: z.string().optional(),
   declarationAccepted: z.boolean().optional(),
   preferredCommunication: z.string().default('Email'),
@@ -96,12 +98,21 @@ const baseSchema = z.object({
     });
   }
 
-  if (data.role === 'buyer' && (!data.contactPerson || data.contactPerson.trim().length < 2)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Contact person name is required for buyers',
-      path: ['contactPerson']
-    });
+  if (data.role === 'buyer') {
+    if (!data.contactPerson || data.contactPerson.trim().length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Contact person name is required for buyers',
+        path: ['contactPerson']
+      });
+    }
+    if (!data.buyerType || data.buyerType.trim() === '') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Please select your buyer business type',
+        path: ['buyerType']
+      });
+    }
   }
 
   if (data.role === 'contractor') {
@@ -120,14 +131,14 @@ const baseSchema = z.object({
         path: ['idProofType']
       });
     }
+  }
 
-    if (!data.declarationAccepted) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'You must certify that all information and uploaded documents are genuine',
-        path: ['declarationAccepted']
-      });
-    }
+  if ((data.role === 'contractor' || data.role === 'buyer') && !data.declarationAccepted) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'You must certify that all information and uploaded documents are genuine',
+      path: ['declarationAccepted']
+    });
   }
 
   if (data.password !== data.confirmPassword) {
@@ -157,6 +168,18 @@ const Register = () => {
   const [idProofError, setIdProofError] = useState('');
   const [supportingFile, setSupportingFile] = useState(null);
   const [supportingError, setSupportingError] = useState('');
+
+  // File state for Buyer verification uploads
+  const [buyerForestLicenceFile, setBuyerForestLicenceFile] = useState(null);
+  const [buyerTradeLicenceFile, setBuyerTradeLicenceFile] = useState(null);
+  const [buyerGstFile, setBuyerGstFile] = useState(null);
+  const [buyerBusinessCertFile, setBuyerBusinessCertFile] = useState(null);
+  const [buyerIdProofFile, setBuyerIdProofFile] = useState(null);
+  const [buyerVerificationError, setBuyerVerificationError] = useState('');
+
+  // File state for Landowner Land Tax Invoice & Identity Proof upload
+  const [landTaxInvoiceFile, setLandTaxInvoiceFile] = useState(null);
+  const [landownerIdProofFile, setLandownerIdProofFile] = useState(null);
 
   const [toast, setToast] = useState({ type: '', message: '' });
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -188,10 +211,12 @@ const Register = () => {
       postalCode: '',
       localBody: '',
       village: '',
-      businessType: 'Timber Merchant',
+      businessType: 'Sawmill',
+      buyerType: 'Sawmill',
+      gstNumber: '',
       yearsOfExperience: '',
       serviceArea: '',
-      licenseNumber: '',
+      landTaxInvoiceDoc: '',
       idProofType: '',
       declarationAccepted: false,
       preferredCommunication: 'Email',
@@ -204,6 +229,7 @@ const Register = () => {
   const watchIdProofType = watch('idProofType', '');
   const watchPostalCode = watch('postalCode', '');
   const watchDistrict = watch('district', '');
+  const watchBuyerType = watch('buyerType', 'Sawmill');
 
   const [isFetchingPin, setIsFetchingPin] = useState(false);
   const [pinAutoMsg, setPinAutoMsg] = useState('');
@@ -271,6 +297,7 @@ const Register = () => {
   const onSubmit = async (data) => {
     setToast({ type: '', message: '' });
     setIdProofError('');
+    setBuyerVerificationError('');
 
     // Contractor specific validation
     if (selectedRole === 'contractor') {
@@ -281,11 +308,44 @@ const Register = () => {
     }
 
     try {
+      const getIdProofDocObj = () => {
+        if (selectedRole === 'buyer' && buyerIdProofFile) return buyerIdProofFile;
+        if (selectedRole === 'landowner' && landownerIdProofFile) return landownerIdProofFile;
+        if (idProofFile) return idProofFile;
+        return null;
+      };
+
+      const idProofObj = getIdProofDocObj();
+
+      const getDocName = (doc) => {
+        if (!doc) return '';
+        return typeof doc === 'string' ? doc : (doc.name || '');
+      };
+
+      const getDocUrl = (doc) => {
+        if (!doc) return '';
+        if (typeof doc === 'string') return doc.startsWith('http') || doc.startsWith('data:') ? doc : '';
+        return doc.dataUrl || doc.previewUrl || '';
+      };
+
       const payload = {
         ...data,
+        businessType: data.buyerType || data.businessType || 'Sawmill',
         contactPerson: data.contactPerson || data.fullName,
-        idProofDocument: idProofFile ? idProofFile.name : '',
-        supportingDocument: supportingFile ? supportingFile.name : ''
+        idProofDocument: getDocName(idProofObj),
+        idProofUrl: getDocUrl(idProofObj),
+        supportingDocument: getDocName(supportingFile),
+        supportingUrl: getDocUrl(supportingFile),
+        forestLicenceDoc: getDocName(buyerForestLicenceFile),
+        forestLicenceUrl: getDocUrl(buyerForestLicenceFile),
+        tradeLicenceDoc: getDocName(buyerTradeLicenceFile),
+        tradeLicenceUrl: getDocUrl(buyerTradeLicenceFile),
+        gstDoc: getDocName(buyerGstFile),
+        gstUrl: getDocUrl(buyerGstFile),
+        businessCertDoc: getDocName(buyerBusinessCertFile),
+        businessCertUrl: getDocUrl(buyerBusinessCertFile),
+        landTaxInvoiceDoc: getDocName(landTaxInvoiceFile),
+        landTaxInvoiceUrl: getDocUrl(landTaxInvoiceFile)
       };
 
       await registerAuth(payload);
@@ -489,36 +549,14 @@ const Register = () => {
                 </div>
               </div>
 
-              {/* Notice Banners */}
-              {selectedRole === 'landowner' && (
-                <div className="w-full mb-8 p-4 rounded-2xl bg-emerald-950/50 border border-emerald-800/60 flex items-center justify-center gap-3 text-emerald-200 text-xs sm:text-sm text-center">
-                  <Info size={20} className="text-emerald-400 flex-shrink-0" />
-                  <div>
-                    <span className="font-bold block text-emerald-300">Property & Forest Details</span>
-                    <span>Property registration and tree inventory can be completed after login.</span>
-                  </div>
+              {/* Global Verification & Admin Approval Notice Banner */}
+              <div className="w-full mb-8 p-4 rounded-2xl bg-amber-950/50 border border-amber-800/60 flex items-center justify-center gap-3 text-amber-200 text-xs sm:text-sm text-center">
+                <ShieldCheck size={20} className="text-amber-400 flex-shrink-0" />
+                <div>
+                  <span className="font-bold block text-amber-300">Administrator Approval Required</span>
+                  <span>All new user accounts are reviewed by the TreeConnect administrator. You will be able to log in once your account is approved.</span>
                 </div>
-              )}
-
-              {selectedRole === 'contractor' && (
-                <div className="w-full mb-8 p-4 rounded-2xl bg-amber-950/50 border border-amber-800/60 flex items-center justify-center gap-3 text-amber-200 text-xs sm:text-sm text-center">
-                  <ShieldCheck size={20} className="text-amber-400 flex-shrink-0" />
-                  <div>
-                    <span className="font-bold block text-amber-300">Verification Notice</span>
-                    <span>Your contractor account will remain in "Pending Verification" until documents are reviewed by the TreeConnect administrator.</span>
-                  </div>
-                </div>
-              )}
-
-              {selectedRole === 'buyer' && (
-                <div className="w-full mb-8 p-4 rounded-2xl bg-emerald-950/50 border border-emerald-800/60 flex items-center justify-center gap-3 text-emerald-200 text-xs sm:text-sm text-center">
-                  <Info size={20} className="text-emerald-400 flex-shrink-0" />
-                  <div>
-                    <span className="font-bold block text-emerald-300">Commercial Buyer Onboarding</span>
-                    <span>Browse timber inventory, inspect specs, and place orders directly after verification.</span>
-                  </div>
-                </div>
-              )}
+              </div>
 
               <form onSubmit={handleSubmit(onSubmit)} method="post" action="#" className="w-full space-y-6">
                 {/* SUB-CONTAINER ①: ACCOUNT INFORMATION */}
@@ -685,29 +723,259 @@ const Register = () => {
                   </div>
                 </div>
 
-                {/* SUB-CONTAINER ②: ROLE CLASSIFICATION / PROFESSIONAL DETAILS */}
+                {/* ==================================================== */}
+                {/* BUYER BUSINESS CLASSIFICATION & DYNAMIC VERIFICATION */}
+                {/* ==================================================== */}
                 {selectedRole === 'buyer' && (
-                  <div className="form-section-subcard w-full">
-                    <h3 className="text-sm font-bold text-white flex items-center justify-center gap-2 mb-4 text-emerald-400 border-b border-slate-800/80 pb-2 text-center">
-                      <Briefcase size={18} />
-                      <span>② Business Classification</span>
-                    </h3>
+                  <div className="form-section-subcard w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-6 sm:p-8 shadow-xl space-y-8">
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                      <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                        <Briefcase size={22} className="text-emerald-400" />
+                        <span>Business & Verification Profile</span>
+                      </h3>
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                        Buyer Verification
+                      </span>
+                    </div>
 
+                    {/* FIELD 1: What type of buyer are you? */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-100 mb-2">
-                        Select Business Type *
+                      <label htmlFor="buyerType" className="block text-sm sm:text-base font-bold text-slate-100 mb-2">
+                        What type of buyer are you? <span className="text-emerald-400">*</span>
                       </label>
                       <select
-                        className="w-full form-input-56 cursor-pointer bg-slate-950 text-white font-semibold border-slate-700 focus:border-emerald-500 shadow-sm"
-                        {...register('businessType')}
+                        id="buyerType"
+                        className={`w-full form-input-56 cursor-pointer bg-slate-950 text-white font-semibold text-sm sm:text-base border-slate-700 focus:border-emerald-500 shadow-sm ${errors.buyerType ? 'form-input-error' : ''}`}
+                        {...register('buyerType')}
+                        onChange={(e) => {
+                          setValue('buyerType', e.target.value, { shouldValidate: true });
+                          setValue('businessType', e.target.value, { shouldValidate: true });
+                        }}
                       >
-                        <option value="Timber Merchant" className="bg-slate-900 text-white">Timber Merchant</option>
-                        <option value="Furniture Manufacturer" className="bg-slate-900 text-white">Furniture Manufacturer</option>
-                        <option value="Construction Company" className="bg-slate-900 text-white">Construction Company</option>
-                        <option value="Sawmill" className="bg-slate-900 text-white">Sawmill</option>
-                        <option value="Wholesaler" className="bg-slate-900 text-white">Wholesaler</option>
-                        <option value="Individual Buyer" className="bg-slate-900 text-white">Individual Buyer</option>
+                        <option value="Sawmill" className="bg-slate-900 text-white font-medium">Sawmill</option>
+                        <option value="Timber Depot" className="bg-slate-900 text-white font-medium">Timber Depot</option>
+                        <option value="Wood Processing Unit" className="bg-slate-900 text-white font-medium">Wood Processing Unit</option>
+                        <option value="Furniture/Manufacturing Business" className="bg-slate-900 text-white font-medium">Furniture/Manufacturing Business</option>
+                        <option value="Timber Trader" className="bg-slate-900 text-white font-medium">Timber Trader</option>
+                        <option value="Other" className="bg-slate-900 text-white font-medium">Other</option>
                       </select>
+                      <p className="text-xs text-slate-400 mt-2">
+                        Select your business category to dynamically see the required verification documents.
+                      </p>
+                      {errors.buyerType && (
+                        <p className="text-xs text-red-400 font-semibold mt-1">{errors.buyerType.message}</p>
+                      )}
+                    </div>
+
+                    {/* Kerala Forest Dept Notice for Sawmills & Wood Processing Units */}
+                    {['Sawmill', 'Wood Processing Unit', 'Timber Depot'].includes(watchBuyerType) && (
+                      <div className="rounded-2xl bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-950 border border-emerald-500/30 p-5 sm:p-6 shadow-lg space-y-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                            <Trees size={22} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm sm:text-base font-bold text-white">Kerala Forest Department Licensing Requirements</h4>
+                            <p className="text-xs text-emerald-400 font-semibold">Sawmill & Wood-Based Industry Compliance</p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed pt-1">
+                          Under Kerala Forest Department rules, operating sawmills, timber storage depots, and wood-based processing units requires valid licensing, inspection compliance, and periodic renewal. Please upload your applicable licence for verified buyer badge status.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* DYNAMIC VERIFICATION DOCUMENT UPLOADS BASED ON BUYER TYPE */}
+                    <div className="pt-6 border-t border-slate-800/80 space-y-8">
+                      <h4 className="text-base font-bold text-white flex items-center gap-2 text-emerald-400">
+                        <FileText size={20} />
+                        <span>Dynamic Verification Documents for {watchBuyerType}</span>
+                      </h4>
+
+                      {/* 1. Forest Department Licence (For Sawmill, Wood Processing Unit, Timber Depot) */}
+                      {['Sawmill', 'Wood Processing Unit', 'Timber Depot'].includes(watchBuyerType) && (
+                        <FileUploadCard
+                          id="buyer-forest-licence"
+                          label={`1. Applicable Forest Department Licence (${watchBuyerType})`}
+                          isRequired={true}
+                          helperText="Upload your Kerala Forest Department Licence or Wood-Based Industry License / Storage Permit."
+                          examples={[
+                            'Kerala Forest Dept Sawmill Licence',
+                            'Wood-Based Industry Operating License',
+                            'Forest Dept Timber Depot Permit / Renewal Receipt'
+                          ]}
+                          acceptedFormatsText="PDF, JPG, PNG"
+                          acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                          maxSizeMB={10}
+                          fileData={buyerForestLicenceFile}
+                          onFileChange={(file) => setBuyerForestLicenceFile(file)}
+                        />
+                      )}
+
+                      {/* 2. Trade Licence / Business Registration (For Sawmill, Wood Processing, Depot, Furniture, Trader) */}
+                      {['Sawmill', 'Wood Processing Unit', 'Timber Depot', 'Furniture/Manufacturing Business', 'Timber Trader'].includes(watchBuyerType) && (
+                        <FileUploadCard
+                          id="buyer-trade-licence"
+                          label="Local-Body Trade / Business Licence"
+                          isRequired={watchBuyerType !== 'Other'}
+                          helperText="Upload your Gram Panchayat, Municipality, or Corporation Trade / Business Licence."
+                          examples={[
+                            'Local Body Trade Licence',
+                            'Gram Panchayat Business Permit',
+                            'Municipal Corporation D&O Licence'
+                          ]}
+                          acceptedFormatsText="PDF, JPG, PNG"
+                          acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                          maxSizeMB={10}
+                          fileData={buyerTradeLicenceFile}
+                          onFileChange={(file) => setBuyerTradeLicenceFile(file)}
+                        />
+                      )}
+
+                      {/* 3. MSME / Business Cert (For Furniture/Manufacturing or Other) */}
+                      {['Furniture/Manufacturing Business', 'Other'].includes(watchBuyerType) && (
+                        <FileUploadCard
+                          id="buyer-business-cert"
+                          label="Business Registration / MSME Certificate"
+                          isRequired={watchBuyerType === 'Furniture/Manufacturing Business'}
+                          helperText="Upload Udyam MSME Certificate, Factory Registration, or Partnership / Business Certificate."
+                          examples={[
+                            'Udyam MSME Registration Certificate',
+                            'Factories & Boilers Registration',
+                            'Partnership Deed / Certificate of Incorporation'
+                          ]}
+                          acceptedFormatsText="PDF, JPG, PNG"
+                          acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                          maxSizeMB={10}
+                          fileData={buyerBusinessCertFile}
+                          onFileChange={(file) => setBuyerBusinessCertFile(file)}
+                        />
+                      )}
+
+                      {/* 4. GST Registration Certificate (Optional / Applicable for all) */}
+                      <FileUploadCard
+                        id="buyer-gst-doc"
+                        label="GST Registration Certificate (Where applicable)"
+                        isRequired={false}
+                        helperText="Optional: Upload your GST Registration (REG-06) Certificate if registered."
+                        examples={['GST REG-06 Certificate', 'GST Tax Registration Copy']}
+                        acceptedFormatsText="PDF, JPG, PNG"
+                        acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                        maxSizeMB={10}
+                        fileData={buyerGstFile}
+                        onFileChange={(file) => setBuyerGstFile(file)}
+                      />
+
+                      {/* 5. Government-Issued ID Proof */}
+                      <FileUploadCard
+                        id="buyer-id-proof"
+                        label="Government-Issued Identity / Business Identification"
+                        isRequired={true}
+                        helperText="Upload a valid government identity document of the authorized business owner / contact person."
+                        docTypes={['Aadhaar Card', 'PAN Card', 'Driving Licence', 'Passport', 'Voter ID']}
+                        selectedDocType={watchIdProofType}
+                        onDocTypeChange={(val) => setValue('idProofType', val, { shouldValidate: true })}
+                        acceptedFormatsText="PDF, JPG, PNG"
+                        acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                        maxSizeMB={5}
+                        fileData={buyerIdProofFile}
+                        onFileChange={(file) => setBuyerIdProofFile(file)}
+                      />
+                    </div>
+
+                    {/* DECLARATION (Required Checkbox for Buyer) */}
+                    <div className="pt-8 border-t border-slate-800/80">
+                      <div className="p-5 sm:p-6 rounded-xl bg-slate-950 border border-slate-800 shadow-sm">
+                        <label className="flex items-start gap-3.5 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            className="mt-1 w-4.5 h-4.5 text-emerald-600 rounded focus:ring-emerald-500 border-slate-700 bg-slate-900 cursor-pointer flex-shrink-0"
+                            {...register('declarationAccepted')}
+                          />
+                          <span className="text-sm sm:text-base text-slate-200 group-hover:text-white font-medium transition-colors leading-relaxed">
+                            <strong className="text-emerald-400 font-bold">Declaration:</strong> I certify that all business details and uploaded licences/certificates are genuine and valid. <span className="text-emerald-400 font-bold">*</span>
+                          </span>
+                        </label>
+                        {errors.declarationAccepted && (
+                          <p className="text-sm text-red-400 font-semibold mt-2.5 pl-8">{errors.declarationAccepted.message}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* VERIFICATION NOTICE CARD FOR BUYERS */}
+                    <div className="pt-6 border-t border-slate-800/80">
+                      <div className="rounded-2xl bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-950 border border-emerald-500/40 p-6 sm:p-7 shadow-xl">
+                        <div className="flex items-center gap-3.5 mb-4 border-b border-emerald-500/20 pb-4">
+                          <div className="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 border border-emerald-500/30">
+                            <ShieldCheck size={26} />
+                          </div>
+                          <div>
+                            <h4 className="text-base sm:text-lg font-bold text-white">Administrator Business Verification</h4>
+                            <p className="text-sm text-emerald-400 font-semibold mt-0.5">TreeConnect Buyer Verification</p>
+                          </div>
+                        </div>
+
+                        <p className="text-sm sm:text-base text-slate-200 font-medium leading-relaxed mb-4">
+                          Uploaded business licences and identity proofs will be reviewed by the TreeConnect administrator to issue your <span className="font-bold text-emerald-400">"Verified Buyer"</span> status badge.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ==================================================== */}
+                {/* LANDOWNER PROPERTY & LAND TAX VERIFICATION SECTION  */}
+                {/* ==================================================== */}
+                {selectedRole === 'landowner' && (
+                  <div className="form-section-subcard w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-6 sm:p-8 shadow-xl space-y-8">
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                      <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                        <Trees size={22} className="text-emerald-400" />
+                        <span>Property Ownership &amp; Identity Verification</span>
+                      </h3>
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                        Landowner Verification
+                      </span>
+                    </div>
+
+                    {/* Government-Issued Identity / Business Identification */}
+                    <div>
+                      <FileUploadCard
+                        id="landowner-id-proof"
+                        label="Government-Issued Identity / Business Identification"
+                        isRequired={false}
+                        helperText="Upload a valid government identity document of the property owner (Aadhaar Card, PAN Card, Passport, etc.)."
+                        docTypes={['Aadhaar Card', 'PAN Card', 'Driving Licence', 'Passport', 'Voter ID']}
+                        selectedDocType={watchIdProofType}
+                        onDocTypeChange={(val) => setValue('idProofType', val, { shouldValidate: true })}
+                        acceptedFormatsText="PDF, JPG, PNG"
+                        acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                        maxSizeMB={5}
+                        fileData={landownerIdProofFile}
+                        onFileChange={(file) => setLandownerIdProofFile(file)}
+                      />
+                    </div>
+
+                    {/* Land Tax Document Upload Card */}
+                    <div className="pt-6 border-t border-slate-800/80">
+                      <FileUploadCard
+                        id="landowner-land-tax-doc"
+                        label="Land Tax Invoice / Property Tax Payment Document"
+                        isRequired={false}
+                        helperText="Upload your latest Land Tax Payment Receipt, Land Revenue Invoice, or Possession Certificate (PDF, JPG, PNG)."
+                        examples={[
+                          'Kerala Revenue Land Tax Payment Receipt',
+                          'Annual Property Tax Invoice',
+                          'Village Office Tax Receipt / Possession Certificate'
+                        ]}
+                        acceptedFormatsText="PDF, JPG, PNG"
+                        acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+                        maxSizeMB={10}
+                        fileData={landTaxInvoiceFile}
+                        onFileChange={(file) => setLandTaxInvoiceFile(file)}
+                      />
                     </div>
                   </div>
                 )}
@@ -754,14 +1022,14 @@ const Register = () => {
                         )}
                       </div>
 
-                      {/* FIELD 2: Government Identity Proof (Required) */}
+                      {/* FIELD 2: Government-Issued Identity / Business Identification (Required) */}
                       <div className="pt-8 border-t border-slate-800/80">
                         <FileUploadCard
                           id="govt-identity-proof"
-                          label="2. Government Identity Proof"
+                          label="2. Government-Issued Identity / Business Identification"
                           isRequired={true}
                           helperText="Upload a valid government-issued identity document for verification."
-                          docTypes={['Aadhaar Card', 'Driving Licence', 'Passport', 'Voter ID']}
+                          docTypes={['Aadhaar Card', 'PAN Card', 'Driving Licence', 'Passport', 'Voter ID']}
                           selectedDocType={watchIdProofType}
                           onDocTypeChange={(val) => setValue('idProofType', val, { shouldValidate: true })}
                           acceptedFormatsText="PDF, JPG, PNG"

@@ -12,21 +12,22 @@ const ContractorVerification = () => {
   const [infoRequestedMessage, setInfoRequestedMessage] = useState(false);
   const [actionSuccessMessage, setActionSuccessMessage] = useState('');
 
-  const fetchContractors = async () => {
+  const fetchPendingUsers = async () => {
     try {
       setLoading(true);
       const res = await api.get('/admin/users');
       if (res.data && Array.isArray(res.data.users)) {
-        // Filter DB contractors that are unverified or pending verification
+        // Filter DB contractors or buyers that are unverified or pending verification
         const dbPending = res.data.users.filter(
-          (u) => u.role === 'contractor' && (!u.isVerified || u.verification?.includes('Pending') || u.status === 'Pending' || u.status === 'pending')
+          (u) => (!u.isVerified || u.verification?.includes('Pending') || u.status === 'Pending' || u.status === 'pending') &&
+                 (u.role === 'contractor' || u.role === 'buyer' || u.forestLicenceDoc || u.tradeLicenceDoc)
         );
         setContractors(dbPending);
       } else {
         setContractors([]);
       }
     } catch (err) {
-      console.error('API contractor fetch error:', err);
+      console.error('API pending users fetch error:', err);
       setContractors([]);
     } finally {
       setLoading(false);
@@ -34,22 +35,22 @@ const ContractorVerification = () => {
   };
 
   useEffect(() => {
-    fetchContractors();
+    fetchPendingUsers();
   }, []);
 
   const handleApprove = async (id) => {
-    const contractorToApprove = contractors.find((c) => c.id === id) || selectedContractor;
+    const userToApprove = contractors.find((c) => c.id === id) || selectedContractor;
     try {
       await api.put(`/admin/users/${id}/status`, { status: 'Active', isVerified: true });
     } catch (e) {
-      console.error('API approve contractor error:', e);
+      console.error('API approve user error:', e);
     }
 
-    if (contractorToApprove?.email) {
-      authService.updateUserStatus(contractorToApprove.email, 'Active', true);
+    if (userToApprove?.email) {
+      authService.updateUserStatus(userToApprove.email, 'Active', true);
     }
 
-    setActionSuccessMessage(`Contractor ${contractorToApprove?.contractorName || contractorToApprove?.name || ''} Verified Successfully!`);
+    setActionSuccessMessage(`Account for ${userToApprove?.name || userToApprove?.companyName || 'User'} Verified Successfully!`);
     setContractors((prev) => prev.filter((c) => c.id !== id));
     setShowReviewModal(false);
     setSelectedContractor(null);
@@ -57,18 +58,18 @@ const ContractorVerification = () => {
   };
 
   const handleReject = async (id) => {
-    const contractorToReject = contractors.find((c) => c.id === id) || selectedContractor;
+    const userToReject = contractors.find((c) => c.id === id) || selectedContractor;
     try {
       await api.put(`/admin/users/${id}/status`, { status: 'Rejected', isVerified: false });
     } catch (e) {
-      console.error('API reject contractor error:', e);
+      console.error('API reject user error:', e);
     }
 
-    if (contractorToReject?.email) {
-      authService.updateUserStatus(contractorToReject.email, 'Rejected', false);
+    if (userToReject?.email) {
+      authService.updateUserStatus(userToReject.email, 'Rejected', false);
     }
 
-    setActionSuccessMessage(`Contractor Registration Rejected.`);
+    setActionSuccessMessage(`Registration Rejected.`);
     setContractors((prev) => prev.filter((c) => c.id !== id));
     setShowReviewModal(false);
     setSelectedContractor(null);
@@ -88,10 +89,10 @@ const ContractorVerification = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-800/80">
         <div>
           <h2 className="text-xl font-extrabold text-white flex items-center gap-2.5">
-            <ShieldCheck size={20} className="text-amber-400" /> Contractor Verification
+            <ShieldCheck size={20} className="text-amber-400" /> Contractor & Business Verification Queue
           </h2>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Review identity proofs and professional harvesting credentials for pending contractors
+            Review identity proofs, Forest Department licences, trade licences, and business credentials
           </p>
         </div>
         <span className="admin-badge-amber text-xs font-bold flex items-center gap-1.5 shrink-0">
@@ -109,23 +110,23 @@ const ContractorVerification = () => {
       {loading ? (
         <div className="p-8 text-center bg-[#0e1612] rounded-xl border border-emerald-500/15 text-slate-300 text-xs flex items-center justify-center gap-2">
           <Loader2 size={16} className="animate-spin text-emerald-400" />
-          <span>Fetching pending contractors from database...</span>
+          <span>Fetching pending verification requests from database...</span>
         </div>
       ) : contractors.length === 0 ? (
         <div className="p-8 text-center bg-[#0e1612] rounded-xl border border-emerald-500/15 space-y-2">
           <CheckCircle size={36} className="text-emerald-400 mx-auto" />
-          <p className="font-bold text-white text-sm">All Contractor Verifications Complete</p>
-          <p className="text-xs text-slate-300">There are no pending contractor approval requests in the queue.</p>
+          <p className="font-bold text-white text-sm">All Verifications Complete</p>
+          <p className="text-xs text-slate-300">There are no pending contractor or buyer verification requests in the queue.</p>
         </div>
       ) : (
         <div className="table-wrapper pt-2">
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Contractor Name</th>
+                <th>Applicant Name / Entity</th>
+                <th>Category / Role</th>
                 <th>Location</th>
-                <th>Experience</th>
-                <th>Registration Date</th>
+                <th>Documents Submitted</th>
                 <th>Status</th>
                 <th className="text-center">Action</th>
               </tr>
@@ -135,13 +136,17 @@ const ContractorVerification = () => {
                 <tr key={c.id}>
                   <td>
                     <div className="flex flex-col">
-                      <span className="font-semibold text-white">{c.contractorName || c.name}</span>
+                      <span className="font-semibold text-white">{c.name || c.companyName}</span>
                       <span className="text-xs text-slate-400">{c.email}</span>
                     </div>
                   </td>
-                  <td className="text-slate-300">{c.location}</td>
-                  <td className="text-emerald-400 font-semibold">{c.experience || '3+ Years'}</td>
-                  <td className="text-slate-400 text-xs">{c.submittedDate || c.date}</td>
+                  <td>
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/60">
+                      {c.role === 'buyer' ? `Buyer: ${c.buyerType || c.businessType || 'Business'}` : 'Contractor'}
+                    </span>
+                  </td>
+                  <td className="text-slate-300 text-xs">{c.location}</td>
+                  <td className="text-slate-300 text-xs max-w-xs truncate">{c.docType || 'Govt ID & Licences'}</td>
                   <td>
                     <span className="admin-badge-amber text-xs font-bold flex items-center gap-1.5 w-max">
                       <Clock size={12} /> {c.status || 'Pending'}
@@ -173,14 +178,14 @@ const ContractorVerification = () => {
         </div>
       )}
 
-      {/* Contractor Review Modal */}
+      {/* Review Modal */}
       {showReviewModal && selectedContractor && (
         <div className="modal-overlay z-50 flex items-center justify-center p-4 bg-[#0a0f0d]/90 backdrop-blur-md">
           <div className="modal-content admin-card max-w-xl w-full p-6 space-y-4 shadow-2xl animate-fade-in text-xs bg-[#121a16] border border-emerald-500/25">
             <div className="flex items-center justify-between border-b border-emerald-500/15 pb-3">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <ShieldCheck size={18} className="text-amber-400" />
-                <span>Contractor Verification Review</span>
+                <span>Verification Review ({selectedContractor.role === 'buyer' ? `Buyer: ${selectedContractor.buyerType || 'Business'}` : 'Contractor'})</span>
               </h3>
               <button
                 className="p-1.5 text-slate-400 hover:text-white hover:bg-[#18241e] rounded-xl transition-all cursor-pointer"
@@ -192,30 +197,82 @@ const ContractorVerification = () => {
 
             <div className="space-y-4 pt-2 text-xs">
               <div className="bg-[#0e1612] p-4 rounded-xl border border-emerald-500/15 space-y-2">
-                <p className="font-bold text-white text-base">{selectedContractor.contractorName || selectedContractor.name}</p>
-                <p className="text-slate-300">Contact: {selectedContractor.contactPerson || selectedContractor.name} ({selectedContractor.phone || 'N/A'})</p>
+                <p className="font-bold text-white text-base">{selectedContractor.name || selectedContractor.companyName}</p>
+                <p className="text-slate-300">Role / Category: <strong className="text-emerald-400 capitalize">{selectedContractor.role} ({selectedContractor.buyerType || selectedContractor.businessType || 'General'})</strong></p>
+                <p className="text-slate-300">Contact Person: {selectedContractor.contactPerson || selectedContractor.name} ({selectedContractor.phone || 'N/A'})</p>
                 <p className="text-slate-300">Email: {selectedContractor.email}</p>
                 <p className="text-slate-300">Location: {selectedContractor.location}</p>
-                <p className="text-emerald-400 font-semibold">Experience: {selectedContractor.experience || '3+ Years'}</p>
-                <p className="text-slate-300">Machinery / Fleet: {selectedContractor.equipment || 'Logging Equipment'}</p>
               </div>
 
-              <div className="bg-[#0a0f0d] p-4 rounded-xl border border-emerald-500/15 space-y-2">
-                <p className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Submitted Documents / Verification Evidence:</p>
-                <div className="flex items-center gap-2 p-2.5 bg-[#0e1612] rounded-lg border border-emerald-500/15 text-slate-200">
-                  <FileText size={16} className="text-emerald-400" />
-                  <span className="font-medium">{selectedContractor.docType || 'Government ID & Business License'}</span>
-                </div>
+              <div className="bg-[#0a0f0d] p-4 rounded-xl border border-emerald-500/15 space-y-2.5">
+                <p className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Submitted Business Verification Documents:</p>
+                
+                {selectedContractor.forestLicenceDoc && (
+                  <div className="flex items-center gap-2 p-2 bg-[#0e1612] rounded-lg border border-emerald-500/20 text-emerald-300">
+                    <FileText size={15} className="text-emerald-400" />
+                    <span><strong>Forest Dept Licence:</strong> {selectedContractor.forestLicenceDoc}</span>
+                  </div>
+                )}
+
+                {selectedContractor.tradeLicenceDoc && (
+                  <div className="flex items-center gap-2 p-2 bg-[#0e1612] rounded-lg border border-emerald-500/20 text-emerald-300">
+                    <FileText size={15} className="text-emerald-400" />
+                    <span><strong>Local Body Trade Licence:</strong> {selectedContractor.tradeLicenceDoc}</span>
+                  </div>
+                )}
+
+                {selectedContractor.gstDoc && (
+                  <div className="flex items-center gap-2 p-2 bg-[#0e1612] rounded-lg border border-emerald-500/20 text-emerald-300">
+                    <FileText size={15} className="text-emerald-400" />
+                    <span><strong>GST Registration:</strong> {selectedContractor.gstDoc}</span>
+                  </div>
+                )}
+
+                {selectedContractor.businessCertDoc && (
+                  <div className="flex items-center gap-2 p-2 bg-[#0e1612] rounded-lg border border-emerald-500/20 text-emerald-300">
+                    <FileText size={15} className="text-emerald-400" />
+                    <span><strong>MSME / Business Certificate:</strong> {selectedContractor.businessCertDoc}</span>
+                  </div>
+                )}
+
+                {selectedContractor.landTaxInvoiceDoc && (
+                  <div className="p-2.5 bg-emerald-950/60 rounded-xl border border-emerald-500/30 text-emerald-300 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                        <FileText size={15} className="text-emerald-400" />
+                        Property Ownership & Land Tax Invoice Document
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-900/80 text-emerald-300 border border-emerald-700">
+                        Landowner Doc
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-400 font-mono pl-5">{selectedContractor.landTaxInvoiceDoc}</p>
+                  </div>
+                )}
+
+                {selectedContractor.idProofDocument && (
+                  <div className="flex items-center gap-2 p-2 bg-[#0e1612] rounded-lg border border-emerald-500/20 text-slate-200">
+                    <FileText size={15} className="text-emerald-400" />
+                    <span><strong>Govt ID Proof:</strong> {selectedContractor.idProofDocument}</span>
+                  </div>
+                )}
+
+                {!selectedContractor.forestLicenceDoc && !selectedContractor.tradeLicenceDoc && !selectedContractor.idProofDocument && (
+                  <div className="flex items-center gap-2 p-2 bg-[#0e1612] rounded-lg border border-emerald-500/15 text-slate-200">
+                    <FileText size={15} className="text-emerald-400" />
+                    <span>{selectedContractor.docType || 'Government ID & Business License'}</span>
+                  </div>
+                )}
               </div>
 
               <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl text-amber-200 text-xs leading-relaxed">
                 <strong className="block text-amber-400 mb-0.5">Verification Designation:</strong>
-                Approving this contractor grants authorization status: <strong>"Verified by TreeConnect Admin"</strong>.
+                Approving grants verified status: <strong>"Verified by TreeConnect Admin"</strong>.
               </div>
 
               {infoRequestedMessage && (
                 <div className="p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-lg text-emerald-300 font-semibold animate-pulse">
-                  Request for additional evidence sent to contractor.
+                  Request for additional evidence sent.
                 </div>
               )}
 
@@ -253,7 +310,7 @@ const ContractorVerification = () => {
                     className="admin-btn-emerald text-xs py-2 px-4"
                     onClick={() => handleApprove(selectedContractor.id)}
                   >
-                    <UserCheck size={14} /> Approve Contractor
+                    <UserCheck size={14} /> Approve Verification
                   </button>
                 </div>
               </div>
