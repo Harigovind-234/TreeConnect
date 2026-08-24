@@ -867,4 +867,64 @@
   border-radius: 8px !important;
 }
 
+/* ==================================================== */
+/* HARVEST REQUEST WIZARD & CARD STYLING                */
+/* ==================================================== */
+.harvest-card {
+  background-color: #0b1710 !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 24px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+}
+
+.harvest-property-card {
+  padding: 16px !important;
+  background-color: #050e08 !important;
+  border: 2px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.harvest-property-card:hover {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  background-color: #0c1810 !important;
+}
+
+.harvest-property-card.selected {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15) !important;
+}
+
+.harvest-scope-card {
+  padding: 16px !important;
+  background-color: #050e08 !important;
+  border: 2px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+}
+
+.harvest-scope-card:hover {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  background-color: #0c1810 !important;
+}
+
+.harvest-scope-card.selected {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15) !important;
+}
+
+.harvest-step-badge {
+  border-radius: 8px !important;
+}
+
+
 

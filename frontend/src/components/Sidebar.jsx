@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard,
@@ -128,6 +128,21 @@ const Sidebar = () => {
     }
   };
 
+  const checkIsActive = (itemPath) => {
+    const currentPath = location.pathname;
+    const currentSearch = location.search;
+    const currentFull = currentPath + currentSearch;
+
+    if (itemPath.includes('?')) {
+      return currentSearch.includes('role=contractor') || currentFull === itemPath;
+    } else {
+      if (currentSearch && currentSearch.includes('role=contractor')) {
+        return false;
+      }
+      return currentPath === itemPath || (currentPath.startsWith(itemPath + '/') && !currentSearch);
+    }
+  };
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
@@ -154,17 +169,16 @@ const Sidebar = () => {
                     </button>
                   );
                 }
+                const isActive = checkIsActive(item.path);
                 return (
-                  <NavLink
+                  <Link
                     key={item.path}
                     to={item.path}
-                    className={({ isActive }) =>
-                      `sidebar-item ${isActive ? 'active' : ''}`
-                    }
+                    className={`sidebar-item ${isActive ? 'active' : ''}`}
                   >
                     <Icon size={18} className="sidebar-icon" />
                     <span>{item.label}</span>
-                  </NavLink>
+                  </Link>
                 );
               })}
             </div>
@@ -173,17 +187,16 @@ const Sidebar = () => {
           <div className="sidebar-group">
             {(menuConfig[role] || []).map((item) => {
               const Icon = item.icon;
+              const isActive = checkIsActive(item.path);
               return (
-                <NavLink
+                <Link
                   key={item.path}
                   to={item.path}
-                  className={({ isActive }) =>
-                    `sidebar-item ${isActive ? 'active' : ''}`
-                  }
+                  className={`sidebar-item ${isActive ? 'active' : ''}`}
                 >
                   <Icon size={18} className="sidebar-icon" />
                   <span>{item.label}</span>
-                </NavLink>
+                </Link>
               );
             })}
           </div>
@@ -192,10 +205,10 @@ const Sidebar = () => {
 
       <div className="sidebar-footer">
         <div className="sidebar-user-card">
-          <img 
-            src={user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=tree'} 
+          <img
+            src={user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=tree'}
             alt={user?.name || 'User'}
-            className="sidebar-avatar" 
+            className="sidebar-avatar"
           />
           <div className="sidebar-user-details">
             <span className="sidebar-user-name">
@@ -205,9 +218,9 @@ const Sidebar = () => {
               {user?.title || (role === 'admin' ? 'Platform Administrator' : 'Forest Estate Owner')}
             </span>
           </div>
-          <button 
-            className="sidebar-logout-btn" 
-            onClick={handleLogout} 
+          <button
+            className="sidebar-logout-btn"
+            onClick={handleLogout}
             title="Log Out"
           >
             <LogOut size={16} />

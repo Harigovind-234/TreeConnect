@@ -44,9 +44,10 @@
 /* Main Cards & Panels matching Sidebar Theme */
 .admin-card {
   background: #121a16 !important;
-  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
   border-radius: 18px !important;
   padding: 24px !important;
+  margin-bottom: 28px !important;
   box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5) !important;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -58,20 +59,63 @@
 .admin-hero-card {
   background: linear-gradient(135deg, #121a16 0%, #0e1612 100%) !important;
   border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  margin-bottom: 28px !important;
   box-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.6) !important;
 }
 
+/* Headings & Section Header Spacing */
+.admin-card-header,
+.admin-section-header,
+.admin-card > h2:first-child,
+.admin-card > h3:first-child,
+.admin-card > h4:first-child,
+.admin-hero-card > h2:first-child,
+.admin-hero-card > h3:first-child,
+.admin-hero-card > h4:first-child {
+  margin-bottom: 20px !important;
+}
+
+.admin-card .border-b,
+.admin-hero-card .border-b {
+  margin-bottom: 20px !important;
+  padding-bottom: 14px !important;
+}
+
 .admin-subcard {
-  background: #0e1612 !important;
-  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  background: #0b130f !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
   border-radius: 14px !important;
   padding: 18px !important;
-  transition: all 0.2s ease;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
 }
 
 .admin-subcard:hover {
   border-color: rgba(16, 185, 129, 0.45) !important;
-  background: #141d18 !important;
+  background: #101c16 !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Document Verification Subcards Spacing & Styling */
+.admin-doc-subcard {
+  background: #0b130f !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 14px !important;
+  padding: 20px !important;
+  margin-top: 20px !important;
+  margin-bottom: 8px !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.admin-doc-subcard:hover {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  background: #101c16 !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5) !important;
+  transform: translateY(-2px);
 }
 
 /* Badges & Pills */
@@ -134,6 +178,32 @@
   background: #18241e !important;
   color: #ffffff !important;
   border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+/* Sleek Back Navigation Button */
+.admin-btn-back {
+  background: #0e1612 !important;
+  color: #a7f3d0 !important;
+  font-weight: 700 !important;
+  font-size: 0.8125rem !important;
+  border-radius: 12px !important;
+  padding: 8px 16px !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease-in-out !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.admin-btn-back:hover {
+  background: #14221b !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.18) !important;
+  transform: translateX(-3px) !important;
 }
 
 /* Tables & Controls */

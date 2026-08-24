@@ -224,13 +224,14 @@ const AddTreeInventory = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                   <div>
-                    <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                    <label className="ld-label">
                       Target Estate / Plot <span className="text-rose-400">*</span>
                     </label>
                     <select
                       value={selectedPropertyId}
                       onChange={(e) => setSelectedPropertyId(e.target.value)}
-                      className="w-full p-3.5 rounded-xl bg-[#0a0f0d] border border-emerald-500/25 text-white font-semibold text-sm sm:text-base focus:border-emerald-500 focus:outline-none transition-colors"
+                      style={{ borderRadius: '8px' }}
+                      className="ld-select text-sm sm:text-base font-semibold"
                     >
                       {safeProperties.length > 0 ? (
                         safeProperties.map(p => {
@@ -249,7 +250,7 @@ const AddTreeInventory = () => {
                   </div>
 
                   {selectedProperty && (
-                    <div className="ld-subcard p-5 flex items-center justify-between gap-4">
+                    <div className="ld-subcard p-5 flex items-center justify-between gap-4" style={{ borderRadius: '10px' }}>
                       <div>
                         <span className="text-base sm:text-lg font-extrabold text-white block">
                           {selectedProperty.propertyName}
@@ -260,7 +261,7 @@ const AddTreeInventory = () => {
                           {selectedProperty.district}, {selectedProperty.state}
                         </span>
                       </div>
-                      <span className="ld-pill text-xs sm:text-sm font-bold py-1 px-3.5 shrink-0">
+                      <span className="ld-pill text-xs sm:text-sm font-bold py-1 px-3.5 shrink-0" style={{ borderRadius: '6px' }}>
                         {selectedProperty.propertyType || 'Estate'}
                       </span>
                     </div>
@@ -282,7 +283,8 @@ const AddTreeInventory = () => {
                   <button
                     type="button"
                     onClick={handleAddGroup}
-                    className="px-4 py-2.5 rounded-xl bg-[#18241e] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 font-bold text-xs sm:text-sm border border-emerald-500/30 transition-all flex items-center gap-2 cursor-pointer shadow-md shrink-0"
+                    style={{ borderRadius: '8px' }}
+                    className="px-4 py-2.5 bg-[#18241e] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 font-bold text-xs sm:text-sm border border-emerald-500/30 transition-all flex items-center gap-2 cursor-pointer shadow-md shrink-0"
                   >
                     <Plus size={16} />
                     <span>Add Tree Group</span>
@@ -292,7 +294,7 @@ const AddTreeInventory = () => {
                 {/* Grid of Tree Groups with generous 24px gap between groups */}
                 <div className="flex flex-col gap-6">
                   {treeGroups.map((tg, idx) => (
-                    <div key={tg.id} className="ld-subcard p-6 sm:p-7 space-y-5 rounded-2xl border border-emerald-500/20 bg-[#0e1612] shadow-lg">
+                    <div key={tg.id} className="ld-subcard p-6 sm:p-7 space-y-5 border border-emerald-500/20 bg-[#0e1612] shadow-lg" style={{ borderRadius: '12px' }}>
                       <div className="flex items-center justify-between pb-3.5 border-b border-emerald-500/15">
                         <span className="ld-hero-tag text-xs sm:text-sm font-bold tracking-wider">
                           <ShieldCheck size={16} /> TREE GROUP #{idx + 1}
@@ -301,7 +303,8 @@ const AddTreeInventory = () => {
                           <button
                             type="button"
                             onClick={() => handleRemoveGroup(idx)}
-                            className="px-3.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                            style={{ borderRadius: '6px' }}
+                            className="px-3.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                           >
                             <Trash2 size={15} /> Remove Group
                           </button>
@@ -312,7 +315,7 @@ const AddTreeInventory = () => {
 
                         {/* Group Designation */}
                         <div>
-                          <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                          <label className="ld-label">
                             Group Designation
                           </label>
                           <input
@@ -320,19 +323,21 @@ const AddTreeInventory = () => {
                             value={tg.groupName}
                             onChange={(e) => handleGroupChange(idx, 'groupName', e.target.value)}
                             placeholder="e.g. Frontyard Teak Stand"
-                            className="w-full p-3 rounded-xl bg-[#0a0f0d] border border-emerald-500/25 text-white text-sm font-medium focus:border-emerald-500 focus:outline-none transition-colors"
+                            style={{ borderRadius: '8px' }}
+                            className="ld-input"
                           />
                         </div>
 
                         {/* Tree Species */}
                         <div>
-                          <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                          <label className="ld-label">
                             Tree Species <span className="text-rose-400">*</span>
                           </label>
                           <select
                             value={tg.species}
                             onChange={(e) => handleGroupChange(idx, 'species', e.target.value)}
-                            className="w-full p-3 rounded-xl bg-[#0a0f0d] border border-emerald-500/25 text-emerald-400 font-bold text-sm focus:border-emerald-500 focus:outline-none transition-colors"
+                            style={{ borderRadius: '8px' }}
+                            className="ld-select font-extrabold text-emerald-400"
                           >
                             {speciesOptions.map(opt => (
                               <option key={opt} value={opt} className="bg-[#0e1612] text-white font-semibold py-1">{opt}</option>
@@ -343,7 +348,7 @@ const AddTreeInventory = () => {
 
                         {/* Number of Trees */}
                         <div>
-                          <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                          <label className="ld-label">
                             Number of Trees <span className="text-rose-400">*</span>
                           </label>
                           <input
@@ -351,14 +356,15 @@ const AddTreeInventory = () => {
                             value={tg.numberOfTrees}
                             onChange={(e) => handleGroupChange(idx, 'numberOfTrees', e.target.value)}
                             placeholder="e.g. 5"
-                            className="w-full p-3 rounded-xl bg-[#0a0f0d] border border-emerald-500/25 text-white font-bold text-sm focus:border-emerald-500 focus:outline-none transition-colors"
+                            style={{ borderRadius: '8px' }}
+                            className="ld-input font-extrabold"
                           />
                           {errors[`count_${idx}`] && <p className="text-xs sm:text-sm text-rose-400 font-medium mt-1.5">{errors[`count_${idx}`]}</p>}
                         </div>
 
                         {/* Approximate Age */}
                         <div>
-                          <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                          <label className="ld-label">
                             Approximate Age
                           </label>
                           <input
@@ -366,13 +372,14 @@ const AddTreeInventory = () => {
                             value={tg.approxAge}
                             onChange={(e) => handleGroupChange(idx, 'approxAge', e.target.value)}
                             placeholder="e.g. 15-20 years"
-                            className="w-full p-3 rounded-xl bg-[#0a0f0d] border border-emerald-500/25 text-white text-sm font-medium focus:border-emerald-500 focus:outline-none transition-colors"
+                            style={{ borderRadius: '8px' }}
+                            className="ld-input"
                           />
                         </div>
 
                         {/* Location within Property */}
                         <div className="md:col-span-2">
-                          <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2">
+                          <label className="ld-label">
                             Location / Plot Position within Property
                           </label>
                           <input
@@ -380,13 +387,14 @@ const AddTreeInventory = () => {
                             value={tg.locationInProperty}
                             onChange={(e) => handleGroupChange(idx, 'locationInProperty', e.target.value)}
                             placeholder="e.g. Near main house compound wall / East boundary"
-                            className="w-full p-3 rounded-xl bg-[#0a0f0d] border border-emerald-500/25 text-white text-sm font-medium focus:border-emerald-500 focus:outline-none transition-colors"
+                            style={{ borderRadius: '8px' }}
+                            className="ld-input"
                           />
                         </div>
 
                         {/* Tree Health & Condition */}
                         <div className="md:col-span-3">
-                          <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2.5">
+                          <label className="ld-label">
                             General Tree Health &amp; Condition
                           </label>
                           <div className="flex flex-wrap gap-3">
@@ -397,13 +405,14 @@ const AddTreeInventory = () => {
                                   key={cond}
                                   type="button"
                                   onClick={() => handleGroupChange(idx, 'condition', cond)}
-                                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold border transition-all cursor-pointer flex items-center gap-2 ${
+                                  style={{ borderRadius: '8px' }}
+                                  className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-2 transition-all cursor-pointer flex items-center gap-2 ${
                                     isSelected
-                                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-sm'
-                                      : 'bg-[#0a0f0d] border-emerald-500/15 text-slate-300 hover:border-emerald-500/30'
+                                      ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-md'
+                                      : 'bg-[#050e08] border-emerald-600/20 text-slate-300 hover:border-emerald-500/40 hover:bg-[#0c1810]'
                                   }`}
                                 >
-                                  <span className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-amber-400'}`}></span>
+                                  <span style={{ borderRadius: '3px' }} className={`w-3 h-3 border ${isSelected ? 'bg-emerald-400 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-amber-400/80 border-amber-500'}`}></span>
                                   {cond}
                                 </button>
                               );
@@ -413,15 +422,16 @@ const AddTreeInventory = () => {
 
                         {/* Notes */}
                         <div className="md:col-span-3">
-                          <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-300 block mb-2">
-                            Special Notes / Hazards <span className="text-slate-400 font-normal">(Optional)</span>
+                          <label className="ld-label">
+                            Special Notes / Hazards <span className="text-slate-400 font-normal lowercase text-xs">(optional)</span>
                           </label>
                           <input
                             type="text"
                             value={tg.notes}
                             onChange={(e) => handleGroupChange(idx, 'notes', e.target.value)}
                             placeholder="e.g. Mature teak trees near front gate access with high timber volume."
-                            className="w-full p-3 rounded-xl bg-[#0a0f0d] border border-emerald-500/25 text-white text-sm font-medium focus:border-emerald-500 focus:outline-none transition-colors"
+                            style={{ borderRadius: '8px' }}
+                            className="ld-input"
                           />
                         </div>
 

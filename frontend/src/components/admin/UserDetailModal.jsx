@@ -91,7 +91,7 @@ const UserDetailModal = ({
     <div className="modal-overlay z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
       {/* Modal Container - 740px Width for Maximum Space */}
       <div className="modal-content card max-w-3xl w-full p-6 sm:p-8 border border-slate-800 rounded-2xl bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 space-y-6 shadow-2xl animate-fade-in text-xs max-h-[92vh] overflow-y-auto relative">
-        
+
         {/* 1. CLEAN PROFILE HEADER */}
         <div className="flex items-start justify-between border-b border-slate-800/80 pb-5">
           <div className="flex items-center gap-4">
@@ -105,7 +105,7 @@ const UserDetailModal = ({
                 <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                   {user.name}
                 </h2>
-                
+
                 {/* Role Badge */}
                 <span className="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold uppercase bg-emerald-950/90 text-emerald-400 border border-emerald-800/80">
                   {user.role}
@@ -274,75 +274,78 @@ const UserDetailModal = ({
             </div>
           </div>
 
-          {/* Government-Issued Identity / Business Identification Verification Badge */}
-          {(user.idProofDocument || user.idProofType || user.role?.toLowerCase() === 'landowner' || user.role?.toLowerCase() === 'contractor' || user.role?.toLowerCase() === 'buyer') && (
-            <div className={`mt-3 p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-amber-950/40 border-amber-500/30'}`}>
-              <div className="flex items-center gap-2.5">
-                <div className={`p-2 rounded-lg border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
-                  <ShieldCheck size={16} />
+          {/* UPLOADED DOCUMENT VERIFICATION CARDS */}
+          <div className="mt-5 space-y-4 pt-3 border-t border-emerald-500/15">
+            {/* Government-Issued Identity / Business Identification Verification Badge */}
+            {(user.idProofDocument || user.idProofType || user.role?.toLowerCase() === 'landowner' || user.role?.toLowerCase() === 'contractor' || user.role?.toLowerCase() === 'buyer') && (
+              <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-amber-950/40 border-amber-500/30'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-lg border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold text-white block">Government-Issued Identity / Business Identification</span>
+                    <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
+                      {user.idProofDocument || (user.idProofType ? `${user.idProofType} Document` : 'govt_identity_proof.pdf')}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-xs font-extrabold text-white block">Government-Issued Identity / Business Identification</span>
-                  <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
-                    {user.idProofDocument || (user.idProofType ? `${user.idProofType} Document` : 'govt_identity_proof.pdf')}
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewingDoc({
+                      title: 'Government-Issued Identity / Business Identification',
+                      fileName: user.idProofDocument || (user.idProofType ? `${user.idProofType} Document` : 'govt_identity_proof.pdf'),
+                      type: user.idProofType || 'Government Identity Proof',
+                      fileUrl: user.idProofUrl || (user.idProofDocument && (user.idProofDocument.startsWith('http') || user.idProofDocument.startsWith('data:')) ? user.idProofDocument : '')
+                    })}
+                    className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  >
+                    <Eye size={13} /> View Document
+                  </button>
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                    {isVerified ? '✓ Identity Verified' : '⏳ Pending Admin Verification'}
                   </span>
                 </div>
               </div>
+            )}
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setViewingDoc({
-                    title: 'Government-Issued Identity / Business Identification',
-                    fileName: user.idProofDocument || (user.idProofType ? `${user.idProofType} Document` : 'govt_identity_proof.pdf'),
-                    type: user.idProofType || 'Government Identity Proof',
-                    fileUrl: user.idProofUrl || (user.idProofDocument && (user.idProofDocument.startsWith('http') || user.idProofDocument.startsWith('data:')) ? user.idProofDocument : '')
-                  })}
-                  className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                >
-                  <Eye size={13} /> View Document
-                </button>
-                <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
-                  {isVerified ? '✓ Identity Verified' : '⏳ Pending Admin Verification'}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Landowner Land Tax Invoice Verification Badge */}
-          {(user.role?.toLowerCase() === 'landowner' || user.landTaxInvoiceDoc) && (
-            <div className={`mt-3 p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-amber-950/40 border-amber-500/30'}`}>
-              <div className="flex items-center gap-2.5">
-                <div className={`p-2 rounded-lg border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
-                  <Trees size={16} />
+            {/* Landowner Land Tax Invoice Verification Badge */}
+            {(user.role?.toLowerCase() === 'landowner' || user.landTaxInvoiceDoc) && (
+              <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-amber-950/40 border-amber-500/30'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-lg border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                    <Trees size={16} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold text-white block">Property Ownership &amp; Land Tax Invoice Details</span>
+                    <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
+                      {user.landTaxInvoiceDoc || 'land_tax_payment_receipt.pdf'}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-xs font-extrabold text-white block">Property Ownership &amp; Land Tax Invoice Details</span>
-                  <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
-                    {user.landTaxInvoiceDoc || 'land_tax_payment_receipt.pdf'}
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewingDoc({
+                      title: 'Property Ownership & Land Tax Invoice Details',
+                      fileName: user.landTaxInvoiceDoc || 'land_tax_payment_receipt.pdf',
+                      type: 'Land Tax Invoice / Property Tax Document',
+                      fileUrl: user.landTaxInvoiceUrl || (user.landTaxInvoiceDoc && (user.landTaxInvoiceDoc.startsWith('http') || user.landTaxInvoiceDoc.startsWith('data:')) ? user.landTaxInvoiceDoc : '')
+                    })}
+                    className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  >
+                    <Eye size={13} /> View Document
+                  </button>
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                    {isVerified ? '✓ Land Tax Receipt Verified' : '⏳ Pending Admin Verification'}
                   </span>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setViewingDoc({
-                    title: 'Property Ownership & Land Tax Invoice Details',
-                    fileName: user.landTaxInvoiceDoc || 'land_tax_payment_receipt.pdf',
-                    type: 'Land Tax Invoice / Property Tax Document',
-                    fileUrl: user.landTaxInvoiceUrl || (user.landTaxInvoiceDoc && (user.landTaxInvoiceDoc.startsWith('http') || user.landTaxInvoiceDoc.startsWith('data:')) ? user.landTaxInvoiceDoc : '')
-                  })}
-                  className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                >
-                  <Eye size={13} /> View Document
-                </button>
-                <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
-                  {isVerified ? '✓ Land Tax Receipt Verified' : '⏳ Pending Admin Verification'}
-                </span>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </section>
 
         {/* 4. ACTIVITY SUMMARY (Spacious 3-Column Metric Cards) */}
@@ -355,62 +358,62 @@ const UserDetailModal = ({
           {/* LANDOWNER ACTIVITY */}
           {user.role?.toLowerCase() === 'landowner' && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div className="admin-subcard p-4 flex items-center justify-between">
                 <div>
                   <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Properties</span>
                   <span className="text-2xl font-black text-emerald-400 mt-0.5 block">{user.propertiesCount || 3}</span>
                 </div>
-                <span className="p-2 rounded-xl bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
                   <Trees size={18} />
                 </span>
               </div>
 
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div className="admin-subcard p-4 flex items-center justify-between">
                 <div>
                   <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Tree Inventories</span>
                   <span className="text-2xl font-black text-white mt-0.5 block">{user.treeInventoriesCount || 12}</span>
                 </div>
-                <span className="p-2 rounded-xl bg-slate-800 text-slate-300 border border-slate-700">
+                <span className="p-2 rounded-xl bg-[#18241e] text-emerald-300 border border-emerald-500/20">
                   <Activity size={18} />
                 </span>
               </div>
 
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div className="admin-subcard p-4 flex items-center justify-between">
                 <div>
                   <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Harvest Requests</span>
                   <span className="text-2xl font-black text-amber-400 mt-0.5 block">{user.harvestRequestsCount || 4}</span>
                 </div>
-                <span className="p-2 rounded-xl bg-amber-950/80 text-amber-400 border border-amber-800/60">
+                <span className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/40">
                   <Truck size={18} />
                 </span>
               </div>
 
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div className="admin-subcard p-4 flex items-center justify-between">
                 <div>
                   <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Timber Listings</span>
                   <span className="text-2xl font-black text-blue-400 mt-0.5 block">{user.timberListingsCount || 2}</span>
                 </div>
-                <span className="p-2 rounded-xl bg-blue-950/80 text-blue-400 border border-blue-800/60">
+                <span className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/40">
                   <ShoppingBag size={18} />
                 </span>
               </div>
 
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div className="admin-subcard p-4 flex items-center justify-between">
                 <div>
                   <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Completed Harvests</span>
                   <span className="text-2xl font-black text-emerald-400 mt-0.5 block">{user.completedHarvestsCount || 1}</span>
                 </div>
-                <span className="p-2 rounded-xl bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
                   <CheckCircle2 size={18} />
                 </span>
               </div>
 
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800 flex items-center justify-between">
+              <div className="admin-subcard p-4 flex items-center justify-between">
                 <div>
                   <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Contractors</span>
                   <span className="text-2xl font-black text-purple-400 mt-0.5 block">{user.assignedContractorsCount || 2}</span>
                 </div>
-                <span className="p-2 rounded-xl bg-purple-950/80 text-purple-400 border border-purple-800/60">
+                <span className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/40">
                   <Truck size={18} />
                 </span>
               </div>
@@ -420,27 +423,27 @@ const UserDetailModal = ({
           {/* CONTRACTOR ACTIVITY */}
           {user.role?.toLowerCase() === 'contractor' && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Experience</span>
-                <span className="text-xl font-black text-emerald-400 mt-1 block">{user.experience || '8 Years'}</span>
+                <span className="text-xl font-black text-emerald-400 mt-0.5 block">{user.experience || '8 Years'}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Bids Submitted</span>
                 <span className="text-2xl font-black text-blue-400 mt-0.5 block">{user.bidsSubmitted || 5}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Accepted Bids</span>
                 <span className="text-2xl font-black text-emerald-400 mt-0.5 block">{user.acceptedBids || 3}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Active Projects</span>
                 <span className="text-2xl font-black text-amber-400 mt-0.5 block">{user.activeProjects || 2}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Completed Projects</span>
                 <span className="text-2xl font-black text-emerald-400 mt-0.5 block">{user.completedProjects || 14}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Rating</span>
                 <span className="text-xl font-black text-amber-400 mt-0.5 block flex items-center gap-1">
                   4.9 <Star size={14} className="fill-amber-400 text-amber-400" />
@@ -452,19 +455,19 @@ const UserDetailModal = ({
           {/* BUYER ACTIVITY */}
           {user.role?.toLowerCase() === 'buyer' && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Timber Inquiries</span>
                 <span className="text-2xl font-black text-blue-400 mt-0.5 block">{user.inquiriesCount || 8}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Active Purchases</span>
                 <span className="text-2xl font-black text-amber-400 mt-0.5 block">{user.activePurchases || 3}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Completed Purchases</span>
                 <span className="text-2xl font-black text-emerald-400 mt-0.5 block">{user.completedPurchases || 15}</span>
               </div>
-              <div className="p-4 bg-slate-900/40 rounded-xl border border-slate-800">
+              <div className="admin-subcard p-4 space-y-0.5">
                 <span className="text-slate-400 text-[11px] font-bold block uppercase tracking-wider">Orders Placed</span>
                 <span className="text-2xl font-black text-purple-400 mt-0.5 block">{user.ordersPlaced || 4}</span>
               </div>
@@ -544,11 +547,10 @@ const UserDetailModal = ({
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
-              className={`btn btn-xs cursor-pointer flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-bold transition-all text-xs w-full sm:w-auto ${
-                isSuspended
+              className={`btn btn-xs cursor-pointer flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-bold transition-all text-xs w-full sm:w-auto ${isSuspended
                   ? 'bg-emerald-950/90 text-emerald-400 hover:bg-emerald-900 border border-emerald-800'
                   : 'bg-red-950/80 text-red-400 hover:bg-red-900 border border-red-800/80'
-              }`}
+                }`}
               onClick={() => {
                 if (isSuspended) onToggleSuspend(user.id);
                 else setShowSuspendConfirm(true);

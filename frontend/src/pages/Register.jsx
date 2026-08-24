@@ -1396,8 +1396,8 @@ const Register = () => {
                   type="submit"
                   disabled={!acceptTerms || !acceptPrivacy || isSubmitting}
                   className={`w-full h-14 rounded-2xl font-black text-base transition-all duration-300 flex items-center justify-center gap-2.5 ${acceptTerms && acceptPrivacy && !isSubmitting
-                      ? 'bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white btn-glow-emerald cursor-pointer'
-                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60 shadow-none'
+                    ? 'bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white btn-glow-emerald cursor-pointer'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60 shadow-none'
                     }`}
                 >
                   <UserPlus size={20} />
