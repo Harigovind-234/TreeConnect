@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import db
-from app.routers import auth, admin, property
+from app.routers import auth, admin, property, harvest
 
 app = FastAPI(
     title="TreeConnect API",
@@ -19,6 +19,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin Operations"])
 app.include_router(property.router, prefix="/api/properties", tags=["Properties"])
+app.include_router(harvest.router, prefix="/api/harvest-requests", tags=["Harvest Requests & Assessments"])
 
 @app.get("/")
 def home():

@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import propertyService from '../services/propertyService';
+import harvestService from '../services/harvestService';
+import { useAuth } from './AuthContext';
 
 const LandownerContext = createContext();
 
@@ -11,6 +13,11 @@ const filterOutMockData = (list) => {
 };
 
 export const LandownerProvider = ({ children }) => {
+    const auth = useAuth();
+    const user = auth?.user;
+
+    const [loadingProperties, setLoadingProperties] = useState(false);
+
     // 1. Initial Properties State (Only user added or DB properties)
     const [properties, setProperties] = useState(() => {
         try {
@@ -81,29 +88,53 @@ export const LandownerProvider = ({ children }) => {
         return [];
     });
 
-    // Sync properties with backend database on mount
-    useEffect(() => {
-        const fetchDBProperties = async () => {
-            try {
-                const storedUserStr = localStorage.getItem('treeconnect_user');
-                const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
-                const userEmail = storedUser?.email || '';
-                
-                const data = await propertyService.getProperties(userEmail ? { userEmail } : {});
-                if (data && Array.isArray(data.properties)) {
-                    const cleanDBProps = filterOutMockData(data.properties);
-                    setProperties(cleanDBProps);
-                    try {
-                        localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
-                    } catch (e) {}
-                }
-            } catch (err) {
-                console.warn("Could not load properties from backend database:", err);
+    // Sync properties with backend database whenever user auth state or email changes
+    const fetchDBProperties = useCallback(async () => {
+        setLoadingProperties(true);
+        try {
+            const storedUserStr = localStorage.getItem('treeconnect_user');
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            const userEmail = user?.email || storedUser?.email || '';
+            
+            const data = await propertyService.getProperties(userEmail ? { userEmail } : {});
+            if (data && Array.isArray(data.properties)) {
+                const cleanDBProps = filterOutMockData(data.properties);
+                setProperties(cleanDBProps);
+                try {
+                    localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
+                } catch (e) {}
             }
-        };
+        } catch (err) {
+            console.warn("Could not load properties from backend database:", err);
+        } finally {
+            setLoadingProperties(false);
+        }
+    }, [user?.email]);
 
+    // Sync harvest requests with backend database
+    const fetchDBHarvestRequests = useCallback(async () => {
+        try {
+            const storedUserStr = localStorage.getItem('treeconnect_user');
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            const userEmail = user?.email || storedUser?.email || '';
+
+            const data = await harvestService.getHarvestRequests(userEmail ? { userEmail } : {});
+            if (data && Array.isArray(data.harvest_requests)) {
+                const cleanRequests = filterOutMockData(data.harvest_requests);
+                setHarvestRequests(cleanRequests);
+                try {
+                    localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(cleanRequests));
+                } catch (e) {}
+            }
+        } catch (err) {
+            console.warn("Could not load harvest requests from backend database:", err);
+        }
+    }, [user?.email]);
+
+    useEffect(() => {
         fetchDBProperties();
-    }, []);
+        fetchDBHarvestRequests();
+    }, [fetchDBProperties, fetchDBHarvestRequests, user?.email]);
 
     // Persist properties to localStorage whenever updated
     useEffect(() => {
@@ -240,21 +271,49 @@ export const LandownerProvider = ({ children }) => {
         return createdInv;
     };
 
-    const addHarvestRequest = (newReq) => {
-        const createdReq = {
-            ...newReq,
-            id: `hr_${Date.now()}`,
-            status: 'Pending Contractor Response',
-            submittedAt: new Date().toISOString().split('T')[0]
-        };
+    const addHarvestRequest = async (newReq) => {
+        let savedReq;
+        try {
+            const res = await harvestService.createHarvestRequest({
+                ...newReq,
+                userEmail: newReq.userEmail || user?.email || ''
+            });
+            savedReq = res.harvest_request || {
+                ...newReq,
+                id: `hr_${Date.now()}`,
+                _id: `hr_${Date.now()}`,
+                status: newReq.assigned_contractor_id ? 'CONTRACTOR_ASSIGNED' : 'PENDING',
+                createdAt: new Date().toISOString().split('T')[0]
+            };
+        } catch (err) {
+            console.error("Error storing harvest request in DB:", err);
+            savedReq = {
+                ...newReq,
+                id: `hr_${Date.now()}`,
+                _id: `hr_${Date.now()}`,
+                status: newReq.assigned_contractor_id ? 'CONTRACTOR_ASSIGNED' : 'PENDING',
+                createdAt: new Date().toISOString().split('T')[0]
+            };
+        }
+
         setHarvestRequests(prev => {
-            const updated = [createdReq, ...prev];
+            const updated = [savedReq, ...prev.filter(r => r.id !== savedReq.id && r._id !== savedReq._id)];
             try {
                 localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
             } catch (e) {}
             return updated;
         });
-        return createdReq;
+
+        return savedReq;
+    };
+
+    const assignContractorToRequest = async (requestId, contractorData) => {
+        try {
+            await harvestService.assignContractor(requestId, contractorData);
+            await fetchDBHarvestRequests();
+        } catch (err) {
+            console.error("Error assigning contractor to harvest request:", err);
+        }
     };
 
     const addTimberListing = (newListing) => {
@@ -344,12 +403,16 @@ export const LandownerProvider = ({ children }) => {
                 completedHarvests,
                 harvestRequests,
                 timberListings,
+                loadingProperties,
+                refreshProperties: fetchDBProperties,
+                refreshHarvestRequests: fetchDBHarvestRequests,
                 addProperty,
                 registerPropertyRecord: addProperty,
                 updateProperty,
                 deleteProperty,
                 addInventory,
                 addHarvestRequest,
+                assignContractorToRequest,
                 addTimberListing,
                 updateListingStatus
             }}

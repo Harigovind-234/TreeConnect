@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
@@ -40,7 +40,13 @@ const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-
 
 const PropertiesPage = () => {
   const navigate = useNavigate();
-  const { properties, inventories, updateProperty, deleteProperty } = useLandowner();
+  const { properties, inventories, updateProperty, deleteProperty, refreshProperties, loadingProperties } = useLandowner();
+
+  useEffect(() => {
+    if (refreshProperties) {
+      refreshProperties();
+    }
+  }, [refreshProperties]);
 
   // Search & District Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -398,8 +404,16 @@ const PropertiesPage = () => {
               </div>
             )}
 
-            {/* Properties Grid or Empty State */}
-            {filteredProperties.length === 0 ? (
+            {/* Properties Grid, Loading State, or Empty State */}
+            {loadingProperties && normalizedProperties.length === 0 ? (
+              <div className="ld-card text-center py-16 space-y-4 flex flex-col items-center justify-center">
+                <Loader2 size={36} className="text-emerald-400 animate-spin mx-auto" />
+                <h3 className="font-bold text-white text-base">Fetching Registered Properties...</h3>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  Connecting to backend database and loading your forestry parcels.
+                </p>
+              </div>
+            ) : filteredProperties.length === 0 ? (
               <div className="ld-card text-center py-16 space-y-4">
                 <Trees size={48} className="text-emerald-500/40 mx-auto" />
                 <h3 className="font-bold text-white text-lg">No Registered Properties Found</h3>

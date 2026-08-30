@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
@@ -37,6 +37,13 @@ const LandownerDashboard = () => {
   const harvestRequests = landownerCtx.harvestRequests || [];
   const timberListings = landownerCtx.timberListings || [];
   const completedHarvests = landownerCtx.completedHarvests || [];
+  const refreshProperties = landownerCtx.refreshProperties;
+
+  useEffect(() => {
+    if (refreshProperties) {
+      refreshProperties();
+    }
+  }, [refreshProperties]);
 
   // Stateful Demo Contractor Bids
   const [bids, setBids] = useState([

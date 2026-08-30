@@ -4,729 +4,914 @@ import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useLandowner } from '../../context/LandownerContext';
 import FileUploadCard from '../../components/FileUploadCard';
+import ApprovedContractorSelector from '../../components/workflow/ApprovedContractorSelector';
 import './LandownerDashboard.css';
 import {
-    Axe,
-    ArrowLeft,
-    ArrowRight,
-    CheckCircle2,
-    Trees,
-    MapPin,
-    Calendar,
-    CheckSquare,
-    FileText,
-    Upload,
-    Check,
-    X,
-    AlertCircle,
-    ShieldCheck,
-    Layers,
-    Sparkles,
-    Ruler,
-    TreePine,
-    Building2
+  Building2,
+  Trees,
+  TreePine,
+  Axe,
+  Calendar,
+  Truck,
+  AlertTriangle,
+  FileText,
+  CheckCircle2,
+  ArrowRight,
+  ArrowLeft,
+  Plus,
+  ShieldCheck,
+  Send,
+  MapPin,
+  Check,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 
 const RequestHarvesting = () => {
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const landownerCtx = useLandowner() || {};
-    const properties = landownerCtx.properties || [];
-    const inventories = landownerCtx.inventories || [];
-    const addHarvestRequest = landownerCtx.addHarvestRequest || (() => {});
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialPropertyId = searchParams.get('propertyId');
 
-    const [currentStep, setCurrentStep] = useState(1);
+  const landownerCtx = useLandowner() || {};
+  const { properties = [], treeInventories = [], addHarvestRequest, refreshProperties } = landownerCtx;
 
-    const safeProperties = Array.isArray(properties) ? properties : [];
+  // Trigger live refresh of properties from backend DB on mount
+  useEffect(() => {
+    if (typeof refreshProperties === 'function') {
+      refreshProperties();
+    }
+  }, [refreshProperties]);
 
-    const fallbackProperty = {
-        id: 'prop-fallback',
-        propertyName: 'Green Estate Compound',
-        district: 'Kottayam',
-        state: 'Kerala',
-        totalArea: '11.93',
-        areaUnit: 'Cents',
-        approxTreesCount: 1250,
-        propertyType: 'Plantation Estate',
-        mainSpecies: 'Teak / Rubber'
-    };
+  const safeProperties = Array.isArray(properties) ? properties : [];
 
-    const displayProperties = safeProperties.length > 0 ? safeProperties : [fallbackProperty];
+  const [currentStep, setCurrentStep] = useState(1);
 
-    const urlPropId = searchParams.get('propertyId') || '';
-    const [selectedPropertyId, setSelectedPropertyId] = useState(urlPropId);
+  // Step 1: Selected Property
+  const [selectedPropertyId, setSelectedPropertyId] = useState(initialPropertyId || '');
+  const activeProperty = safeProperties.find(
+    (p) => p.id === selectedPropertyId || p._id === selectedPropertyId || String(p.id) === String(selectedPropertyId)
+  ) || safeProperties[0] || null;
 
-    useEffect(() => {
-        const propIdFromUrl = searchParams.get('propertyId');
-        if (propIdFromUrl) {
-            setSelectedPropertyId(propIdFromUrl);
-        } else if (displayProperties.length > 0) {
-            const firstId = displayProperties[0]?.id || displayProperties[0]?._id || 'prop-fallback';
-            setSelectedPropertyId(prev => prev || firstId);
-        }
-    }, [searchParams, safeProperties]);
+  useEffect(() => {
+    if (!selectedPropertyId && safeProperties.length > 0) {
+      setSelectedPropertyId(safeProperties[0].id || safeProperties[0]._id);
+    }
+  }, [safeProperties]);
 
-    const activeProperty = displayProperties.find(
-        p => p && (p.id === selectedPropertyId || p._id === selectedPropertyId)
-    ) || displayProperties[0] || fallbackProperty;
+  // Step 2: Live Selected Tree Inventories for active property
+  const activePropertyId = activeProperty?.id || activeProperty?._id;
+  const activeInventories = (treeInventories || []).filter(
+    (inv) =>
+      inv.propertyId === activePropertyId ||
+      inv.propertyId === selectedPropertyId ||
+      inv.property_id === activePropertyId ||
+      inv.property_id === selectedPropertyId
+  );
 
-    const propertyInventory = (Array.isArray(inventories) ? inventories : []).find(
-        i => i && i.propertyId === activeProperty?.id
-    ) || null;
+  const rawTreeGroups = [
+    ...(activeProperty?.treeInventoryGroups || []),
+    ...(activeProperty?.inventories || []),
+    ...activeInventories
+  ];
 
-    const [harvestScope, setHarvestScope] = useState('Specific Area'); // Entire Property, Specific Area, Specific Tree Species, Selected Trees
-    const [harvestScopeDetail, setHarvestScopeDetail] = useState('North Plot Block B (Rubber, 250 Trees)');
-    const [estimatedVolume, setEstimatedVolume] = useState('180 m³');
+  const availableTreeGroups = (
+    rawTreeGroups.length > 0
+      ? rawTreeGroups
+      : [
+          {
+            id: 'group_demo_1',
+            groupName: 'Teak Stand #1',
+            species: 'Teakwood',
+            numberOfTrees: 24,
+            approxAge: '14 years',
+            condition: 'Healthy',
+            location: activeProperty?.district || 'Kottayam',
+            girth: '65 - 85 cm'
+          }
+        ]
+  ).map((g, idx) => ({
+    id: g.id || g._id || `group_${idx}`,
+    groupName: g.groupName || g.standName || `Stand #${idx + 1} (${g.species || 'Teak'})`,
+    species: g.species || 'Teak',
+    numberOfTrees: g.numberOfTrees || g.count || 20,
+    approxAge: g.approxAge || '15 years',
+    condition: g.condition || 'Healthy',
+    location: g.location || activeProperty?.village || 'Kerala',
+    girth: g.girth || g.girthInfo || '60 - 90 cm'
+  }));
 
-    const [reasonForHarvesting, setReasonForHarvesting] = useState('Mature Timber Harvest');
-    const [preferredStartDate, setPreferredStartDate] = useState('2026-08-25');
-    const [preferredCompletionDate, setPreferredCompletionDate] = useState('2026-09-20');
+  const [selectedTreeGroupIds, setSelectedTreeGroupIds] = useState([]);
 
-    const [requiredServices, setRequiredServices] = useState([
-        'Tree Felling',
-        'Cutting',
-        'Timber Extraction',
-        'Transportation',
-        'Site Clearing'
-    ]);
+  useEffect(() => {
+    if (availableTreeGroups.length > 0) {
+      setSelectedTreeGroupIds(availableTreeGroups.map((g) => g.id));
+    } else {
+      setSelectedTreeGroupIds([]);
+    }
+  }, [selectedPropertyId, treeInventories]);
 
-    const [additionalInstructions, setAdditionalInstructions] = useState('Easy access from main panchayat road. Preserve surrounding teak trees.');
-
-    const [propertyPhotos, setPropertyPhotos] = useState(null);
-    const [treePhotos, setTreePhotos] = useState(null);
-    const [harvestAreaPhotos, setHarvestAreaPhotos] = useState(null);
-
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [successMessage, setSuccessMessage] = useState('');
-
-    const serviceOptions = [
-        { id: 'Tree Felling', label: 'Tree Felling', desc: 'Directional felling of tagged trees' },
-        { id: 'Cutting', label: 'Cutting & Bucking', desc: 'De-limbing and cutting logs to custom specifications' },
-        { id: 'Timber Extraction', label: 'Timber Extraction', desc: 'Skidding and moving logs to landing yard' },
-        { id: 'Transportation', label: 'Transportation', desc: 'Log hauling and transport to mill/storage' },
-        { id: 'Site Clearing', label: 'Site Clearing', desc: 'Slash management, brush clearing, and site prep' }
-    ];
-
-    const handleToggleService = (serviceId) => {
-        if (requiredServices.includes(serviceId)) {
-            setRequiredServices(requiredServices.filter(s => s !== serviceId));
-        } else {
-            setRequiredServices([...requiredServices, serviceId]);
-        }
-    };
-
-    const handleNextStep = () => {
-        if (currentStep < 5) setCurrentStep(prev => prev + 1);
-    };
-
-    const handlePrevStep = () => {
-        if (currentStep > 1) setCurrentStep(prev => prev - 1);
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-
-        setTimeout(() => {
-            addHarvestRequest({
-                propertyId: activeProperty?.id || activeProperty?._id || '',
-                propertyName: activeProperty?.propertyName || 'Registered Property',
-                location: `${activeProperty?.district || 'Kottayam'}, ${activeProperty?.state || 'Kerala'}`,
-                area: `${activeProperty?.totalArea || 25} ${activeProperty?.areaUnit || 'Acres'}`,
-                treeCount: activeProperty?.approxTreesCount || 1250,
-                harvestScope,
-                harvestScopeDetail,
-                estimatedVolume,
-                reasonForHarvesting,
-                preferredStartDate,
-                preferredCompletionDate,
-                requiredServices,
-                additionalInstructions,
-                photosCount: (propertyPhotos ? 1 : 0) + (treePhotos ? 1 : 0) + (harvestAreaPhotos ? 1 : 0)
-            });
-
-            setIsSubmitting(false);
-            setSuccessMessage('Harvest request submitted successfully. Status: Pending Contractor Response');
-            setTimeout(() => {
-                navigate('/landowner/harvest-requests');
-            }, 1400);
-        }, 700);
-    };
-
-    return (
-        <div className="landowner-dashboard-page min-h-screen bg-[#060e09] text-slate-100 flex flex-col font-sans">
-            <Navbar />
-            <div className="landowner-dashboard-container flex-1">
-                <Sidebar />
-
-                <div className="landowner-dashboard-workspace max-w-5xl mx-auto py-8 px-4 sm:px-6 space-y-6">
-
-                    {/* HERO HEADER CARD */}
-                    <div style={{ borderRadius: '16px' }} className="relative overflow-hidden bg-gradient-to-r from-[#091a11] via-[#0e271a] to-[#091a11] border-2 border-emerald-600/30 p-6 sm:p-8 shadow-2xl space-y-4">
-                        <div className="absolute -right-12 -top-12 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
-                            <button
-                                onClick={() => navigate('/landowner/dashboard')}
-                                style={{ borderRadius: '8px' }}
-                                className="px-3.5 py-2 bg-[#050e08] hover:bg-[#0c1810] text-slate-300 hover:text-white border border-emerald-600/40 text-xs font-extrabold flex items-center gap-2 cursor-pointer transition-all shrink-0"
-                            >
-                                <ArrowLeft size={16} className="text-emerald-400" /> Back to Dashboard
-                            </button>
-
-                            <span style={{ borderRadius: '6px' }} className="px-3 py-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black tracking-wider uppercase flex items-center gap-1.5 shrink-0">
-                                <Sparkles size={14} className="text-emerald-400" /> Step {currentStep} of 5 • Harvest Request Wizard
-                            </span>
-                        </div>
-
-                        <div className="flex items-center gap-4 relative z-10 pt-2">
-                            <div style={{ borderRadius: '12px' }} className="w-14 h-14 bg-emerald-500/15 border-2 border-emerald-400/40 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10 shrink-0">
-                                <Axe size={28} />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Request Harvesting</h1>
-                                <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed mt-0.5">
-                                    Dispatch a formal harvest request with tree specs &amp; timeline to verified timber contractors across Kerala.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* SUCCESS BANNER */}
-                    {successMessage && (
-                        <div style={{ borderRadius: '8px' }} className="p-4 bg-emerald-950/90 border-2 border-emerald-500 text-emerald-300 flex items-center gap-3 shadow-xl animate-fade-in">
-                            <CheckCircle2 size={22} className="shrink-0 text-emerald-400" />
-                            <span className="font-extrabold text-sm sm:text-base">{successMessage} Redirecting to Harvest Requests...</span>
-                        </div>
-                    )}
-
-                    {/* WIZARD STEP TRACKER BAR */}
-                    <div style={{ borderRadius: '14px' }} className="ld-card p-4 sm:p-6 bg-[#0a150e] border-2 border-emerald-600/25 shadow-xl">
-                        <div className="grid grid-cols-5 gap-2 text-center text-xs">
-                            {[
-                                { step: 1, label: '1. Select Property' },
-                                { step: 2, label: '2. Harvest Scope' },
-                                { step: 3, label: '3. Timeline & Services' },
-                                { step: 4, label: '4. Upload Photos' },
-                                { step: 5, label: '5. Review & Submit' }
-                            ].map((item) => {
-                                const isActive = currentStep === item.step;
-                                const isDone = currentStep > item.step;
-                                return (
-                                    <div key={item.step} className="flex flex-col items-center space-y-1.5">
-                                        <div
-                                            style={{ borderRadius: '8px' }}
-                                            className={`w-9 h-9 flex items-center justify-center font-black transition-all text-xs sm:text-sm ${isActive
-                                                    ? 'bg-emerald-400 text-slate-950 ring-4 ring-emerald-500/30 shadow-lg shadow-emerald-500/20'
-                                                    : isDone
-                                                        ? 'bg-emerald-950 text-emerald-300 border-2 border-emerald-600/60'
-                                                        : 'bg-[#050e08] text-slate-400 border border-emerald-600/20'
-                                                }`}
-                                        >
-                                            {isDone ? <Check size={16} strokeWidth={3} /> : item.step}
-                                        </div>
-                                        <span className={`font-bold hidden sm:block text-[11px] sm:text-xs tracking-tight ${isActive ? 'text-emerald-400 font-extrabold' : isDone ? 'text-white' : 'text-slate-400'}`}>
-                                            {item.label}
-                                        </span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* MAIN STEP FORM CONTAINER */}
-                    <div style={{ borderRadius: '16px' }} className="ld-card p-6 sm:p-8 bg-[#0b1710] border-2 border-emerald-600/25 shadow-2xl space-y-6">
-
-                        {/* ==================== STEP 1: SELECT PROPERTY ==================== */}
-                        {currentStep === 1 && (
-                            <div className="space-y-6">
-                                <div className="flex items-center justify-between flex-wrap gap-2 pb-4 border-b border-emerald-500/20">
-                                    <div>
-                                        <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
-                                            <Trees size={24} className="text-emerald-400" /> Step 1 — Select Target Property
-                                        </h2>
-                                        <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1">
-                                            Choose the registered estate or plot where timber harvesting is requested.
-                                        </p>
-                                    </div>
-                                    <span style={{ borderRadius: '6px' }} className="px-3 py-1 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs">
-                                        {displayProperties.length} Properties Available
-                                    </span>
-                                </div>
-
-                                {/* Property Cards Selection Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                    {displayProperties.map((p) => {
-                                        const pId = p.id || p._id;
-                                        const isSelected = activeProperty?.id === pId || activeProperty?._id === pId;
-                                        return (
-                                            <div
-                                                key={pId}
-                                                onClick={() => setSelectedPropertyId(pId)}
-                                                style={{ borderRadius: '12px' }}
-                                                className={`p-5 border-2 cursor-pointer transition-all duration-300 flex flex-col justify-between space-y-4 select-none ${isSelected
-                                                        ? 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)] transform -translate-y-0.5'
-                                                        : 'bg-[#050e08] border-emerald-600/25 hover:border-emerald-500/50 hover:bg-[#0c1810]'
-                                                    }`}
-                                            >
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xl">🌳</span>
-                                                            <span className="font-extrabold text-white text-base truncate">{p.propertyName}</span>
-                                                        </div>
-                                                        {isSelected && (
-                                                            <div style={{ borderRadius: '6px' }} className="w-6 h-6 bg-emerald-400 text-slate-950 flex items-center justify-center font-black shrink-0 shadow-md">
-                                                                <Check size={14} strokeWidth={3} />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-xs text-slate-300 font-semibold flex items-center gap-1.5">
-                                                        <MapPin size={14} className="text-emerald-400 shrink-0" /> {p.district || p.location || 'Kottayam'}, {p.state || 'Kerala'}
-                                                    </p>
-                                                </div>
-
-                                                <div style={{ borderRadius: '8px' }} className="grid grid-cols-2 gap-2.5 text-xs bg-[#09150d] p-3 border border-emerald-600/20 mt-2">
-                                                    <div>
-                                                        <span className="text-slate-400 font-semibold block text-[11px]">Registered Area:</span>
-                                                        <span className="font-extrabold text-white text-xs sm:text-sm">{p.totalArea} {p.areaUnit}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-slate-400 font-semibold block text-[11px]">Tree Stock:</span>
-                                                        <span className="font-extrabold text-emerald-400 text-xs sm:text-sm">{p.approxTreesCount || 1250} Trees</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* SELECTED PROPERTY OVERVIEW PANEL */}
-                                {activeProperty && (
-                                    <div style={{ borderRadius: '14px' }} className="p-6 bg-[#050e08] border-2 border-emerald-500/40 space-y-4 shadow-xl">
-                                        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-600/25 pb-3">
-                                            <span className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                <ShieldCheck size={16} /> SELECTED PROPERTY OVERVIEW
-                                            </span>
-                                            <span style={{ borderRadius: '6px' }} className="px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[11px]">
-                                                READY FOR HARVEST REQUEST
-                                            </span>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                            <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/30 space-y-1">
-                                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                                                    <Building2 size={13} className="text-emerald-400" /> Property Name
-                                                </span>
-                                                <div className="font-extrabold text-base text-white truncate">{activeProperty.propertyName}</div>
-                                                <div className="text-xs text-slate-300 font-medium truncate">{activeProperty.district || 'Kottayam'}, {activeProperty.state || 'Kerala'}</div>
-                                            </div>
-
-                                            <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/30 space-y-1">
-                                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                                                    <Ruler size={13} className="text-emerald-400" /> Registered Area
-                                                </span>
-                                                <div className="font-extrabold text-base text-white">{activeProperty.totalArea} {activeProperty.areaUnit}</div>
-                                                <div className="text-xs text-slate-300 font-medium">Clear boundaries mapped</div>
-                                            </div>
-
-                                            <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/30 space-y-1">
-                                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                                                    <TreePine size={13} className="text-emerald-400" /> Standing Trees
-                                                </span>
-                                                <div className="font-black text-base text-emerald-400">{activeProperty.approxTreesCount || 1250} Trees</div>
-                                                <div className="text-xs text-slate-300 font-medium">Logged in inventory</div>
-                                            </div>
-
-                                            <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/30 space-y-1">
-                                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                                                    <Trees size={13} className="text-emerald-400" /> Property Type
-                                                </span>
-                                                <div className="font-extrabold text-base text-white">{activeProperty.propertyType || 'Estate'}</div>
-                                                <div className="text-xs text-slate-300 font-medium">Private ownership</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* BOTTOM ACTION BAR */}
-                                <div className="flex items-center justify-end pt-4 border-t border-emerald-500/20">
-                                    <button
-                                        onClick={handleNextStep}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black text-sm border-none shadow-lg shadow-emerald-500/25 flex items-center gap-2.5 cursor-pointer transition-all"
-                                    >
-                                        <span>Continue to Scope Selection</span>
-                                        <ArrowRight size={18} strokeWidth={3} />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ==================== STEP 2: SELECT HARVEST AREA / TREES ==================== */}
-                        {currentStep === 2 && (
-                            <div className="space-y-6">
-                                <div className="pb-4 border-b border-emerald-500/20">
-                                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Step 2 — Select Harvest Area / Scope</h2>
-                                    <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1">Choose the specific scope of harvesting within {activeProperty?.propertyName}.</p>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    {[
-                                        { id: 'Entire Property', icon: '🌲', label: 'Entire Property', desc: `Harvest all mature standing trees across ${activeProperty?.totalArea || 25} ${activeProperty?.areaUnit || 'acres'}` },
-                                        { id: 'Specific Area', icon: '📍', label: 'Specific Area / Parcel Block', desc: 'Harvest a designated block or plot (e.g. North Plot Block B)' },
-                                        { id: 'Specific Tree Species', icon: '🪵', label: 'Specific Tree Species', desc: 'Harvest a specific species only (e.g. Rubber trees only)' },
-                                        { id: 'Selected Trees', icon: '🏷️', label: 'Selected Tagged Trees', desc: 'Select individual tagged mature trees for selective logging' }
-                                    ].map((opt) => {
-                                        const isSelected = harvestScope === opt.id;
-                                        return (
-                                            <div
-                                                key={opt.id}
-                                                onClick={() => setHarvestScope(opt.id)}
-                                                style={{ borderRadius: '12px' }}
-                                                className={`p-5 border-2 cursor-pointer transition-all duration-300 flex flex-col justify-between space-y-3 ${isSelected
-                                                        ? 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)] transform -translate-y-0.5'
-                                                        : 'bg-[#050e08] border-emerald-600/25 hover:border-emerald-500/50 hover:bg-[#0c1810]'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <span className="text-xl">{opt.icon}</span>
-                                                        <span className="font-extrabold text-white text-base">{opt.label}</span>
-                                                    </div>
-                                                    <div style={{ borderRadius: '6px' }} className={`w-6 h-6 border-2 flex items-center justify-center text-xs font-black shrink-0 ${isSelected ? 'border-emerald-400 bg-emerald-400 text-slate-950 shadow-md' : 'border-slate-600 bg-slate-800 text-slate-400'}`}>
-                                                        {isSelected ? '✓' : ''}
-                                                    </div>
-                                                </div>
-                                                <p className="text-xs text-slate-300 font-medium leading-relaxed">{opt.desc}</p>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div className="space-y-2">
-                                        <label className="ld-label">Harvest Scope Description / Detail</label>
-                                        <input
-                                            type="text"
-                                            value={harvestScopeDetail}
-                                            onChange={(e) => setHarvestScopeDetail(e.target.value)}
-                                            placeholder="e.g. North Plot Block B (Rubber, 250 Trees)"
-                                            style={{ borderRadius: '8px' }}
-                                            className="ld-input"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="ld-label">Estimated Timber Volume (m³)</label>
-                                        <input
-                                            type="text"
-                                            value={estimatedVolume}
-                                            onChange={(e) => setEstimatedVolume(e.target.value)}
-                                            placeholder="e.g. 180 m³"
-                                            style={{ borderRadius: '8px' }}
-                                            className="ld-input text-emerald-400 font-black font-mono text-base"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Inventory Information Box */}
-                                <div style={{ borderRadius: '12px' }} className="p-5 bg-[#050e08] border-2 border-emerald-600/30 space-y-3">
-                                    <span className="text-xs font-black text-emerald-400 uppercase tracking-wider block">
-                                        Available Tree Inventory ({activeProperty?.propertyName}):
-                                    </span>
-                                    {propertyInventory?.speciesList ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            {propertyInventory.speciesList.map((sp) => (
-                                                <div key={sp.id} style={{ borderRadius: '8px' }} className="p-3.5 bg-[#0a1810] border border-emerald-600/30 text-xs space-y-1.5">
-                                                    <span className="font-extrabold text-emerald-400 text-sm block">{sp.treeSpecies}</span>
-                                                    <div className="flex justify-between text-slate-300 font-semibold pt-1 border-t border-emerald-600/20">
-                                                        <span>Trees: <strong className="text-white">{sp.numberOfTrees}</strong></span>
-                                                        <span>Est. Volume: <strong className="text-emerald-400">{sp.estimatedVolume} m³</strong></span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div style={{ borderRadius: '8px' }} className="p-3.5 bg-[#0a1810] border border-emerald-600/30 text-xs flex items-center justify-between font-semibold text-slate-200">
-                                            <span className="font-extrabold text-emerald-400 text-sm">Teak / Rubber Stand #1</span>
-                                            <span className="text-slate-300">Trees: <strong className="text-white">250</strong> • Est. Volume: <strong className="text-emerald-400">180 m³</strong></span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center justify-between pt-4 border-t border-emerald-500/20">
-                                    <button
-                                        onClick={handlePrevStep}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-6 py-3.5 bg-[#050e08] hover:bg-[#0c1810] text-slate-300 hover:text-white border border-emerald-600/40 text-sm font-bold flex items-center gap-2 cursor-pointer transition-all"
-                                    >
-                                        <ArrowLeft size={18} /> Back
-                                    </button>
-                                    <button
-                                        onClick={handleNextStep}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black text-sm border-none shadow-lg shadow-emerald-500/25 flex items-center gap-2.5 cursor-pointer transition-all"
-                                    >
-                                        <span>Continue to Timeline &amp; Services</span>
-                                        <ArrowRight size={18} strokeWidth={3} />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ==================== STEP 3: HARVEST REQUIREMENTS ==================== */}
-                        {currentStep === 3 && (
-                            <div className="space-y-6">
-                                <div className="pb-4 border-b border-emerald-500/20">
-                                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Step 3 — Timeline &amp; Required Services</h2>
-                                    <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1">Specify schedule preferences, required contractor services, and site rules.</p>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                    <div className="space-y-2">
-                                        <label className="ld-label">Reason for Harvesting</label>
-                                        <select
-                                            value={reasonForHarvesting}
-                                            onChange={(e) => setReasonForHarvesting(e.target.value)}
-                                            style={{ borderRadius: '8px' }}
-                                            className="ld-select font-semibold"
-                                        >
-                                            <option value="Mature Timber Harvest" className="bg-[#0b1710] text-white">Mature Timber Harvest</option>
-                                            <option value="Replanting / Land Clearing" className="bg-[#0b1710] text-white">Replanting / Land Clearing</option>
-                                            <option value="Forest Health Thinning" className="bg-[#0b1710] text-white">Forest Health Thinning</option>
-                                            <option value="Storm Cleanup" className="bg-[#0b1710] text-white">Storm Cleanup</option>
-                                            <option value="Commercial Monetization" className="bg-[#0b1710] text-white">Commercial Monetization</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="ld-label">Preferred Start Date</label>
-                                        <input
-                                            type="date"
-                                            value={preferredStartDate}
-                                            onChange={(e) => setPreferredStartDate(e.target.value)}
-                                            style={{ borderRadius: '8px' }}
-                                            className="ld-input font-medium text-white"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="ld-label">Preferred Completion Date</label>
-                                        <input
-                                            type="date"
-                                            value={preferredCompletionDate}
-                                            onChange={(e) => setPreferredCompletionDate(e.target.value)}
-                                            style={{ borderRadius: '8px' }}
-                                            className="ld-input font-medium text-white"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Services Needed */}
-                                <div className="space-y-3">
-                                    <label className="ld-label">Select Required Contractor Services</label>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                                        {serviceOptions.map((srv) => {
-                                            const isChecked = requiredServices.includes(srv.id);
-                                            return (
-                                                <div
-                                                    key={srv.id}
-                                                    onClick={() => handleToggleService(srv.id)}
-                                                    style={{ borderRadius: '10px' }}
-                                                    className={`p-4 border-2 cursor-pointer transition-all flex items-start gap-3.5 ${isChecked
-                                                            ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-md'
-                                                            : 'bg-[#050e08] border-emerald-600/25 text-slate-300 hover:border-emerald-500/40 hover:bg-[#0c1810]'
-                                                        }`}
-                                                >
-                                                    <div style={{ borderRadius: '5px' }} className={`mt-0.5 w-5 h-5 border-2 flex items-center justify-center text-xs font-black shrink-0 ${isChecked ? 'border-emerald-400 bg-emerald-400 text-slate-950' : 'border-slate-600 bg-slate-800 text-slate-400'}`}>
-                                                        {isChecked && <Check size={14} strokeWidth={3} />}
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-sm font-black text-white block">{srv.label}</span>
-                                                        <span className="text-xs text-slate-300 font-medium leading-relaxed">{srv.desc}</span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Additional Instructions */}
-                                <div className="space-y-2">
-                                    <label className="ld-label">Additional Instructions / Access Notes</label>
-                                    <textarea
-                                        rows="3"
-                                        value={additionalInstructions}
-                                        onChange={(e) => setAdditionalInstructions(e.target.value)}
-                                        placeholder="Note access road condition, terrain slope, gate entry codes, or environmental buffer rules."
-                                        style={{ borderRadius: '8px' }}
-                                        className="ld-textarea min-h-[90px]"
-                                    ></textarea>
-                                </div>
-
-                                <div className="flex items-center justify-between pt-4 border-t border-emerald-500/20">
-                                    <button
-                                        onClick={handlePrevStep}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-6 py-3.5 bg-[#050e08] hover:bg-[#0c1810] text-slate-300 hover:text-white border border-emerald-600/40 text-sm font-bold flex items-center gap-2 cursor-pointer transition-all"
-                                    >
-                                        <ArrowLeft size={18} /> Back
-                                    </button>
-                                    <button
-                                        onClick={handleNextStep}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black text-sm border-none shadow-lg shadow-emerald-500/25 flex items-center gap-2.5 cursor-pointer transition-all"
-                                    >
-                                        <span>Continue to Photo Upload</span>
-                                        <ArrowRight size={18} strokeWidth={3} />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ==================== STEP 4: PHOTOS / SUPPORTING INFORMATION ==================== */}
-                        {currentStep === 4 && (
-                            <div className="space-y-6">
-                                <div className="pb-4 border-b border-emerald-500/20">
-                                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Step 4 — Upload Site &amp; Tree Photos</h2>
-                                    <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1">Upload optional property, tree, and harvest site photos for contractor estimation.</p>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                    <FileUploadCard
-                                        label="Property Photos"
-                                        sublabel="Gate access, road entrance"
-                                        file={propertyPhotos}
-                                        onFileSelect={(f) => setPropertyPhotos(f)}
-                                        onFileRemove={() => setPropertyPhotos(null)}
-                                    />
-                                    <FileUploadCard
-                                        label="Tree Photos"
-                                        sublabel="Tree canopy & trunks"
-                                        file={treePhotos}
-                                        onFileSelect={(f) => setTreePhotos(f)}
-                                        onFileRemove={() => setTreePhotos(null)}
-                                    />
-                                    <FileUploadCard
-                                        label="Harvest Area Photos"
-                                        sublabel="Target plot terrain"
-                                        file={harvestAreaPhotos}
-                                        onFileSelect={(f) => setHarvestAreaPhotos(f)}
-                                        onFileRemove={() => setHarvestAreaPhotos(null)}
-                                    />
-                                </div>
-
-                                <div className="flex items-center justify-between pt-4 border-t border-emerald-500/20">
-                                    <button
-                                        onClick={handlePrevStep}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-6 py-3.5 bg-[#050e08] hover:bg-[#0c1810] text-slate-300 hover:text-white border border-emerald-600/40 text-sm font-bold flex items-center gap-2 cursor-pointer transition-all"
-                                    >
-                                        <ArrowLeft size={18} /> Back
-                                    </button>
-                                    <button
-                                        onClick={handleNextStep}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black text-sm border-none shadow-lg shadow-emerald-500/25 flex items-center gap-2.5 cursor-pointer transition-all"
-                                    >
-                                        <span>Continue to Final Review</span>
-                                        <ArrowRight size={18} strokeWidth={3} />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ==================== STEP 5: REVIEW ==================== */}
-                        {currentStep === 5 && (
-                            <div className="space-y-6">
-                                <div className="pb-4 border-b border-emerald-500/20">
-                                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Step 5 — Review &amp; Submit Request</h2>
-                                    <p className="text-xs sm:text-sm text-slate-300 font-medium mt-1">Verify your harvest request details before broadcasting to licensed timber contractors.</p>
-                                </div>
-
-                                {/* Summary Card */}
-                                <div style={{ borderRadius: '14px' }} className="p-6 bg-[#050e08] border-2 border-emerald-500/40 space-y-5 shadow-xl">
-                                    <div className="flex items-center justify-between border-b border-emerald-600/25 pb-4">
-                                        <div>
-                                            <span className="text-xs font-black text-emerald-400 uppercase tracking-widest block">PROPERTY SELECTED</span>
-                                            <h3 className="text-xl sm:text-2xl font-black text-white mt-1">{activeProperty?.propertyName}</h3>
-                                            <p className="text-xs text-slate-300 font-semibold mt-1">{activeProperty?.district || 'Kottayam'}, {activeProperty?.state || 'Kerala'} • {activeProperty?.totalArea} {activeProperty?.areaUnit}</p>
-                                        </div>
-                                        <span style={{ borderRadius: '6px' }} className="px-3 py-1.5 bg-amber-500/15 border border-amber-500/30 text-amber-400 font-black text-xs uppercase tracking-wider">
-                                            PENDING SUBMISSION
-                                        </span>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs sm:text-sm">
-                                        <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/25 space-y-1">
-                                            <span className="text-slate-400 font-semibold text-xs block uppercase tracking-wider">Harvest Area &amp; Scope:</span>
-                                            <span className="font-extrabold text-white text-base block">{harvestScope}</span>
-                                            <span className="text-emerald-400 font-bold text-xs block">{harvestScopeDetail}</span>
-                                        </div>
-                                        <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/25 space-y-1">
-                                            <span className="text-slate-400 font-semibold text-xs block uppercase tracking-wider">Estimated Volume:</span>
-                                            <span className="font-black text-emerald-400 text-xl font-mono block">{estimatedVolume}</span>
-                                        </div>
-                                        <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/25 space-y-1">
-                                            <span className="text-slate-400 font-semibold text-xs block uppercase tracking-wider">Reason for Harvest:</span>
-                                            <span className="font-extrabold text-white">{reasonForHarvesting}</span>
-                                        </div>
-                                        <div style={{ borderRadius: '10px' }} className="p-4 bg-[#0b1811] border border-emerald-600/25 space-y-1">
-                                            <span className="text-slate-400 font-semibold text-xs block uppercase tracking-wider">Preferred Timeline:</span>
-                                            <span className="font-extrabold text-white">{preferredStartDate} to {preferredCompletionDate}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="border-t border-emerald-600/25 pt-4 space-y-2">
-                                        <span className="text-xs font-black text-slate-300 uppercase tracking-wider block">Requested Contractor Services:</span>
-                                        <div className="flex flex-wrap gap-2">
-                                            {requiredServices.map(s => (
-                                                <span key={s} style={{ borderRadius: '6px' }} className="px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black">
-                                                    ✓ {s}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {additionalInstructions && (
-                                        <div className="border-t border-emerald-600/25 pt-4 text-xs sm:text-sm">
-                                            <span className="text-slate-400 font-semibold block mb-1">Additional Instructions:</span>
-                                            <p className="text-slate-200 italic font-medium">"{additionalInstructions}"</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center justify-between pt-4 border-t border-emerald-500/20">
-                                    <button
-                                        onClick={handlePrevStep}
-                                        disabled={isSubmitting}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-6 py-3.5 bg-[#050e08] hover:bg-[#0c1810] text-slate-300 hover:text-white border border-emerald-600/40 text-sm font-bold flex items-center gap-2 cursor-pointer transition-all"
-                                    >
-                                        <ArrowLeft size={18} /> Back
-                                    </button>
-                                    <button
-                                        onClick={handleSubmit}
-                                        disabled={isSubmitting}
-                                        style={{ borderRadius: '10px' }}
-                                        className="px-8 py-3.5 bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 hover:to-emerald-300 text-slate-950 font-black text-sm sm:text-base border-none shadow-xl shadow-emerald-500/30 min-w-56 flex items-center justify-center gap-2.5 cursor-pointer transition-all"
-                                    >
-                                        {isSubmitting ? (
-                                            <span>Submitting...</span>
-                                        ) : (
-                                            <span className="flex items-center gap-2"><CheckCircle2 size={20} strokeWidth={3} /> Submit Harvest Request</span>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                    </div>
-                </div>
-            </div>
-        </div>
+  const toggleTreeGroupSelection = (groupId) => {
+    setSelectedTreeGroupIds((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]
     );
+  };
+
+  // Step 3: Harvest Requirements
+  const [reason, setReason] = useState('Mature timber');
+  const [preferredStartDate, setPreferredStartDate] = useState(
+    new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+  );
+  const [preferredEndDate, setPreferredEndDate] = useState(
+    new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+  );
+
+  const serviceOptions = [
+    { id: 'Tree felling', label: 'Tree Felling', desc: 'Professional directional felling' },
+    { id: 'Cutting', label: 'Cross-cutting / Bucking', desc: 'Sizing logs to market standards' },
+    { id: 'Timber extraction', label: 'Log Extraction & Skidding', desc: 'Hauling logs to roadside landing' },
+    { id: 'Transportation', label: 'Log Truck Transport', desc: 'Transporting timber to buyer depot' },
+    { id: 'Site clearing', label: 'Branch / Slash Clearing', desc: 'Clearing stump area post-harvest' }
+  ];
+  const [requiredServices, setRequiredServices] = useState(['Tree felling', 'Timber extraction', 'Transportation']);
+
+  const handleToggleService = (serviceId) => {
+    setRequiredServices((prev) =>
+      prev.includes(serviceId) ? prev.filter((s) => s !== serviceId) : [...prev, serviceId]
+    );
+  };
+
+  // Step 4: Site Conditions
+  const [accessAvailability, setAccessAvailability] = useState('Heavy vehicle access');
+  const [roadCondition, setRoadCondition] = useState('Paved panchayat road');
+  const [distanceFromRoad, setDistanceFromRoad] = useState('50 meters');
+  const [terrain, setTerrain] = useState('Gently sloped');
+
+  const hazardOptions = [
+    'Power lines nearby',
+    'Nearby buildings / structures',
+    'Public road adjacent',
+    'Steep ravine / slope',
+    'Wet / muddy ground'
+  ];
+  const [hazards, setHazards] = useState(['Power lines nearby']);
+
+  const toggleHazard = (haz) => {
+    setHazards((prev) => (prev.includes(haz) ? prev.filter((h) => h !== haz) : [...prev, haz]));
+  };
+
+  const [additionalNotes, setAdditionalNotes] = useState('');
+  const [sitePhotos, setSitePhotos] = useState(null);
+
+  // Step 5: Contractor Assignment (Optional)
+  const [selectedContractor, setSelectedContractor] = useState(null);
+  const [showContractorModal, setShowContractorModal] = useState(false);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Step Navigation
+  const handleNextStep = () => {
+    setErrorMessage('');
+    if (currentStep === 1 && !activeProperty) {
+      setErrorMessage('Please select a registered property first.');
+      return;
+    }
+    if (currentStep === 2 && availableTreeGroups.length > 0 && selectedTreeGroupIds.length === 0) {
+      setErrorMessage('Please select at least one tree inventory group for harvest.');
+      return;
+    }
+    if (currentStep < 5) setCurrentStep((prev) => prev + 1);
+  };
+
+  const handlePrevStep = () => {
+    setErrorMessage('');
+    if (currentStep > 1) setCurrentStep((prev) => prev - 1);
+  };
+
+  // Submit Handler
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!activeProperty) {
+      setErrorMessage('No property selected.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const selectedGroups = availableTreeGroups.filter((g) => selectedTreeGroupIds.includes(g.id));
+
+      const payload = {
+        property_id: activeProperty.id || activeProperty._id,
+        propertyName: activeProperty.propertyName || activeProperty.name || 'Registered Property',
+        propertyLocation: `${activeProperty.district || 'Kottayam'}, ${activeProperty.state || 'Kerala'}`,
+        selected_inventory_ids: selectedTreeGroupIds,
+        selected_tree_groups: selectedGroups,
+        reason,
+        preferred_start_date: preferredStartDate,
+        preferred_end_date: preferredEndDate,
+        required_services: requiredServices,
+        site_conditions: {
+          access_availability: accessAvailability,
+          road_condition: roadCondition,
+          distance_from_road: distanceFromRoad,
+          terrain,
+          additional_notes: additionalNotes
+        },
+        hazards,
+        photos: sitePhotos ? [sitePhotos] : [],
+        instructions: additionalNotes,
+        assigned_contractor_id: selectedContractor?.id || selectedContractor?._id || null,
+        assigned_contractor_name: selectedContractor?.companyName || selectedContractor?.name || null
+      };
+
+      await addHarvestRequest(payload);
+
+      setIsSubmitting(false);
+      setSuccessMessage(
+        selectedContractor
+          ? `Harvest request submitted and assigned to contractor ${selectedContractor.companyName || selectedContractor.name}!`
+          : 'Harvest request submitted successfully! You can now select an approved contractor or await quotes.'
+      );
+
+      setTimeout(() => {
+        navigate('/landowner/harvest-requests');
+      }, 2000);
+    } catch (err) {
+      console.error('Error submitting harvest request:', err);
+      setIsSubmitting(false);
+      setErrorMessage('Failed to submit harvest request. Please try again.');
+    }
+  };
+
+  const selectedTreeGroups = availableTreeGroups.filter((g) => selectedTreeGroupIds.includes(g.id));
+
+  return (
+    <div className="landowner-dashboard-page">
+      <Navbar />
+      <div className="landowner-dashboard-container">
+        <Sidebar />
+
+        <div className="landowner-dashboard-workspace">
+          <main className="w-full flex flex-col gap-6 max-w-6xl mx-auto py-2">
+            
+            {/* HERO CARD HEADER */}
+            <section className="ld-card ld-hero-card">
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <span className="ld-hero-tag">
+                    <Axe size={14} /> HARVEST REQUEST WORKFLOW
+                  </span>
+                  <h1 className="ld-hero-heading mt-1">Submit Landowner Harvest Request</h1>
+                  <p className="ld-hero-subtext mt-1">
+                    Select your existing registered estate parcel and tree inventory records to create a harvesting job for licensed platform contractors. No duplicate property entry required.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/landowner/harvest-requests')}
+                    className="ld-btn-back"
+                  >
+                    <ArrowLeft size={14} /> Back to Requests
+                  </button>
+
+                  <span className="ld-badge-live">
+                    Step {currentStep} of 5
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            {/* STEP PROGRESS INDICATOR TABS */}
+            <div className="ld-subcard flex items-center justify-between gap-3 overflow-x-auto">
+              {[
+                { step: 1, label: '1. Select Property' },
+                { step: 2, label: '2. Select Trees' },
+                { step: 3, label: '3. Requirements' },
+                { step: 4, label: '4. Site Conditions' },
+                { step: 5, label: '5. Review & Submit' }
+              ].map((item) => {
+                const isActive = currentStep === item.step;
+                const isPassed = currentStep > item.step;
+
+                return (
+                  <div
+                    key={item.step}
+                    onClick={() => {
+                      if (isPassed || (item.step === 2 && activeProperty)) {
+                        setCurrentStep(item.step);
+                      }
+                    }}
+                    className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-emerald-950 border-emerald-400 text-white shadow-md'
+                        : isPassed
+                        ? 'bg-[#0e1612] border-emerald-700/40 text-emerald-300'
+                        : 'bg-transparent border-slate-800 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {item.label}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ERROR / SUCCESS ALERTS */}
+            {errorMessage && (
+              <div className="p-4 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center gap-3">
+                <AlertCircle size={18} className="text-red-400 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="p-4 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-200 text-xs flex items-center gap-3">
+                <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
+                <span className="font-bold">{successMessage}</span>
+              </div>
+            )}
+
+            {/* STEP 1: SELECT EXISTING PROPERTY */}
+            {currentStep === 1 && (
+              <div className="ld-card space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                      <Building2 className="text-emerald-400" size={20} /> Step 1: Select Existing Property
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Choose from your live registered properties. Property details are retrieved automatically and displayed as read-only.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => refreshProperties && refreshProperties()}
+                    className="ld-btn-back text-xs"
+                    title="Refresh live properties"
+                  >
+                    <RefreshCw size={13} /> Refresh Live DB
+                  </button>
+                </div>
+
+                {safeProperties.length === 0 ? (
+                  <div className="ld-subcard text-center py-10 space-y-4">
+                    <Trees size={44} className="text-emerald-500/40 mx-auto" />
+                    <h4 className="font-bold text-white text-base">No Registered Properties Found</h4>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                      You need at least one registered property to create a harvest request.
+                    </p>
+                    <button
+                      onClick={() => navigate('/landowner/register-property')}
+                      className="ld-btn-green-sm"
+                    >
+                      <Plus size={15} /> Register Property First
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {safeProperties.map((p) => {
+                      const pId = p.id || p._id;
+                      const isSelected = selectedPropertyId === pId || String(selectedPropertyId) === String(pId);
+                      const pName = p.propertyName || p.name || 'Registered Estate';
+                      const address = p.address || [p.village, p.localBody, p.district, p.state].filter(Boolean).join(', ') || 'Kerala';
+
+                      return (
+                        <div
+                          key={pId}
+                          onClick={() => setSelectedPropertyId(pId)}
+                          className={`harvest-property-card ${isSelected ? 'selected' : ''}`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-extrabold text-white text-base">{pName}</h4>
+                              <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-700/50">
+                                ID: {pId.substring(0, 10)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-300 flex items-center gap-1">
+                              <MapPin size={13} className="text-emerald-400" /> {address}
+                            </p>
+                            <div className="flex items-center gap-4 text-xs text-slate-400 pt-2 border-t border-emerald-500/10">
+                              <span>District: <strong className="text-white">{p.district || 'Kottayam'}</strong></span>
+                              <span>Area: <strong className="text-white">{p.totalArea || '12'} {p.areaUnit || 'Cents'}</strong></span>
+                            </div>
+                          </div>
+
+                          <div className="pt-3 flex items-center justify-between text-xs">
+                            <span className="text-emerald-400 font-bold flex items-center gap-1">
+                              {isSelected ? <><CheckCircle2 size={14} /> Selected Property</> : 'Click to select'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
+                              READ-ONLY Details
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Read-Only Summary Box for Selected Property */}
+                {activeProperty && (
+                  <div className="ld-subcard space-y-3">
+                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                      <CheckCircle2 size={14} /> SELECTED PROPERTY SUMMARY (READ-ONLY)
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                      <div>
+                        <span className="text-slate-400 block text-[11px]">Property Name:</span>
+                        <span className="font-bold text-white">{activeProperty.propertyName || activeProperty.name}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[11px]">District & Location:</span>
+                        <span className="font-bold text-white">{activeProperty.district || 'Kottayam'}, {activeProperty.state || 'Kerala'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[11px]">Total Area:</span>
+                        <span className="font-bold text-white">{activeProperty.totalArea || '12'} {activeProperty.areaUnit || 'Cents'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[11px]">Property Type:</span>
+                        <span className="font-bold text-white">{activeProperty.propertyType || 'Residential Property'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* STEP 2: SELECT EXISTING TREES FROM INVENTORY */}
+            {currentStep === 2 && (
+              <div className="ld-card space-y-6">
+                <div>
+                  <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                    <Trees className="text-emerald-400" size={20} /> Step 2: Select Trees Intended for Harvesting
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Trees registered under <strong className="text-white">{activeProperty?.propertyName || activeProperty?.name}</strong> are listed below. Select the stands or tree groups to include in this harvest request.
+                  </p>
+                </div>
+
+                {availableTreeGroups.length === 0 ? (
+                  <div className="ld-subcard text-center py-10 space-y-4">
+                    <TreePine size={44} className="text-emerald-500/40 mx-auto" />
+                    <h4 className="font-bold text-white text-base">No Tree Inventory Records Found for Property</h4>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      No registered tree stands were found for this property in Tree Inventory. You can still proceed or add inventory records first.
+                    </p>
+                    <button
+                      onClick={() => navigate(`/landowner/add-inventory?propertyId=${activeProperty?.id || activeProperty?._id}`)}
+                      className="ld-btn-green-sm"
+                    >
+                      <Plus size={15} /> Add Tree Inventory
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-xs text-slate-300 pb-2 border-b border-emerald-500/10">
+                      <span>Selected {selectedTreeGroupIds.length} of {availableTreeGroups.length} tree stand(s)</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedTreeGroupIds.length === availableTreeGroups.length) {
+                            setSelectedTreeGroupIds([]);
+                          } else {
+                            setSelectedTreeGroupIds(availableTreeGroups.map((g) => g.id));
+                          }
+                        }}
+                        className="text-emerald-400 hover:underline font-bold"
+                      >
+                        {selectedTreeGroupIds.length === availableTreeGroups.length ? 'Deselect All' : 'Select All Stands'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {availableTreeGroups.map((g) => {
+                        const isSelected = selectedTreeGroupIds.includes(g.id);
+
+                        return (
+                          <div
+                            key={g.id}
+                            onClick={() => toggleTreeGroupSelection(g.id)}
+                            className={`harvest-scope-card ${isSelected ? 'selected' : ''}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-1">
+                                <h4 className="font-extrabold text-white text-sm flex items-center gap-2">
+                                  <TreePine size={16} className="text-emerald-400" /> {g.groupName}
+                                </h4>
+                                <span className="inline-block px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 text-xs font-bold border border-emerald-700/50">
+                                  Species: {g.species}
+                                </span>
+                              </div>
+
+                              <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+                                isSelected ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600'
+                              }`}>
+                                {isSelected && <Check size={14} strokeWidth={3} />}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 pt-2 border-t border-emerald-500/10">
+                              <div>Quantity: <strong className="text-white">{g.numberOfTrees} trees</strong></div>
+                              <div>Age: <strong className="text-white">{g.approxAge}</strong></div>
+                              <div>Condition: <strong className="text-emerald-400">{g.condition}</strong></div>
+                              <div>Location: <strong className="text-white">{g.location}</strong></div>
+                            </div>
+
+                            <div className="text-[11px] text-slate-400 bg-[#040b07] p-2 rounded-lg font-mono">
+                              Inventory Measurement: {g.girth}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* STEP 3: HARVEST REQUIREMENTS */}
+            {currentStep === 3 && (
+              <div className="ld-card space-y-6">
+                <div>
+                  <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                    <Axe className="text-emerald-400" size={20} /> Step 3: Harvesting Requirements
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Specify the reason for harvesting, preferred timeframe, and required contractor services.
+                  </p>
+                </div>
+
+                {/* Reason for Harvesting */}
+                <div className="space-y-2">
+                  <label className="ld-label">Reason for Harvesting *</label>
+                  <select
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="ld-select"
+                  >
+                    <option value="Mature timber">Mature timber</option>
+                    <option value="Commercial harvest">Commercial harvest</option>
+                    <option value="Diseased/damaged tree">Diseased/damaged tree</option>
+                    <option value="Dangerous tree">Dangerous tree</option>
+                    <option value="Land development">Land development</option>
+                    <option value="Plantation rotation">Plantation rotation</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                {/* Preferred Dates */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="ld-label">Preferred Start Date *</label>
+                    <input
+                      type="date"
+                      value={preferredStartDate}
+                      onChange={(e) => setPreferredStartDate(e.target.value)}
+                      className="ld-input"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="ld-label">Preferred Completion Date *</label>
+                    <input
+                      type="date"
+                      value={preferredEndDate}
+                      onChange={(e) => setPreferredEndDate(e.target.value)}
+                      className="ld-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Required Services */}
+                <div className="space-y-3">
+                  <label className="ld-label">Required Harvesting Services *</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {serviceOptions.map((s) => {
+                      const isChecked = requiredServices.includes(s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => handleToggleService(s.id)}
+                          className={`ld-subcard flex items-center justify-between cursor-pointer ${
+                            isChecked ? 'border-[#10b981] bg-[rgba(16,185,129,0.12)]' : ''
+                          }`}
+                        >
+                          <div>
+                            <div className="font-bold text-xs text-white">{s.label}</div>
+                            <div className="text-[11px] text-slate-400 mt-0.5">{s.desc}</div>
+                          </div>
+                          <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                            isChecked ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600'
+                          }`}>
+                            {isChecked && <Check size={14} strokeWidth={3} />}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 4: SITE CONDITIONS & SITE PHOTOS */}
+            {currentStep === 4 && (
+              <div className="ld-card space-y-6">
+                <div>
+                  <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                    <Truck className="text-emerald-400" size={20} /> Step 4: Site Conditions & Access
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Provide site terrain, road access, special hazards, and upload current harvest site photos.
+                  </p>
+                </div>
+
+                {/* Access & Road */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="ld-label">Vehicle / Access Availability</label>
+                    <select
+                      value={accessAvailability}
+                      onChange={(e) => setAccessAvailability(e.target.value)}
+                      className="ld-select"
+                    >
+                      <option value="Heavy vehicle access">Heavy vehicle access (Log Trucks)</option>
+                      <option value="4WD Tractor access">4WD Tractor access only</option>
+                      <option value="Small truck / Pickup">Small truck / Pickup only</option>
+                      <option value="Manual / Cable extraction required">Manual / Cable extraction required</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="ld-label">Road Condition</label>
+                    <input
+                      type="text"
+                      value={roadCondition}
+                      onChange={(e) => setRoadCondition(e.target.value)}
+                      placeholder="e.g. Paved panchayat road, Dirt track"
+                      className="ld-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Distance & Terrain */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="ld-label">Approximate Distance from Main Road</label>
+                    <input
+                      type="text"
+                      value={distanceFromRoad}
+                      onChange={(e) => setDistanceFromRoad(e.target.value)}
+                      placeholder="e.g. 50 meters, 200 meters"
+                      className="ld-input"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="ld-label">Terrain Type</label>
+                    <select
+                      value={terrain}
+                      onChange={(e) => setTerrain(e.target.value)}
+                      className="ld-select"
+                    >
+                      <option value="Flat land">Flat land</option>
+                      <option value="Gently sloped">Gently sloped</option>
+                      <option value="Steep hillside">Steep hillside</option>
+                      <option value="Marshy / Wet ground">Marshy / Wet ground</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Hazards */}
+                <div className="space-y-2">
+                  <label className="ld-label flex items-center gap-1.5">
+                    <AlertTriangle size={14} className="text-amber-400" /> Special Site Hazards
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {hazardOptions.map((haz) => {
+                      const isChecked = hazards.includes(haz);
+                      return (
+                        <button
+                          type="button"
+                          key={haz}
+                          onClick={() => toggleHazard(haz)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                            isChecked
+                              ? 'bg-amber-950 border-amber-500 text-amber-300'
+                              : 'bg-[#050e09] border-emerald-500/20 text-slate-400 hover:border-slate-600'
+                          }`}
+                        >
+                          {isChecked ? '✓ ' : '+ '}{haz}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Additional Instructions */}
+                <div className="space-y-2">
+                  <label className="ld-label">Additional Instructions / Site Notes</label>
+                  <textarea
+                    rows={3}
+                    value={additionalNotes}
+                    onChange={(e) => setAdditionalNotes(e.target.value)}
+                    placeholder="Special directions, gate access codes, neighbouring house precautions..."
+                    className="ld-textarea"
+                  />
+                </div>
+
+                {/* Photos Upload */}
+                <div className="space-y-2">
+                  <label className="ld-label">Upload Current Harvest Site Photos</label>
+                  <p className="text-[11px] text-slate-400">
+                    Upload photos showing selected trees, access road, terrain, loading area, or hazards.
+                  </p>
+                  <FileUploadCard
+                    title="Harvest Site & Access Road Photos"
+                    description="Upload clear site photos for contractor quotation inspection"
+                    onFileSelect={(fileData) => setSitePhotos(fileData)}
+                    selectedFile={sitePhotos}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5: REVIEW & SUBMIT */}
+            {currentStep === 5 && (
+              <div className="ld-card space-y-6">
+                <div>
+                  <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                    <FileText className="text-emerald-400" size={20} /> Step 5: Review & Submit Request
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Review your complete harvest request summary below before submitting to the platform.
+                  </p>
+                </div>
+
+                {/* Summary Card */}
+                <div className="ld-subcard space-y-4 text-xs">
+                  
+                  {/* PROPERTY SUMMARY */}
+                  <div className="space-y-1.5 pb-4 border-b border-emerald-500/10">
+                    <h4 className="font-extrabold text-emerald-400 uppercase text-[11px] tracking-wider">Property Information (Existing)</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300">
+                      <div>Property: <strong className="text-white block">{activeProperty?.propertyName || activeProperty?.name}</strong></div>
+                      <div>Location: <strong className="text-white block">{activeProperty?.district || 'Kottayam'}, {activeProperty?.state || 'Kerala'}</strong></div>
+                      <div>Area: <strong className="text-white block">{activeProperty?.totalArea || '12'} {activeProperty?.areaUnit || 'Cents'}</strong></div>
+                      <div>ID: <strong className="text-emerald-300 font-mono block">{activeProperty?.id || activeProperty?._id}</strong></div>
+                    </div>
+                  </div>
+
+                  {/* SELECTED TREES SUMMARY */}
+                  <div className="space-y-1.5 pb-4 border-b border-emerald-500/10">
+                    <h4 className="font-extrabold text-emerald-400 uppercase text-[11px] tracking-wider">Selected Tree Inventories ({selectedTreeGroups.length} Stands)</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedTreeGroups.map((g) => (
+                        <div key={g.id} className="p-2.5 rounded-lg bg-[#08170e] border border-emerald-500/20">
+                          <div className="font-bold text-white">{g.groupName}</div>
+                          <div className="text-slate-400 text-[11px]">Species: <span className="text-emerald-300 font-bold">{g.species}</span> • Quantity: <span className="text-white font-bold">{g.numberOfTrees} trees</span></div>
+                          <div className="text-slate-500 text-[10px]">Measurement: {g.girth}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* HARVEST REQUIREMENTS */}
+                  <div className="space-y-1.5 pb-4 border-b border-emerald-500/10">
+                    <h4 className="font-extrabold text-emerald-400 uppercase text-[11px] tracking-wider">Harvest Requirements & Services</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-slate-300">
+                      <div>Reason: <strong className="text-white block">{reason}</strong></div>
+                      <div>Preferred Period: <strong className="text-white block">{preferredStartDate} to {preferredEndDate}</strong></div>
+                      <div>Services Requested: 
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {requiredServices.map((s) => (
+                            <span key={s} className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 text-[10px] font-bold border border-emerald-800">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SITE CONDITIONS */}
+                  <div className="space-y-1.5 pb-4 border-b border-emerald-500/10">
+                    <h4 className="font-extrabold text-emerald-400 uppercase text-[11px] tracking-wider">Site Conditions & Hazards</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300">
+                      <div>Access: <strong className="text-white block">{accessAvailability}</strong></div>
+                      <div>Road: <strong className="text-white block">{roadCondition} ({distanceFromRoad})</strong></div>
+                      <div>Terrain: <strong className="text-white block">{terrain}</strong></div>
+                      <div>Hazards: <strong className="text-amber-400 block">{hazards.join(', ') || 'None'}</strong></div>
+                    </div>
+                    {additionalNotes && (
+                      <div className="mt-2 text-slate-400 text-[11px]">
+                        Instructions: <span className="text-slate-200 italic">{additionalNotes}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* OPTIONAL CONTRACTOR ASSIGNMENT */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-extrabold text-emerald-400 uppercase text-[11px] tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck size={14} /> Assigned Admin-Approved Contractor (Optional)
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowContractorModal(true)}
+                        className="ld-btn-back text-xs"
+                      >
+                        {selectedContractor ? 'Change Contractor' : '+ Select Approved Contractor'}
+                      </button>
+                    </div>
+
+                    {selectedContractor ? (
+                      <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-white text-xs">{selectedContractor.companyName || selectedContractor.name}</div>
+                          <div className="text-[11px] text-emerald-300">{selectedContractor.location || selectedContractor.district} • Verified Contractor</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedContractor(null)}
+                          className="text-xs text-red-400 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-[#030905] border border-emerald-500/10 text-slate-400 text-xs">
+                        No contractor selected yet. You can submit now to let approved contractors view and bid, or select a contractor directly above.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ACTION FOOTER BAR (COMPACT NEXT BUTTON ON RIGHT BOTTOM SIDE) */}
+            <div className="flex items-center justify-between pt-4 border-t border-emerald-500/20">
+              <button
+                type="button"
+                onClick={handlePrevStep}
+                disabled={currentStep === 1 || isSubmitting}
+                className={`ld-btn-back ${currentStep === 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
+              >
+                <ArrowLeft size={14} /> Previous
+              </button>
+
+              <div className="flex items-center justify-end">
+                {currentStep < 5 ? (
+                  <button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="ld-btn-green-sm"
+                  >
+                    Next Step <ArrowRight size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting}
+                    className="ld-btn-green-sm"
+                  >
+                    {isSubmitting ? (
+                      'Submitting Request...'
+                    ) : (
+                      <>
+                        <Send size={14} /> Submit Harvest Request
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* MODAL FOR CONTRACTOR SELECTION */}
+            {showContractorModal && (
+              <ApprovedContractorSelector
+                selectedContractorId={selectedContractor?.id || selectedContractor?._id}
+                onSelectContractor={(c) => {
+                  setSelectedContractor(c);
+                  setShowContractorModal(false);
+                }}
+                onCancel={() => setShowContractorModal(false)}
+                isModal={true}
+              />
+            )}
+
+          </main>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default RequestHarvesting;

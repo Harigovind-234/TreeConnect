@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
+import harvestService from '../../services/harvestService';
 import {
   Truck,
   Compass,
@@ -26,11 +27,38 @@ import {
   ChevronRight,
   X,
   AlertTriangle,
-  Award
+  Award,
+  TreePine,
+  Loader2
 } from 'lucide-react';
 
 const ContractorDashboard = () => {
   const { user } = useAuth();
+  const contractorName = user?.fullName || user?.name || user?.companyName || 'Apex Harvesting Co.';
+
+  // Assigned harvest requests from backend DB
+  const [assignedRequests, setAssignedRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+
+  // Contractor Assessment Modal state
+  const [selectedRequestForAssessment, setSelectedRequestForAssessment] = useState(null);
+  const [assessmentForm, setAssessmentForm] = useState({
+    estimated_harvestable_volume: 180,
+    estimated_timber_value: 2160000,
+    harvesting_cost: 45000,
+    extraction_cost: 30000,
+    transportation_cost: 25000,
+    other_cost: 10000,
+    total_quote: 110000,
+    estimated_duration: '10 working days',
+    proposed_start_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    notes: 'Site inspection completed. Access road cleared for heavy haulers.'
+  });
+
+  const [isSubmittingAssessment, setIsSubmittingAssessment] = useState(false);
+  const [assessmentMessage, setAssessmentMessage] = useState('');
+
+  // Legacy Bid Modal state
   const [showBidModal, setShowBidModal] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [bidAmountInput, setBidAmountInput] = useState('');
@@ -59,17 +87,6 @@ const ContractorDashboard = () => {
       deadline: 'Sep 15, 2026',
       estBudget: '₹ 18,20,000',
       myBid: '₹ 17,80,000'
-    },
-    {
-      id: 'job_3',
-      owner: 'Malabar Agro Forestry Ltd.',
-      parcel: 'Kozhikode Coastal Timber Lot #2',
-      location: 'Kozhikode, Kerala',
-      species: 'Jackwood & Softwood',
-      volume: '620 m³',
-      deadline: 'Sep 05, 2026',
-      estBudget: '₹ 8,90,000',
-      myBid: null
     }
   ]);
 
@@ -80,7 +97,105 @@ const ContractorDashboard = () => {
     { id: 4, name: 'Volvo FMX Log Hauler Truck', category: 'Log Truck', status: 'In Operation', location: 'Palakkad Route #4', operator: 'Rajesh Kumar', lastService: '2026-07-28' }
   ]);
 
-  const contractorName = user?.name || 'Apex Harvesting Co.';
+  // Fetch assigned harvest requests
+  const fetchAssignedRequests = async () => {
+    setLoadingRequests(true);
+    try {
+      const data = await harvestService.getHarvestRequests({ all_records: true });
+      if (data && Array.isArray(data.harvest_requests)) {
+        // Filter requests assigned to this contractor or general active requests
+        const cId = user?.id || user?._id || user?.email;
+        const assigned = data.harvest_requests.filter(r => 
+          r.assigned_contractor_id === cId ||
+          r.assigned_contractor_email === user?.email ||
+          r.status === 'CONTRACTOR_ASSIGNED' ||
+          r.status === 'ASSESSMENT_SUBMITTED' ||
+          r.status === 'OPERATION_READY'
+        );
+
+        if (assigned.length > 0) {
+          setAssignedRequests(assigned);
+        } else {
+          // Fallback sample assigned harvest request if DB is empty
+          setAssignedRequests([
+            {
+              id: 'hr_demo_99',
+              _id: 'hr_demo_99',
+              propertyName: 'Green Valley Teak Plantation',
+              propertyLocation: 'Kottayam, Kerala',
+              owner_email: 'landowner@treeconnect.in',
+              reason: 'Mature timber harvest',
+              preferred_start_date: '2026-09-01',
+              preferred_end_date: '2026-09-25',
+              required_services: ['Tree felling', 'Cutting', 'Timber extraction', 'Transportation', 'Site clearing'],
+              site_conditions: {
+                access_availability: 'Heavy vehicle access',
+                road_condition: 'Paved panchayat road',
+                distance_from_road: '40 meters',
+                terrain: 'Gently sloped',
+                additional_notes: 'Easy access from main road. Preserve surrounding saplings.'
+              },
+              hazards: ['Power lines nearby'],
+              status: 'CONTRACTOR_ASSIGNED',
+              createdAt: '2026-08-30'
+            }
+          ]);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load contractor assigned harvest requests:", err);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssignedRequests();
+  }, [user?.email]);
+
+  // Auto calculate total quote in assessment form
+  const handleAssessmentFormChange = (e) => {
+    const { name, value } = e.target;
+    setAssessmentForm(prev => {
+      const updated = { ...prev, [name]: value };
+      
+      if (['harvesting_cost', 'extraction_cost', 'transportation_cost', 'other_cost'].includes(name)) {
+        const sum = (Number(updated.harvesting_cost) || 0) +
+                    (Number(updated.extraction_cost) || 0) +
+                    (Number(updated.transportation_cost) || 0) +
+                    (Number(updated.other_cost) || 0);
+        updated.total_quote = sum;
+      }
+      return updated;
+    });
+  };
+
+  // Submit Assessment Handler
+  const handleSubmitAssessment = async (e) => {
+    e.preventDefault();
+    if (!selectedRequestForAssessment) return;
+
+    setIsSubmittingAssessment(true);
+    setAssessmentMessage('');
+
+    try {
+      const reqId = selectedRequestForAssessment.id || selectedRequestForAssessment._id;
+      await harvestService.submitAssessment(reqId, assessmentForm);
+
+      setIsSubmittingAssessment(false);
+      setAssessmentMessage("Contractor assessment & formal quotation submitted to Landowner successfully!");
+
+      setTimeout(() => {
+        setSelectedRequestForAssessment(null);
+        setAssessmentMessage('');
+        fetchAssignedRequests();
+      }, 1800);
+    } catch (err) {
+      console.error("Error submitting assessment:", err);
+      setIsSubmittingAssessment(false);
+      setAssessmentMessage("Failed to submit assessment. Please try again.");
+    }
+  };
 
   const handleOpenBidModal = (job) => {
     setSelectedJob(job);
@@ -104,10 +219,7 @@ const ContractorDashboard = () => {
       <div className="dashboard-body">
         <Sidebar />
 
-        {/* Main Workspace Container */}
         <div className="dashboard-workspace">
-
-          {/* Center Main Dashboard Content */}
           <main className="dashboard-content">
 
             {/* HERO WELCOME CARD */}
@@ -119,220 +231,108 @@ const ContractorDashboard = () => {
                   </span>
                   <h1 className="hero-title-text">Welcome Back, {contractorName}</h1>
                   <p className="hero-subtitle-text">
-                    Monitor available timber harvest listings, submit competitive bids, and manage heavy logging machinery.
+                    Review assigned landowner harvest requests, inspect site specifications & tree inventories, and submit formal contractor assessments & quotations.
                   </p>
-
-                  {/* Summary Metric Pills */}
-                  <div className="today-summary-pills">
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-amber"></span>
-                      <span className="pill-val">4</span> Heavy Machines
-                    </div>
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-emerald"></span>
-                      <span className="pill-val">3</span> Available Jobs
-                    </div>
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-blue"></span>
-                      <span className="pill-val">₹ 17.8L</span> Active Bids
-                    </div>
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-muted"></span>
-                      <span className="pill-val">1</span> Ongoing Project
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Action Buttons Beside Hero */}
-                <div className="hero-quick-actions">
-                  <button className="btn btn-primary btn-sm" onClick={() => handleOpenBidModal(jobs[0])}>
-                    <Send size={16} /> Submit Harvest Bid
-                  </button>
-                  <button className="btn btn-secondary btn-sm">
-                    <Truck size={16} /> Add Machinery
-                  </button>
-                  <button className="btn btn-secondary btn-sm">
-                    <FileText size={16} /> Transport Permits
-                  </button>
                 </div>
               </div>
             </section>
 
-            {/* UNIFORM KPI CARDS */}
-            <section className="kpi-grid">
-              {/* Card 1 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-amber">
-                    <Truck size={20} />
-                  </span>
-                  <span className="kpi-trend trend-positive">
-                    <TrendingUp size={12} /> 3 Active
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">4 Machines</div>
-                  <div className="kpi-label">Heavy Logging Fleet</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 16 Q 20 10, 40 14 T 80 6 T 100 2" fill="none" stroke="#fbbf24" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-forest">
-                    <Compass size={20} />
-                  </span>
-                  <span className="kpi-trend trend-positive">
-                    <TrendingUp size={12} /> 3 New
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">3 Listings</div>
-                  <div className="kpi-label">Available Timber Jobs</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 20 Q 25 14, 50 8 T 75 12 T 100 4" fill="none" stroke="#10b981" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-emerald">
-                    <FileText size={20} />
-                  </span>
-                  <span className="kpi-trend trend-neutral">
-                    In Progress
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">1 Contract</div>
-                  <div className="kpi-label">Active Harvesting Project</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 12 Q 25 15, 50 8 T 75 12 T 100 7" fill="none" stroke="#34d399" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 4 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-blue">
-                    <DollarSign size={20} />
-                  </span>
-                  <span className="kpi-trend trend-positive">
-                    <TrendingUp size={12} /> ₹ 17.8L
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">₹ 17,80,000</div>
-                  <div className="kpi-label">Active Bid Volume</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 19 Q 20 14, 40 16 T 70 6 T 100 2" fill="none" stroke="#3b82f6" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* ACTIVE HARVEST HIGHLIGHT SECTION */}
-            <section className="active-harvest-section card highlight-card">
+            {/* ASSIGNED LANDOWNER HARVEST REQUESTS (ASSESSMENT WORKFLOW) */}
+            <section className="dashboard-section card highlight-card border border-emerald-500/30">
               <div className="card-header">
-                <div className="section-header-title">
-                  <span className="live-indicator"><span className="pulse-dot"></span> HARVEST OPERATION IN PROGRESS</span>
-                  <h2 className="section-heading">Current Field Operation Spotlight</h2>
+                <div>
+                  <span className="live-indicator"><span className="pulse-dot"></span> ASSIGNED HARVEST JOBS</span>
+                  <h2 className="section-heading">Assigned Harvest Requests & Assessment Quotations</h2>
+                  <p className="section-subtext">Inspect landowner site conditions & tree inventory to submit harvestable volume & price quotations</p>
                 </div>
-                <span className="status-chip status-chip-active">
-                  Field Active
-                </span>
+                <span className="dash-user-count font-semibold text-emerald">{assignedRequests.length} Assigned</span>
               </div>
 
-              <div className="active-harvest-grid">
-                <div className="harvest-details-col">
-                  <div className="harvest-primary-info">
-                    <h3 className="harvest-property-title">Wayanad Teak & Hardwood Stand #1</h3>
-                    <p className="harvest-meta"><MapPin size={14} /> Wayanad, Kerala • Mature Teakwood & Rosewood</p>
-                  </div>
-
-                  <div className="harvest-stats-row">
-                    <div className="h-stat">
-                      <span className="h-stat-label">Land Owner</span>
-                      <span className="h-stat-value font-semibold">Robert Pine</span>
-                    </div>
-                    <div className="h-stat">
-                      <span className="h-stat-label">Target Volume</span>
-                      <span className="h-stat-value text-emerald font-bold">850 m³</span>
-                    </div>
-                    <div className="h-stat">
-                      <span className="h-stat-label">Est. Completion</span>
-                      <span className="h-stat-value">Sep 12, 2026</span>
-                    </div>
-                    <div className="h-stat">
-                      <span className="h-stat-label">Equipment Onsite</span>
-                      <span className="h-stat-value text-emerald">2 Machinery Units</span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="harvest-progress-wrapper">
-                    <div className="progress-label-bar">
-                      <span>Harvesting & Log Skidding Progress</span>
-                      <span className="progress-pct font-bold">42%</span>
-                    </div>
-                    <div className="progress-track">
-                      <div className="progress-fill" style={{ width: '42%' }}></div>
-                    </div>
-                  </div>
+              {loadingRequests ? (
+                <div className="py-8 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
+                  <Loader2 size={24} className="animate-spin text-emerald-400" />
+                  <span>Loading assigned harvest jobs...</span>
                 </div>
-
-                {/* Milestone Timeline */}
-                <div className="harvest-timeline-col">
-                  <span className="timeline-title">Contractor Field Milestones</span>
-                  <div className="timeline-steps">
-                    <div className="timeline-step step-complete">
-                      <span className="step-icon"><CheckCircle2 size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">Forest Permit & Transport Clearance</span>
-                        <span className="step-date">Approved Aug 02</span>
-                      </div>
-                    </div>
-                    <div className="timeline-step step-active">
-                      <span className="step-icon"><Activity size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">Tree Felling & Stem Bucking</span>
-                        <span className="step-date">In Progress (42%)</span>
-                      </div>
-                    </div>
-                    <div className="timeline-step step-upcoming">
-                      <span className="step-icon"><Clock size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">Skidding & Yard Stacking</span>
-                        <span className="step-date">Est. Aug 22</span>
-                      </div>
-                    </div>
-                    <div className="timeline-step step-upcoming">
-                      <span className="step-icon"><Clock size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">Timber Mill Transit Hauling</span>
-                        <span className="step-date">Est. Sep 05</span>
-                      </div>
-                    </div>
-                  </div>
+              ) : assignedRequests.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 text-xs">
+                  No landowner harvest requests currently assigned to your company.
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4 pt-2">
+                  {assignedRequests.map((req) => {
+                    const reqId = req.id || req._id;
+                    const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
+                    const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+
+                    return (
+                      <div key={reqId} className="bg-[#050f09] border border-emerald-500/25 rounded-2xl p-5 space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/15 pb-3">
+                          <div>
+                            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded">
+                              Job #{reqId.substring(0, 8)}
+                            </span>
+                            <h3 className="text-base font-extrabold text-white mt-1">{req.propertyName || 'Forest Estate'}</h3>
+                            <p className="text-xs text-slate-300 flex items-center gap-1">
+                              <MapPin size={12} className="text-emerald-400" /> {req.propertyLocation || req.location || 'Kerala'}
+                            </p>
+                          </div>
+
+                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${
+                            isAccepted
+                              ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
+                              : isSubmitted
+                              ? 'bg-amber-950 border-amber-500 text-amber-300'
+                              : 'bg-blue-950 border-blue-500 text-blue-300'
+                          }`}>
+                            {isAccepted ? 'Operation Authorized' : isSubmitted ? 'Assessment Submitted' : 'Pending Contractor Assessment'}
+                          </span>
+                        </div>
+
+                        {/* SPECIFICATIONS */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-[#091b11] p-3.5 rounded-xl border border-emerald-500/10">
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Reason:</span>
+                            <strong className="text-white">{req.reason || 'Mature timber harvest'}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Preferred Period:</span>
+                            <strong className="text-white">{req.preferred_start_date || '2026-09-01'} to {req.preferred_end_date || '2026-09-25'}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Services:</span>
+                            <strong className="text-emerald-300">{Array.isArray(req.required_services) ? req.required_services.join(', ') : 'Tree Felling'}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 text-[11px] block">Site Access:</span>
+                            <strong className="text-white">{req.site_conditions?.access_availability || 'Heavy vehicle'}</strong>
+                          </div>
+                        </div>
+
+                        {/* ACTION BUTTON */}
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="text-xs text-slate-400">
+                            Landowner Email: <strong className="text-slate-200">{req.owner_email || 'landowner@treeconnect.in'}</strong>
+                          </span>
+
+                          <button
+                            onClick={() => {
+                              setSelectedRequestForAssessment(req);
+                              setAssessmentMessage('');
+                            }}
+                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md"
+                          >
+                            <Calculator size={14} />
+                            {isSubmitted ? 'Edit / Resubmit Assessment' : 'Submit Inspection Assessment & Quote'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
-            {/* AVAILABLE HARVESTING JOB LISTINGS */}
+            {/* AVAILABLE HARVESTING JOB BOARD */}
             <section className="dashboard-section card">
               <div className="card-header">
                 <div>
@@ -389,7 +389,7 @@ const ContractorDashboard = () => {
               </div>
             </section>
 
-            {/* MACHINERY FLEET & EQUIPMENT STATUS */}
+            {/* MACHINERY FLEET */}
             <section className="dashboard-section card">
               <div className="card-header">
                 <div>
@@ -433,10 +433,8 @@ const ContractorDashboard = () => {
 
           </main>
 
-          {/* RIGHT INSIGHTS PANEL */}
+          {/* RIGHT PANEL */}
           <aside className="right-insights-panel">
-
-            {/* Widget 1: Contractor Verification Card */}
             <div className="insight-widget card glass-widget">
               <div className="widget-header">
                 <span className="widget-title"><ShieldCheck size={16} /> Verification Status</span>
@@ -449,113 +447,180 @@ const ContractorDashboard = () => {
                 </p>
               </div>
             </div>
-
-            {/* Widget 2: Timber Operations Weather */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><CloudSun size={16} /> Harvesting Weather</span>
-                <span className="widget-badge badge-green font-semibold">Good</span>
-              </div>
-              <div className="weather-content">
-                <div className="weather-main">
-                  <div className="weather-temp">28°C</div>
-                  <div className="weather-desc">
-                    <span className="font-semibold">Partly Sunny</span>
-                    <span className="text-muted text-xs">Wayanad & Palakkad</span>
-                  </div>
-                </div>
-                <div className="weather-stats">
-                  <div className="w-stat"><Wind size={12} /> Wind: 12 km/h</div>
-                  <div className="w-stat"><Droplets size={12} /> Rain: Low Risk</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Widget 3: Today's Tasks */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><CheckCircle2 size={16} /> Field Operations</span>
-                <span className="widget-count">3 Pending</span>
-              </div>
-              <ul className="task-list">
-                <li className="task-item">
-                  <input type="checkbox" id="ct1" className="task-check" />
-                  <label htmlFor="ct1" className="task-label">Inspect Wayanad Teak Felling Site</label>
-                </li>
-                <li className="task-item">
-                  <input type="checkbox" id="ct2" className="task-check" />
-                  <label htmlFor="ct2" className="task-label">Submit Quotation for Palakkad Lot</label>
-                </li>
-                <li className="task-item">
-                  <input type="checkbox" id="ct3" className="task-check" />
-                  <label htmlFor="ct3" className="task-label">Schedule Skidder Maintenance</label>
-                </li>
-              </ul>
-            </div>
-
-            {/* Widget 4: Timber Market Index (INR / m³) */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><DollarSign size={16} /> Kerala Timber Index</span>
-                <span className="text-xs text-muted">₹ / m³</span>
-              </div>
-              <div className="market-prices">
-                <div className="price-row">
-                  <span className="species-name">Teakwood (A-Grade)</span>
-                  <span className="price-val font-bold">₹ 42,500</span>
-                  <span className="price-change text-emerald">+2.4%</span>
-                </div>
-                <div className="price-row">
-                  <span className="species-name">Rosewood</span>
-                  <span className="price-val font-bold">₹ 58,000</span>
-                  <span className="price-change text-emerald">+1.8%</span>
-                </div>
-                <div className="price-row">
-                  <span className="species-name">Rubberwood</span>
-                  <span className="price-val font-bold">₹ 12,800</span>
-                  <span className="price-change text-emerald">+0.5%</span>
-                </div>
-                <div className="price-row">
-                  <span className="species-name">Mahogany</span>
-                  <span className="price-val font-bold">₹ 24,000</span>
-                  <span className="price-change text-red">-0.8%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Widget 5: Upcoming Schedule */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><Calendar size={16} /> Transit Schedule</span>
-              </div>
-              <div className="schedule-list">
-                <div className="sched-item">
-                  <div className="sched-date">
-                    <span className="sched-day">12</span>
-                    <span className="sched-month">AUG</span>
-                  </div>
-                  <div className="sched-details">
-                    <span className="sched-title font-semibold">Log Transit Inspection</span>
-                    <span className="sched-location text-muted">Wayanad Forest Checkpost</span>
-                  </div>
-                </div>
-                <div className="sched-item">
-                  <div className="sched-date">
-                    <span className="sched-day">18</span>
-                    <span className="sched-month">AUG</span>
-                  </div>
-                  <div className="sched-details">
-                    <span className="sched-title font-semibold">Machinery Dispatch</span>
-                    <span className="sched-location text-muted">Palakkad Rubber Stand</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
           </aside>
-
         </div>
       </div>
+
+      {/* CONTRACTOR ASSESSMENT FORM MODAL */}
+      {selectedRequestForAssessment && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#07130c] border border-emerald-500/40 rounded-3xl max-w-2xl w-full p-6 max-h-[92vh] overflow-y-auto shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <Calculator size={20} className="text-emerald-400" />
+                  Submit Contractor Assessment & Quotation
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Provide evaluated harvestable volume, timber valuation, and itemized service quotation for <strong className="text-white">{selectedRequestForAssessment.propertyName}</strong>.
+                </p>
+              </div>
+              <button
+                className="p-1 text-slate-400 hover:text-white rounded-lg"
+                onClick={() => setSelectedRequestForAssessment(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {assessmentMessage && (
+              <div className="p-3.5 rounded-xl bg-emerald-950 border border-emerald-500 text-emerald-200 text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-400" />
+                <span>{assessmentMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitAssessment} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-200 block">Assessed Harvestable Volume (m³) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    name="estimated_harvestable_volume"
+                    value={assessmentForm.estimated_harvestable_volume}
+                    onChange={handleAssessmentFormChange}
+                    className="w-full bg-[#030a06] border border-emerald-500/30 rounded-xl px-4 py-2.5 text-xs text-white font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-200 block">Estimated Commercial Timber Value (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    name="estimated_timber_value"
+                    value={assessmentForm.estimated_timber_value}
+                    onChange={handleAssessmentFormChange}
+                    className="w-full bg-[#030a06] border border-emerald-500/30 rounded-xl px-4 py-2.5 text-xs text-emerald-400 font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* COST BREAKDOWN */}
+              <div className="p-4 rounded-2xl bg-[#040d07] border border-emerald-500/20 space-y-3">
+                <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Itemized Service Cost Breakdown (₹)</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">Tree Felling Cost</label>
+                    <input
+                      type="number"
+                      name="harvesting_cost"
+                      value={assessmentForm.harvesting_cost}
+                      onChange={handleAssessmentFormChange}
+                      className="w-full bg-[#08170e] border border-emerald-500/30 rounded-lg p-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">Extraction Cost</label>
+                    <input
+                      type="number"
+                      name="extraction_cost"
+                      value={assessmentForm.extraction_cost}
+                      onChange={handleAssessmentFormChange}
+                      className="w-full bg-[#08170e] border border-emerald-500/30 rounded-lg p-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">Transport Cost</label>
+                    <input
+                      type="number"
+                      name="transportation_cost"
+                      value={assessmentForm.transportation_cost}
+                      onChange={handleAssessmentFormChange}
+                      className="w-full bg-[#08170e] border border-emerald-500/30 rounded-lg p-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">Other / Clearing</label>
+                    <input
+                      type="number"
+                      name="other_cost"
+                      value={assessmentForm.other_cost}
+                      onChange={handleAssessmentFormChange}
+                      className="w-full bg-[#08170e] border border-emerald-500/30 rounded-lg p-2 text-xs text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-emerald-500/10 flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-bold">Total Contractor Quotation:</span>
+                  <span className="text-emerald-400 font-black text-sm font-mono">
+                    ₹ {Number(assessmentForm.total_quote || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-200 block">Estimated Job Duration *</label>
+                  <input
+                    type="text"
+                    required
+                    name="estimated_duration"
+                    value={assessmentForm.estimated_duration}
+                    onChange={handleAssessmentFormChange}
+                    placeholder="e.g. 10 working days"
+                    className="w-full bg-[#030a06] border border-emerald-500/30 rounded-xl px-4 py-2.5 text-xs text-white"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-200 block">Proposed Start Date *</label>
+                  <input
+                    type="date"
+                    required
+                    name="proposed_start_date"
+                    value={assessmentForm.proposed_start_date}
+                    onChange={handleAssessmentFormChange}
+                    className="w-full bg-[#030a06] border border-emerald-500/30 rounded-xl px-4 py-2.5 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-200 block">Site Inspection Notes & Assessment Remarks</label>
+                <textarea
+                  rows={3}
+                  name="notes"
+                  value={assessmentForm.notes}
+                  onChange={handleAssessmentFormChange}
+                  placeholder="Notes on log haulers, crane positioning, timber quality assessment..."
+                  className="w-full bg-[#030a06] border border-emerald-500/30 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-emerald-500/20">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRequestForAssessment(null)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingAssessment}
+                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-950 flex items-center gap-1.5"
+                >
+                  {isSubmittingAssessment ? 'Submitting Assessment...' : 'Submit Assessment & Quotation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Submit Harvest Bid Modal */}
       {showBidModal && selectedJob && (
@@ -588,32 +653,6 @@ const ContractorDashboard = () => {
                   value={bidAmountInput}
                   onChange={(e) => setBidAmountInput(e.target.value)}
                   className="w-full form-input bg-slate-950 border-slate-700 text-white font-bold"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Rate Per Volume (₹ / m³)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. ₹ 1,700 / m³"
-                  value={bidRateInput}
-                  onChange={(e) => setBidRateInput(e.target.value)}
-                  className="w-full form-input bg-slate-950 border-slate-700 text-slate-200"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Machinery & Operation Plan Notes
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Mention equipment deployment, timeline, transport details..."
-                  value={bidNotesInput}
-                  onChange={(e) => setBidNotesInput(e.target.value)}
-                  className="w-full form-input bg-slate-950 border-slate-700 text-slate-200 text-xs"
                 />
               </div>
 
