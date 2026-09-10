@@ -3139,24 +3139,26 @@ select option:disabled {
 .contractor-jobs-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 20px;
+  gap: 24px;
 }
 
 .contractor-job-card {
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 20px;
+  background: #091811;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 16px;
+  gap: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   transition: all 0.25s ease;
 }
 
 .contractor-job-card:hover {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(16, 185, 129, 0.45);
+  background: #0c1e15;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.1);
   transform: translateY(-2px);
 }
 
@@ -3164,20 +3166,22 @@ select option:disabled {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
 }
 
 .contractor-job-title {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: #ffffff;
+  line-height: 1.35;
 }
 
 .contractor-job-owner {
   font-size: 0.82rem;
   color: #94a3b8;
-  margin-top: 4px;
+  margin-top: 6px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
@@ -3185,60 +3189,75 @@ select option:disabled {
 .contractor-job-loc {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   color: #34d399;
+  font-weight: 600;
 }
 
 .contractor-volume-badge {
   font-size: 0.85rem;
   font-weight: 800;
-  padding: 6px 12px;
-  border-radius: 10px;
+  font-family: monospace;
+  padding: 6px 14px;
+  border-radius: 12px;
   background: rgba(16, 185, 129, 0.15);
   color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .contractor-job-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  background: rgba(15, 23, 42, 0.6);
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: #040e08;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 185, 129, 0.12);
 }
 
 .contractor-job-detail-item {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .contractor-detail-label {
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
   font-weight: 700;
 }
 
 .contractor-detail-value {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin-top: 2px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .contractor-job-footer {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid rgba(16, 185, 129, 0.15);
 }
 
 .contractor-bid-badge {
-  padding: 6px 14px;
-  font-size: 0.85rem;
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ==========================================================

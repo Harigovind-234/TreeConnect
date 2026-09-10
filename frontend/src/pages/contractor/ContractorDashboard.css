@@ -1,0 +1,647 @@
+/* ==========================================================
+   DESIGN SYSTEM FOR CONTRACTOR DASHBOARD & ACTION PAGES
+   TreeConnect Platform - Contractor Portal CSS
+   ========================================================== */
+
+/* Outer Page Container & Responsive Reset */
+.contractor-dashboard-page {
+  min-height: 100vh;
+  background-color: #060c08;
+  color: #f3f4f6;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+.contractor-dashboard-container {
+  display: flex;
+  flex: 1;
+  width: 100%;
+}
+
+.contractor-dashboard-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+  padding: 32px 28px;
+  gap: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .contractor-dashboard-workspace {
+    padding: 20px 16px;
+    gap: 24px;
+  }
+}
+
+/* ==========================================================
+   BASE CARDS & HERO WELCOME SECTION
+   ========================================================== */
+.cd-card {
+  background: #0b1c12;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 24px;
+  padding: 28px 32px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, transform 0.2s ease;
+  box-sizing: border-box;
+}
+
+.cd-card:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6), 0 0 25px rgba(16, 185, 129, 0.1);
+}
+
+.cd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.cd-section-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cd-section-subtitle {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* Hero Welcome Card */
+.cd-hero-card {
+  background: linear-gradient(135deg, #07170e 0%, #0d281a 50%, #07170e 100%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 28px;
+  padding: 32px 38px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.cd-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.cd-hero-title {
+  font-size: 1.85rem;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.cd-hero-subtext {
+  font-size: 0.92rem;
+  color: #d1d5db;
+  margin-top: 8px;
+  max-width: 720px;
+  line-height: 1.6;
+}
+
+/* ==========================================================
+   ASSIGNED HARVEST REQUEST CARDS (ASSESSMENT WORKFLOW)
+   ========================================================== */
+.cd-assigned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.cd-assigned-card {
+  background: #07170e;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 24px;
+  padding: 26px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.cd-assigned-card:hover {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: #091f13;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), 0 0 25px rgba(16, 185, 129, 0.08);
+}
+
+.cd-assigned-header {
+  display: flex;
+  flex-direction: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.18);
+}
+
+.cd-assigned-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cd-assigned-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cd-req-id-badge {
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #34d399;
+  background: #04120a;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.cd-req-date {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cd-req-title {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #ffffff;
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+.cd-req-location {
+  font-size: 0.85rem;
+  color: #d1d5db;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+/* Status Pills */
+.cd-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  align-self: flex-start;
+}
+
+.cd-status-pending {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+.cd-status-submitted {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fde047;
+}
+
+.cd-status-accepted {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #34d399;
+}
+
+/* 4-Column Specifications Grid */
+.cd-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 16px;
+  background: #030d07;
+  padding: 18px 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(16, 185, 129, 0.14);
+  font-size: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .cd-specs-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .cd-specs-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.cd-spec-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cd-spec-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+}
+
+.cd-spec-value {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.cd-spec-value-emerald {
+  font-weight: 800;
+  color: #34d399;
+}
+
+/* Card Action Bar */
+.cd-action-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+@media (min-width: 640px) {
+  .cd-action-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.cd-landowner-info {
+  font-size: 0.82rem;
+  color: #d1d5db;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Action Buttons & Fixed Submit Button */
+.cd-btn-primary,
+.cd-btn-assessment {
+  background: #10b981;
+  color: #04120a;
+  font-weight: 900;
+  font-size: 0.85rem;
+  border-radius: 14px;
+  border: none;
+  padding: 12px 24px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.cd-btn-primary:hover,
+.cd-btn-assessment:hover {
+  background: #34d399;
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.45);
+  transform: translateY(-1px);
+}
+
+.cd-btn-outline {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+  font-weight: 700;
+  font-size: 0.82rem;
+  border-radius: 12px;
+  padding: 10px 18px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.cd-btn-outline:hover {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #ffffff;
+}
+
+/* ==========================================================
+   AVAILABLE TIMBER HARVESTING JOB BOARD CARDS
+   ========================================================== */
+.contractor-jobs-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+}
+
+.contractor-job-card {
+  background: #091811;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  transition: all 0.25s ease;
+}
+
+.contractor-job-card:hover {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: #0c1e15;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.1);
+  transform: translateY(-2px);
+}
+
+.contractor-job-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.contractor-job-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1.35;
+}
+
+.contractor-job-owner {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.contractor-job-loc {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #34d399;
+  font-weight: 600;
+}
+
+.contractor-volume-badge {
+  font-size: 0.85rem;
+  font-weight: 800;
+  font-family: monospace;
+  padding: 6px 14px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.contractor-job-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: #040e08;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 185, 129, 0.12);
+}
+
+.contractor-job-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contractor-detail-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.contractor-detail-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.contractor-job-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.contractor-bid-badge {
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================
+   DEDICATED SUBMIT ASSESSMENT PAGE STYLES
+   ========================================================== */
+.cd-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.cd-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cd-form-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #e2e8f0;
+}
+
+.cd-input,
+.cd-select,
+.cd-textarea {
+  width: 100%;
+  background: #040d07 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 14px !important;
+  padding: 12px 18px !important;
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  outline: none !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+  box-sizing: border-box !important;
+}
+
+.cd-input:focus,
+.cd-select:focus,
+.cd-textarea:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+  background: #06140c !important;
+}
+
+.cd-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Itemized Cost Breakdown Box */
+.cd-cost-breakdown-box {
+  background: #040d07;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 20px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cd-total-quote-box {
+  background: #06140c;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+}
+
+.cd-total-quote-amount {
+  font-size: 1.25rem;
+  font-weight: 900;
+  font-family: monospace;
+  color: #34d399;
+}
+
+.cd-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(16, 185, 129, 0.2);
+  flex-wrap: wrap;
+}
+
+.cd-btn-cancel {
+  padding: 12px 24px;
+  background: #0f1712;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d1d5db;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cd-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* ==========================================================
+   FLEET & EQUIPMENT DATA TABLES
+   ========================================================== */
+.cd-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: #08170e;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.cd-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.cd-data-table th {
+  background: #040e08;
+  padding: 14px 18px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.cd-data-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+  color: #e2e8f0;
+}
+
+.cd-data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.cd-data-table tr:hover td {
+  background: rgba(16, 185, 129, 0.05);
+}

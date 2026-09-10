@@ -21,6 +21,8 @@ import AdminPropertiesPage from './pages/admin/AdminPropertiesPage';
 import PropertyDetailPage from './pages/admin/PropertyDetailPage';
 import LandownerDashboard from './pages/landowner/Dashboard';
 import ContractorDashboard from './pages/contractor/Dashboard';
+import AssignedHarvestJobsPage from './pages/contractor/AssignedHarvestJobsPage';
+import SubmitAssessmentPage from './pages/contractor/SubmitAssessmentPage';
 import BuyerDashboard from './pages/buyer/Dashboard';
 
 // Dedicated Landowner Action Pages
@@ -176,6 +178,38 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['contractor']}>
                   <ContractorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/assigned-jobs"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <AssignedHarvestJobsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/assigned-harvest-requests"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <AssignedHarvestJobsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/assessment/:requestId"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <SubmitAssessmentPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/assessment"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <SubmitAssessmentPage />
                 </ProtectedRoute>
               }
             />
