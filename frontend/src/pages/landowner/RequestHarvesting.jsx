@@ -27,20 +27,83 @@ import {
   RefreshCw
 } from 'lucide-react';
 
+const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=1200&q=80';
+
+const getPropertyImage = (p) => {
+  if (!p) return DEFAULT_PROPERTY_IMAGE;
+  if (Array.isArray(p.photos) && p.photos.length > 0 && typeof p.photos[0] === 'string' && p.photos[0].trim()) {
+    return p.photos[0];
+  }
+  if (p.image && typeof p.image === 'string' && p.image.trim()) {
+    return p.image;
+  }
+  if (p.imageUrl && typeof p.imageUrl === 'string' && p.imageUrl.trim()) {
+    return p.imageUrl;
+  }
+  return DEFAULT_PROPERTY_IMAGE;
+};
+
+const speciesImagesMap = {
+  Teak: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  Teakwood: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
+  'Western Red Cedar': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+  Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+  Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+  Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+  Pine: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+  'Douglas Fir': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+  Eucalyptus: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+  Jackfruit: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  Mango: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
+  Other: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80'
+};
+
+const getTreePhoto = (g) => {
+  if (!g) return speciesImagesMap.Other;
+
+  const extractUrl = (ph) => {
+    if (!ph) return null;
+    if (typeof ph === 'string' && ph.trim()) return ph;
+    if (typeof ph === 'object') {
+      return ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || null;
+    }
+    return null;
+  };
+
+  const directImg = extractUrl(g.image);
+  if (directImg) return directImg;
+
+  if (Array.isArray(g.photos) && g.photos.length > 0) {
+    for (const ph of g.photos) {
+      const u = extractUrl(ph);
+      if (u) return u;
+    }
+  }
+
+  const specKey = Object.keys(speciesImagesMap).find(
+    k => (g.species || '').toLowerCase().includes(k.toLowerCase())
+  );
+  return speciesImagesMap[specKey] || speciesImagesMap.Other;
+};
+
 const RequestHarvesting = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialPropertyId = searchParams.get('propertyId');
 
   const landownerCtx = useLandowner() || {};
-  const { properties = [], treeInventories = [], addHarvestRequest, refreshProperties } = landownerCtx;
+  const properties = landownerCtx.properties || [];
+  const treeInventories = landownerCtx.inventories || landownerCtx.treeInventories || [];
+  const rawInventories = treeInventories;
+  const { addHarvestRequest, refreshProperties } = landownerCtx;
 
   // Trigger live refresh of properties from backend DB on mount
   useEffect(() => {
     if (typeof refreshProperties === 'function') {
       refreshProperties();
     }
-  }, [refreshProperties]);
+  }, []);
 
   const safeProperties = Array.isArray(properties) ? properties : [];
 
@@ -60,47 +123,111 @@ const RequestHarvesting = () => {
 
   // Step 2: Live Selected Tree Inventories for active property
   const activePropertyId = activeProperty?.id || activeProperty?._id;
-  const activeInventories = (treeInventories || []).filter(
+  const activeInventories = (rawInventories || []).filter(
     (inv) =>
+      !inv.propertyId ||
       inv.propertyId === activePropertyId ||
       inv.propertyId === selectedPropertyId ||
       inv.property_id === activePropertyId ||
-      inv.property_id === selectedPropertyId
+      inv.property_id === selectedPropertyId ||
+      String(inv.propertyId) === String(activePropertyId) ||
+      String(inv.propertyId) === String(selectedPropertyId) ||
+      String(inv.property_id) === String(activePropertyId) ||
+      String(inv.property_id) === String(selectedPropertyId)
   );
 
-  const rawTreeGroups = [
+  const extractedTreeGroups = [];
+
+  // 1. Direct groups attached to activeProperty
+  const directGroups = [
     ...(activeProperty?.treeInventoryGroups || []),
     ...(activeProperty?.inventories || []),
-    ...activeInventories
+    ...(activeProperty?.treeGroups || [])
   ];
 
-  const availableTreeGroups = (
-    rawTreeGroups.length > 0
-      ? rawTreeGroups
-      : [
-          {
-            id: 'group_demo_1',
-            groupName: 'Teak Stand #1',
-            species: 'Teakwood',
-            numberOfTrees: 24,
-            approxAge: '14 years',
-            condition: 'Healthy',
-            location: activeProperty?.district || 'Kottayam',
-            girth: '65 - 85 cm'
-          }
-        ]
-  ).map((g, idx) => ({
-    id: g.id || g._id || `group_${idx}`,
-    groupName: g.groupName || g.standName || `Stand #${idx + 1} (${g.species || 'Teak'})`,
-    species: g.species || 'Teak',
-    numberOfTrees: g.numberOfTrees || g.count || 20,
-    approxAge: g.approxAge || '15 years',
-    condition: g.condition || 'Healthy',
-    location: g.location || activeProperty?.village || 'Kerala',
-    girth: g.girth || g.girthInfo || '60 - 90 cm'
-  }));
+  directGroups.forEach((g, idx) => {
+    if (g) {
+      const treeCount = Number(g.numberOfTrees || g.count || g.quantity || 20);
+      const photos = Array.isArray(g.photos) ? g.photos : (g.photo ? [g.photo] : (g.image ? [g.image] : []));
+      extractedTreeGroups.push({
+        id: g.id || g._id || `direct_${idx}`,
+        groupName: g.groupName || g.standName || `${g.species || g.treeSpecies || 'Teak'} Stand #${idx + 1}`,
+        species: g.species || g.treeSpecies || 'Teakwood',
+        numberOfTrees: treeCount,
+        approxAge: g.approxAge || g.age || '14 years',
+        condition: g.condition || g.healthCondition || 'Healthy',
+        location: g.location || g.locationOnProperty || activeProperty?.village || activeProperty?.district || 'Kottayam',
+        girth: g.girth || g.girthInfo || g.averageDbh || '65 - 85 cm',
+        image: photos[0] || g.image || null,
+        photos: photos,
+        estimatedVolume: g.estimatedVolume || `${(treeCount * 0.75).toFixed(1)} m³`
+      });
+    }
+  });
+
+  // 2. Unpack live inventories and their speciesList
+  activeInventories.forEach((inv, invIdx) => {
+    const invPhotos = Array.isArray(inv.photos) ? inv.photos : (inv.photo ? [inv.photo] : (inv.image ? [inv.image] : []));
+
+    if (Array.isArray(inv.speciesList) && inv.speciesList.length > 0) {
+      inv.speciesList.forEach((sp, spIdx) => {
+        const count = Number(sp.numberOfTrees || sp.count || sp.quantity || 20);
+        const spPhotos = Array.isArray(sp.photos) && sp.photos.length > 0
+          ? sp.photos
+          : (sp.photo ? [sp.photo] : (sp.image ? [sp.image] : invPhotos));
+
+        extractedTreeGroups.push({
+          id: sp.id || sp._id || `inv_${invIdx}_sp_${spIdx}`,
+          groupName: sp.groupName || sp.standName || `${sp.treeSpecies || sp.species || 'Teak'} Stand #${spIdx + 1}`,
+          species: sp.treeSpecies || sp.species || 'Teakwood',
+          numberOfTrees: count,
+          approxAge: sp.approxAge || sp.treeAge || sp.age || '14 years',
+          condition: sp.healthCondition || sp.condition || sp.treeCondition || 'Healthy',
+          location: sp.locationOnProperty || sp.locationInProperty || sp.location || inv.treeAreaLocation || activeProperty?.district || 'Kottayam',
+          girth: sp.girth || sp.girthInfo || sp.averageDbh || '65 - 85 cm',
+          image: spPhotos[0] || null,
+          photos: spPhotos,
+          estimatedVolume: sp.estimatedVolume || `${(count * 0.75).toFixed(1)} m³`
+        });
+      });
+    } else if (inv.species || inv.treeSpecies || inv.groupName) {
+      const count = Number(inv.numberOfTrees || inv.count || 20);
+      extractedTreeGroups.push({
+        id: inv.id || inv._id || `inv_${invIdx}`,
+        groupName: inv.groupName || inv.standName || `${inv.species || inv.treeSpecies || 'Teak'} Stand #${invIdx + 1}`,
+        species: inv.species || inv.treeSpecies || 'Teakwood',
+        numberOfTrees: count,
+        approxAge: inv.approxAge || inv.age || '14 years',
+        condition: inv.condition || inv.healthCondition || 'Healthy',
+        location: inv.location || inv.treeAreaLocation || activeProperty?.district || 'Kottayam',
+        girth: inv.girth || inv.girthInfo || '65 - 85 cm',
+        image: invPhotos[0] || null,
+        photos: invPhotos,
+        estimatedVolume: inv.estimatedVolume || `${(count * 0.75).toFixed(1)} m³`
+      });
+    }
+  });
+
+  const availableTreeGroups = extractedTreeGroups.length > 0
+    ? extractedTreeGroups
+    : [
+      {
+        id: 'group_demo_1',
+        groupName: 'Teak Stand #1',
+        species: 'Teakwood',
+        numberOfTrees: 24,
+        approxAge: '14 years',
+        condition: 'Healthy',
+        location: activeProperty?.district || 'Kottayam',
+        girth: '65 - 85 cm',
+        image: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+        photos: ['https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80'],
+        estimatedVolume: '18.5 m³'
+      }
+    ];
 
   const [selectedTreeGroupIds, setSelectedTreeGroupIds] = useState([]);
+  const selectedTreeGroups = availableTreeGroups.filter((g) => selectedTreeGroupIds.includes(g.id));
 
   useEffect(() => {
     if (availableTreeGroups.length > 0) {
@@ -246,8 +373,6 @@ const RequestHarvesting = () => {
     }
   };
 
-  const selectedTreeGroups = availableTreeGroups.filter((g) => selectedTreeGroupIds.includes(g.id));
-
   return (
     <div className="landowner-dashboard-page">
       <Navbar />
@@ -256,7 +381,7 @@ const RequestHarvesting = () => {
 
         <div className="landowner-dashboard-workspace">
           <main className="w-full flex flex-col gap-6 max-w-6xl mx-auto py-2">
-            
+
             {/* HERO CARD HEADER */}
             <section className="ld-card ld-hero-card">
               <div className="flex items-center justify-between flex-wrap gap-4">
@@ -306,13 +431,12 @@ const RequestHarvesting = () => {
                         setCurrentStep(item.step);
                       }
                     }}
-                    className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-emerald-950 border-emerald-400 text-white shadow-md'
-                        : isPassed
+                    className={`flex-1 min-w-[120px] py-2.5 px-4 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer ${isActive
+                      ? 'bg-emerald-950 border-emerald-400 text-white shadow-md'
+                      : isPassed
                         ? 'bg-[#0e1612] border-emerald-700/40 text-emerald-300'
                         : 'bg-transparent border-slate-800 text-slate-500 cursor-not-allowed'
-                    }`}
+                      }`}
                   >
                     {item.label}
                   </div>
@@ -493,44 +617,125 @@ const RequestHarvesting = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {availableTreeGroups.map((g) => {
                         const isSelected = selectedTreeGroupIds.includes(g.id);
+                        const treePhoto = getTreePhoto(g);
 
                         return (
                           <div
                             key={g.id}
                             onClick={() => toggleTreeGroupSelection(g.id)}
-                            className={`harvest-scope-card ${isSelected ? 'selected' : ''}`}
+                            className={`harvest-scope-card group cursor-pointer ${isSelected ? 'selected' : ''}`}
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="space-y-1">
-                                <h4 className="font-extrabold text-white text-sm flex items-center gap-2">
-                                  <TreePine size={16} className="text-emerald-400" /> {g.groupName}
-                                </h4>
-                                <span className="inline-block px-2.5 py-0.5 rounded bg-emerald-950 text-emerald-300 text-xs font-bold border border-emerald-700/50">
+                            {/* Tree Stand Cover Image Banner */}
+                            <div className="relative w-full h-44 mb-3 rounded-xl overflow-hidden border border-emerald-500/20 bg-slate-900 shadow-md">
+                              <img
+                                src={treePhoto}
+                                alt={g.groupName}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                onError={(e) => { e.target.onerror = null; e.target.src = speciesImagesMap.Other; }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+
+                              {/* Selection Checkbox Badge */}
+                              <div className="absolute top-2.5 right-2.5">
+                                <div className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                                  isSelected ? 'bg-emerald-500 border-emerald-400 text-slate-950 shadow-lg' : 'bg-slate-950/70 border-slate-600 text-transparent'
+                                }`}>
+                                  {isSelected && <Check size={16} strokeWidth={3} />}
+                                </div>
+                              </div>
+
+                              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+                                <span className="text-[10px] font-bold text-emerald-300 bg-emerald-950/85 px-2.5 py-0.5 rounded border border-emerald-700/60 backdrop-blur-sm">
                                   Species: {g.species}
                                 </span>
-                              </div>
-
-                              <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
-                                isSelected ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600'
-                              }`}>
-                                {isSelected && <Check size={14} strokeWidth={3} />}
+                                <span className="text-[10px] font-bold text-white bg-black/75 px-2 py-0.5 rounded border border-emerald-500/30 backdrop-blur-sm">
+                                  {g.numberOfTrees} Trees Registered
+                                </span>
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 pt-2 border-t border-emerald-500/10">
-                              <div>Quantity: <strong className="text-white">{g.numberOfTrees} trees</strong></div>
-                              <div>Age: <strong className="text-white">{g.approxAge}</strong></div>
-                              <div>Condition: <strong className="text-emerald-400">{g.condition}</strong></div>
-                              <div>Location: <strong className="text-white">{g.location}</strong></div>
-                            </div>
+                            {/* Stand Info & Title */}
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-extrabold text-white text-base flex items-center gap-2">
+                                  <TreePine size={18} className="text-emerald-400 shrink-0" /> {g.groupName}
+                                </h4>
+                              </div>
 
-                            <div className="text-[11px] text-slate-400 bg-[#040b07] p-2 rounded-lg font-mono">
-                              Inventory Measurement: {g.girth}
+                              {/* Details Grid */}
+                              <div className="grid grid-cols-2 gap-3 text-xs text-slate-300 pt-2 border-t border-emerald-500/10">
+                                <div>
+                                  <span className="text-slate-400 block text-[11px]">Quantity:</span>
+                                  <strong className="text-white text-sm">{g.numberOfTrees} trees</strong>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block text-[11px]">Stand Age:</span>
+                                  <strong className="text-white">{g.approxAge}</strong>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block text-[11px]">Health Condition:</span>
+                                  <strong className="text-emerald-400 font-bold">{g.condition}</strong>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block text-[11px]">Location on Estate:</span>
+                                  <strong className="text-white">{g.location}</strong>
+                                </div>
+                              </div>
+
+                              {/* Measurements & Volume Details Footer */}
+                              <div className="pt-2 flex items-center justify-between gap-2 text-[11px] text-slate-300 border-t border-emerald-500/10">
+                                <div className="bg-[#040b07] px-2.5 py-1 rounded-md font-mono border border-emerald-900/60">
+                                  Trunk Girth: <span className="text-emerald-300 font-bold">{g.girth}</span>
+                                </div>
+                                <div className="bg-emerald-950/70 px-2.5 py-1 rounded-md font-bold text-emerald-300 border border-emerald-700/40">
+                                  Est. Volume: {g.estimatedVolume}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
+
+                    {/* Selected Trees Summary Box */}
+                    {selectedTreeGroupIds.length > 0 && (
+                      <div className="ld-subcard space-y-3 mt-6">
+                        <div className="flex items-center justify-between border-b border-emerald-500/10 pb-2">
+                          <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                            <Trees size={16} /> SELECTED TREE HARVEST SUMMARY
+                          </h4>
+                          <span className="text-xs font-bold text-emerald-300 bg-emerald-950 px-2.5 py-0.5 rounded border border-emerald-700/50">
+                            {selectedTreeGroupIds.length} Stand(s) Selected
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Total Selected Trees:</span>
+                            <span className="font-bold text-white text-sm">
+                              {availableTreeGroups.filter(g => selectedTreeGroupIds.includes(g.id)).reduce((acc, curr) => acc + (curr.numberOfTrees || 0), 0)} trees
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Target Species:</span>
+                            <span className="font-bold text-emerald-300">
+                              {[...new Set(availableTreeGroups.filter(g => selectedTreeGroupIds.includes(g.id)).map(g => g.species))].join(', ')}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Average Stand Age:</span>
+                            <span className="font-bold text-white">
+                              {availableTreeGroups.find(g => selectedTreeGroupIds.includes(g.id))?.approxAge || '14 years'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[11px]">Est. Total Timber Volume:</span>
+                            <span className="font-bold text-emerald-400">
+                              {availableTreeGroups.filter(g => selectedTreeGroupIds.includes(g.id)).reduce((acc, curr) => acc + parseFloat(curr.estimatedVolume || '0'), 0).toFixed(1)} m³
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -599,17 +804,15 @@ const RequestHarvesting = () => {
                         <div
                           key={s.id}
                           onClick={() => handleToggleService(s.id)}
-                          className={`ld-subcard flex items-center justify-between cursor-pointer ${
-                            isChecked ? 'border-[#10b981] bg-[rgba(16,185,129,0.12)]' : ''
-                          }`}
+                          className={`ld-subcard flex items-center justify-between cursor-pointer ${isChecked ? 'border-[#10b981] bg-[rgba(16,185,129,0.12)]' : ''
+                            }`}
                         >
                           <div>
                             <div className="font-bold text-xs text-white">{s.label}</div>
                             <div className="text-[11px] text-slate-400 mt-0.5">{s.desc}</div>
                           </div>
-                          <div className={`w-5 h-5 rounded border flex items-center justify-center ${
-                            isChecked ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600'
-                          }`}>
+                          <div className={`w-5 h-5 rounded border flex items-center justify-center ${isChecked ? 'bg-emerald-500 border-emerald-400 text-slate-950' : 'border-slate-600'
+                            }`}>
                             {isChecked && <Check size={14} strokeWidth={3} />}
                           </div>
                         </div>
@@ -701,11 +904,10 @@ const RequestHarvesting = () => {
                           type="button"
                           key={haz}
                           onClick={() => toggleHazard(haz)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                            isChecked
-                              ? 'bg-amber-950 border-amber-500 text-amber-300'
-                              : 'bg-[#050e09] border-emerald-500/20 text-slate-400 hover:border-slate-600'
-                          }`}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isChecked
+                            ? 'bg-amber-950 border-amber-500 text-amber-300'
+                            : 'bg-[#050e09] border-emerald-500/20 text-slate-400 hover:border-slate-600'
+                            }`}
                         >
                           {isChecked ? '✓ ' : '+ '}{haz}
                         </button>
@@ -756,7 +958,7 @@ const RequestHarvesting = () => {
 
                 {/* Summary Card */}
                 <div className="ld-subcard space-y-4 text-xs">
-                  
+
                   {/* PROPERTY SUMMARY */}
                   <div className="space-y-1.5 pb-4 border-b border-emerald-500/10">
                     <h4 className="font-extrabold text-emerald-400 uppercase text-[11px] tracking-wider">Property Information (Existing)</h4>
@@ -788,7 +990,7 @@ const RequestHarvesting = () => {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-slate-300">
                       <div>Reason: <strong className="text-white block">{reason}</strong></div>
                       <div>Preferred Period: <strong className="text-white block">{preferredStartDate} to {preferredEndDate}</strong></div>
-                      <div>Services Requested: 
+                      <div>Services Requested:
                         <div className="flex flex-wrap gap-1 mt-1">
                           {requiredServices.map((s) => (
                             <span key={s} className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 text-[10px] font-bold border border-emerald-800">

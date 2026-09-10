@@ -24,7 +24,7 @@ const AddTreeInventory = () => {
   const [searchParams] = useSearchParams();
   const landownerCtx = useLandowner() || {};
   const properties = landownerCtx.properties || [];
-  const addInventory = landownerCtx.addInventory || (() => {});
+  const addInventory = landownerCtx.addInventory || (() => { });
 
   const safeProperties = Array.isArray(properties) ? properties : [];
 
@@ -168,7 +168,7 @@ const AddTreeInventory = () => {
 
         <div className="landowner-dashboard-workspace">
           <main className="w-full flex flex-col gap-8">
-          
+
             {/* Header Banner Card */}
             <section className="ld-card ld-hero-card">
               <div className="flex items-center justify-between flex-wrap gap-4">
@@ -406,11 +406,10 @@ const AddTreeInventory = () => {
                                   type="button"
                                   onClick={() => handleGroupChange(idx, 'condition', cond)}
                                   style={{ borderRadius: '8px' }}
-                                  className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-2 transition-all cursor-pointer flex items-center gap-2 ${
-                                    isSelected
+                                  className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-2 transition-all cursor-pointer flex items-center gap-2 ${isSelected
                                       ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-md'
                                       : 'bg-[#050e08] border-emerald-600/20 text-slate-300 hover:border-emerald-500/40 hover:bg-[#0c1810]'
-                                  }`}
+                                    }`}
                                 >
                                   <span style={{ borderRadius: '3px' }} className={`w-3 h-3 border ${isSelected ? 'bg-emerald-400 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-amber-400/80 border-amber-500'}`}></span>
                                   {cond}

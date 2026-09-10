@@ -35,7 +35,7 @@ const ApprovedContractorSelector = ({
       try {
         const response = await api.get('/admin/users');
         const allUsers = response.data?.users || [];
-        
+
         // Filter ONLY contractors who are status = "Active", isVerified = true, role = "contractor"
         const approved = allUsers.filter(u => {
           const roleMatch = (u.role || '').toLowerCase() === 'contractor';
@@ -261,11 +261,10 @@ const ApprovedContractorSelector = ({
               <div
                 key={c.id || c._id}
                 onClick={() => onSelectContractor(c)}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-4 ${
-                  isSelected
+                className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-4 ${isSelected
                     ? 'bg-[#0f2a1d] border-emerald-400 shadow-lg shadow-emerald-950/50'
                     : 'bg-[#0a1610] border-emerald-500/20 hover:border-emerald-500/50 hover:bg-[#0c1d14]'
-                }`}
+                  }`}
               >
                 <div className="space-y-3">
                   {/* Top Bar */}
@@ -331,11 +330,10 @@ const ApprovedContractorSelector = ({
                       e.stopPropagation();
                       onSelectContractor(c);
                     }}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      isSelected
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isSelected
                         ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
                         : 'bg-[#0f2418] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border border-emerald-500/30'
-                    }`}
+                      }`}
                   >
                     {isSelected ? (
                       <>

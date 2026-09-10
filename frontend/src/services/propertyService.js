@@ -54,6 +54,28 @@ export const propertyService = {
       console.error(`Error in propertyService.deleteProperty (${id}):`, error);
       throw error.response?.data || error;
     }
+  },
+
+  // Save tree inventory in DB
+  addTreeInventory: async (inventoryData) => {
+    try {
+      const response = await api.post('/properties/tree-inventory', inventoryData);
+      return response.data;
+    } catch (error) {
+      console.error('Error in propertyService.addTreeInventory:', error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Get tree inventories from DB
+  getTreeInventories: async (params = {}) => {
+    try {
+      const response = await api.get('/properties/tree-inventory', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error in propertyService.getTreeInventories:', error);
+      throw error.response?.data || error;
+    }
   }
 };
 

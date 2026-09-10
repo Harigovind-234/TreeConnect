@@ -60,6 +60,29 @@ class AssessmentStatusUpdate(BaseModel):
     status: str  # ACCEPTED, REJECTED, REVISION_REQUESTED
     feedback: Optional[str] = ""
 
+class HarvestCompletionCreate(BaseModel):
+    actual_harvested_volume: float
+    actual_harvested_trees: int
+    actual_start_date: Optional[str] = None
+    actual_completion_date: Optional[str] = None
+    completion_notes: Optional[str] = ""
+    completion_photos: Optional[List[str]] = []
+
+VALID_TRANSITIONS = {
+    "PENDING": ["CONTRACTOR_ASSIGNED", "CANCELLED"],
+    "CONTRACTOR_ASSIGNED": ["ASSESSMENT_SUBMITTED", "PENDING", "CANCELLED"],
+    "ASSESSMENT_SUBMITTED": ["OPERATION_READY", "REVISION_REQUESTED", "ASSESSMENT_REJECTED", "CANCELLED"],
+    "REVISION_REQUESTED": ["ASSESSMENT_SUBMITTED", "CANCELLED"],
+    "OPERATION_READY": ["IN_PROGRESS", "CANCELLED"],
+    "IN_PROGRESS": ["COMPLETED", "CANCELLED"],
+    "COMPLETED": [],
+    "CANCELLED": []
+}
+
+def is_valid_transition(current_status: str, target_status: str) -> bool:
+    allowed = VALID_TRANSITIONS.get(current_status, [])
+    return target_status in allowed
+
 # Helper to serialize Mongo documents
 def serialize_doc(doc: dict) -> dict:
     if not doc:
@@ -456,3 +479,79 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to action contractor assessment: {str(e)}"}
         )
+
+@router.post("/{request_id}/request-revision")
+def request_revision_endpoint(request_id: str, payload: Dict[str, Any] = {}):
+    return action_contractor_assessment(request_id, AssessmentStatusUpdate(status="REVISION_REQUESTED", feedback=payload.get("feedback", "")))
+
+@router.post("/{request_id}/reject")
+def reject_assessment_endpoint(request_id: str, payload: Dict[str, Any] = {}):
+    return action_contractor_assessment(request_id, AssessmentStatusUpdate(status="REJECTED", feedback=payload.get("feedback", "")))
+
+# Execution endpoints
+@router.post("/{request_id}/start")
+def start_harvest_execution(request_id: str):
+    try:
+        if db is None:
+            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "Harvest request not found"})
+
+        curr_status = req_doc.get("status", "PENDING").upper()
+        if not is_valid_transition(curr_status, "IN_PROGRESS"):
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Cannot start harvest operation from status '{curr_status}'. Request must be in OPERATION_READY status."})
+
+        updated_at = datetime.now(timezone.utc).isoformat()
+        db.harvest_requests.update_one(req_query, {"$set": {
+            "status": "IN_PROGRESS",
+            "actual_start_date": updated_at.split("T")[0],
+            "started_at": updated_at,
+            "updatedAt": updated_at
+        }})
+
+        updated_req = db.harvest_requests.find_one(req_query)
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Harvest operation marked as IN_PROGRESS", "harvest_request": serialize_doc(updated_req)})
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
+
+@router.post("/{request_id}/complete")
+def complete_harvest_execution(request_id: str, payload: HarvestCompletionCreate):
+    try:
+        if db is None:
+            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "Harvest request not found"})
+
+        curr_status = req_doc.get("status", "PENDING").upper()
+        if not is_valid_transition(curr_status, "COMPLETED"):
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Cannot complete harvest operation from status '{curr_status}'. Request must be in IN_PROGRESS status."})
+
+        updated_at = datetime.now(timezone.utc).isoformat()
+
+        update_fields = {
+            "status": "COMPLETED",
+            "actual_completion_date": payload.actual_completion_date or updated_at.split("T")[0],
+            "completed_at": updated_at,
+            "actual_harvested_volume": payload.actual_harvested_volume,
+            "actual_harvested_trees": payload.actual_harvested_trees,
+            "completion_notes": payload.completion_notes or "",
+            "completion_photos": payload.completion_photos or [],
+            "updatedAt": updated_at
+        }
+        if payload.actual_start_date:
+            update_fields["actual_start_date"] = payload.actual_start_date
+
+        db.harvest_requests.update_one(req_query, {"$set": update_fields})
+
+        updated_req = db.harvest_requests.find_one(req_query)
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Harvest operation marked as COMPLETED", "harvest_request": serialize_doc(updated_req)})
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
+
+

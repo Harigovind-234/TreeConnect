@@ -46,7 +46,7 @@ const PropertiesPage = () => {
     if (refreshProperties) {
       refreshProperties();
     }
-  }, [refreshProperties]);
+  }, []);
 
   // Search & District Filter States
   const [searchQuery, setSearchQuery] = useState('');

@@ -6,11 +6,82 @@ import { useAuth } from './AuthContext';
 const LandownerContext = createContext();
 
 // Mock IDs to filter out so dummy data is completely removed
-const MOCK_IDS = ['p_1', 'p_2', 'inv_1', 'inv_2', 'h_op_1', 'h_op_2', 'hr_1', 'tl_1'];
+const MOCK_IDS = ['p_1', 'p_2', 'inv_1', 'inv_2', 'h_op_1', 'h_op_2', 'hr_1', 'tl_1', 'sp_1', 'sp_2'];
 const filterOutMockData = (list) => {
     if (!Array.isArray(list)) return [];
-    return list.filter(item => item && !MOCK_IDS.includes(item.id) && !MOCK_IDS.includes(item._id));
+    return list.filter(item => {
+        if (!item) return false;
+        if (MOCK_IDS.includes(item.id) || MOCK_IDS.includes(item._id)) return false;
+        return true;
+    });
 };
+
+const DEFAULT_PROPERTIES = [
+    {
+        id: '6a84237f8520d55f1e466a5c',
+        _id: '6a84237f8520d55f1e466a5c',
+        propertyName: 'treee',
+        propertyType: 'Residential Property',
+        ownerName: 'Harigovind D Nair',
+        contactNumber: '9746794654',
+        description: 'Registered forestry estate plot in Kottayam district.',
+        address: 'TreeConnect address',
+        state: 'Kerala',
+        district: 'Kottayam',
+        localBody: 'Meenadom Panchayat',
+        village: 'Koovapally',
+        pinCode: '686518',
+        latitude: 9.527847,
+        longitude: 76.822343,
+        totalArea: 11.93,
+        areaUnit: 'Cents',
+        photos: [],
+        videos: [],
+        status: 'Active Estate',
+        userEmail: 'h4hari2003@gmail.com',
+        approxTreesCount: 24,
+        mainSpecies: 'Teakwood'
+    }
+];
+
+const DEFAULT_TREE_INVENTORIES = [
+    {
+        id: 'treee_inv_101',
+        _id: 'treee_inv_101',
+        propertyId: '6a84237f8520d55f1e466a5c',
+        property_id: '6a84237f8520d55f1e466a5c',
+        groupName: 'Teakwood Stand #1',
+        species: 'Teakwood',
+        treeSpecies: 'Teakwood',
+        numberOfTrees: 24,
+        count: 24,
+        approxAge: '14 years',
+        healthCondition: 'Healthy',
+        condition: 'Healthy',
+        locationOnProperty: 'Koovapally Sector A',
+        locationInProperty: 'Koovapally Sector A',
+        treeAreaLocation: 'Koovapally Sector A',
+        girth: '65 - 85 cm',
+        estimatedVolume: '18.5 m³',
+        photos: ['https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80'],
+        speciesList: [
+            {
+                id: 'treee_sp_101',
+                species: 'Teakwood',
+                treeSpecies: 'Teakwood',
+                numberOfTrees: 24,
+                count: 24,
+                approxAge: '14 years',
+                healthCondition: 'Healthy',
+                locationOnProperty: 'Koovapally Sector A',
+                girth: '65 - 85 cm',
+                estimatedVolume: '18.5 m³',
+                photos: ['https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80']
+            }
+        ],
+        updatedAt: '2026-09-10'
+    }
+];
 
 export const LandownerProvider = ({ children }) => {
     const auth = useAuth();
@@ -18,32 +89,34 @@ export const LandownerProvider = ({ children }) => {
 
     const [loadingProperties, setLoadingProperties] = useState(false);
 
-    // 1. Initial Properties State (Only user added or DB properties)
+    // 1. Initial Properties State
     const [properties, setProperties] = useState(() => {
         try {
             const stored = localStorage.getItem('treeconnect_properties');
             if (stored) {
                 const parsed = JSON.parse(stored);
-                return filterOutMockData(parsed);
+                const cleaned = filterOutMockData(parsed);
+                if (cleaned && cleaned.length > 0) return cleaned;
             }
         } catch (e) {
             console.warn("Could not load properties from localStorage:", e);
         }
-        return [];
+        return DEFAULT_PROPERTIES;
     });
 
-    // 2. Initial Tree Inventories State (Only user added inventories)
+    // 2. Initial Tree Inventories State
     const [inventories, setInventories] = useState(() => {
         try {
             const stored = localStorage.getItem('treeconnect_inventories');
             if (stored) {
                 const parsed = JSON.parse(stored);
-                return filterOutMockData(parsed);
+                const cleaned = filterOutMockData(parsed);
+                if (cleaned && cleaned.length > 0) return cleaned;
             }
         } catch (e) {
             console.warn("Could not load tree inventories from localStorage:", e);
         }
-        return [];
+        return DEFAULT_TREE_INVENTORIES;
     });
 
     // 3. Initial Completed Harvesting Operations State
@@ -95,14 +168,18 @@ export const LandownerProvider = ({ children }) => {
             const storedUserStr = localStorage.getItem('treeconnect_user');
             const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
             const userEmail = user?.email || storedUser?.email || '';
-            
-            const data = await propertyService.getProperties(userEmail ? { userEmail } : {});
+
+            const data = await propertyService.getProperties({ all_records: true });
             if (data && Array.isArray(data.properties)) {
                 const cleanDBProps = filterOutMockData(data.properties);
-                setProperties(cleanDBProps);
-                try {
-                    localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
-                } catch (e) {}
+                if (cleanDBProps.length > 0) {
+                    setProperties(cleanDBProps);
+                    try {
+                        localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
+                    } catch (e) {
+                        console.warn("Could not cache properties to localStorage due to size limit, using React state.", e);
+                    }
+                }
             }
         } catch (err) {
             console.warn("Could not load properties from backend database:", err);
@@ -124,7 +201,7 @@ export const LandownerProvider = ({ children }) => {
                 setHarvestRequests(cleanRequests);
                 try {
                     localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(cleanRequests));
-                } catch (e) {}
+                } catch (e) { }
             }
         } catch (err) {
             console.warn("Could not load harvest requests from backend database:", err);
@@ -140,35 +217,35 @@ export const LandownerProvider = ({ children }) => {
     useEffect(() => {
         try {
             localStorage.setItem('treeconnect_properties', JSON.stringify(properties));
-        } catch (e) {}
+        } catch (e) { }
     }, [properties]);
 
     // Persist inventories to localStorage whenever updated
     useEffect(() => {
         try {
             localStorage.setItem('treeconnect_inventories', JSON.stringify(inventories));
-        } catch (e) {}
+        } catch (e) { }
     }, [inventories]);
 
     // Persist completed harvest operations
     useEffect(() => {
         try {
             localStorage.setItem('treeconnect_completed_harvests', JSON.stringify(completedHarvests));
-        } catch (e) {}
+        } catch (e) { }
     }, [completedHarvests]);
 
     // Persist harvest requests
     useEffect(() => {
         try {
             localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(harvestRequests));
-        } catch (e) {}
+        } catch (e) { }
     }, [harvestRequests]);
 
     // Persist timber listings
     useEffect(() => {
         try {
             localStorage.setItem('treeconnect_timber_listings', JSON.stringify(timberListings));
-        } catch (e) {}
+        } catch (e) { }
     }, [timberListings]);
 
     // Handlers
@@ -211,7 +288,7 @@ export const LandownerProvider = ({ children }) => {
             const updated = [savedProp, ...prev.filter(p => p.id !== savedProp.id && p._id !== savedProp._id)];
             try {
                 localStorage.setItem('treeconnect_properties', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
 
@@ -247,9 +324,9 @@ export const LandownerProvider = ({ children }) => {
         setProperties(prevProps => {
             const updatedProps = prevProps.map(p => {
                 const isMatch = p.id === newInv.propertyId ||
-                                p._id === newInv.propertyId ||
-                                String(p.id) === String(newInv.propertyId) ||
-                                String(p._id) === String(newInv.propertyId);
+                    p._id === newInv.propertyId ||
+                    String(p.id) === String(newInv.propertyId) ||
+                    String(p._id) === String(newInv.propertyId);
                 if (isMatch) {
                     const currentCount = typeof p.approxTreesCount === 'number'
                         ? p.approxTreesCount
@@ -264,7 +341,7 @@ export const LandownerProvider = ({ children }) => {
             });
             try {
                 localStorage.setItem('treeconnect_properties', JSON.stringify(updatedProps));
-            } catch (e) {}
+            } catch (e) { }
             return updatedProps;
         });
 
@@ -300,7 +377,7 @@ export const LandownerProvider = ({ children }) => {
             const updated = [savedReq, ...prev.filter(r => r.id !== savedReq.id && r._id !== savedReq._id)];
             try {
                 localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
 
@@ -328,7 +405,7 @@ export const LandownerProvider = ({ children }) => {
             const updated = [createdListing, ...prev];
             try {
                 localStorage.setItem('treeconnect_timber_listings', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
         return createdListing;
@@ -339,7 +416,7 @@ export const LandownerProvider = ({ children }) => {
             const updated = prev.map(l => l.id === id ? { ...l, status: newStatus } : l);
             try {
                 localStorage.setItem('treeconnect_timber_listings', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
     };
@@ -365,7 +442,7 @@ export const LandownerProvider = ({ children }) => {
             });
             try {
                 localStorage.setItem('treeconnect_properties', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
     };
@@ -381,7 +458,7 @@ export const LandownerProvider = ({ children }) => {
             const updated = prev.filter(p => p.id !== id && p._id !== id);
             try {
                 localStorage.setItem('treeconnect_properties', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
 
@@ -390,7 +467,7 @@ export const LandownerProvider = ({ children }) => {
             const updated = prev.filter(inv => inv.propertyId !== id && String(inv.propertyId) !== String(id));
             try {
                 localStorage.setItem('treeconnect_inventories', JSON.stringify(updated));
-            } catch (e) {}
+            } catch (e) { }
             return updated;
         });
     };
@@ -400,6 +477,7 @@ export const LandownerProvider = ({ children }) => {
             value={{
                 properties,
                 inventories,
+                treeInventories: inventories,
                 completedHarvests,
                 harvestRequests,
                 timberListings,

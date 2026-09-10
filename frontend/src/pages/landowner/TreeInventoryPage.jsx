@@ -51,14 +51,16 @@ const TreeInventoryPage = () => {
   const [searchParams] = useSearchParams();
   const targetPropertyId = searchParams.get('propertyId');
 
-  const { properties, inventories } = useLandowner();
+  const landownerCtx = useLandowner() || {};
+  const properties = landownerCtx.properties || [];
+  const inventories = landownerCtx.inventories || landownerCtx.treeInventories || [];
 
   // State for image lightbox modal
   const [activePhotoModal, setActivePhotoModal] = useState(null); // { photos: [], index: 0, title: '' }
 
   // Filter properties based on URL param
   const displayedProperties = targetPropertyId
-    ? properties.filter(p => p.id === targetPropertyId || p._id === targetPropertyId || String(p.id) === String(targetPropertyId) || String(p._id) === String(targetPropertyId))
+    ? properties.filter(p => p && (p.id === targetPropertyId || p._id === targetPropertyId || String(p.id) === String(targetPropertyId) || String(p._id) === String(targetPropertyId)))
     : properties;
 
   // Handle Lightbox Click
@@ -288,12 +290,41 @@ const TreeInventoryPage = () => {
                         {allTreeGroups.length > 0 ? (
                           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                             {allTreeGroups.map((tg, idx) => {
+                              const groupImage = getTreeSpeciesPhoto(tg.species, tg.attachedPhotos);
                               return (
                                 <div
                                   key={idx}
                                   className="ld-card p-6 transition-all duration-300 hover:border-emerald-500/40 flex flex-col justify-between space-y-5 shadow-lg"
                                 >
                                   <div className="space-y-4">
+                                    {/* Prominent Tree Image Banner */}
+                                    <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden bg-[#090e0b] border border-emerald-500/20 group/treeimg shadow-md">
+                                      <img
+                                        src={groupImage}
+                                        alt={tg.species}
+                                        className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
+                                      />
+                                      <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
+
+                                      <button
+                                        type="button"
+                                        onClick={() => openLightbox([groupImage], 0, `${p.propertyName} - ${tg.species} Tree Group (${tg.count} Trees)`)}
+                                        className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur cursor-pointer transition-all z-10"
+                                      >
+                                        <ZoomIn size={14} className="text-emerald-400" />
+                                        <span>View Photo</span>
+                                      </button>
+
+                                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+                                        <span className="px-3 py-1 rounded-xl bg-[#090e0b]/90 backdrop-blur border border-emerald-500/35 text-white text-xs font-extrabold flex items-center gap-1.5 shadow">
+                                          <Trees size={14} className="text-emerald-400" /> {tg.species} Stand
+                                        </span>
+                                        <span className="px-3 py-1 rounded-xl bg-emerald-900/90 backdrop-blur border border-emerald-500/35 text-emerald-300 text-xs font-bold shadow">
+                                          {tg.count} Standing Trees
+                                        </span>
+                                      </div>
+                                    </div>
+
                                     {/* Group Header */}
                                     <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-emerald-500/15">
                                       <div>

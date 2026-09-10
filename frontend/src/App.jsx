@@ -147,6 +147,14 @@ function App() {
               }
             />
             <Route
+              path="/landowner/tree-inventory"
+              element={
+                <ProtectedRoute allowedRoles={['landowner']}>
+                  <TreeInventoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/landowner/harvest-requests"
               element={
                 <ProtectedRoute allowedRoles={['landowner']}>

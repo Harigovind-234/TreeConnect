@@ -30,8 +30,8 @@ const HarvestRequestsPage = () => {
   const navigate = useNavigate();
   const landownerCtx = useLandowner() || {};
   const harvestRequests = landownerCtx.harvestRequests || [];
-  const refreshHarvestRequests = landownerCtx.refreshHarvestRequests || (() => {});
-  const assignContractorToRequest = landownerCtx.assignContractorToRequest || (() => {});
+  const refreshHarvestRequests = landownerCtx.refreshHarvestRequests || (() => { });
+  const assignContractorToRequest = landownerCtx.assignContractorToRequest || (() => { });
 
   const [selectedRequestForContractor, setSelectedRequestForContractor] = useState(null);
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
@@ -174,7 +174,7 @@ const HarvestRequestsPage = () => {
 
                   return (
                     <div key={reqId} className="bg-[#091810] border border-emerald-500/20 rounded-3xl p-8 sm:p-10 space-y-8 shadow-2xl">
-                      
+
                       {/* TOP SUMMARY ROW */}
                       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-500/15 pb-5">
                         <div>
@@ -192,23 +192,22 @@ const HarvestRequestsPage = () => {
 
                         {/* STATUS PILL */}
                         <div className="flex flex-col items-end gap-1">
-                          <span className={`px-4 py-1.5 rounded-full text-xs font-black flex items-center gap-2 border ${
-                            isOperationReady
-                              ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
-                              : isAssessmentSubmitted
+                          <span className={`px-4 py-1.5 rounded-full text-xs font-black flex items-center gap-2 border ${isOperationReady
+                            ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
+                            : isAssessmentSubmitted
                               ? 'bg-amber-950 border-amber-500 text-amber-300'
                               : isAssigned
-                              ? 'bg-blue-950 border-blue-500 text-blue-300'
-                              : 'bg-slate-900 border-slate-700 text-slate-300'
-                          }`}>
+                                ? 'bg-blue-950 border-blue-500 text-blue-300'
+                                : 'bg-slate-900 border-slate-700 text-slate-300'
+                            }`}>
                             <Clock size={14} />
                             {isOperationReady
                               ? 'Harvest Operation Ready'
                               : isAssessmentSubmitted
-                              ? 'Contractor Assessment Submitted'
-                              : isAssigned
-                              ? 'Contractor Assigned'
-                              : 'Pending Contractor Assignment'}
+                                ? 'Contractor Assessment Submitted'
+                                : isAssigned
+                                  ? 'Contractor Assigned'
+                                  : 'Pending Contractor Assignment'}
                           </span>
                         </div>
                       </div>
@@ -284,13 +283,12 @@ const HarvestRequestsPage = () => {
                               </h4>
                             </div>
 
-                            <span className={`px-2.5 py-1 rounded text-xs font-bold ${
-                              assessment.status === 'ACCEPTED'
-                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-500'
-                                : assessment.status === 'REJECTED'
+                            <span className={`px-2.5 py-1 rounded text-xs font-bold ${assessment.status === 'ACCEPTED'
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-500'
+                              : assessment.status === 'REJECTED'
                                 ? 'bg-red-950 text-red-300 border border-red-500'
                                 : 'bg-amber-950 text-amber-300 border border-amber-500'
-                            }`}>
+                              }`}>
                               Assessment Status: {assessment.status}
                             </span>
                           </div>
@@ -388,3 +386,4 @@ const HarvestRequestsPage = () => {
 };
 
 export default HarvestRequestsPage;
+

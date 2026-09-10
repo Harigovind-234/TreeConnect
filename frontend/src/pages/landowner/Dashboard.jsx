@@ -43,7 +43,7 @@ const LandownerDashboard = () => {
     if (refreshProperties) {
       refreshProperties();
     }
-  }, [refreshProperties]);
+  }, []);
 
   // Stateful Demo Contractor Bids
   const [bids, setBids] = useState([

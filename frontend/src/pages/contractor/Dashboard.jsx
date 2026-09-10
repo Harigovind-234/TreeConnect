@@ -105,7 +105,7 @@ const ContractorDashboard = () => {
       if (data && Array.isArray(data.harvest_requests)) {
         // Filter requests assigned to this contractor or general active requests
         const cId = user?.id || user?._id || user?.email;
-        const assigned = data.harvest_requests.filter(r => 
+        const assigned = data.harvest_requests.filter(r =>
           r.assigned_contractor_id === cId ||
           r.assigned_contractor_email === user?.email ||
           r.status === 'CONTRACTOR_ASSIGNED' ||
@@ -158,12 +158,12 @@ const ContractorDashboard = () => {
     const { name, value } = e.target;
     setAssessmentForm(prev => {
       const updated = { ...prev, [name]: value };
-      
+
       if (['harvesting_cost', 'extraction_cost', 'transportation_cost', 'other_cost'].includes(name)) {
         const sum = (Number(updated.harvesting_cost) || 0) +
-                    (Number(updated.extraction_cost) || 0) +
-                    (Number(updated.transportation_cost) || 0) +
-                    (Number(updated.other_cost) || 0);
+          (Number(updated.extraction_cost) || 0) +
+          (Number(updated.transportation_cost) || 0) +
+          (Number(updated.other_cost) || 0);
         updated.total_quote = sum;
       }
       return updated;
@@ -277,13 +277,12 @@ const ContractorDashboard = () => {
                             </p>
                           </div>
 
-                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${
-                            isAccepted
+                          <span className={`px-3 py-1 rounded-full text-xs font-extrabold border ${isAccepted
                               ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
                               : isSubmitted
-                              ? 'bg-amber-950 border-amber-500 text-amber-300'
-                              : 'bg-blue-950 border-blue-500 text-blue-300'
-                          }`}>
+                                ? 'bg-amber-950 border-amber-500 text-amber-300'
+                                : 'bg-blue-950 border-blue-500 text-blue-300'
+                            }`}>
                             {isAccepted ? 'Operation Authorized' : isSubmitted ? 'Assessment Submitted' : 'Pending Contractor Assessment'}
                           </span>
                         </div>
@@ -673,3 +672,4 @@ const ContractorDashboard = () => {
 };
 
 export default ContractorDashboard;
+
