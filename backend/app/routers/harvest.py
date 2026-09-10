@@ -28,8 +28,8 @@ class HarvestRequestCreate(BaseModel):
     property_id: str
     selected_inventory_ids: List[str] = []
     reason: str
-    preferred_start_date: str
-    preferred_end_date: str
+    preferred_start_date: Optional[str] = ""
+    preferred_end_date: Optional[str] = ""
     required_services: List[str] = []
     site_conditions: Dict[str, Any] = {}
     hazards: List[str] = []

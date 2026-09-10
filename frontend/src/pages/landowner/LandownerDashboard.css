@@ -33,23 +33,23 @@
 /* Base Dark Card Container */
 .ld-card {
   background: #121a16;
-  border: 1px solid rgba(16, 185, 129, 0.15);
-  border-radius: 20px;
-  padding: 32px 36px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 24px;
+  padding: 36px 42px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .ld-card:hover {
   border-color: rgba(16, 185, 129, 0.35);
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.55), 0 0 25px rgba(16, 185, 129, 0.08);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(16, 185, 129, 0.08);
 }
 
 .ld-subcard {
   background: #0e1612;
-  border: 1px solid rgba(16, 185, 129, 0.12);
-  border-radius: 16px;
-  padding: 24px 28px;
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 18px;
+  padding: 28px 32px;
 }
 
 /* Hero Commercial Forestry Portfolio Card */
@@ -766,20 +766,29 @@
 /* ==================================================== */
 /* GUARANTEED RECTANGULAR FORM FIELD STYLING            */
 /* ==================================================== */
+/* ==================================================== */
+/* GUARANTEED RECTANGULAR FORM FIELD STYLING            */
+/* ==================================================== */
 .ld-input,
 .ld-select,
 .ld-textarea {
   width: 100% !important;
   background-color: #050e08 !important;
   border: 2px solid rgba(16, 185, 129, 0.3) !important;
-  border-radius: 8px !important; /* RECTANGULAR SHAPE - NO OVAL / PILL */
+  border-radius: 12px !important;
   color: #ffffff !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 600 !important;
-  padding: 12px 16px !important;
+  line-height: 1.5 !important;
+  padding: 14px 20px !important;
+  min-height: 50px !important;
   outline: none !important;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease !important;
   box-sizing: border-box !important;
+}
+
+.ld-textarea {
+  min-height: 120px !important;
 }
 
 .ld-input:focus,
@@ -787,7 +796,7 @@
 .ld-textarea:focus {
   border-color: #10b981 !important;
   background-color: #07150d !important;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.25) !important;
 }
 
 .ld-input::placeholder,
@@ -797,13 +806,13 @@
 }
 
 .ld-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #e2e8f0;
-  margin-bottom: 6px;
+  display: block !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  color: #34d399 !important; /* emerald-400 */
+  margin-bottom: 12px !important;
 }
 
 .landowner-dashboard-page input[type="text"],
@@ -815,18 +824,19 @@
 .ld-card input,
 .ld-card select,
 .ld-card textarea {
-  border-radius: 8px !important;
+  border-radius: 12px !important;
 }
 
 .ld-risk-card {
-  padding: 14px 16px !important;
+  padding: 18px 22px !important;
   background-color: #050e08 !important;
   border: 2px solid rgba(16, 185, 129, 0.25) !important;
-  border-radius: 8px !important; /* CRISP RECTANGULAR SHAPE - NO OVAL / PILL */
+  border-radius: 12px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
-  gap: 12px !important;
+  gap: 16px !important;
+  min-height: 64px !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
   box-sizing: border-box !important;
@@ -844,15 +854,15 @@
 }
 
 .ld-risk-checkbox {
-  width: 20px !important;
-  height: 20px !important;
-  border-radius: 4px !important; /* RECTANGULAR CHECKBOX */
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 6px !important;
   border: 2px solid rgba(255, 255, 255, 0.2) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   font-weight: 800 !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
   flex-shrink: 0 !important;
   transition: all 0.2s ease !important;
 }
@@ -864,7 +874,7 @@
 }
 
 .ld-risk-button {
-  border-radius: 8px !important;
+  border-radius: 10px !important;
 }
 
 /* ==================================================== */
@@ -873,16 +883,16 @@
 .harvest-card {
   background-color: #0b1710 !important;
   border: 1px solid rgba(16, 185, 129, 0.2) !important;
-  border-radius: 12px !important;
-  padding: 24px !important;
+  border-radius: 16px !important;
+  padding: 32px !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
 }
 
 .harvest-property-card {
-  padding: 16px !important;
+  padding: 20px 24px !important;
   background-color: #050e08 !important;
   border: 2px solid rgba(16, 185, 129, 0.25) !important;
-  border-radius: 10px !important;
+  border-radius: 14px !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
 }
@@ -899,16 +909,16 @@
 }
 
 .harvest-scope-card {
-  padding: 16px !important;
-  background-color: #050e08 !important;
-  border: 2px solid rgba(16, 185, 129, 0.25) !important;
-  border-radius: 10px !important;
+  padding: 26px 30px !important;
+  background-color: #061209 !important;
+  border: 2px solid rgba(16, 185, 129, 0.3) !important;
+  border-radius: 20px !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
-  gap: 10px !important;
+  gap: 20px !important;
 }
 
 .harvest-scope-card:hover {
@@ -919,11 +929,11 @@
 .harvest-scope-card.selected {
   background-color: rgba(16, 185, 129, 0.18) !important;
   border-color: #10b981 !important;
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15) !important;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2) !important;
 }
 
 .harvest-step-badge {
-  border-radius: 8px !important;
+  border-radius: 10px !important;
 }
 
 /* ==================================================== */
@@ -1048,6 +1058,134 @@
   border-radius: 16px !important;
 }
 
+/* ==================================================== */
+/* CONTRACTOR SELECTION & DIRECT ASSIGNMENT SYSTEM       */
+/* ==================================================== */
+.contractor-selector-container {
+  background: #0e1612 !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+  border-radius: 18px !important;
+  padding: 24px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+}
 
+.contractor-search-box {
+  width: 100% !important;
+  background: #0a110d !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  padding: 10px 16px 10px 38px !important;
+  font-size: 12.5px !important;
+  transition: all 0.2s ease !important;
+}
 
+.contractor-search-box::placeholder {
+  color: #6b7280 !important;
+}
 
+.contractor-search-box:focus {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  background: #0e1612 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+  outline: none !important;
+}
+
+.contractor-filter-select {
+  width: 100% !important;
+  background: #0a110d !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  padding: 10px 16px !important;
+  font-size: 12.5px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.contractor-filter-select:focus {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  outline: none !important;
+}
+
+.contractor-grid-card {
+  background: #121c16 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 16px !important;
+  padding: 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+}
+
+.contractor-grid-card:hover {
+  background: #16241c !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+}
+
+.contractor-grid-card.selected {
+  background: #152b1e !important;
+  border: 1px solid #10b981 !important;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(16, 185, 129, 0.12) !important;
+}
+
+.contractor-verified-badge {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  color: #34d399 !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 3px 10px !important;
+  border-radius: 9999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  white-space: nowrap !important;
+}
+
+.contractor-btn-select {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #e2e8f0 !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  padding: 8px 16px !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+}
+
+.contractor-btn-select:hover {
+  background: #10b981 !important;
+  color: #050e08 !important;
+  border-color: #10b981 !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25) !important;
+}
+
+.contractor-btn-selected {
+  background: #10b981 !important;
+  border: 1px solid #34d399 !important;
+  color: #050e08 !important;
+  font-weight: 800 !important;
+  font-size: 12px !important;
+  padding: 8px 16px !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
+}

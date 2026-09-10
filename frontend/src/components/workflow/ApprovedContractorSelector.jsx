@@ -186,15 +186,15 @@ const ApprovedContractorSelector = ({
   });
 
   const content = (
-    <div className="space-y-6">
+    <div className="contractor-selector-container space-y-6">
       {/* Header Info */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-500/20 pb-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-1">
-            <ShieldCheck size={13} /> Admin Verified Contractors Only
+          <div className="contractor-verified-badge mb-2">
+            <ShieldCheck size={14} /> Admin Verified Contractors Only
           </div>
-          <h3 className="text-xl font-black text-white">Select Platform-Approved Contractor</h3>
-          <p className="text-xs text-slate-300">
+          <h3 className="text-xl font-extrabold text-white">Select Platform-Approved Contractor</h3>
+          <p className="text-xs text-slate-400 mt-1">
             Only contractors verified by TreeConnect Admin with active forest & trade licences are eligible to receive harvest requests.
           </p>
         </div>
@@ -202,7 +202,8 @@ const ApprovedContractorSelector = ({
         {isModal && onCancel && (
           <button
             onClick={onCancel}
-            className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            title="Close Modal"
           >
             <X size={18} />
           </button>
@@ -212,20 +213,20 @@ const ApprovedContractorSelector = ({
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="relative">
-          <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+          <Search size={16} className="absolute left-3.5 top-3.5 text-slate-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Search by company name, location, equipment..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#07130c] border border-emerald-500/30 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+            className="contractor-search-box"
           />
         </div>
 
         <select
           value={districtFilter}
           onChange={(e) => setDistrictFilter(e.target.value)}
-          className="w-full bg-[#07130c] border border-emerald-500/30 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-400"
+          className="contractor-filter-select"
         >
           <option value="all">All Kerala Districts</option>
           <option value="kottayam">Kottayam</option>
@@ -252,7 +253,7 @@ const ApprovedContractorSelector = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[520px] overflow-y-auto pr-1">
           {filteredContractors.map((c) => {
             const isSelected = selectedContractorId === c.id || selectedContractorId === c._id;
             const cName = c.companyName || c.name || 'Harvesting Contractor';
@@ -261,48 +262,45 @@ const ApprovedContractorSelector = ({
               <div
                 key={c.id || c._id}
                 onClick={() => onSelectContractor(c)}
-                className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-4 ${isSelected
-                    ? 'bg-[#0f2a1d] border-emerald-400 shadow-lg shadow-emerald-950/50'
-                    : 'bg-[#0a1610] border-emerald-500/20 hover:border-emerald-500/50 hover:bg-[#0c1d14]'
-                  }`}
+                className={`contractor-grid-card ${isSelected ? 'selected' : ''}`}
               >
                 <div className="space-y-3">
                   {/* Top Bar */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-1.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <h4 className="font-extrabold text-white text-base leading-snug">{cName}</h4>
-                        <span className="text-emerald-400" title="Verified by TreeConnect Admin">
+                        <span className="text-emerald-400 shrink-0" title="Verified by TreeConnect Admin">
                           <CheckCircle2 size={16} />
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                        <MapPin size={12} className="text-emerald-400" /> {c.location || c.district || 'Kerala'}
+                      <p className="text-xs text-slate-300 flex items-center gap-1">
+                        <MapPin size={12} className="text-emerald-400 shrink-0" /> {c.location || c.district || 'Kerala'}
                       </p>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-600/40 text-emerald-300 text-[10px] font-extrabold">
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="contractor-verified-badge">
                         Active & Verified
                       </span>
                       {c.rating && (
-                        <div className="flex items-center gap-1 text-xs text-amber-400 font-bold">
-                          <Star size={12} className="fill-amber-400" /> {c.rating} ({c.completedJobs || 12} jobs)
+                        <div className="flex items-center gap-1 text-xs text-amber-400 font-extrabold mt-0.5">
+                          <Star size={12} className="fill-amber-400" /> {c.rating} <span className="text-slate-400 font-normal">({c.completedJobs || 12} jobs)</span>
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* Highlights Grid */}
-                  <div className="grid grid-cols-2 gap-2 py-2 text-xs border-y border-emerald-500/10">
+                  <div className="grid grid-cols-2 gap-3 py-2.5 text-xs border-y border-emerald-500/15">
                     <div>
-                      <span className="text-slate-500 block text-[11px]">Experience:</span>
-                      <span className="text-slate-200 font-medium">{c.experience || '10+ years'}</span>
+                      <span className="text-slate-400 block text-[11px]">Experience:</span>
+                      <span className="text-white font-bold">{c.experience || '10+ years'}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 block text-[11px]">Licences:</span>
-                      <span className="text-emerald-300 font-medium truncate block" title={c.docType}>
-                        {c.docType || 'Forest Licence, GST'}
+                      <span className="text-slate-400 block text-[11px]">Licences:</span>
+                      <span className="text-emerald-300 font-bold truncate block" title={c.docType || c.forestLicenceDoc}>
+                        {c.docType || c.forestLicenceDoc || 'Forest Licence, GST'}
                       </span>
                     </div>
                   </div>
@@ -310,18 +308,18 @@ const ApprovedContractorSelector = ({
                   {/* Equipment */}
                   {c.equipment && (
                     <div className="text-xs">
-                      <span className="text-slate-500 block text-[11px] flex items-center gap-1">
-                        <Wrench size={11} className="text-emerald-400" /> Equipment & Fleet:
+                      <span className="text-slate-400 block text-[11px] flex items-center gap-1 mb-0.5">
+                        <Wrench size={12} className="text-emerald-400 shrink-0" /> Equipment & Fleet:
                       </span>
-                      <p className="text-slate-300 font-mono text-[11px] truncate mt-0.5">{c.equipment}</p>
+                      <p className="text-slate-200 font-medium text-[11px] leading-relaxed truncate">{c.equipment}</p>
                     </div>
                   )}
                 </div>
 
                 {/* Selection Footer Button */}
-                <div className="pt-2 flex items-center justify-between">
+                <div className="pt-3 border-t border-emerald-500/10 flex items-center justify-between gap-2">
                   <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <FileCheck size={12} className="text-emerald-400" /> Admin Approved
+                    <FileCheck size={13} className="text-emerald-400" /> Admin Approved
                   </span>
 
                   <button
@@ -330,14 +328,11 @@ const ApprovedContractorSelector = ({
                       e.stopPropagation();
                       onSelectContractor(c);
                     }}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isSelected
-                        ? 'bg-emerald-500 text-slate-950 font-black shadow-md'
-                        : 'bg-[#0f2418] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border border-emerald-500/30'
-                      }`}
+                    className={isSelected ? 'contractor-btn-selected' : 'contractor-btn-select'}
                   >
                     {isSelected ? (
                       <>
-                        <Check size={14} /> Selected Contractor
+                        <Check size={14} strokeWidth={3} /> Selected Contractor
                       </>
                     ) : (
                       'Select Contractor'
@@ -354,8 +349,8 @@ const ApprovedContractorSelector = ({
 
   if (isModal) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-[#07120a] border border-emerald-500/30 rounded-3xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="bg-[#0a120c] border border-emerald-500/30 rounded-3xl max-w-4xl w-full p-7 max-h-[85vh] overflow-y-auto shadow-2xl">
           {content}
         </div>
       </div>
