@@ -40,14 +40,25 @@ const AssignedHarvestJobsPage = () => {
     try {
       const data = await harvestService.getHarvestRequests({ all_records: true });
       if (data && Array.isArray(data.harvest_requests)) {
-        const cId = user?.id || user?._id || user?.email;
-        const assigned = data.harvest_requests.filter(r =>
-          r.assigned_contractor_id === cId ||
-          r.assigned_contractor_email === user?.email ||
-          r.status === 'CONTRACTOR_ASSIGNED' ||
-          r.status === 'ASSESSMENT_SUBMITTED' ||
-          r.status === 'OPERATION_READY'
-        );
+        const cId = user?.id || user?._id;
+        const cEmail = user?.email?.toLowerCase();
+        const cName = (user?.fullName || user?.name || user?.companyName || '').toLowerCase();
+
+        const assigned = data.harvest_requests.filter(r => {
+          const reqCId = r.assigned_contractor_id;
+          const reqCEmail = (r.assigned_contractor_email || '').toLowerCase();
+          const reqCName = (r.assigned_contractor_name || '').toLowerCase();
+
+          const isDirectlyAssigned = (cId && reqCId === cId) ||
+            (cEmail && (reqCEmail === cEmail || reqCName === cEmail)) ||
+            (cName && reqCName === cName);
+
+          const isAssignedStatus = r.status === 'CONTRACTOR_ASSIGNED' ||
+            r.status === 'ASSESSMENT_SUBMITTED' ||
+            r.status === 'OPERATION_READY';
+
+          return isDirectlyAssigned || isAssignedStatus;
+        });
 
         if (assigned.length > 0) {
           setAssignedRequests(assigned);

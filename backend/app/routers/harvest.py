@@ -193,13 +193,42 @@ def get_harvest_requests(
         for req in cursor:
             req_data = serialize_doc(req)
 
-            # Hydrate property details if available
+            # Hydrate property details & tree inventory if available
             p_id = req_data.get("property_id")
+            p_doc = None
             if p_id:
                 p_query = {"_id": ObjectId(p_id)} if ObjectId.is_valid(p_id) else {"_id": p_id}
                 p_doc = db.properties.find_one(p_query)
                 if p_doc:
                     req_data["property_details"] = serialize_doc(p_doc)
+
+            inv_list = []
+            if p_id:
+                p_id_str = str(p_id)
+                or_conds = [{"propertyId": p_id_str}, {"property_id": p_id_str}]
+                if ObjectId.is_valid(p_id_str):
+                    or_conds.extend([{"propertyId": ObjectId(p_id_str)}, {"property_id": ObjectId(p_id_str)}])
+                inv_cursor = db.tree_inventories.find({"$or": or_conds})
+                inv_list = [serialize_doc(i) for i in inv_cursor]
+
+            if not inv_list and req_data.get("owner_email"):
+                inv_cursor = db.tree_inventories.find({"userEmail": req_data["owner_email"]})
+                inv_list = [serialize_doc(i) for i in inv_cursor]
+
+            if req_data.get("selected_tree_groups") and isinstance(req_data["selected_tree_groups"], list) and len(req_data["selected_tree_groups"]) > 0:
+                req_data["tree_inventory"] = req_data["selected_tree_groups"]
+            elif inv_list:
+                req_data["tree_inventory"] = inv_list
+            elif p_doc:
+                if p_doc.get("tree_inventory"):
+                    req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventory"]) if isinstance(p_doc["tree_inventory"], dict) else p_doc["tree_inventory"]
+                elif p_doc.get("tree_inventories"):
+                    req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventories"]) if isinstance(p_doc["tree_inventories"], dict) else p_doc["tree_inventories"]
+
+            # Hydrate contractor assessment if available
+            ass_doc = db.contractor_assessments.find_one({"harvest_request_id": req_data["id"]})
+            if ass_doc:
+                req_data["assessment"] = serialize_doc(ass_doc)
 
             requests_list.append(req_data)
 
@@ -234,13 +263,42 @@ def get_harvest_request_by_id(request_id: str):
 
         req_data = serialize_doc(req)
 
-        # Hydrate property details
+        # Hydrate property details & tree inventory
         p_id = req_data.get("property_id")
+        p_doc = None
         if p_id:
             p_query = {"_id": ObjectId(p_id)} if ObjectId.is_valid(p_id) else {"_id": p_id}
             p_doc = db.properties.find_one(p_query)
             if p_doc:
                 req_data["property_details"] = serialize_doc(p_doc)
+
+        inv_list = []
+        if p_id:
+            p_id_str = str(p_id)
+            or_conds = [{"propertyId": p_id_str}, {"property_id": p_id_str}]
+            if ObjectId.is_valid(p_id_str):
+                or_conds.extend([{"propertyId": ObjectId(p_id_str)}, {"property_id": ObjectId(p_id_str)}])
+            inv_cursor = db.tree_inventories.find({"$or": or_conds})
+            inv_list = [serialize_doc(i) for i in inv_cursor]
+
+        if not inv_list and req_data.get("owner_email"):
+            inv_cursor = db.tree_inventories.find({"userEmail": req_data["owner_email"]})
+            inv_list = [serialize_doc(i) for i in inv_cursor]
+
+        if req_data.get("selected_tree_groups") and isinstance(req_data["selected_tree_groups"], list) and len(req_data["selected_tree_groups"]) > 0:
+            req_data["tree_inventory"] = req_data["selected_tree_groups"]
+        elif inv_list:
+            req_data["tree_inventory"] = inv_list
+        elif p_doc:
+            if p_doc.get("tree_inventory"):
+                req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventory"]) if isinstance(p_doc["tree_inventory"], dict) else p_doc["tree_inventory"]
+            elif p_doc.get("tree_inventories"):
+                req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventories"]) if isinstance(p_doc["tree_inventories"], dict) else p_doc["tree_inventories"]
+
+        # Hydrate contractor assessment if available
+        ass_doc = db.contractor_assessments.find_one({"harvest_request_id": req_data["id"]})
+        if ass_doc:
+            req_data["assessment"] = serialize_doc(ass_doc)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,

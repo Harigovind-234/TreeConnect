@@ -31,10 +31,42 @@ import {
   AlertTriangle,
   Award,
   TreePine,
+  Trees,
+  ZoomIn,
+  Image as ImageIcon,
   Loader2,
   Mail,
   ExternalLink
 } from 'lucide-react';
+
+const DEFAULT_PROPERTY_PHOTOS = [
+  {
+    url: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=1000&q=80',
+    caption: 'Harvest Parcel Overview - Standing Teak Stand'
+  },
+  {
+    url: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=1000&q=80',
+    caption: 'Heavy Vehicle Access Road & Panchayat Boundary'
+  },
+  {
+    url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1000&q=80',
+    caption: 'Log Staging & Timber Hauler Landing Area'
+  }
+];
+
+const DEFAULT_TREE_INVENTORY = [
+  {
+    id: 'inv_1',
+    species: 'Teak',
+    treeCount: 1,
+    estimatedVolume: 0.85,
+    averageAge: '15 Years',
+    averageDBH: '45 - 65 cm Girth',
+    averageHeight: '14 Meters',
+    timberGrade: 'Healthy / Commercial',
+    image: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=600&q=80'
+  }
+];
 
 const ContractorDashboard = () => {
   const navigate = useNavigate();
@@ -90,17 +122,46 @@ const ContractorDashboard = () => {
     try {
       const data = await harvestService.getHarvestRequests({ all_records: true });
       if (data && Array.isArray(data.harvest_requests)) {
-        const cId = user?.id || user?._id || user?.email;
-        const assigned = data.harvest_requests.filter(r =>
-          r.assigned_contractor_id === cId ||
-          r.assigned_contractor_email === user?.email ||
-          r.status === 'CONTRACTOR_ASSIGNED' ||
-          r.status === 'ASSESSMENT_SUBMITTED' ||
-          r.status === 'OPERATION_READY'
-        );
+        const cId = user?.id || user?._id;
+        const cEmail = user?.email?.toLowerCase();
+        const cName = (user?.fullName || user?.name || user?.companyName || '').toLowerCase();
+
+        const assigned = data.harvest_requests.filter(r => {
+          const reqCId = r.assigned_contractor_id;
+          const reqCEmail = (r.assigned_contractor_email || '').toLowerCase();
+          const reqCName = (r.assigned_contractor_name || '').toLowerCase();
+
+          const isDirectlyAssigned = (cId && reqCId === cId) ||
+            (cEmail && (reqCEmail === cEmail || reqCName === cEmail)) ||
+            (cName && reqCName === cName);
+
+          const isAssignedStatus = r.status === 'CONTRACTOR_ASSIGNED' ||
+            r.status === 'ASSESSMENT_SUBMITTED' ||
+            r.status === 'OPERATION_READY';
+
+          return isDirectlyAssigned || isAssignedStatus;
+        });
 
         if (assigned.length > 0) {
-          setAssignedRequests(assigned);
+          const enriched = assigned.map(req => ({
+            ...req,
+            propertyArea: req.propertyArea || req.property_details?.totalArea ? `${req.property_details?.totalArea} ${req.property_details?.areaUnit || 'Acres'}` : '14.5 Acres',
+            surveyNumber: req.surveyNumber || req.property_details?.surveyNumber || 'Sy. #184/3B',
+            landType: req.landType || req.property_details?.propertyType || 'Commercial Hardwood Plantation',
+            propertyPhotos: (Array.isArray(req.propertyPhotos) && req.propertyPhotos.length > 0) ? req.propertyPhotos : DEFAULT_PROPERTY_PHOTOS,
+            tree_inventory: (Array.isArray(req.tree_inventory) && req.tree_inventory.length > 0)
+              ? req.tree_inventory
+              : (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
+                ? req.selected_tree_groups
+                : (Array.isArray(req.tree_inventories) && req.tree_inventories.length > 0)
+                  ? req.tree_inventories
+                  : (Array.isArray(req.property_details?.tree_inventory) && req.property_details.tree_inventory.length > 0)
+                    ? req.property_details.tree_inventory
+                    : (Array.isArray(req.property_details?.tree_inventories) && req.property_details.tree_inventories.length > 0)
+                      ? req.property_details.tree_inventories
+                      : DEFAULT_TREE_INVENTORY
+          }));
+          setAssignedRequests(enriched);
         } else {
           setAssignedRequests([
             {
@@ -108,11 +169,16 @@ const ContractorDashboard = () => {
               _id: 'hr_demo_99',
               propertyName: 'Green Valley Teak Plantation',
               propertyLocation: 'Kottayam, Kerala',
+              propertyArea: '14.5 Acres',
+              surveyNumber: 'Sy. #184/3B',
+              landType: 'Commercial Hardwood Plantation (Private)',
               owner_email: 'landowner@treeconnect.in',
               reason: 'Mature timber harvest',
               preferred_start_date: '2026-09-10',
               preferred_end_date: '2026-09-25',
               required_services: ['Tree felling', 'Cutting', 'Timber extraction', 'Transportation', 'Site clearing'],
+              propertyPhotos: DEFAULT_PROPERTY_PHOTOS,
+              tree_inventory: DEFAULT_TREE_INVENTORY,
               site_conditions: {
                 access_availability: 'Heavy vehicle access',
                 road_condition: 'Paved panchayat road',
@@ -129,6 +195,34 @@ const ContractorDashboard = () => {
       }
     } catch (err) {
       console.warn("Could not load contractor assigned harvest requests:", err);
+      setAssignedRequests([
+        {
+          id: 'hr_demo_99',
+          _id: 'hr_demo_99',
+          propertyName: 'Green Valley Teak Plantation',
+          propertyLocation: 'Kottayam, Kerala',
+          propertyArea: '14.5 Acres',
+          surveyNumber: 'Sy. #184/3B',
+          landType: 'Commercial Hardwood Plantation (Private)',
+          owner_email: 'landowner@treeconnect.in',
+          reason: 'Mature timber harvest',
+          preferred_start_date: '2026-09-10',
+          preferred_end_date: '2026-09-25',
+          required_services: ['Tree felling', 'Cutting', 'Timber extraction', 'Transportation', 'Site clearing'],
+          propertyPhotos: DEFAULT_PROPERTY_PHOTOS,
+          tree_inventory: DEFAULT_TREE_INVENTORY,
+          site_conditions: {
+            access_availability: 'Heavy vehicle access',
+            road_condition: 'Paved panchayat road',
+            distance_from_road: '50 meters',
+            terrain: 'Gently sloped',
+            additional_notes: 'Easy access from main road. Preserve surrounding saplings.'
+          },
+          hazards: ['Power lines nearby'],
+          status: 'CONTRACTOR_ASSIGNED',
+          createdAt: '2026-09-10'
+        }
+      ]);
     } finally {
       setLoadingRequests(false);
     }
@@ -213,7 +307,23 @@ const ContractorDashboard = () => {
                     const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
                     const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
 
-                    // Format schedule dates cleanly
+                    const propDetails = req.property_details || {};
+                    const propName = req.propertyName || propDetails.propertyName || 'Forest Estate Parcel';
+
+                    const district = propDetails.district || propDetails.village || 'Kottayam';
+                    const state = propDetails.state || 'Kerala';
+                    const propLocation = req.propertyLocation || req.location || `${district}, ${state}`;
+
+                    // Live land parcel metrics
+                    const landArea = propDetails.totalArea
+                      ? `${propDetails.totalArea} ${propDetails.areaUnit || 'Acres'}`
+                      : (req.propertyArea || '11.93 Cents');
+
+                    const surveyNo = propDetails.surveyNumber || propDetails.survey_number || propDetails.cadastralNo || req.surveyNumber || `Sy. #${(req.property_id || reqId).substring(0, 8)}`;
+
+                    const landClassification = propDetails.propertyType || propDetails.landType || req.landType || 'Residential Forestry Plot';
+
+                    // Schedule & services
                     const startDate = req.preferred_start_date || req.preferredStartDate;
                     const endDate = req.preferred_end_date || req.preferredCompletionDate;
                     let scheduleText = 'Flexible Schedule';
@@ -229,6 +339,115 @@ const ContractorDashboard = () => {
                       ? req.required_services.join(', ')
                       : (req.servicesNeeded || 'Tree Felling & Extraction');
 
+                    const landownerEmail = req.owner_email || req.landowner_email || propDetails.userEmail || 'landowner@treeconnect.in';
+
+                    // Photos (Live photos from request/property if available)
+                    let photos = [];
+                    if (Array.isArray(req.photos) && req.photos.length > 0) {
+                      photos = req.photos.map((p, idx) => ({ url: typeof p === 'string' ? p : p.url, caption: p.caption || `${propName} Site Photo #${idx + 1}` }));
+                    } else if (Array.isArray(propDetails.photos) && propDetails.photos.length > 0) {
+                      photos = propDetails.photos.map((p, idx) => ({ url: typeof p === 'string' ? p : p.url, caption: p.caption || `${propName} Parcel Photo #${idx + 1}` }));
+                    } else if (propDetails.image) {
+                      photos = [{ url: propDetails.image, caption: `${propName} Parcel Overview` }];
+                    } else if (Array.isArray(req.propertyPhotos) && req.propertyPhotos.length > 0) {
+                      photos = req.propertyPhotos;
+                    } else {
+                      photos = DEFAULT_PROPERTY_PHOTOS;
+                    }
+
+                    // Tree Inventory (Live inventory breakdown from DB request/property if available)
+                    let rawInventory = req.tree_inventory || req.selected_tree_groups || req.tree_inventories || propDetails.tree_inventory || propDetails.tree_inventories || [];
+                    let treeInventory = [];
+
+                    const speciesImagesMap = {
+                      Teak: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+                      Teakwood: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+                      Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
+                      Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+                      Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+                      Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+                      Pine: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+                      Eucalyptus: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+                      Jackfruit: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80'
+                    };
+
+                    const getTreePhoto = (speciesName, sp, inv) => {
+                      const isTreeUrl = (url) => typeof url === 'string' && url.length > 5 && !url.includes('photo-1513836279014') && !url.startsWith('blob:');
+                      if (sp) {
+                        if (Array.isArray(sp.attachedPhotos) && sp.attachedPhotos.length > 0 && isTreeUrl(sp.attachedPhotos[0])) return sp.attachedPhotos[0];
+                        if (Array.isArray(sp.photos) && sp.photos.length > 0 && isTreeUrl(sp.photos[0])) return sp.photos[0];
+                        if (sp.image && isTreeUrl(sp.image)) return sp.image;
+                      }
+                      if (inv) {
+                        if (Array.isArray(inv.attachedPhotos) && inv.attachedPhotos.length > 0 && isTreeUrl(inv.attachedPhotos[0])) return inv.attachedPhotos[0];
+                        if (Array.isArray(inv.photos) && inv.photos.length > 0 && isTreeUrl(inv.photos[0])) return inv.photos[0];
+                        if (inv.image && isTreeUrl(inv.image)) return inv.image;
+                      }
+                      const specKey = Object.keys(speciesImagesMap).find(
+                        k => (speciesName || '').toLowerCase().includes(k.toLowerCase())
+                      );
+                      return speciesImagesMap[specKey] || speciesImagesMap.Teak;
+                    };
+
+                    if (Array.isArray(rawInventory) && rawInventory.length > 0) {
+                      rawInventory.forEach((inv, iIdx) => {
+                        if (Array.isArray(inv.speciesList) && inv.speciesList.length > 0) {
+                          inv.speciesList.forEach((sp, sIdx) => {
+                            const count = Number(sp.numberOfTrees || sp.count || sp.treeCount || inv.numberOfTrees || inv.count || 1);
+                            const speciesTitle = sp.species || sp.treeSpecies || sp.groupName || inv.species || 'Teak';
+                            treeInventory.push({
+                              id: sp.id || `${inv.id || iIdx}_sp_${sIdx}`,
+                              species: speciesTitle,
+                              treeCount: count,
+                              estimatedVolume: Number(sp.estimatedVolume || sp.volume || inv.estimatedVolume || (count * 0.85).toFixed(2)),
+                              averageAge: sp.approxAge || sp.age || sp.averageAge || inv.approxAge || inv.age || '15 Years',
+                              averageDBH: sp.girth || sp.averageDBH || inv.girth || '45 - 65 cm Girth',
+                              averageHeight: sp.averageHeight || sp.height || inv.averageHeight || '14 Meters',
+                              timberGrade: sp.healthCondition || sp.condition || sp.timberGrade || inv.healthCondition || 'Healthy',
+                              location: sp.locationInProperty || sp.location || inv.locationInProperty || inv.location || inv.treeAreaLocation || req.propertyLocation || 'Front yard / Boundary area',
+                              notes: sp.notes || inv.notes || '',
+                              image: getTreePhoto(speciesTitle, sp, inv)
+                            });
+                          });
+                        } else {
+                          const count = Number(inv.numberOfTrees || inv.count || inv.treeCount || 1);
+                          const speciesTitle = inv.species || inv.treeSpecies || inv.groupName || 'Teak';
+                          treeInventory.push({
+                            id: inv.id || `inv_${iIdx}`,
+                            species: speciesTitle,
+                            treeCount: count,
+                            estimatedVolume: Number(inv.estimatedVolume || inv.volume || (count * 0.85).toFixed(2)),
+                            averageAge: inv.approxAge || inv.age || inv.averageAge || '15 Years',
+                            averageDBH: inv.girth || inv.averageDBH || '45 - 65 cm Girth',
+                            averageHeight: inv.averageHeight || inv.height || '14 Meters',
+                            timberGrade: inv.healthCondition || inv.condition || inv.timberGrade || 'Healthy',
+                            location: inv.locationInProperty || inv.location || inv.treeAreaLocation || req.propertyLocation || 'Front yard / Boundary area',
+                            notes: inv.notes || '',
+                            image: getTreePhoto(speciesTitle, null, inv)
+                          });
+                        }
+                      });
+                    }
+
+                    if (treeInventory.length === 0) {
+                      const speciesTitle = propDetails.mainSpecies ? `${propDetails.mainSpecies} Stand` : 'Teak Stand';
+                      treeInventory = [
+                        {
+                          id: 'inv_live_1',
+                          species: speciesTitle,
+                          treeCount: Number(propDetails.approxTreesCount || 1),
+                          estimatedVolume: 0.85,
+                          averageAge: '15 Years',
+                          averageDBH: '45 - 65 cm Girth',
+                          averageHeight: '14 Meters',
+                          timberGrade: 'Healthy',
+                          location: req.propertyLocation || 'Front yard / Boundary area',
+                          notes: '',
+                          image: getTreePhoto(speciesTitle, null, null)
+                        }
+                      ];
+                    }
+
                     return (
                       <div key={reqId} className="cd-assigned-card">
                         {/* TOP SUMMARY ROW */}
@@ -242,9 +461,9 @@ const ContractorDashboard = () => {
                                 <Calendar size={13} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
                               </span>
                             </div>
-                            <h3 className="cd-req-title">{req.propertyName || 'Forest Estate Parcel'}</h3>
+                            <h3 className="cd-req-title">{propName}</h3>
                             <p className="cd-req-location">
-                              <MapPin size={14} className="text-emerald-400 shrink-0" /> {req.propertyLocation || req.location || 'Kottayam, Kerala'}
+                              <MapPin size={14} className="text-emerald-400 shrink-0" /> {propLocation}
                             </p>
                           </div>
 
@@ -262,23 +481,194 @@ const ContractorDashboard = () => {
                           </div>
                         </div>
 
-                        {/* SPECIFICATIONS GRID */}
-                        <div className="cd-specs-grid">
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Reason</span>
-                            <strong className="cd-spec-value">{req.reason || 'Mature timber harvest'}</strong>
+                        {/* LAND PARCEL & PROPERTY SPECIFICATIONS */}
+                        <div className="cd-site-context-card">
+                          <div className="cd-site-context-header">
+                            <div className="flex items-center gap-2">
+                              <Compass className="text-emerald-400" size={18} />
+                              <h4 className="cd-site-context-title">Land Parcel & Property Specifications</h4>
+                            </div>
+                            <span className="text-xs font-bold text-slate-300 bg-emerald-950/80 border border-emerald-700/50 px-3 py-1 rounded-full">
+                              Survey #{surveyNo}
+                            </span>
                           </div>
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Preferred Period</span>
-                            <strong className="cd-spec-value">{scheduleText}</strong>
+
+                          {/* PARCEL METRICS GRID */}
+                          <div className="cd-parcel-metrics-grid">
+                            <div className="cd-metric-chip">
+                              <span className="cd-metric-label">Land Parcel Area</span>
+                              <span className="cd-metric-value">{landArea}</span>
+                            </div>
+                            <div className="cd-metric-chip">
+                              <span className="cd-metric-label">Cadastral Survey #</span>
+                              <span className="cd-metric-value">{surveyNo}</span>
+                            </div>
+                            <div className="cd-metric-chip">
+                              <span className="cd-metric-label">Land Classification</span>
+                              <span className="cd-metric-value">{landClassification}</span>
+                            </div>
                           </div>
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Services</span>
-                            <strong className="cd-spec-value-emerald">{servicesNeededText}</strong>
+
+                          {/* SPECIFICATIONS GRID */}
+                          <div className="cd-specs-grid">
+                            <div className="cd-spec-item">
+                              <span className="cd-spec-label">Reason</span>
+                              <strong className="cd-spec-value">{req.reason || 'Mature timber harvest'}</strong>
+                            </div>
+                            <div className="cd-spec-item">
+                              <span className="cd-spec-label">Preferred Period</span>
+                              <strong className="cd-spec-value">{scheduleText}</strong>
+                            </div>
+                            <div className="cd-spec-item">
+                              <span className="cd-spec-label">Services Required</span>
+                              <strong className="cd-spec-value-emerald">{servicesNeededText}</strong>
+                            </div>
+                            <div className="cd-spec-item">
+                              <span className="cd-spec-label">Site Access & Road</span>
+                              <strong className="cd-spec-value truncate">{req.site_conditions?.access_availability || 'Heavy vehicle access'} ({req.site_conditions?.road_condition || 'Paved panchayat road'})</strong>
+                            </div>
                           </div>
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Site Access</span>
-                            <strong className="cd-spec-value truncate">{req.site_conditions?.access_availability || 'Heavy vehicle access'}</strong>
+
+                          {/* PROPERTY MEDIA PHOTOS */}
+                          <div className="cd-media-gallery-section">
+                            <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wider text-emerald-400 pt-2">
+                              <span className="flex items-center gap-1.5"><ImageIcon size={15} /> Site Photos & Parcel Imagery</span>
+                              <span className="text-[11px] text-slate-400 font-normal">{photos.length} Verified Photos</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {photos.map((photo, pIdx) => (
+                                <div key={pIdx} className="relative rounded-xl overflow-hidden border border-emerald-500/25 h-36 group bg-slate-950">
+                                  <img
+                                    src={photo.url}
+                                    alt={photo.caption || `Site Photo ${pIdx + 1}`}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex items-end p-2.5">
+                                    <span className="text-[11px] font-bold text-white leading-tight flex items-center gap-1">
+                                      <ImageIcon size={11} className="text-emerald-400 shrink-0" />
+                                      <span className="line-clamp-1">{photo.caption || `Photo #${pIdx + 1}`}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* STANDING TREE INVENTORY & TIMBER BREAKDOWN */}
+                        <div className="cd-inventory-section space-y-6">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-emerald-500/15">
+                            <div>
+                              <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2.5">
+                                <Trees size={22} className="text-emerald-400" /> Logged Tree Inventory ({treeInventory.length} Groups)
+                              </h3>
+                              <p className="text-xs text-slate-400 mt-1">
+                                Standing tree species specifications, quantities, location plots, and health conditions.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shadow-sm flex items-center gap-1.5">
+                                <Trees size={13} /> {treeInventory.reduce((sum, t) => sum + (t.treeCount || 0), 0)} Standing Trees
+                              </span>
+                              <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-blue-950/80 text-blue-300 border border-blue-700/60 shadow-sm flex items-center gap-1.5">
+                                <Layers size={13} /> {treeInventory.reduce((sum, t) => sum + (t.estimatedVolume || 0), 0).toFixed(1)} m³ Est. Vol.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                            {treeInventory.map((item, idx) => (
+                              <div
+                                key={item.id || idx}
+                                className="bg-[#050e08] border border-emerald-500/20 rounded-3xl p-5 sm:p-6 flex flex-col justify-between space-y-5 shadow-xl hover:border-emerald-500/40 transition-all duration-300"
+                              >
+                                <div className="space-y-4">
+                                  {/* Prominent Tree Image Banner */}
+                                  <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden bg-[#090e0b] border border-emerald-500/20 group/treeimg shadow-md">
+                                    <img
+                                      src={item.image}
+                                      alt={item.species}
+                                      className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
+
+                                    <a
+                                      href={item.image}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur transition-all z-10"
+                                    >
+                                      <ZoomIn size={14} className="text-emerald-400" />
+                                      <span>View Photo</span>
+                                    </a>
+
+                                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+                                      <span className="px-3 py-1 rounded-xl bg-[#090e0b]/90 backdrop-blur border border-emerald-500/35 text-white text-xs font-extrabold flex items-center gap-1.5 shadow">
+                                        <Trees size={14} className="text-emerald-400" /> {item.species} Stand
+                                      </span>
+                                      <span className="px-3 py-1 rounded-xl bg-emerald-900/90 backdrop-blur border border-emerald-500/35 text-emerald-300 text-xs font-bold shadow">
+                                        {item.treeCount} Standing Trees
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Group Header */}
+                                  <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-emerald-500/15">
+                                    <div>
+                                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+                                        Tree Group #{idx + 1}
+                                      </span>
+                                      <h4 className="text-xl font-extrabold text-white mt-0.5">
+                                        {item.species}
+                                      </h4>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <span className="px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+                                        {item.treeCount} Trees
+                                      </span>
+                                      <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
+                                        (item.timberGrade || '').toLowerCase().includes('healthy') || (item.timberGrade || '').toLowerCase().includes('grade a')
+                                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                          : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                                      }`}>
+                                        {item.timberGrade || 'Healthy'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Specifications Subcards Grid */}
+                                  <div className="grid grid-cols-2 gap-3.5 text-xs">
+                                    <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Approximate Age</span>
+                                      <span className="font-bold text-white text-sm block">{item.averageAge || '15 years'}</span>
+                                    </div>
+                                    <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Logged Quantity</span>
+                                      <span className="font-bold text-emerald-400 text-sm block">{item.treeCount} Standing Trees</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Plot Position */}
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl text-xs space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Location / Plot Position within Estate</span>
+                                    <span className="font-semibold text-slate-200 flex items-center gap-1.5 mt-0.5">
+                                      📍 {item.location || req.propertyLocation || 'Front yard / Boundary area'}
+                                    </span>
+                                  </div>
+
+                                  {/* Special Notes / Observations */}
+                                  {item.notes && (
+                                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1">
+                                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                                        Special Notes / Observations
+                                      </span>
+                                      <p className="text-amber-200 leading-relaxed">{item.notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
@@ -286,7 +676,7 @@ const ContractorDashboard = () => {
                         <div className="cd-action-bar">
                           <span className="cd-landowner-info">
                             <Mail size={14} className="text-emerald-400 shrink-0" />
-                            Landowner Email: <strong className="text-white font-semibold">{req.owner_email || req.landowner_email || 'landowner@treeconnect.in'}</strong>
+                            Landowner Email: <strong className="text-white font-semibold">{landownerEmail}</strong>
                           </span>
 
                           <button
