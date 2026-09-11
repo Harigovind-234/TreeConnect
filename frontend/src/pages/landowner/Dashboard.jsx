@@ -437,7 +437,7 @@ const LandownerDashboard = () => {
               <div className="ld-estates-grid">
                 {properties.slice(0, 3).map((p) => {
                   const pId = p.id || p._id;
-                  const coverPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : (p.image || 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=600&q=80');
+                  const coverPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : (p.image || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=600&q=80');
                   return (
                     <div key={pId} className="ld-estate-item group">
                       <div>

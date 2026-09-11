@@ -21,25 +21,48 @@ import {
 } from 'lucide-react';
 
 const speciesImagesMap = {
-  Teak: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  Teak: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+  Teakwood: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
   Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
   'Western Red Cedar': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
   Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
   Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
   Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  Pine: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  'Douglas Fir': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  Eucalyptus: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  Jackfruit: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  Pine: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Douglas Fir': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+  Eucalyptus: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+  Jackfruit: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
   Mango: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-  Other: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80'
+  Other: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
 };
 
-const getTreeSpeciesPhoto = (species, attachedPhotos = []) => {
-  if (attachedPhotos && attachedPhotos.length > 0) {
-    const validPhoto = attachedPhotos.find(p => p && typeof p === 'string' && !p.startsWith('blob:'));
-    if (validPhoto) return validPhoto;
+const getTreeSpeciesPhoto = (species, attachedPhotos = [], invPhotos = [], propPhotos = []) => {
+  const extractUrl = (p) => {
+    if (!p) return null;
+    if (typeof p === 'string' && p.trim().length > 5) return p.trim();
+    if (typeof p === 'object') return p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || null;
+    return null;
+  };
+
+  if (Array.isArray(attachedPhotos)) {
+    for (const p of attachedPhotos) {
+      const u = extractUrl(p);
+      if (u) return u;
+    }
   }
+  if (Array.isArray(invPhotos)) {
+    for (const p of invPhotos) {
+      const u = extractUrl(p);
+      if (u) return u;
+    }
+  }
+  if (Array.isArray(propPhotos)) {
+    for (const p of propPhotos) {
+      const u = extractUrl(p);
+      if (u) return u;
+    }
+  }
+
   const specKey = Object.keys(speciesImagesMap).find(
     k => (species || '').toLowerCase().includes(k.toLowerCase())
   );
@@ -290,7 +313,7 @@ const TreeInventoryPage = () => {
                         {allTreeGroups.length > 0 ? (
                           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                             {allTreeGroups.map((tg, idx) => {
-                              const groupImage = getTreeSpeciesPhoto(tg.species, tg.attachedPhotos);
+                              const groupImage = getTreeSpeciesPhoto(tg.species, tg.attachedPhotos, tg.photos, p?.photos || p?.propertyPhotos);
                               return (
                                 <div
                                   key={idx}
@@ -308,7 +331,7 @@ const TreeInventoryPage = () => {
 
                                       <button
                                         type="button"
-                                        onClick={() => openLightbox([groupImage], 0, `${p.propertyName} - ${tg.species} Tree Group (${tg.count} Trees)`)}
+                                        onClick={() => openLightbox([groupImage], 0, `${p?.propertyName || 'Property'} - ${tg.species} Tree Group (${tg.count} Trees)`)}
                                         className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur cursor-pointer transition-all z-10"
                                       >
                                         <ZoomIn size={14} className="text-emerald-400" />

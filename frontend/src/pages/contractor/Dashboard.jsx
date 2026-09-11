@@ -34,6 +34,7 @@ import {
   Trees,
   ZoomIn,
   Image as ImageIcon,
+  Camera,
   Loader2,
   Mail,
   ExternalLink
@@ -41,7 +42,7 @@ import {
 
 const DEFAULT_PROPERTY_PHOTOS = [
   {
-    url: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=1000&q=80',
+    url: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1000&q=80',
     caption: 'Harvest Parcel Overview - Standing Teak Stand'
   },
   {
@@ -64,7 +65,7 @@ const DEFAULT_TREE_INVENTORY = [
     averageDBH: '45 - 65 cm Girth',
     averageHeight: '14 Meters',
     timberGrade: 'Healthy / Commercial',
-    image: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=600&q=80'
+    image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
   }
 ];
 
@@ -360,29 +361,141 @@ const ContractorDashboard = () => {
                     let treeInventory = [];
 
                     const speciesImagesMap = {
-                      Teak: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-                      Teakwood: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+                      Teak: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+                      Teakwood: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
                       Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
                       Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
                       Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
                       Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-                      Pine: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-                      Eucalyptus: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-                      Jackfruit: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80'
+                      Pine: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+                      Eucalyptus: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+                      Jackfruit: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+                      Other: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
                     };
 
                     const getTreePhoto = (speciesName, sp, inv) => {
-                      const isTreeUrl = (url) => typeof url === 'string' && url.length > 5 && !url.includes('photo-1513836279014') && !url.startsWith('blob:');
+                      const extractUrl = (p) => {
+                        if (!p) return null;
+                        let str = '';
+                        if (typeof p === 'string') str = p.trim();
+                        else if (typeof p === 'object' && p) str = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
+
+                        if (!str || str.length < 5) return null;
+
+                        // Reject fake / legacy misty pine forest images
+                        if (str.includes('photo-1473448912268')) return null;
+
+                        return str;
+                      };
+
+                      // 1. Direct photo on species item (sp)
                       if (sp) {
-                        if (Array.isArray(sp.attachedPhotos) && sp.attachedPhotos.length > 0 && isTreeUrl(sp.attachedPhotos[0])) return sp.attachedPhotos[0];
-                        if (Array.isArray(sp.photos) && sp.photos.length > 0 && isTreeUrl(sp.photos[0])) return sp.photos[0];
-                        if (sp.image && isTreeUrl(sp.image)) return sp.image;
+                        const spPhotos = Array.isArray(sp.attachedPhotos) ? sp.attachedPhotos : (Array.isArray(sp.photos) ? sp.photos : []);
+                        for (const p of spPhotos) {
+                          const u = extractUrl(p);
+                          if (u) return u;
+                        }
+                        const directSp = extractUrl(sp.image || sp.photo || sp.previewUrl || sp.dataUrl);
+                        if (directSp) return directSp;
                       }
+
+                      // 2. Direct photo on tree inventory item (inv)
                       if (inv) {
-                        if (Array.isArray(inv.attachedPhotos) && inv.attachedPhotos.length > 0 && isTreeUrl(inv.attachedPhotos[0])) return inv.attachedPhotos[0];
-                        if (Array.isArray(inv.photos) && inv.photos.length > 0 && isTreeUrl(inv.photos[0])) return inv.photos[0];
-                        if (inv.image && isTreeUrl(inv.image)) return inv.image;
+                        const invPhotos = Array.isArray(inv.attachedPhotos) ? inv.attachedPhotos : (Array.isArray(inv.photos) ? inv.photos : []);
+                        for (const p of invPhotos) {
+                          const u = extractUrl(p);
+                          if (u) return u;
+                        }
+                        const directInv = extractUrl(inv.image || inv.photo || inv.previewUrl || inv.dataUrl);
+                        if (directInv) return directInv;
                       }
+
+                      // 3. Direct photo from harvest request level photos (uploaded by landowner)
+                      const reqLevelPhotos = Array.isArray(req.photos) ? req.photos : (Array.isArray(req.propertyPhotos) ? req.propertyPhotos : (Array.isArray(propDetails.photos) ? propDetails.photos : []));
+                      for (const p of reqLevelPhotos) {
+                        const u = extractUrl(p);
+                        if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
+                      }
+
+                      // 4. Search localStorage treeconnect_inventories (landowner logged tree inventory photos)
+                      try {
+                        const storedInventoriesRaw = localStorage.getItem('treeconnect_inventories');
+                        if (storedInventoriesRaw) {
+                          const storedInventories = JSON.parse(storedInventoriesRaw);
+                          if (Array.isArray(storedInventories)) {
+                            const propId = req?.property_id || req?.propertyId || inv?.propertyId || inv?.property_id;
+                            const ownerEmail = req?.owner_email || req?.landowner_email || req?.userEmail;
+
+                            const matchingInvs = storedInventories.filter(item => {
+                              if (!item) return false;
+                              if (propId && (item.propertyId === propId || item.property_id === propId || String(item.propertyId) === String(propId))) return true;
+                              if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
+                              if (req?.propertyName && item.propertyName && item.propertyName.toLowerCase() === req.propertyName.toLowerCase()) return true;
+                              return false;
+                            });
+
+                            for (const item of matchingInvs) {
+                              if (Array.isArray(item.photos)) {
+                                for (const p of item.photos) {
+                                  const u = extractUrl(p);
+                                  if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
+                                }
+                              }
+                              if (Array.isArray(item.speciesList)) {
+                                for (const s of item.speciesList) {
+                                  if (Array.isArray(s.photos)) {
+                                    for (const p of s.photos) {
+                                      const u = extractUrl(p);
+                                      if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
+                                    }
+                                  }
+                                  const su = extractUrl(s.image || s.photo);
+                                  if (su && !su.includes('photo-1542273917363-3b1817f69a2d')) return su;
+                                }
+                              }
+                              const itemUrl = extractUrl(item.image || item.photo);
+                              if (itemUrl && !itemUrl.includes('photo-1542273917363-3b1817f69a2d')) return itemUrl;
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.warn('Error reading treeconnect_inventories from localStorage:', e);
+                      }
+
+                      // 5. Search localStorage treeconnect_properties
+                      try {
+                        const storedPropsRaw = localStorage.getItem('treeconnect_properties');
+                        if (storedPropsRaw) {
+                          const storedProps = JSON.parse(storedPropsRaw);
+                          if (Array.isArray(storedProps)) {
+                            const propId = req?.property_id || req?.propertyId || inv?.propertyId || inv?.property_id;
+                            const ownerEmail = req?.owner_email || req?.landowner_email || req?.userEmail;
+
+                            const matchingProp = storedProps.find(item => {
+                              if (!item) return false;
+                              if (propId && (item.id === propId || item._id === propId || String(item.id) === String(propId) || String(item._id) === String(propId))) return true;
+                              if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
+                              if (req?.propertyName && item.propertyName && item.propertyName.toLowerCase() === req.propertyName.toLowerCase()) return true;
+                              return false;
+                            });
+
+                            if (matchingProp) {
+                              if (Array.isArray(matchingProp.photos)) {
+                                for (const p of matchingProp.photos) {
+                                  const u = extractUrl(p);
+                                  if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
+                                }
+                              }
+                              const pu = extractUrl(matchingProp.image);
+                              if (pu && !pu.includes('photo-1542273917363-3b1817f69a2d')) return pu;
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.warn('Error reading treeconnect_properties from localStorage:', e);
+                      }
+
+                      // 6. Fallback species image (Authentic Kerala Teak Stand)
                       const specKey = Object.keys(speciesImagesMap).find(
                         k => (speciesName || '').toLowerCase().includes(k.toLowerCase())
                       );
@@ -588,6 +701,10 @@ const ContractorDashboard = () => {
                                     <img
                                       src={item.image}
                                       alt={item.species}
+                                      onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80';
+                                      }}
                                       className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />

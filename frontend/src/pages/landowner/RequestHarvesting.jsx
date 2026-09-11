@@ -22,13 +22,14 @@ import {
   ShieldCheck,
   Send,
   MapPin,
+  Camera,
   Check,
   AlertCircle,
   RefreshCw,
   X
 } from 'lucide-react';
 
-const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=1200&q=80';
+const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1200&q=80';
 
 const getPropertyImage = (p) => {
   if (!p) return DEFAULT_PROPERTY_IMAGE;
@@ -45,19 +46,19 @@ const getPropertyImage = (p) => {
 };
 
 const speciesImagesMap = {
-  Teak: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-  Teakwood: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  Teak: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+  Teakwood: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
   Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
   'Western Red Cedar': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
   Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
   Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
   Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  Pine: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  'Douglas Fir': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  Eucalyptus: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  Jackfruit: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  Pine: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Douglas Fir': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+  Eucalyptus: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
+  Jackfruit: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
   Mango: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-  Other: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80'
+  Other: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
 };
 
 const getTreePhoto = (g) => {
@@ -65,22 +66,21 @@ const getTreePhoto = (g) => {
 
   const extractUrl = (ph) => {
     if (!ph) return null;
-    if (typeof ph === 'string' && ph.trim()) return ph;
+    if (typeof ph === 'string' && ph.trim().length > 5) return ph.trim();
     if (typeof ph === 'object') {
       return ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || null;
     }
     return null;
   };
 
-  const directImg = extractUrl(g.image);
-  if (directImg) return directImg;
-
-  if (Array.isArray(g.photos) && g.photos.length > 0) {
-    for (const ph of g.photos) {
-      const u = extractUrl(ph);
-      if (u) return u;
-    }
+  const photosList = Array.isArray(g.attachedPhotos) ? g.attachedPhotos : (Array.isArray(g.photos) ? g.photos : []);
+  for (const ph of photosList) {
+    const u = extractUrl(ph);
+    if (u) return u;
   }
+
+  const directImg = extractUrl(g.image || g.photo);
+  if (directImg) return directImg;
 
   const specKey = Object.keys(speciesImagesMap).find(
     k => (g.species || '').toLowerCase().includes(k.toLowerCase())
@@ -169,13 +169,14 @@ const RequestHarvesting = () => {
   // 2. Unpack live inventories and their speciesList
   activeInventories.forEach((inv, invIdx) => {
     const invPhotos = Array.isArray(inv.photos) ? inv.photos : (inv.photo ? [inv.photo] : (inv.image ? [inv.image] : []));
+    const propPhotos = Array.isArray(activeProperty?.photos) ? activeProperty.photos : (activeProperty?.image ? [activeProperty.image] : []);
 
     if (Array.isArray(inv.speciesList) && inv.speciesList.length > 0) {
       inv.speciesList.forEach((sp, spIdx) => {
         const count = Number(sp.numberOfTrees || sp.count || sp.quantity || 20);
         const spPhotos = Array.isArray(sp.photos) && sp.photos.length > 0
           ? sp.photos
-          : (sp.photo ? [sp.photo] : (sp.image ? [sp.image] : invPhotos));
+          : (sp.photo ? [sp.photo] : (sp.image ? [sp.image] : (Array.isArray(sp.attachedPhotos) && sp.attachedPhotos.length > 0 ? sp.attachedPhotos : (invPhotos.length > 0 ? invPhotos : propPhotos))));
 
         extractedTreeGroups.push({
           id: sp.id || sp._id || `inv_${invIdx}_sp_${spIdx}`,
@@ -188,11 +189,13 @@ const RequestHarvesting = () => {
           girth: sp.girth || sp.girthInfo || sp.averageDbh || '65 - 85 cm',
           image: spPhotos[0] || null,
           photos: spPhotos,
+          attachedPhotos: spPhotos,
           estimatedVolume: sp.estimatedVolume || `${(count * 0.75).toFixed(1)} m³`
         });
       });
     } else if (inv.species || inv.treeSpecies || inv.groupName) {
       const count = Number(inv.numberOfTrees || inv.count || 20);
+      const photosToUse = invPhotos.length > 0 ? invPhotos : propPhotos;
       extractedTreeGroups.push({
         id: inv.id || inv._id || `inv_${invIdx}`,
         groupName: inv.groupName || inv.standName || `${inv.species || inv.treeSpecies || 'Teak'} Stand #${invIdx + 1}`,
@@ -202,8 +205,9 @@ const RequestHarvesting = () => {
         condition: inv.condition || inv.healthCondition || 'Healthy',
         location: inv.location || inv.treeAreaLocation || activeProperty?.district || 'Kottayam',
         girth: inv.girth || inv.girthInfo || '65 - 85 cm',
-        image: invPhotos[0] || null,
-        photos: invPhotos,
+        image: photosToUse[0] || null,
+        photos: photosToUse,
+        attachedPhotos: photosToUse,
         estimatedVolume: inv.estimatedVolume || `${(count * 0.75).toFixed(1)} m³`
       });
     }

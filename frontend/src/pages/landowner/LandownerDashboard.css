@@ -1189,3 +1189,388 @@
   white-space: nowrap !important;
   box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
 }
+
+/* ==================================================== */
+/* HARVEST REQUEST CARDS - MATCHING IMAGE 1 INVENTORY CSS */
+/* ==================================================== */
+
+.harvest-requests-header-card {
+  background: linear-gradient(135deg, #07170e 0%, #0d2216 50%, #07170e 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 24px !important;
+  padding: 32px 36px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 24px !important;
+}
+
+.harvest-request-card {
+  background: #0d1712 !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 24px !important;
+  padding: 32px 36px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 24px !important;
+  transition: all 0.25s ease-in-out !important;
+}
+
+.harvest-request-card:hover {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 25px rgba(16, 185, 129, 0.08) !important;
+}
+
+.harvest-card-top {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15) !important;
+  padding-bottom: 20px !important;
+}
+
+@media (min-width: 640px) {
+  .harvest-card-top {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.harvest-pills-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+.harvest-tag-pill {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  color: #34d399 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  font-family: monospace !important;
+  text-transform: uppercase !important;
+  padding: 4px 12px !important;
+  border-radius: 9999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.harvest-date-pill {
+  color: #9ca3af !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.harvest-card-title {
+  font-size: 26px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  margin: 6px 0 0 0 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.25 !important;
+}
+
+.harvest-card-location {
+  font-size: 13px !important;
+  color: #d1d5db !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-top: 4px !important;
+}
+
+/* STATUS BADGES */
+.harvest-status-pill {
+  padding: 8px 18px !important;
+  border-radius: 9999px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  letter-spacing: 0.02em !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  white-space: nowrap !important;
+}
+
+.harvest-status-submitted {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.6) !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.15) !important;
+}
+
+.harvest-status-ready {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border: 1px solid rgba(16, 185, 129, 0.6) !important;
+  color: #34d399 !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.18) !important;
+}
+
+.harvest-status-assigned {
+  background: rgba(59, 130, 246, 0.14) !important;
+  border: 1px solid rgba(59, 130, 246, 0.5) !important;
+  color: #60a5fa !important;
+}
+
+.harvest-status-pending {
+  background: rgba(148, 163, 184, 0.1) !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  color: #cbd5e1 !important;
+}
+
+/* STAT SPECIFICATIONS GRID - 4 COLUMN CARD DISPLAY MATCHING IMAGE 1 */
+.harvest-specs-grid {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+}
+
+@media (min-width: 640px) {
+  .harvest-specs-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .harvest-specs-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+.harvest-spec-box {
+  background: #07130c !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+  border-radius: 16px !important;
+  padding: 20px 22px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  min-height: 100px !important;
+  transition: all 0.2s ease !important;
+}
+
+.harvest-spec-box:hover {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  background: #0a1a10 !important;
+}
+
+.harvest-spec-label {
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  color: #9ca3af !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  margin-bottom: 8px !important;
+  display: block !important;
+}
+
+.harvest-spec-value {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  line-height: 1.3 !important;
+  display: block !important;
+}
+
+.harvest-spec-value-highlight {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  color: #34d399 !important;
+  line-height: 1.3 !important;
+  display: block !important;
+}
+
+/* SITE CONDITIONS BAR */
+.harvest-site-conditions {
+  background: #07130c !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+  border-radius: 14px !important;
+  padding: 16px 22px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+@media (min-width: 640px) {
+  .harvest-site-conditions {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.harvest-conditions-title {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  white-space: nowrap !important;
+}
+
+.harvest-conditions-list {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 20px !important;
+  font-size: 12.5px !important;
+  color: #9ca3af !important;
+}
+
+.harvest-conditions-list strong {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+/* ASSIGNED CONTRACTOR FOOTER BAR */
+.harvest-contractor-footer {
+  background: #07130c !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 16px !important;
+  padding: 20px 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+@media (min-width: 640px) {
+  .harvest-contractor-footer {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.harvest-contractor-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.harvest-contractor-avatar {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  color: #34d399 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+.harvest-contractor-subhead {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  display: block !important;
+}
+
+.harvest-contractor-name {
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
+  display: block !important;
+}
+
+.harvest-contractor-desc {
+  font-size: 12px !important;
+  color: #9ca3af !important;
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
+}
+
+.harvest-contractor-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+.harvest-btn-contact {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  color: #34d399 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  padding: 8px 16px !important;
+  border-radius: 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  text-decoration: none !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+.harvest-btn-contact:hover {
+  background: rgba(16, 185, 129, 0.22) !important;
+  color: #a7f3d0 !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2) !important;
+}
+
+.harvest-btn-change {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #e2e8f0 !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  padding: 8px 16px !important;
+  border-radius: 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+.harvest-btn-change:hover {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+.harvest-btn-assign {
+  background: #10b981 !important;
+  color: #050e08 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  padding: 10px 20px !important;
+  border-radius: 10px !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.harvest-btn-assign:hover {
+  background: #34d399 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4) !important;
+}
+

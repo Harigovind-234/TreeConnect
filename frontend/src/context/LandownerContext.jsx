@@ -63,7 +63,7 @@ const DEFAULT_TREE_INVENTORIES = [
         treeAreaLocation: 'Koovapally Sector A',
         girth: '65 - 85 cm',
         estimatedVolume: '18.5 m³',
-        photos: ['https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80'],
+        photos: ['https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'],
         speciesList: [
             {
                 id: 'treee_sp_101',
@@ -76,7 +76,7 @@ const DEFAULT_TREE_INVENTORIES = [
                 locationOnProperty: 'Koovapally Sector A',
                 girth: '65 - 85 cm',
                 estimatedVolume: '18.5 m³',
-                photos: ['https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80']
+                photos: ['https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80']
             }
         ],
         updatedAt: '2026-09-10'

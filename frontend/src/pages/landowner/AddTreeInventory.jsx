@@ -124,10 +124,10 @@ const AddTreeInventory = () => {
     if (photos) {
       if (typeof photos === 'string') {
         photoUrls = [photos];
-      } else if (photos.dataUrl) {
-        photoUrls = [photos.dataUrl];
-      } else if (photos.previewUrl) {
-        photoUrls = [photos.previewUrl];
+      } else if (Array.isArray(photos)) {
+        photoUrls = photos.map(p => typeof p === 'string' ? p : (p.dataUrl || p.previewUrl || p.url)).filter(Boolean);
+      } else if (photos.dataUrl || photos.previewUrl || photos.url) {
+        photoUrls = [photos.dataUrl || photos.previewUrl || photos.url];
       }
     }
 
@@ -137,14 +137,19 @@ const AddTreeInventory = () => {
       speciesList: treeGroups.map(tg => ({
         id: tg.id,
         treeSpecies: tg.species,
+        species: tg.species,
         numberOfTrees: Number(tg.numberOfTrees),
         approxAge: tg.approxAge,
         treeCondition: tg.condition,
         notes: tg.notes,
-        locationInProperty: tg.locationInProperty
+        locationInProperty: tg.locationInProperty,
+        photos: photoUrls,
+        attachedPhotos: photoUrls,
+        image: photoUrls[0] || null
       })),
       treeAreaLocation: treeGroups[0]?.locationInProperty || 'Main Estate Area',
-      photos: photoUrls
+      photos: photoUrls,
+      attachedPhotos: photoUrls
     };
 
     try {
