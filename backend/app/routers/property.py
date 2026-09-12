@@ -240,9 +240,30 @@ def delete_property(property_id: str):
                 content={"message": "Property not found for deletion"}
             )
 
+        # Cascade cleanup associated tree inventories, harvest requests & assessments
+        try:
+            or_prop_conds = [{"propertyId": property_id}, {"property_id": property_id}]
+            if ObjectId.is_valid(property_id):
+                or_prop_conds.extend([{"propertyId": ObjectId(property_id)}, {"property_id": ObjectId(property_id)}])
+            db.tree_inventories.delete_many({"$or": or_prop_conds})
+
+            or_req_conds = [{"property_id": property_id}]
+            if ObjectId.is_valid(property_id):
+                or_req_conds.append({"property_id": ObjectId(property_id)})
+
+            reqs_to_delete = list(db.harvest_requests.find({"$or": or_req_conds}))
+            for r_doc in reqs_to_delete:
+                r_id = str(r_doc.get("_id", ""))
+                if r_id:
+                    db.contractor_assessments.delete_many({"harvest_request_id": r_id})
+
+            db.harvest_requests.delete_many({"$or": or_req_conds})
+        except Exception as cascade_err:
+            print(f"[WARN] Cascade cleanup error for property {property_id}: {cascade_err}")
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"message": "Property deleted successfully from DB"}
+            content={"message": "Property and associated harvest records deleted successfully from DB"}
         )
     except Exception as e:
         return JSONResponse(

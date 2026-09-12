@@ -87,6 +87,17 @@ export const harvestService = {
       console.error(`Error in harvestService.actionAssessment (${requestId}):`, error);
       throw error.response?.data || error;
     }
+  },
+
+  // Delete harvest request
+  deleteHarvestRequest: async (id) => {
+    try {
+      const response = await api.delete(`/harvest-requests/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.deleteHarvestRequest (${id}):`, error);
+      throw error.response?.data || error;
+    }
   }
 };
 

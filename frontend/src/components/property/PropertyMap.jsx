@@ -1,7 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Search, Crosshair, CheckCircle2, Layers, Loader2, RefreshCw } from 'lucide-react';
 
-const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222 }) => {
+const KERALA_DISTRICT_COORDS = {
+  'Kottayam': { lat: 9.5916, lng: 76.5222, label: 'Kottayam, Kerala' },
+  'Wayanad': { lat: 11.6854, lng: 76.1320, label: 'Kalpetta, Wayanad, Kerala' },
+  'Idukki': { lat: 9.8497, lng: 76.9806, label: 'Painavu, Idukki, Kerala' },
+  'Ernakulam': { lat: 9.9816, lng: 76.2999, label: 'Kochi, Ernakulam, Kerala' },
+  'Thrissur': { lat: 10.5276, lng: 76.2144, label: 'Thrissur, Kerala' },
+  'Palakkad': { lat: 10.7867, lng: 76.6548, label: 'Palakkad, Kerala' },
+  'Kozhikode': { lat: 11.2588, lng: 75.7804, label: 'Kozhikode, Kerala' },
+  'Malappuram': { lat: 11.0720, lng: 76.0740, label: 'Malappuram, Kerala' },
+  'Kannur': { lat: 11.8745, lng: 75.3704, label: 'Kannur, Kerala' },
+  'Kollam': { lat: 8.8932, lng: 76.6141, label: 'Kollam, Kerala' },
+  'Alappuzha': { lat: 9.4981, lng: 76.3388, label: 'Alappuzha, Kerala' },
+  'Pathanamthitta': { lat: 9.2648, lng: 76.7870, label: 'Pathanamthitta, Kerala' },
+  'Thiruvananthapuram': { lat: 8.5241, lng: 76.9366, label: 'Thiruvananthapuram, Kerala' },
+  'Kasaragod': { lat: 12.5102, lng: 74.9852, label: 'Kasaragod, Kerala' }
+};
+
+const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222, addressData }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLocating, setIsLocating] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -15,13 +32,19 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
     locationLabel: 'Meenachil, Pala, Kottayam'
   });
 
-  // Reverse Geocode helper using OpenStreetMap Nominatim
+  // Reverse Geocode helper with AbortController 3s timeout to prevent hanging
   const reverseGeocode = async (lat, lng) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-        { headers: { 'Accept-Language': 'en' } }
+        {
+          headers: { 'Accept-Language': 'en' },
+          signal: controller.signal
+        }
       );
+      clearTimeout(timeoutId);
       if (response.ok) {
         const data = await response.json();
         if (data && data.display_name) {
@@ -39,58 +62,230 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
         }
       }
     } catch (err) {
-      console.warn("Reverse geocoding error:", err);
+      console.warn("Reverse geocoding timeout or error:", err);
     }
     return { label: `Location (${lat}, ${lng})`, details: null };
   };
 
-  // Fetch Live GPS Location using browser geolocation API
-  const handleFetchLiveLocation = () => {
+  // Forward Geocode query helper
+  const geocodeQuery = async (queryStr) => {
+    if (!queryStr || !queryStr.trim()) return null;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr.trim())}&limit=1`,
+        {
+          headers: { 'Accept-Language': 'en' },
+          signal: controller.signal
+        }
+      );
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        const results = await response.json();
+        if (results && results.length > 0) {
+          const item = results[0];
+          const lat = parseFloat(parseFloat(item.lat).toFixed(6));
+          const lng = parseFloat(parseFloat(item.lon).toFixed(6));
+          const label = item.display_name;
+          const { details } = await reverseGeocode(lat, lng);
+          return { lat, lng, label, details };
+        }
+      }
+    } catch (e) {
+      console.warn("Geocoding failed for query:", queryStr, e);
+    }
+    return null;
+  };
+
+  // Auto-sync map location whenever user updates form location fields (district, localBody, village, pinCode, address)
+  useEffect(() => {
+    if (!addressData) return;
+
+    const parts = [
+      addressData.village,
+      addressData.localBody,
+      addressData.district,
+      addressData.state || 'Kerala',
+      addressData.pinCode
+    ].filter(p => p && typeof p === 'string' && p.trim().length > 0 && !p.toLowerCase().includes('treeconnect address'));
+
+    const queryStr = parts.join(', ');
+
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      if (queryStr) {
+        const geo = await geocodeQuery(queryStr);
+        if (geo && isMounted) {
+          setCoords({ lat: geo.lat, lng: geo.lng, locationLabel: geo.label });
+          setIsPinned(true);
+          if (onCoordsChange) onCoordsChange(geo.lat, geo.lng, geo.details);
+          return;
+        }
+      }
+
+      if (addressData.district && KERALA_DISTRICT_COORDS[addressData.district] && isMounted) {
+        const dCoord = KERALA_DISTRICT_COORDS[addressData.district];
+        const { label, details } = await reverseGeocode(dCoord.lat, dCoord.lng);
+        if (isMounted) {
+          setCoords({ lat: dCoord.lat, lng: dCoord.lng, locationLabel: label || dCoord.label });
+          setIsPinned(true);
+          if (onCoordsChange) onCoordsChange(dCoord.lat, dCoord.lng, details);
+        }
+      }
+    }, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [addressData?.district, addressData?.localBody, addressData?.village, addressData?.pinCode, addressData?.address]);
+
+  // Fetch Location using device GPS API or CORS-friendly multi-provider IP fallbacks
+  const fetchIPLocation = async () => {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 2500);
+    try {
+      const res = await fetch('https://ipwho.is/', { signal: controller.signal });
+      clearTimeout(tid);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success !== false && data.latitude && data.longitude) {
+          return {
+            lat: parseFloat(parseFloat(data.latitude).toFixed(6)),
+            lng: parseFloat(parseFloat(data.longitude).toFixed(6)),
+            label: `${data.city || data.region || 'Local Area'}, ${data.region || ''}`
+          };
+        }
+      }
+    } catch (e) { }
+
+    const controller2 = new AbortController();
+    const tid2 = setTimeout(() => controller2.abort(), 2500);
+    try {
+      const res2 = await fetch('https://freeipapi.com/api/json', { signal: controller2.signal });
+      clearTimeout(tid2);
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (data2 && data2.latitude && data2.longitude) {
+          return {
+            lat: parseFloat(parseFloat(data2.latitude).toFixed(6)),
+            lng: parseFloat(parseFloat(data2.longitude).toFixed(6)),
+            label: `${data2.cityName || data2.regionName || ''}, ${data2.regionName || ''}`
+          };
+        }
+      }
+    } catch (e) { }
+
+    return null;
+  };
+
+  const handleFetchLiveLocation = async () => {
+    setIsLocating(true);
+    setLocationStatus('Acquiring location...');
+
+    const applyPosition = async (lat, lng, statusMsg) => {
+      const initialLabel = `Lat: ${lat}°, Lng: ${lng}°`;
+      setCoords({ lat, lng, locationLabel: initialLabel });
+      setIsPinned(true);
+      setIsLocating(false);
+      setLocationStatus(statusMsg || 'Location pinned!');
+
+      try {
+        const { label, details } = await reverseGeocode(lat, lng);
+        setCoords(prev => ({ ...prev, locationLabel: label || initialLabel }));
+        if (onCoordsChange) onCoordsChange(lat, lng, details);
+      } catch (e) {
+        if (onCoordsChange) onCoordsChange(lat, lng, null);
+      }
+
+      setTimeout(() => setLocationStatus(''), 4000);
+    };
+
+    const resolveFallbackLocation = async () => {
+      // 1. Multi-provider IP Geolocation (ipwho.is / freeipapi)
+      setLocationStatus('Fetching network location...');
+      const ipLoc = await fetchIPLocation();
+      if (ipLoc) {
+        await applyPosition(ipLoc.lat, ipLoc.lng, 'Live network location acquired!');
+        return true;
+      }
+
+      // 2. Try Geocoding Property Address fields if entered by user
+      if (addressData) {
+        const parts = [
+          addressData.address,
+          addressData.village,
+          addressData.localBody,
+          addressData.district,
+          addressData.state || 'Kerala',
+          addressData.pinCode
+        ].filter(p => p && typeof p === 'string' && p.trim().length > 0 && !p.toLowerCase().includes('treeconnect address'));
+
+        if (parts.length > 0) {
+          setLocationStatus('Geocoding property address...');
+          const query = parts.join(', ');
+          const geoRes = await geocodeQuery(query);
+          if (geoRes) {
+            applyPosition(
+              geoRes.lat,
+              geoRes.lng,
+              `Pinned from property address (${addressData.district || 'Kerala'})`
+            );
+            return true;
+          }
+        }
+
+        // 3. Try District Fallback
+        const districtName = addressData.district;
+        if (districtName && KERALA_DISTRICT_COORDS[districtName]) {
+          const dCoord = KERALA_DISTRICT_COORDS[districtName];
+          await applyPosition(dCoord.lat, dCoord.lng, `Pinned to ${districtName} District`);
+          return true;
+        }
+      }
+
+      // 4. Default Fallback
+      const defaultLat = initialLat || 9.5916;
+      const defaultLng = initialLng || 76.5222;
+      await applyPosition(defaultLat, defaultLng, 'Location pinned');
+      return false;
+    };
+
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
+      await resolveFallbackLocation();
       return;
     }
 
-    setIsLocating(true);
-    setLocationStatus('Accessing device GPS...');
+    // Set a safety timeout of 3.5 seconds on browser Geolocation API
+    let hasResponded = false;
+    const gpsTimer = setTimeout(async () => {
+      if (!hasResponded) {
+        hasResponded = true;
+        console.warn("Browser Geolocation timed out after 3.5s, switching to IP & address fallback...");
+        await resolveFallbackLocation();
+      }
+    }, 3500);
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        if (hasResponded) return;
+        hasResponded = true;
+        clearTimeout(gpsTimer);
+
         const lat = parseFloat(position.coords.latitude.toFixed(6));
         const lng = parseFloat(position.coords.longitude.toFixed(6));
-
-        setLocationStatus('Fetching address details...');
-        const { label, details } = await reverseGeocode(lat, lng);
-
-        setCoords({ lat, lng, locationLabel: label });
-        setIsPinned(true);
-        setIsLocating(false);
-        setLocationStatus('Live location acquired!');
-
-        if (onCoordsChange) onCoordsChange(lat, lng, details);
-
-        setTimeout(() => setLocationStatus(''), 3000);
+        await applyPosition(lat, lng, 'Live GPS location acquired!');
       },
-      (error) => {
-        console.error("GPS location error:", error);
-        setIsLocating(false);
-        setLocationStatus('');
-        
-        let errorMsg = 'Failed to fetch live location.';
-        if (error.code === error.PERMISSION_DENIED) {
-          errorMsg = 'Location permission denied. Please allow location access in your browser.';
-        } else if (error.code === error.POSITION_UNAVAILABLE) {
-          errorMsg = 'Location information unavailable from device GPS.';
-        } else if (error.code === error.TIMEOUT) {
-          errorMsg = 'Location request timed out. Please try again.';
-        }
-        alert(errorMsg);
+      async (error) => {
+        if (hasResponded) return;
+        hasResponded = true;
+        clearTimeout(gpsTimer);
+
+        console.warn("Browser GPS error or permission denied:", error);
+        await resolveFallbackLocation();
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 0
-      }
+      { enableHighAccuracy: false, timeout: 3000, maximumAge: 60000 }
     );
   };
 
@@ -252,6 +447,7 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
         {mapMode === 'live' ? (
           <div className="w-full h-full relative">
             <iframe
+              key={`${coords.lat}-${coords.lng}`}
               title="OpenStreetMap GIS Location"
               width="100%"
               height="100%"

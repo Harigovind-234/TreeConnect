@@ -45,6 +45,10 @@ const AssignedHarvestJobsPage = () => {
         const cName = (user?.fullName || user?.name || user?.companyName || '').toLowerCase();
 
         const assigned = data.harvest_requests.filter(r => {
+          if (r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+          // Skip if request has a property_id but property_details is missing/empty (property was deleted)
+          if (r.property_id && (!r.property_details || Object.keys(r.property_details).length === 0)) return false;
+
           const reqCId = r.assigned_contractor_id;
           const reqCEmail = (r.assigned_contractor_email || '').toLowerCase();
           const reqCName = (r.assigned_contractor_name || '').toLowerCase();
@@ -63,56 +67,12 @@ const AssignedHarvestJobsPage = () => {
         if (assigned.length > 0) {
           setAssignedRequests(assigned);
         } else {
-          // Fallback sample assigned harvest request
-          setAssignedRequests([
-            {
-              id: 'hr_demo_99',
-              _id: 'hr_demo_99',
-              propertyName: 'Green Valley Teak Plantation',
-              propertyLocation: 'Kottayam, Kerala',
-              owner_email: 'h4hari2003@gmail.com',
-              reason: 'Mature timber harvest',
-              preferred_start_date: '2026-09-10',
-              preferred_end_date: '2026-09-25',
-              required_services: ['Tree felling', 'Cutting', 'Timber extraction', 'Transportation', 'Site clearing'],
-              site_conditions: {
-                access_availability: 'Heavy vehicle access',
-                road_condition: 'Paved panchayat road',
-                distance_from_road: '50 meters',
-                terrain: 'Gently sloped',
-                additional_notes: 'Easy access from main road. Clear haul path.'
-              },
-              hazards: ['Power lines nearby'],
-              status: 'CONTRACTOR_ASSIGNED',
-              createdAt: '2026-09-10'
-            }
-          ]);
+          setAssignedRequests([]);
         }
       }
     } catch (err) {
       console.warn("Could not load contractor assigned harvest requests:", err);
-      // Fallback sample on error
-      setAssignedRequests([
-        {
-          id: 'hr_demo_99',
-          _id: 'hr_demo_99',
-          propertyName: 'Green Valley Teak Plantation',
-          propertyLocation: 'Kottayam, Kerala',
-          owner_email: 'h4hari2003@gmail.com',
-          reason: 'Mature timber harvest',
-          preferred_start_date: '2026-09-10',
-          preferred_end_date: '2026-09-25',
-          required_services: ['Tree felling', 'Timber extraction', 'Transportation'],
-          site_conditions: {
-            access_availability: 'Heavy vehicle access',
-            road_condition: 'Paved road',
-            distance_from_road: '50m',
-            terrain: 'Gently sloped'
-          },
-          status: 'CONTRACTOR_ASSIGNED',
-          createdAt: '2026-09-10'
-        }
-      ]);
+      setAssignedRequests([]);
     } finally {
       setLoadingRequests(false);
     }

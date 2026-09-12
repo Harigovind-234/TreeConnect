@@ -36,7 +36,7 @@ import {
   Loader2
 } from 'lucide-react';
 
-const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1200&q=80';
+const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=1200&q=80';
 
 const PropertiesPage = () => {
   const navigate = useNavigate();

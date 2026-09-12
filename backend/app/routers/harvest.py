@@ -193,14 +193,23 @@ def get_harvest_requests(
         for req in cursor:
             req_data = serialize_doc(req)
 
+            if req_data.get("status") in ["CANCELLED", "DELETED"]:
+                continue
+
             # Hydrate property details & tree inventory if available
             p_id = req_data.get("property_id")
             p_doc = None
             if p_id:
                 p_query = {"_id": ObjectId(p_id)} if ObjectId.is_valid(p_id) else {"_id": p_id}
                 p_doc = db.properties.find_one(p_query)
-                if p_doc:
-                    req_data["property_details"] = serialize_doc(p_doc)
+                if not p_doc:
+                    # Property was deleted by landowner — purge orphaned request
+                    try:
+                        db.harvest_requests.delete_one({"_id": req.get("_id")})
+                    except Exception:
+                        pass
+                    continue
+                req_data["property_details"] = serialize_doc(p_doc)
 
             inv_list = []
             if p_id:
@@ -225,28 +234,22 @@ def get_harvest_requests(
                 elif p_doc.get("tree_inventories"):
                     req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventories"]) if isinstance(p_doc["tree_inventories"], dict) else p_doc["tree_inventories"]
 
-            # Hydrate photo fallbacks into tree_inventory items if missing
+            # Hydrate photo fallbacks into tree_inventory items ONLY from tree inventories
             fallback_photos = []
             if inv_list:
                 for inv in inv_list:
                     ph = inv.get("photos") or inv.get("attachedPhotos") or []
                     if isinstance(ph, list) and len(ph) > 0:
-                        fallback_photos.extend([p for p in ph if isinstance(p, str) and "photo-1473448912268" not in p])
-                    elif isinstance(ph, str) and ph and "photo-1473448912268" not in ph:
+                        fallback_photos.extend([p for p in ph if isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p])
+                    elif isinstance(ph, str) and ph and "unsplash.com" not in ph and "photo-1473448912268" not in ph:
                         fallback_photos.append(ph)
-            if not fallback_photos and p_doc:
-                p_ph = p_doc.get("photos") or p_doc.get("propertyPhotos") or []
-                if isinstance(p_ph, list) and len(p_ph) > 0:
-                    fallback_photos.extend([p for p in p_ph if isinstance(p, str) and "photo-1473448912268" not in p])
-                elif isinstance(p_ph, str) and p_ph and "photo-1473448912268" not in p_ph:
-                    fallback_photos.append(p_ph)
 
             if req_data.get("tree_inventory") and isinstance(req_data["tree_inventory"], list):
                 for tg in req_data["tree_inventory"]:
                     if isinstance(tg, dict):
                         tg_img = str(tg.get("image") or "")
                         tg_ph = tg.get("photos") or tg.get("attachedPhotos") or []
-                        has_valid_photo = (tg_img and "photo-1473448912268" not in tg_img) or any(isinstance(p, str) and "photo-1473448912268" not in p for p in (tg_ph if isinstance(tg_ph, list) else [tg_ph]))
+                        has_valid_photo = (tg_img and "unsplash.com" not in tg_img and "photo-1473448912268" not in tg_img) or any(isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p for p in (tg_ph if isinstance(tg_ph, list) else [tg_ph]))
                         if not has_valid_photo and fallback_photos:
                             tg["photos"] = fallback_photos
                             tg["attachedPhotos"] = fallback_photos
@@ -322,28 +325,22 @@ def get_harvest_request_by_id(request_id: str):
             elif p_doc.get("tree_inventories"):
                 req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventories"]) if isinstance(p_doc["tree_inventories"], dict) else p_doc["tree_inventories"]
 
-        # Hydrate photo fallbacks into tree_inventory items if missing
+        # Hydrate photo fallbacks into tree_inventory items ONLY from tree inventories
         fallback_photos = []
         if inv_list:
             for inv in inv_list:
                 ph = inv.get("photos") or inv.get("attachedPhotos") or []
                 if isinstance(ph, list) and len(ph) > 0:
-                    fallback_photos.extend([p for p in ph if isinstance(p, str) and "photo-1473448912268" not in p])
-                elif isinstance(ph, str) and ph and "photo-1473448912268" not in ph:
+                    fallback_photos.extend([p for p in ph if isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p])
+                elif isinstance(ph, str) and ph and "unsplash.com" not in ph and "photo-1473448912268" not in ph:
                     fallback_photos.append(ph)
-        if not fallback_photos and p_doc:
-            p_ph = p_doc.get("photos") or p_doc.get("propertyPhotos") or []
-            if isinstance(p_ph, list) and len(p_ph) > 0:
-                fallback_photos.extend([p for p in p_ph if isinstance(p, str) and "photo-1473448912268" not in p])
-            elif isinstance(p_ph, str) and p_ph and "photo-1473448912268" not in p_ph:
-                fallback_photos.append(p_ph)
 
         if req_data.get("tree_inventory") and isinstance(req_data["tree_inventory"], list):
             for tg in req_data["tree_inventory"]:
                 if isinstance(tg, dict):
                     tg_img = str(tg.get("image") or "")
                     tg_ph = tg.get("photos") or tg.get("attachedPhotos") or []
-                    has_valid_photo = (tg_img and "photo-1473448912268" not in tg_img) or any(isinstance(p, str) and "photo-1473448912268" not in p for p in (tg_ph if isinstance(tg_ph, list) else [tg_ph]))
+                    has_valid_photo = (tg_img and "unsplash.com" not in tg_img and "photo-1473448912268" not in tg_img) or any(isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p for p in (tg_ph if isinstance(tg_ph, list) else [tg_ph]))
                     if not has_valid_photo and fallback_photos:
                         tg["photos"] = fallback_photos
                         tg["attachedPhotos"] = fallback_photos
@@ -665,5 +662,38 @@ def complete_harvest_execution(request_id: str, payload: HarvestCompletionCreate
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Harvest operation marked as COMPLETED", "harvest_request": serialize_doc(updated_req)})
     except Exception as e:
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
+
+@router.delete("/{request_id}")
+def delete_harvest_request(request_id: str):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        result = db.harvest_requests.delete_one(query)
+
+        try:
+            db.contractor_assessments.delete_many({"harvest_request_id": request_id})
+        except Exception:
+            pass
+
+        if result.deleted_count == 0:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found for deletion"}
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Harvest request deleted successfully from DB"}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to delete harvest request: {str(e)}"}
+        )
 
 

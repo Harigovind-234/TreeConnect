@@ -29,48 +29,33 @@ import {
   X
 } from 'lucide-react';
 
-const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1200&q=80';
+const DEFAULT_PROPERTY_IMAGE = null;
 
 const getPropertyImage = (p) => {
-  if (!p) return DEFAULT_PROPERTY_IMAGE;
-  if (Array.isArray(p.photos) && p.photos.length > 0 && typeof p.photos[0] === 'string' && p.photos[0].trim()) {
-    return p.photos[0];
+  if (!p) return null;
+  const isReal = (u) => typeof u === 'string' && u.trim().length > 5 && !u.startsWith('blob:') && !u.includes('unsplash.com');
+  if (Array.isArray(p.photos) && p.photos.length > 0 && isReal(p.photos[0])) {
+    return p.photos[0].trim();
   }
-  if (p.image && typeof p.image === 'string' && p.image.trim()) {
-    return p.image;
+  if (isReal(p.image)) {
+    return p.image.trim();
   }
-  if (p.imageUrl && typeof p.imageUrl === 'string' && p.imageUrl.trim()) {
-    return p.imageUrl;
+  if (isReal(p.imageUrl)) {
+    return p.imageUrl.trim();
   }
-  return DEFAULT_PROPERTY_IMAGE;
-};
-
-const speciesImagesMap = {
-  Teak: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Teakwood: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-  'Western Red Cedar': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-  Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-  Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  Pine: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-  'Douglas Fir': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-  Eucalyptus: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Jackfruit: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Mango: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-  Other: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
+  return null;
 };
 
 const getTreePhoto = (g) => {
-  if (!g) return speciesImagesMap.Other;
+  if (!g) return null;
 
   const extractUrl = (ph) => {
     if (!ph) return null;
-    if (typeof ph === 'string' && ph.trim().length > 5) return ph.trim();
-    if (typeof ph === 'object') {
-      return ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || null;
-    }
-    return null;
+    let str = '';
+    if (typeof ph === 'string') str = ph.trim();
+    else if (typeof ph === 'object') str = (ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || '').trim();
+    if (!str || str.length < 5 || str.startsWith('blob:') || str.includes('unsplash.com')) return null;
+    return str;
   };
 
   const photosList = Array.isArray(g.attachedPhotos) ? g.attachedPhotos : (Array.isArray(g.photos) ? g.photos : []);
@@ -82,10 +67,7 @@ const getTreePhoto = (g) => {
   const directImg = extractUrl(g.image || g.photo);
   if (directImg) return directImg;
 
-  const specKey = Object.keys(speciesImagesMap).find(
-    k => (g.species || '').toLowerCase().includes(k.toLowerCase())
-  );
-  return speciesImagesMap[specKey] || speciesImagesMap.Other;
+  return null;
 };
 
 const RequestHarvesting = () => {
@@ -168,15 +150,25 @@ const RequestHarvesting = () => {
 
   // 2. Unpack live inventories and their speciesList
   activeInventories.forEach((inv, invIdx) => {
-    const invPhotos = Array.isArray(inv.photos) ? inv.photos : (inv.photo ? [inv.photo] : (inv.image ? [inv.image] : []));
-    const propPhotos = Array.isArray(activeProperty?.photos) ? activeProperty.photos : (activeProperty?.image ? [activeProperty.image] : []);
+    const isReal = (p) => p && typeof p === 'string' && p.trim().length > 5 && !p.startsWith('blob:') && !p.includes('unsplash.com');
+    const rawInvPhotos = Array.isArray(inv.photos) ? inv.photos : (inv.photo ? [inv.photo] : (inv.image ? [inv.image] : []));
+    const rawPropPhotos = Array.isArray(activeProperty?.photos) ? activeProperty.photos : (activeProperty?.image ? [activeProperty.image] : []);
+
+    const invReal = rawInvPhotos.filter(isReal);
+    const propReal = rawPropPhotos.filter(isReal);
+
+    const invPhotos = invReal.length > 0 ? invReal : rawInvPhotos;
+    const propPhotos = propReal.length > 0 ? propReal : rawPropPhotos;
 
     if (Array.isArray(inv.speciesList) && inv.speciesList.length > 0) {
       inv.speciesList.forEach((sp, spIdx) => {
         const count = Number(sp.numberOfTrees || sp.count || sp.quantity || 20);
-        const spPhotos = Array.isArray(sp.photos) && sp.photos.length > 0
+        const rawSpPhotos = Array.isArray(sp.photos) && sp.photos.length > 0
           ? sp.photos
           : (sp.photo ? [sp.photo] : (sp.image ? [sp.image] : (Array.isArray(sp.attachedPhotos) && sp.attachedPhotos.length > 0 ? sp.attachedPhotos : (invPhotos.length > 0 ? invPhotos : propPhotos))));
+
+        const spReal = rawSpPhotos.filter(isReal);
+        const spPhotos = spReal.length > 0 ? spReal : (propReal.length > 0 ? propReal : rawSpPhotos);
 
         extractedTreeGroups.push({
           id: sp.id || sp._id || `inv_${invIdx}_sp_${spIdx}`,

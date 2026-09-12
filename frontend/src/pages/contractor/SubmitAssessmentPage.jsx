@@ -120,20 +120,7 @@ const SubmitAssessmentPage = () => {
       preferred_start_date: '2026-09-10',
       preferred_end_date: '2026-09-25',
       required_services: ['Tree felling', 'Cutting', 'Timber extraction', 'Transportation', 'Site clearing'],
-      propertyPhotos: [
-        {
-          url: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1000&q=80',
-          caption: 'Harvest Parcel Overview - Standing Teak Stand'
-        },
-        {
-          url: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=1000&q=80',
-          caption: 'Heavy Vehicle Access Road & Panchayat Boundary'
-        },
-        {
-          url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1000&q=80',
-          caption: 'Log Staging & Timber Hauler Landing Area'
-        }
-      ],
+      propertyPhotos: [],
       tree_inventory: [
         {
           id: 'inv_1',
@@ -143,8 +130,7 @@ const SubmitAssessmentPage = () => {
           averageAge: '24 Years (Mature)',
           averageDBH: '52 cm Girth',
           averageHeight: '19 Meters',
-          timberGrade: 'Grade A Commercial Hardwood',
-          image: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
+          timberGrade: 'Grade A Commercial Hardwood'
         },
         {
           id: 'inv_2',
@@ -154,8 +140,7 @@ const SubmitAssessmentPage = () => {
           averageAge: '28 Years (Prime)',
           averageDBH: '46 cm Girth',
           averageHeight: '16 Meters',
-          timberGrade: 'Prime Decorative Hardwood',
-          image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80'
+          timberGrade: 'Prime Decorative Hardwood'
         }
       ],
       site_conditions: {
@@ -286,36 +271,106 @@ const SubmitAssessmentPage = () => {
                   </div>
 
                   {/* PROPERTY MEDIA & SITE PHOTO GALLERY */}
-                  {Array.isArray(requestDetails?.propertyPhotos) && requestDetails.propertyPhotos.length > 0 && (
-                    <div className="cd-media-gallery-section">
-                      <div className="cd-main-photo-container">
-                        <img
-                          src={requestDetails.propertyPhotos[activePhotoIndex]?.url || requestDetails.propertyPhotos[0]?.url}
-                          alt="Harvest Site Parcel"
-                          className="cd-main-photo-img"
-                        />
-                        <div className="cd-photo-caption-overlay">
-                          <ImageIcon size={14} className="text-emerald-400" />
-                          <span>{requestDetails.propertyPhotos[activePhotoIndex]?.caption || 'Site Parcel View'}</span>
-                        </div>
-                      </div>
+                  {(() => {
+                    const isRealPhoto = (p) => {
+                      if (!p) return false;
+                      let url = '';
+                      if (typeof p === 'string') url = p.trim();
+                      else if (typeof p === 'object' && p) url = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
+                      if (!url || typeof url !== 'string' || url.length < 5) return false;
+                      if (url.startsWith('blob:')) return false;
+                      if (url.includes('unsplash.com')) return false;
+                      return true;
+                    };
 
-                      {requestDetails.propertyPhotos.length > 1 && (
-                        <div className="cd-photo-thumbnails">
-                          {requestDetails.propertyPhotos.map((photo, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setActivePhotoIndex(idx)}
-                              className={`cd-photo-thumb-btn ${activePhotoIndex === idx ? 'active' : ''}`}
-                            >
-                              <img src={photo.url} alt={`Thumbnail ${idx + 1}`} className="cd-photo-thumb-img" />
-                            </button>
-                          ))}
+                    const getRealPhotoUrl = (p) => {
+                      if (!p) return null;
+                      if (typeof p === 'string') {
+                        const s = p.trim();
+                        if (s.length > 5 && !s.startsWith('blob:') && !s.includes('unsplash.com')) return s;
+                      } else if (typeof p === 'object' && p) {
+                        const s = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
+                        if (s.length > 5 && !s.startsWith('blob:') && !s.includes('unsplash.com')) return s;
+                      }
+                      return null;
+                    };
+
+                    const rawSources = [
+                      ...(Array.isArray(requestDetails?.photos) ? requestDetails.photos : (requestDetails?.photos ? [requestDetails.photos] : [])),
+                      ...(Array.isArray(requestDetails?.propertyPhotos) ? requestDetails.propertyPhotos : (requestDetails?.propertyPhotos ? [requestDetails.propertyPhotos] : [])),
+                      ...(Array.isArray(requestDetails?.property_details?.photos) ? requestDetails.property_details.photos : (requestDetails?.property_details?.photos ? [requestDetails.property_details.photos] : [])),
+                      requestDetails?.property_details?.image
+                    ];
+
+                    try {
+                      const storedPropsRaw = localStorage.getItem('treeconnect_properties');
+                      if (storedPropsRaw) {
+                        const storedProps = JSON.parse(storedPropsRaw);
+                        if (Array.isArray(storedProps)) {
+                          const propId = requestDetails?.property_id || requestDetails?.propertyId;
+                          const ownerEmail = requestDetails?.owner_email || requestDetails?.landowner_email || requestDetails?.userEmail;
+                          const matchingProp = storedProps.find(item => {
+                            if (!item) return false;
+                            if (propId && (item.id === propId || item._id === propId || String(item.id) === String(propId) || String(item._id) === String(propId))) return true;
+                            if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
+                            if (requestDetails?.propertyName && item.propertyName && item.propertyName.toLowerCase() === requestDetails.propertyName.toLowerCase()) return true;
+                            return false;
+                          });
+                          if (matchingProp) {
+                            if (Array.isArray(matchingProp.photos)) rawSources.push(...matchingProp.photos);
+                            if (matchingProp.image) rawSources.push(matchingProp.image);
+                          }
+                        }
+                      }
+                    } catch (e) {}
+
+                    const realPhotos = [];
+                    rawSources.forEach(item => {
+                      const u = getRealPhotoUrl(item);
+                      if (u && !realPhotos.includes(u)) realPhotos.push(u);
+                    });
+
+                    if (realPhotos.length === 0) {
+                      return (
+                        <div className="p-4 bg-[#08150d] border border-emerald-500/20 rounded-xl text-slate-400 text-xs flex items-center justify-center gap-2 mt-2">
+                          <ImageIcon size={16} className="text-slate-500" />
+                          <span>No site photos uploaded by landowner for this request</span>
                         </div>
-                      )}
-                    </div>
-                  )}
+                      );
+                    }
+
+                    return (
+                      <div className="cd-media-gallery-section">
+                        <div className="cd-main-photo-container">
+                          <img
+                            src={realPhotos[activePhotoIndex] || realPhotos[0]}
+                            alt="Harvest Site Parcel"
+                            className="cd-main-photo-img"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          <div className="cd-photo-caption-overlay">
+                            <ImageIcon size={14} className="text-emerald-400" />
+                            <span>{requestDetails?.propertyName || 'Site Parcel View'} - Photo #{activePhotoIndex + 1}</span>
+                          </div>
+                        </div>
+
+                        {realPhotos.length > 1 && (
+                          <div className="cd-photo-thumbnails">
+                            {realPhotos.map((url, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setActivePhotoIndex(idx)}
+                                className={`cd-photo-thumb-btn ${activePhotoIndex === idx ? 'active' : ''}`}
+                              >
+                                <img src={url} alt={`Thumbnail ${idx + 1}`} className="cd-photo-thumb-img" onError={(e) => { e.target.style.display = 'none'; }} />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* PARCEL METRICS & LAND SPECIFICATIONS */}
                   <div className="cd-parcel-metrics-grid">
@@ -360,18 +415,6 @@ const SubmitAssessmentPage = () => {
                   {(() => {
                     const rawInv = requestDetails?.tree_inventory || requestDetails?.selected_tree_groups || requestDetails?.tree_inventories || requestDetails?.property_details?.tree_inventory || requestDetails?.property_details?.tree_inventories || [];
                     let parsedInv = [];
-                    const speciesImagesMap = {
-                      Teak: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-                      Teakwood: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-                      Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-                      Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-                      Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-                      Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-                      Pine: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-                      Eucalyptus: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-                      Jackfruit: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-                      Other: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
-                    };
 
                     const getTreePhoto = (speciesName, sp, inv) => {
                       const extractUrl = (p) => {
@@ -381,10 +424,8 @@ const SubmitAssessmentPage = () => {
                         else if (typeof p === 'object' && p) str = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
 
                         if (!str || str.length < 5) return null;
-
-                        // Reject fake / legacy misty pine forest images
-                        if (str.includes('photo-1473448912268')) return null;
-
+                        if (str.startsWith('blob:')) return null;
+                        if (str.includes('unsplash.com')) return null;
                         return str;
                       };
 
@@ -410,14 +451,7 @@ const SubmitAssessmentPage = () => {
                         if (directInv) return directInv;
                       }
 
-                      // 3. Direct photo from harvest request level photos (uploaded by landowner)
-                      const reqLevelPhotos = Array.isArray(requestDetails?.photos) ? requestDetails.photos : (Array.isArray(requestDetails?.propertyPhotos) ? requestDetails.propertyPhotos : (Array.isArray(requestDetails?.property_details?.photos) ? requestDetails.property_details.photos : []));
-                      for (const p of reqLevelPhotos) {
-                        const u = extractUrl(p);
-                        if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
-                      }
-
-                      // 4. Search localStorage treeconnect_inventories (landowner logged tree inventory photos)
+                      // 3. Search localStorage treeconnect_inventories (landowner logged tree inventory photos)
                       try {
                         const storedInventoriesRaw = localStorage.getItem('treeconnect_inventories');
                         if (storedInventoriesRaw) {
@@ -438,7 +472,7 @@ const SubmitAssessmentPage = () => {
                               if (Array.isArray(item.photos)) {
                                 for (const p of item.photos) {
                                   const u = extractUrl(p);
-                                  if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
+                                  if (u) return u;
                                 }
                               }
                               if (Array.isArray(item.speciesList)) {
@@ -446,15 +480,15 @@ const SubmitAssessmentPage = () => {
                                   if (Array.isArray(s.photos)) {
                                     for (const p of s.photos) {
                                       const u = extractUrl(p);
-                                      if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
+                                      if (u) return u;
                                     }
                                   }
                                   const su = extractUrl(s.image || s.photo);
-                                  if (su && !su.includes('photo-1542273917363-3b1817f69a2d')) return su;
+                                  if (su) return su;
                                 }
                               }
                               const itemUrl = extractUrl(item.image || item.photo);
-                              if (itemUrl && !itemUrl.includes('photo-1542273917363-3b1817f69a2d')) return itemUrl;
+                              if (itemUrl) return itemUrl;
                             }
                           }
                         }
@@ -462,44 +496,7 @@ const SubmitAssessmentPage = () => {
                         console.warn('Error reading treeconnect_inventories from localStorage:', e);
                       }
 
-                      // 5. Search localStorage treeconnect_properties
-                      try {
-                        const storedPropsRaw = localStorage.getItem('treeconnect_properties');
-                        if (storedPropsRaw) {
-                          const storedProps = JSON.parse(storedPropsRaw);
-                          if (Array.isArray(storedProps)) {
-                            const propId = requestDetails?.property_id || requestDetails?.propertyId || inv?.propertyId || inv?.property_id;
-                            const ownerEmail = requestDetails?.owner_email || requestDetails?.landowner_email || requestDetails?.userEmail;
-
-                            const matchingProp = storedProps.find(item => {
-                              if (!item) return false;
-                              if (propId && (item.id === propId || item._id === propId || String(item.id) === String(propId) || String(item._id) === String(propId))) return true;
-                              if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
-                              if (requestDetails?.propertyName && item.propertyName && item.propertyName.toLowerCase() === requestDetails.propertyName.toLowerCase()) return true;
-                              return false;
-                            });
-
-                            if (matchingProp) {
-                              if (Array.isArray(matchingProp.photos)) {
-                                for (const p of matchingProp.photos) {
-                                  const u = extractUrl(p);
-                                  if (u && !u.includes('photo-1542273917363-3b1817f69a2d')) return u;
-                                }
-                              }
-                              const pu = extractUrl(matchingProp.image);
-                              if (pu && !pu.includes('photo-1542273917363-3b1817f69a2d')) return pu;
-                            }
-                          }
-                        }
-                      } catch (e) {
-                        console.warn('Error reading treeconnect_properties from localStorage:', e);
-                      }
-
-                      // 6. Fallback species image (Authentic Kerala Teak Stand)
-                      const specKey = Object.keys(speciesImagesMap).find(
-                        k => (speciesName || '').toLowerCase().includes(k.toLowerCase())
-                      );
-                      return speciesImagesMap[specKey] || speciesImagesMap.Teak;
+                      return null;
                     };
 
                     if (Array.isArray(rawInv) && rawInv.length > 0) {
@@ -589,34 +586,46 @@ const SubmitAssessmentPage = () => {
                               className="bg-[#050e08] border border-emerald-500/20 rounded-3xl p-5 sm:p-6 flex flex-col justify-between space-y-5 shadow-xl hover:border-emerald-500/40 transition-all duration-300"
                             >
                               <div className="space-y-4">
-                                {/* Prominent Tree Image Banner */}
-                                <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden bg-[#090e0b] border border-emerald-500/20 group/treeimg shadow-md">
-                                  <img
-                                    src={item.image}
-                                    alt={item.species}
-                                    className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
-                                  />
-                                  <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
+                                {/* Tree Image / Placeholder Banner */}
+                                {item.image ? (
+                                  <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden bg-[#090e0b] border border-emerald-500/20 group/treeimg shadow-md">
+                                    <img
+                                      src={item.image}
+                                      alt={item.species}
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                      }}
+                                      className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
 
-                                  <a
-                                    href={item.image}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur transition-all z-10"
-                                  >
-                                    <ZoomIn size={14} className="text-emerald-400" />
-                                    <span>View Photo</span>
-                                  </a>
+                                    <a
+                                      href={item.image}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur transition-all z-10"
+                                    >
+                                      <ZoomIn size={14} className="text-emerald-400" />
+                                      <span>View Photo</span>
+                                    </a>
 
-                                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
-                                    <span className="px-3 py-1 rounded-xl bg-[#090e0b]/90 backdrop-blur border border-emerald-500/35 text-white text-xs font-extrabold flex items-center gap-1.5 shadow">
-                                      <Trees size={14} className="text-emerald-400" /> {item.species} Stand
-                                    </span>
-                                    <span className="px-3 py-1 rounded-xl bg-emerald-900/90 backdrop-blur border border-emerald-500/35 text-emerald-300 text-xs font-bold shadow">
-                                      {item.treeCount} Standing Trees
-                                    </span>
+                                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
+                                      <span className="px-3 py-1 rounded-xl bg-[#090e0b]/90 backdrop-blur border border-emerald-500/35 text-white text-xs font-extrabold flex items-center gap-1.5 shadow">
+                                        <Trees size={14} className="text-emerald-400" /> {item.species} Stand
+                                      </span>
+                                      <span className="px-3 py-1 rounded-xl bg-emerald-900/90 backdrop-blur border border-emerald-500/35 text-emerald-300 text-xs font-bold shadow">
+                                        {item.treeCount} Standing Trees
+                                      </span>
+                                    </div>
                                   </div>
-                                </div>
+                                ) : (
+                                  <div className="relative h-28 w-full rounded-2xl overflow-hidden bg-gradient-to-br from-[#0a1e12] to-[#040e08] border border-emerald-500/20 shadow-md flex items-center justify-center p-4">
+                                    <div className="flex flex-col items-center gap-1.5 text-center">
+                                      <Trees size={24} className="text-emerald-500/50" />
+                                      <span className="text-xs font-semibold text-slate-400">No tree photo uploaded by landowner</span>
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Group Header */}
                                 <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-emerald-500/15">

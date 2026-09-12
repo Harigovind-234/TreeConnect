@@ -24,7 +24,8 @@ import {
   XCircle,
   RefreshCw,
   Loader2,
-  Mail
+  Mail,
+  Trash2
 } from 'lucide-react';
 
 const HarvestRequestsPage = () => {
@@ -33,11 +34,26 @@ const HarvestRequestsPage = () => {
   const harvestRequests = landownerCtx.harvestRequests || [];
   const refreshHarvestRequests = landownerCtx.refreshHarvestRequests || (() => { });
   const assignContractorToRequest = landownerCtx.assignContractorToRequest || (() => { });
+  const deleteHarvestRequest = landownerCtx.deleteHarvestRequest || (() => { });
 
   const [selectedRequestForContractor, setSelectedRequestForContractor] = useState(null);
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [loadingAssessments, setLoadingAssessments] = useState({});
   const [actionMessage, setActionMessage] = useState('');
+
+  const handleDeleteHarvestRequest = async (requestId) => {
+    if (window.confirm("Are you sure you want to cancel and delete this harvest request? This action cannot be undone.")) {
+      try {
+        await deleteHarvestRequest(requestId);
+        setActionMessage("Harvest request deleted successfully.");
+        setTimeout(() => setActionMessage(''), 3000);
+        refreshHarvestRequests();
+      } catch (err) {
+        console.error("Error deleting harvest request:", err);
+        setActionMessage("Failed to delete harvest request.");
+      }
+    }
+  };
 
   // Fetch assessments for requests that are ASSESSMENT_SUBMITTED or ACCEPTED/OPERATION_READY
   useEffect(() => {
@@ -176,11 +192,20 @@ const HarvestRequestsPage = () => {
                   // Format schedule dates cleanly
                   const startDate = req.preferred_start_date || req.preferredStartDate;
                   const endDate = req.preferred_end_date || req.preferredCompletionDate;
+                  const customSchedule = req.preferred_schedule || req.schedule;
+
                   let scheduleText = 'Flexible Schedule';
-                  if (startDate && endDate) {
+                  if (customSchedule) {
+                    scheduleText = customSchedule;
+                  } else if (startDate && endDate) {
                     scheduleText = `${startDate} to ${endDate}`;
                   } else if (startDate) {
-                    scheduleText = `From ${startDate}`;
+                    const createdDateStr = req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : '';
+                    if (startDate === createdDateStr) {
+                      scheduleText = `Immediate (From ${startDate})`;
+                    } else {
+                      scheduleText = `From ${startDate}`;
+                    }
                   } else if (endDate) {
                     scheduleText = `By ${endDate}`;
                   }
@@ -226,24 +251,28 @@ const HarvestRequestsPage = () => {
                           </p>
                         </div>
 
-                        {/* STATUS PILL */}
-                        <div className="shrink-0 self-start sm:self-center">
+                        {/* STATUS PILL & DELETE BUTTON */}
+                        <div className="shrink-0 self-start sm:self-center flex items-center gap-3">
                           <span className={`harvest-status-pill ${statusClass}`}>
                             <Clock size={14} />
                             {statusLabel}
                           </span>
+                          <button
+                            onClick={() => handleDeleteHarvestRequest(reqId)}
+                            className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                            title="Cancel & Delete Harvest Request"
+                          >
+                            <Trash2 size={15} />
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
                         </div>
                       </div>
 
-                      {/* REQUEST SPECIFICATIONS GRID (MATCHING 4-BOX CARDS IN IMAGE 1) */}
+                      {/* REQUEST SPECIFICATIONS GRID */}
                       <div className="harvest-specs-grid">
                         <div className="harvest-spec-box">
                           <span className="harvest-spec-label">Reason for Harvest</span>
                           <strong className="harvest-spec-value">{req.reason || req.reasonForHarvesting || 'Mature timber'}</strong>
-                        </div>
-                        <div className="harvest-spec-box">
-                          <span className="harvest-spec-label">Preferred Schedule</span>
-                          <strong className="harvest-spec-value">{scheduleText}</strong>
                         </div>
                         <div className="harvest-spec-box">
                           <span className="harvest-spec-label">Services Needed</span>

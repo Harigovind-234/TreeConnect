@@ -20,53 +20,43 @@ import {
   ImageIcon
 } from 'lucide-react';
 
-const speciesImagesMap = {
-  Teak: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Teakwood: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Rubber: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-  'Western Red Cedar': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-  Cedar: 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-  Mahogany: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  Rosewood: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  Pine: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-  'Douglas Fir': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-  Eucalyptus: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Jackfruit: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80',
-  Mango: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-  Other: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'
+const isRealPhoto = (p) => {
+  if (!p) return false;
+  let url = '';
+  if (typeof p === 'string') url = p;
+  else if (typeof p === 'object') url = p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '';
+  if (!url || typeof url !== 'string') return false;
+  url = url.trim();
+  if (url.length < 5) return false;
+  if (url.startsWith('blob:')) return false;
+  if (url.includes('unsplash.com')) return false;
+  return true;
+};
+
+const extractPhotoUrl = (p) => {
+  if (!p) return null;
+  let str = '';
+  if (typeof p === 'string') str = p.trim();
+  else if (typeof p === 'object') str = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
+  if (!str || str.length < 5 || str.startsWith('blob:') || str.includes('unsplash.com')) return null;
+  return str;
 };
 
 const getTreeSpeciesPhoto = (species, attachedPhotos = [], invPhotos = [], propPhotos = []) => {
-  const extractUrl = (p) => {
-    if (!p) return null;
-    if (typeof p === 'string' && p.trim().length > 5) return p.trim();
-    if (typeof p === 'object') return p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || null;
-    return null;
-  };
+  const allCandidates = [
+    ...(Array.isArray(attachedPhotos) ? attachedPhotos : (attachedPhotos ? [attachedPhotos] : [])),
+    ...(Array.isArray(invPhotos) ? invPhotos : (invPhotos ? [invPhotos] : [])),
+    ...(Array.isArray(propPhotos) ? propPhotos : (propPhotos ? [propPhotos] : []))
+  ];
 
-  if (Array.isArray(attachedPhotos)) {
-    for (const p of attachedPhotos) {
-      const u = extractUrl(p);
-      if (u) return u;
-    }
-  }
-  if (Array.isArray(invPhotos)) {
-    for (const p of invPhotos) {
-      const u = extractUrl(p);
-      if (u) return u;
-    }
-  }
-  if (Array.isArray(propPhotos)) {
-    for (const p of propPhotos) {
-      const u = extractUrl(p);
-      if (u) return u;
+  for (const item of allCandidates) {
+    const u = extractPhotoUrl(item);
+    if (u && isRealPhoto(u)) {
+      return u;
     }
   }
 
-  const specKey = Object.keys(speciesImagesMap).find(
-    k => (species || '').toLowerCase().includes(k.toLowerCase())
-  );
-  return speciesImagesMap[specKey] || speciesImagesMap.Other;
+  return null;
 };
 
 const TreeInventoryPage = () => {
@@ -438,23 +428,34 @@ const TreeInventoryPage = () => {
 
                       {/* 3. DEDICATED STANDING TREE PHOTOS & SPECIES MEDIA GALLERY SECTION */}
                       {(() => {
-                        // Collect real attached photos only
+                        // Collect real attached photos (prioritizing landowner uploaded photos)
                         const realTreePhotos = [];
                         allTreeGroups.forEach((tg, idx) => {
-                          if (tg.attachedPhotos && tg.attachedPhotos.length > 0) {
-                            tg.attachedPhotos.forEach(ph => {
-                              if (ph && typeof ph === 'string' && !ph.startsWith('blob:')) {
-                                realTreePhotos.push({
-                                  url: ph,
-                                  species: tg.species,
-                                  count: tg.count,
-                                  location: tg.location,
-                                  condition: tg.condition,
-                                  standIndex: idx + 1
-                                });
-                              }
-                            });
-                          }
+                          const candidatePhotos = [
+                            ...(Array.isArray(tg.attachedPhotos) ? tg.attachedPhotos : []),
+                            ...(Array.isArray(tg.photos) ? tg.photos : []),
+                            ...(Array.isArray(propertyPhotos) ? propertyPhotos : []),
+                            ...(p?.image ? [p.image] : [])
+                          ];
+
+                          const realPhotos = candidatePhotos.filter(ph => isRealPhoto(ph));
+                          const photosToUse = realPhotos.length > 0
+                            ? realPhotos
+                            : candidatePhotos.filter(ph => ph && typeof ph === 'string' && !ph.startsWith('blob:'));
+
+                          photosToUse.forEach(ph => {
+                            const u = extractPhotoUrl(ph);
+                            if (u && !realTreePhotos.some(item => item.url === u)) {
+                              realTreePhotos.push({
+                                url: u,
+                                species: tg.species,
+                                count: tg.count,
+                                location: tg.location,
+                                condition: tg.condition,
+                                standIndex: idx + 1
+                              });
+                            }
+                          });
                         });
 
                         if (realTreePhotos.length === 0) return null;

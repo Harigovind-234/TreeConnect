@@ -16,72 +16,9 @@ const filterOutMockData = (list) => {
     });
 };
 
-const DEFAULT_PROPERTIES = [
-    {
-        id: '6a84237f8520d55f1e466a5c',
-        _id: '6a84237f8520d55f1e466a5c',
-        propertyName: 'treee',
-        propertyType: 'Residential Property',
-        ownerName: 'Harigovind D Nair',
-        contactNumber: '9746794654',
-        description: 'Registered forestry estate plot in Kottayam district.',
-        address: 'TreeConnect address',
-        state: 'Kerala',
-        district: 'Kottayam',
-        localBody: 'Meenadom Panchayat',
-        village: 'Koovapally',
-        pinCode: '686518',
-        latitude: 9.527847,
-        longitude: 76.822343,
-        totalArea: 11.93,
-        areaUnit: 'Cents',
-        photos: [],
-        videos: [],
-        status: 'Active Estate',
-        userEmail: 'h4hari2003@gmail.com',
-        approxTreesCount: 24,
-        mainSpecies: 'Teakwood'
-    }
-];
+const DEFAULT_PROPERTIES = [];
 
-const DEFAULT_TREE_INVENTORIES = [
-    {
-        id: 'treee_inv_101',
-        _id: 'treee_inv_101',
-        propertyId: '6a84237f8520d55f1e466a5c',
-        property_id: '6a84237f8520d55f1e466a5c',
-        groupName: 'Teakwood Stand #1',
-        species: 'Teakwood',
-        treeSpecies: 'Teakwood',
-        numberOfTrees: 24,
-        count: 24,
-        approxAge: '14 years',
-        healthCondition: 'Healthy',
-        condition: 'Healthy',
-        locationOnProperty: 'Koovapally Sector A',
-        locationInProperty: 'Koovapally Sector A',
-        treeAreaLocation: 'Koovapally Sector A',
-        girth: '65 - 85 cm',
-        estimatedVolume: '18.5 m³',
-        photos: ['https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80'],
-        speciesList: [
-            {
-                id: 'treee_sp_101',
-                species: 'Teakwood',
-                treeSpecies: 'Teakwood',
-                numberOfTrees: 24,
-                count: 24,
-                approxAge: '14 years',
-                healthCondition: 'Healthy',
-                locationOnProperty: 'Koovapally Sector A',
-                girth: '65 - 85 cm',
-                estimatedVolume: '18.5 m³',
-                photos: ['https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80']
-            }
-        ],
-        updatedAt: '2026-09-10'
-    }
-];
+const DEFAULT_TREE_INVENTORIES = [];
 
 export const LandownerProvider = ({ children }) => {
     const auth = useAuth();
@@ -93,10 +30,9 @@ export const LandownerProvider = ({ children }) => {
     const [properties, setProperties] = useState(() => {
         try {
             const stored = localStorage.getItem('treeconnect_properties');
-            if (stored) {
+            if (stored !== null) {
                 const parsed = JSON.parse(stored);
-                const cleaned = filterOutMockData(parsed);
-                if (cleaned && cleaned.length > 0) return cleaned;
+                return filterOutMockData(parsed);
             }
         } catch (e) {
             console.warn("Could not load properties from localStorage:", e);
@@ -108,10 +44,17 @@ export const LandownerProvider = ({ children }) => {
     const [inventories, setInventories] = useState(() => {
         try {
             const stored = localStorage.getItem('treeconnect_inventories');
-            if (stored) {
+            if (stored !== null) {
                 const parsed = JSON.parse(stored);
                 const cleaned = filterOutMockData(parsed);
-                if (cleaned && cleaned.length > 0) return cleaned;
+                return cleaned.map(inv => {
+                    const cleanPhotos = (inv.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'));
+                    const cleanSpeciesList = (inv.speciesList || []).map(sp => ({
+                        ...sp,
+                        photos: (sp.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'))
+                    }));
+                    return { ...inv, photos: cleanPhotos, speciesList: cleanSpeciesList };
+                });
             }
         } catch (e) {
             console.warn("Could not load tree inventories from localStorage:", e);
@@ -447,6 +390,22 @@ export const LandownerProvider = ({ children }) => {
         });
     };
 
+    const deleteHarvestRequest = async (id) => {
+        try {
+            await harvestService.deleteHarvestRequest(id);
+        } catch (err) {
+            console.error("Error deleting harvest request from DB:", err);
+        }
+
+        setHarvestRequests(prev => {
+            const updated = prev.filter(r => r.id !== id && r._id !== id);
+            try {
+                localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+            } catch (e) { }
+            return updated;
+        });
+    };
+
     const deleteProperty = async (id) => {
         try {
             await propertyService.deleteProperty(id);
@@ -464,9 +423,18 @@ export const LandownerProvider = ({ children }) => {
 
         // Also clean up inventories for deleted property
         setInventories(prev => {
-            const updated = prev.filter(inv => inv.propertyId !== id && String(inv.propertyId) !== String(id));
+            const updated = prev.filter(inv => inv.propertyId !== id && String(inv.propertyId) !== String(id) && inv.property_id !== id && String(inv.property_id) !== String(id));
             try {
                 localStorage.setItem('treeconnect_inventories', JSON.stringify(updated));
+            } catch (e) { }
+            return updated;
+        });
+
+        // Also clean up harvest requests for deleted property
+        setHarvestRequests(prev => {
+            const updated = prev.filter(hr => hr.property_id !== id && String(hr.property_id) !== String(id) && hr.propertyId !== id && String(hr.propertyId) !== String(id));
+            try {
+                localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
             } catch (e) { }
             return updated;
         });
@@ -490,6 +458,7 @@ export const LandownerProvider = ({ children }) => {
                 deleteProperty,
                 addInventory,
                 addHarvestRequest,
+                deleteHarvestRequest,
                 assignContractorToRequest,
                 addTimberListing,
                 updateListingStatus

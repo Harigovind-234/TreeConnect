@@ -261,6 +261,7 @@ const RegisterProperty = () => {
                   {/* 4. GIS MAP LOCATION */}
                   <PropertyMap
                     onCoordsChange={handleCoordsChange}
+                    addressData={formData}
                   />
 
                   {/* 5. PROPERTY PHOTOS & VIDEOS */}
