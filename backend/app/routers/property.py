@@ -68,6 +68,8 @@ def register_property(
             "status": prop.status or "Active Estate",
             "ownerId": prop.ownerId or "",
             "userEmail": owner_email,
+            "approxTreesCount": prop.approxTreesCount or 0,
+            "mainSpecies": prop.mainSpecies or "",
             "createdAt": created_at,
             "updatedAt": created_at
         }
@@ -147,6 +149,111 @@ def get_properties(
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to fetch properties from database: {str(e)}"}
+        )
+
+# Tree Inventory Endpoints
+@router.post("/inventories/add", status_code=status.HTTP_201_CREATED)
+@router.post("/tree-inventory", status_code=status.HTTP_201_CREATED)
+def add_tree_inventory(payload: dict, authorization: Optional[str] = Header(None)):
+    try:
+        if db is None:
+            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
+
+        token_email = get_current_user_email(authorization)
+        user_email = payload.get("userEmail") or token_email or ""
+        created_at = datetime.now(timezone.utc).isoformat()
+
+        doc = {
+            "propertyId": payload.get("propertyId"),
+            "propertyName": payload.get("propertyName", ""),
+            "treeAreaLocation": payload.get("treeAreaLocation", ""),
+            "speciesList": payload.get("speciesList", []),
+            "photos": payload.get("photos", []),
+            "userEmail": user_email,
+            "createdAt": created_at,
+            "updatedAt": created_at
+        }
+
+        result = db.tree_inventories.insert_one(doc)
+        doc["id"] = str(result.inserted_id)
+        doc["_id"] = str(result.inserted_id)
+
+        # Update property tree count & main species in db.properties
+        prop_id = payload.get("propertyId")
+        if prop_id:
+            try:
+                species_list = payload.get("speciesList", [])
+                added_count = 0
+                primary_species = ""
+                if species_list and len(species_list) > 0:
+                    primary_species = species_list[0].get("treeSpecies") or species_list[0].get("species") or ""
+                    for sp in species_list:
+                        if isinstance(sp, dict):
+                            added_count += int(sp.get("numberOfTrees") or sp.get("count") or 0)
+
+                query = {"_id": ObjectId(prop_id)} if ObjectId.is_valid(prop_id) else {"_id": prop_id}
+                target_prop = db.properties.find_one(query)
+                if target_prop:
+                    curr_count = target_prop.get("approxTreesCount", 0)
+                    try:
+                        curr_count = int(curr_count)
+                    except (ValueError, TypeError):
+                        curr_count = 0
+                    
+                    update_fields = {
+                        "approxTreesCount": curr_count + added_count,
+                        "updatedAt": created_at
+                    }
+                    if primary_species and not target_prop.get("mainSpecies"):
+                        update_fields["mainSpecies"] = primary_species
+
+                    db.properties.update_one(query, {"$set": update_fields})
+            except Exception as prop_err:
+                print(f"[WARN] Failed to update property tree count in DB: {prop_err}")
+
+        return JSONResponse(
+            status_code=status.HTTP_201_CREATED,
+            content={"message": "Tree inventory saved to database", "inventory": doc}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to save tree inventory: {str(e)}"}
+        )
+
+@router.get("/inventories/list")
+@router.get("/tree-inventory")
+def get_tree_inventories(
+    propertyId: Optional[str] = None,
+    userEmail: Optional[str] = None,
+    all_records: Optional[bool] = False
+):
+    try:
+        if db is None:
+            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
+
+        query = {}
+        if not all_records:
+            if propertyId:
+                query["propertyId"] = propertyId
+            elif userEmail:
+                query["userEmail"] = userEmail
+
+        cursor = db.tree_inventories.find(query).sort("createdAt", -1)
+        inventories = []
+        for doc in cursor:
+            doc["id"] = str(doc["_id"])
+            doc["_id"] = str(doc["_id"])
+            inventories.append(doc)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"inventories": inventories}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to fetch tree inventories: {str(e)}"}
         )
 
 @router.get("/{property_id}")
@@ -269,77 +376,5 @@ def delete_property(property_id: str):
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to delete property: {str(e)}"}
-        )
-
-# Tree Inventory Endpoints
-@router.post("/inventories/add", status_code=status.HTTP_201_CREATED)
-@router.post("/tree-inventory", status_code=status.HTTP_201_CREATED)
-def add_tree_inventory(payload: dict, authorization: Optional[str] = Header(None)):
-    try:
-        if db is None:
-            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
-
-        token_email = get_current_user_email(authorization)
-        user_email = payload.get("userEmail") or token_email or ""
-        created_at = datetime.now(timezone.utc).isoformat()
-
-        doc = {
-            "propertyId": payload.get("propertyId"),
-            "propertyName": payload.get("propertyName", ""),
-            "treeAreaLocation": payload.get("treeAreaLocation", ""),
-            "speciesList": payload.get("speciesList", []),
-            "photos": payload.get("photos", []),
-            "userEmail": user_email,
-            "createdAt": created_at,
-            "updatedAt": created_at
-        }
-
-        result = db.tree_inventories.insert_one(doc)
-        doc["id"] = str(result.inserted_id)
-        doc["_id"] = str(result.inserted_id)
-
-        return JSONResponse(
-            status_code=status.HTTP_201_CREATED,
-            content={"message": "Tree inventory saved to database", "inventory": doc}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"message": f"Failed to save tree inventory: {str(e)}"}
-        )
-
-@router.get("/inventories/list")
-@router.get("/tree-inventory")
-def get_tree_inventories(
-    propertyId: Optional[str] = None,
-    userEmail: Optional[str] = None,
-    all_records: Optional[bool] = False
-):
-    try:
-        if db is None:
-            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
-
-        query = {}
-        if not all_records:
-            if propertyId:
-                query["propertyId"] = propertyId
-            elif userEmail:
-                query["userEmail"] = userEmail
-
-        cursor = db.tree_inventories.find(query).sort("createdAt", -1)
-        inventories = []
-        for doc in cursor:
-            doc["id"] = str(doc["_id"])
-            doc["_id"] = str(doc["_id"])
-            inventories.append(doc)
-
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"inventories": inventories}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"message": f"Failed to fetch tree inventories: {str(e)}"}
         )
 

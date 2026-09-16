@@ -28,7 +28,10 @@ import {
   Loader2,
   ShieldCheck,
   DollarSign,
-  Info
+  Info,
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const SubmitAssessmentPage = () => {
@@ -41,6 +44,17 @@ const SubmitAssessmentPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState({ type: '', text: '' });
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const [activePhotoModal, setActivePhotoModal] = useState(null);
+
+  const openLightbox = (photosList, index = 0, title = 'Site Photo') => {
+    const validPhotos = (photosList || []).map(p => {
+      if (typeof p === 'string') return p.trim();
+      if (typeof p === 'object' && p) return (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
+      return '';
+    }).filter(Boolean);
+    if (validPhotos.length === 0) return;
+    setActivePhotoModal({ photos: validPhotos, index, title });
+  };
 
   const [assessmentForm, setAssessmentForm] = useState({
     estimated_harvestable_volume: 180,
@@ -244,17 +258,17 @@ const SubmitAssessmentPage = () => {
             </div>
           </div>
 
-          {/* MAIN FORM & DETAILS GRID */}
+          {/* MAIN FORM & DETAILS CONTAINER - STACKED UNDER PROPERTY */}
           {loading ? (
             <div className="cd-card text-center py-16 flex flex-col items-center justify-center gap-3">
               <Loader2 size={32} className="text-emerald-400 animate-spin" />
               <p className="text-white font-semibold text-sm">Loading harvest job details...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="flex flex-col gap-8 w-full">
               
-              {/* LEFT COLUMN: LANDOWNER HARVEST JOB CONTEXT (5 cols) */}
-              <div className="lg:col-span-5 flex flex-col gap-6">
+              {/* TOP SECTION: LANDOWNER HARVEST JOB & PROPERTY CONTEXT */}
+              <div className="w-full flex flex-col gap-6">
                 
                 {/* Property & Owner Summary Card */}
                 <div className="cd-site-context-card">
@@ -277,20 +291,17 @@ const SubmitAssessmentPage = () => {
                       let url = '';
                       if (typeof p === 'string') url = p.trim();
                       else if (typeof p === 'object' && p) url = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
-                      if (!url || typeof url !== 'string' || url.length < 5) return false;
-                      if (url.startsWith('blob:')) return false;
-                      if (url.includes('unsplash.com')) return false;
-                      return true;
+                      return url && typeof url === 'string' && url.length >= 5;
                     };
 
                     const getRealPhotoUrl = (p) => {
                       if (!p) return null;
                       if (typeof p === 'string') {
                         const s = p.trim();
-                        if (s.length > 5 && !s.startsWith('blob:') && !s.includes('unsplash.com')) return s;
+                        if (s.length >= 5) return s;
                       } else if (typeof p === 'object' && p) {
                         const s = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
-                        if (s.length > 5 && !s.startsWith('blob:') && !s.includes('unsplash.com')) return s;
+                        if (s.length >= 5) return s;
                       }
                       return null;
                     };
@@ -341,13 +352,29 @@ const SubmitAssessmentPage = () => {
 
                     return (
                       <div className="cd-media-gallery-section">
-                        <div className="cd-main-photo-container">
+                        <div
+                          className="cd-main-photo-container relative group cursor-pointer overflow-hidden"
+                          onClick={() => openLightbox(realPhotos, activePhotoIndex, `${requestDetails?.propertyName || 'Property'} - Site Photo #${activePhotoIndex + 1}`)}
+                        >
                           <img
                             src={realPhotos[activePhotoIndex] || realPhotos[0]}
                             alt="Harvest Site Parcel"
-                            className="cd-main-photo-img"
+                            className="cd-main-photo-img group-hover:scale-[1.02] transition-transform duration-300"
                             onError={(e) => { e.target.style.display = 'none'; }}
                           />
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openLightbox(realPhotos, activePhotoIndex, `${requestDetails?.propertyName || 'Property'} - Site Photo #${activePhotoIndex + 1}`);
+                            }}
+                            className="absolute top-3 right-3 px-3.5 py-1.5 rounded-xl bg-[#090e0b]/85 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-lg flex items-center gap-1.5 backdrop-blur cursor-pointer transition-all z-10"
+                          >
+                            <ZoomIn size={14} className="text-emerald-400" />
+                            <span>View Photo</span>
+                          </button>
+
                           <div className="cd-photo-caption-overlay">
                             <ImageIcon size={14} className="text-emerald-400" />
                             <span>{requestDetails?.propertyName || 'Site Parcel View'} - Photo #{activePhotoIndex + 1}</span>
@@ -397,17 +424,11 @@ const SubmitAssessmentPage = () => {
                     </strong>
                   </div>
 
-                  {/* Reason & Schedule Grid */}
+                  {/* Harvest Reason Box */}
                   <div className="cd-context-grid">
-                    <div className="cd-context-box">
+                    <div className="cd-context-box w-full">
                       <span className="cd-context-box-label">Harvest Reason</span>
                       <strong className="cd-context-box-value">{requestDetails?.reason || 'Mature timber harvest'}</strong>
-                    </div>
-                    <div className="cd-context-box">
-                      <span className="cd-context-box-label">Target Schedule</span>
-                      <strong className="cd-context-box-value-emerald">
-                        {requestDetails?.preferred_start_date ? `From ${requestDetails.preferred_start_date}` : 'Flexible Schedule'}
-                      </strong>
                     </div>
                   </div>
 
@@ -599,15 +620,14 @@ const SubmitAssessmentPage = () => {
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
 
-                                    <a
-                                      href={item.image}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur transition-all z-10"
+                                    <button
+                                      type="button"
+                                      onClick={() => openLightbox([item.image], 0, `${requestDetails?.propertyName || 'Property'} - ${item.species} Tree Group (${item.treeCount} Trees)`)}
+                                      className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur transition-all z-10 cursor-pointer"
                                     >
                                       <ZoomIn size={14} className="text-emerald-400" />
                                       <span>View Photo</span>
-                                    </a>
+                                    </button>
 
                                     <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
                                       <span className="px-3 py-1 rounded-xl bg-[#090e0b]/90 backdrop-blur border border-emerald-500/35 text-white text-xs font-extrabold flex items-center gap-1.5 shadow">
@@ -748,8 +768,8 @@ const SubmitAssessmentPage = () => {
                 </div>
               </div>
 
-              {/* RIGHT COLUMN: ASSESSMENT & QUOTATION FORM (7 cols) */}
-              <div className="lg:col-span-7">
+              {/* BOTTOM SECTION: ASSESSMENT & QUOTATION FORM (STACKED UNDER PROPERTY) */}
+              <div className="w-full">
                 <div className="cd-card border-emerald-500/40">
                   <div className="border-b border-emerald-500/20 pb-4 mb-6 flex items-center justify-between">
                     <div>
@@ -820,7 +840,7 @@ const SubmitAssessmentPage = () => {
                         <DollarSign size={15} /> Itemized Service Cost Breakdown (₹)
                       </h4>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="cd-form-group">
                           <label className="text-[11px] font-semibold text-slate-300">Tree Felling Cost (₹)</label>
                           <input
@@ -955,6 +975,75 @@ const SubmitAssessmentPage = () => {
 
             </div>
           )}
+
+            {/* FULL-SCREEN LIGHTBOX MODAL FOR PROPERTY & TREE PHOTOS */}
+            {activePhotoModal && (
+              <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[#0a0f0d]/95 backdrop-blur-md animate-fade-in">
+                <div className="max-w-4xl w-full p-6 border border-emerald-500/30 rounded-2xl bg-[#121a16] space-y-4 shadow-2xl relative">
+
+                  {/* Modal Header */}
+                  <div className="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center gap-2">
+                        <ImageIcon size={18} className="text-emerald-400" /> {activePhotoModal.title}
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        Photo {activePhotoModal.index + 1} of {activePhotoModal.photos.length}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActivePhotoModal(null)}
+                      className="p-1.5 rounded-lg bg-[#0e1612] border border-emerald-500/20 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Main Image View */}
+                  <div className="relative max-h-[65vh] flex items-center justify-center overflow-hidden rounded-xl bg-[#0a0f0d] border border-emerald-500/20 p-2">
+                    <img
+                      src={activePhotoModal.photos[activePhotoModal.index]}
+                      alt="Full View"
+                      className="max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
+                    />
+
+                    {/* Prev/Next Navigation Controls */}
+                    {activePhotoModal.photos.length > 1 && (
+                      <>
+                        <button
+                          onClick={() => setActivePhotoModal(prev => ({
+                            ...prev,
+                            index: prev.index === 0 ? prev.photos.length - 1 : prev.index - 1
+                          }))}
+                          className="absolute left-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
+                        >
+                          <ChevronLeft size={22} />
+                        </button>
+                        <button
+                          onClick={() => setActivePhotoModal(prev => ({
+                            ...prev,
+                            index: prev.index === prev.photos.length - 1 ? 0 : prev.index + 1
+                          }))}
+                          className="absolute right-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
+                        >
+                          <ChevronRight size={22} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Footer Close Button */}
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      onClick={() => setActivePhotoModal(null)}
+                      className="px-5 py-2 rounded-xl bg-[#0e1612] hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer"
+                    >
+                      Close Lightbox
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
         </div>
       </div>

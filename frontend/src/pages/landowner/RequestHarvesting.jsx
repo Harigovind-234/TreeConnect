@@ -29,32 +29,52 @@ import {
   X
 } from 'lucide-react';
 
-const DEFAULT_PROPERTY_IMAGE = null;
+const SPECIES_FALLBACK_IMAGES = {
+  'Teak': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Teakwood': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Mahogany': 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
+  'Rosewood': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+  'Sandalwood': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+  'Rubber': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+  'Coconut': 'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?auto=format&fit=crop&w=800&q=80',
+  'Jackfruit': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Eucalyptus': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+  'Pine': 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80'
+};
+
+const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80';
 
 const getPropertyImage = (p) => {
-  if (!p) return null;
-  const isReal = (u) => typeof u === 'string' && u.trim().length > 5 && !u.startsWith('blob:') && !u.includes('unsplash.com');
-  if (Array.isArray(p.photos) && p.photos.length > 0 && isReal(p.photos[0])) {
-    return p.photos[0].trim();
+  if (!p) return DEFAULT_PROPERTY_IMAGE;
+  const extractUrl = (ph) => {
+    if (!ph) return null;
+    if (typeof ph === 'string' && ph.trim().length > 5) return ph.trim();
+    if (typeof ph === 'object') {
+      const u = ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || '';
+      if (typeof u === 'string' && u.trim().length > 5) return u.trim();
+    }
+    return null;
+  };
+
+  if (Array.isArray(p.photos) && p.photos.length > 0) {
+    const u = extractUrl(p.photos[0]);
+    if (u) return u;
   }
-  if (isReal(p.image)) {
-    return p.image.trim();
-  }
-  if (isReal(p.imageUrl)) {
-    return p.imageUrl.trim();
-  }
-  return null;
+  const direct = extractUrl(p.image || p.imageUrl || p.photo);
+  if (direct) return direct;
+
+  return DEFAULT_PROPERTY_IMAGE;
 };
 
 const getTreePhoto = (g) => {
-  if (!g) return null;
+  if (!g) return DEFAULT_PROPERTY_IMAGE;
 
   const extractUrl = (ph) => {
     if (!ph) return null;
     let str = '';
     if (typeof ph === 'string') str = ph.trim();
     else if (typeof ph === 'object') str = (ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || '').trim();
-    if (!str || str.length < 5 || str.startsWith('blob:') || str.includes('unsplash.com')) return null;
+    if (!str || str.length < 5) return null;
     return str;
   };
 
@@ -67,7 +87,7 @@ const getTreePhoto = (g) => {
   const directImg = extractUrl(g.image || g.photo);
   if (directImg) return directImg;
 
-  return null;
+  return SPECIES_FALLBACK_IMAGES[g.species] || DEFAULT_PROPERTY_IMAGE;
 };
 
 const RequestHarvesting = () => {
@@ -150,7 +170,7 @@ const RequestHarvesting = () => {
 
   // 2. Unpack live inventories and their speciesList
   activeInventories.forEach((inv, invIdx) => {
-    const isReal = (p) => p && typeof p === 'string' && p.trim().length > 5 && !p.startsWith('blob:') && !p.includes('unsplash.com');
+    const isReal = (p) => p && typeof p === 'string' && p.trim().length > 5;
     const rawInvPhotos = Array.isArray(inv.photos) ? inv.photos : (inv.photo ? [inv.photo] : (inv.image ? [inv.image] : []));
     const rawPropPhotos = Array.isArray(activeProperty?.photos) ? activeProperty.photos : (activeProperty?.image ? [activeProperty.image] : []);
 
@@ -1200,7 +1220,7 @@ const RequestHarvesting = () => {
 
             {/* STEP 5: REVIEW & SUBMIT */}
             {currentStep === 5 && (
-              <div className="ld-card p-8 sm:p-10 space-y-8">
+              <div className="ld-card p-6 sm:p-10 space-y-6">
                 <div>
                   <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3">
                     <FileText className="text-emerald-400" size={24} /> Step 5: Review & Submit Request
@@ -1210,36 +1230,36 @@ const RequestHarvesting = () => {
                   </p>
                 </div>
 
-                {/* Unified Summary Container */}
-                <div className="ld-subcard p-6 sm:p-8 space-y-8 bg-[#061209] border border-emerald-500/30 rounded-2xl shadow-xl">
+                {/* Unified Summary Container matching Image 1 aesthetics */}
+                <div className="ld-subcard p-5 sm:p-8 space-y-6 bg-slate-950/70 border border-emerald-500/30 rounded-2xl shadow-xl">
 
                   {/* 1. PROPERTY SUMMARY */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20 flex-wrap gap-2">
-                      <h4 className="font-extrabold text-emerald-400 uppercase text-xs sm:text-sm tracking-widest flex items-center gap-2.5">
-                        <Building2 size={18} className="text-emerald-400" /> PROPERTY INFORMATION (EXISTING)
+                  <div className="review-summary-card">
+                    <div className="review-section-header">
+                      <h4 className="review-section-title">
+                        <Building2 size={16} className="text-emerald-400" /> PROPERTY INFORMATION (EXISTING)
                       </h4>
-                      <span className="ld-badge-green flex items-center gap-1.5 font-bold text-xs">
+                      <span className="review-badge-green">
                         <CheckCircle2 size={13} /> Active Registered Estate
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-6 rounded-2xl bg-[#030a05] border border-emerald-500/20 shadow-md">
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Property Name</span>
-                        <strong className="text-xl font-black text-white block">{activeProperty?.propertyName || activeProperty?.name}</strong>
+                    <div className="review-grid-4">
+                      <div className="review-field-item">
+                        <span className="review-field-label">Property Name:</span>
+                        <span className="review-field-value">{activeProperty?.propertyName || activeProperty?.name}</span>
                       </div>
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Location</span>
-                        <strong className="text-base font-extrabold text-white block">{activeProperty?.district || 'Kottayam'}, {activeProperty?.state || 'Kerala'}</strong>
+                      <div className="review-field-item">
+                        <span className="review-field-label">Location:</span>
+                        <span className="review-field-value">{activeProperty?.district || 'Kottayam'}, {activeProperty?.state || 'Kerala'}</span>
                       </div>
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Total Registered Area</span>
-                        <strong className="text-lg font-black text-emerald-400 block">{activeProperty?.totalArea || '12'} {activeProperty?.areaUnit || 'Cents'}</strong>
+                      <div className="review-field-item">
+                        <span className="review-field-label">Total Registered Area:</span>
+                        <span className="review-field-value-emerald">{activeProperty?.totalArea || '12'} {activeProperty?.areaUnit || 'Cents'}</span>
                       </div>
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Property Record ID</span>
-                        <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-950/90 px-3 py-1.5 rounded-lg border border-emerald-700/80 inline-block overflow-hidden text-ellipsis max-w-full">
+                      <div className="review-field-item">
+                        <span className="review-field-label">Property Record ID:</span>
+                        <span className="review-id-code">
                           {activeProperty?.id || activeProperty?._id}
                         </span>
                       </div>
@@ -1247,35 +1267,42 @@ const RequestHarvesting = () => {
                   </div>
 
                   {/* 2. SELECTED TREES SUMMARY */}
-                  <div className="mt-10 pt-6 border-t border-emerald-500/25 space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20 flex-wrap gap-2">
-                      <h4 className="font-extrabold text-emerald-400 uppercase text-xs sm:text-sm tracking-widest flex items-center gap-2.5">
-                        <Trees size={18} className="text-emerald-400" /> SELECTED TREE INVENTORIES ({selectedTreeGroups.length} STANDS)
+                  <div className="review-summary-card">
+                    <div className="review-section-header">
+                      <h4 className="review-section-title">
+                        <Trees size={16} className="text-emerald-400" /> SELECTED TREE INVENTORIES ({selectedTreeGroups.length} STANDS)
                       </h4>
-                      <span className="ld-badge-green font-bold text-xs">
+                      <span className="review-badge-green">
                         {selectedTreeGroups.length} Stand(s) Selected
                       </span>
                     </div>
 
-                    <div className={`grid grid-cols-1 ${selectedTreeGroups.length > 1 ? 'md:grid-cols-2' : ''} gap-6`}>
+                    <div className={`grid grid-cols-1 ${selectedTreeGroups.length > 1 ? 'md:grid-cols-2' : ''} gap-4`}>
                       {selectedTreeGroups.map((g) => (
-                        <div key={g.id} className="p-6 rounded-2xl bg-[#07170d] border-2 border-emerald-500/35 shadow-xl space-y-4">
-                          <div className="font-black text-white text-xl flex items-center justify-between flex-wrap gap-2">
-                            <span>{g.groupName}</span>
-                            <span className="text-xs font-bold text-emerald-300 bg-emerald-950/90 px-3 py-1 rounded-lg border border-emerald-700/80 shadow-sm">
+                        <div key={g.id} className="review-stand-box">
+                          <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-emerald-500/15">
+                            <span className="font-extrabold text-white text-base">{g.groupName}</span>
+                            <span className="review-badge-green">
                               {g.numberOfTrees} Trees
                             </span>
                           </div>
-                          <div className="text-sm text-slate-200">
-                            Species: <strong className="text-emerald-300 font-extrabold text-base ml-1">{g.species}</strong> • Stand Age: <strong className="text-white font-bold text-base ml-1">{g.approxAge || '14 years'}</strong>
-                          </div>
-                          <div className="pt-4 border-t border-emerald-500/20 flex items-center justify-between gap-4 text-sm font-mono flex-wrap">
-                            <span className="bg-[#030a05] px-4 py-2 rounded-xl border border-emerald-800/60 text-emerald-300 font-extrabold flex items-center gap-2">
-                              <span className="text-slate-400 font-sans text-xs">Trunk Girth:</span> {getStandGirth(g)}
-                            </span>
-                            <span className="bg-[#030a05] px-4 py-2 rounded-xl border border-emerald-800/60 text-emerald-300 font-extrabold flex items-center gap-2">
-                              <span className="text-slate-400 font-sans text-xs">Est. Volume:</span> {getStandVolume(g)}
-                            </span>
+                          <div className="review-grid-4 gap-y-3 pt-1">
+                            <div className="review-field-item">
+                              <span className="review-field-label">Species:</span>
+                              <span className="review-field-value-emerald">{g.species}</span>
+                            </div>
+                            <div className="review-field-item">
+                              <span className="review-field-label">Stand Age:</span>
+                              <span className="review-field-value">{g.approxAge || '14 years'}</span>
+                            </div>
+                            <div className="review-field-item">
+                              <span className="review-field-label">Trunk Girth:</span>
+                              <span className="review-field-value">{getStandGirth(g)}</span>
+                            </div>
+                            <div className="review-field-item">
+                              <span className="review-field-label">Est. Volume:</span>
+                              <span className="review-field-value-emerald">{getStandVolume(g)}</span>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1283,94 +1310,100 @@ const RequestHarvesting = () => {
                   </div>
 
                   {/* 3. HARVEST REQUIREMENTS */}
-                  <div className="mt-10 pt-6 border-t border-emerald-500/25 space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20 flex-wrap gap-2">
-                      <h4 className="font-extrabold text-emerald-400 uppercase text-xs sm:text-sm tracking-widest flex items-center gap-2.5">
-                        <Axe size={18} className="text-emerald-400" /> HARVEST REQUIREMENTS
+                  <div className="review-summary-card">
+                    <div className="review-section-header">
+                      <h4 className="review-section-title">
+                        <Axe size={16} className="text-emerald-400" /> HARVEST REQUIREMENTS
                       </h4>
-                      <span className="ld-badge-amber font-bold text-xs">
+                      <span className="review-badge-amber">
                         Commercial Request
                       </span>
                     </div>
 
-                    <div className="p-6 rounded-2xl bg-[#030a05] border border-emerald-500/20 text-base text-slate-300 font-medium shadow-md">
-                      Reason for Harvesting: <strong className="text-xl font-black text-white ml-2">{reason}</strong>
+                    <div className="review-grid-4">
+                      <div className="review-field-item sm:col-span-2">
+                        <span className="review-field-label">Reason for Harvesting:</span>
+                        <span className="review-field-value text-base">{reason}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* 4. SITE CONDITIONS */}
-                  <div className="mt-10 pt-6 border-t border-emerald-500/25 space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20 flex-wrap gap-2">
-                      <h4 className="font-extrabold text-emerald-400 uppercase text-xs sm:text-sm tracking-widest flex items-center gap-2.5">
-                        <Truck size={18} className="text-emerald-400" /> SITE CONDITIONS & HAZARDS
+                  {/* 4. SITE CONDITIONS & HAZARDS */}
+                  <div className="review-summary-card">
+                    <div className="review-section-header">
+                      <h4 className="review-section-title">
+                        <Truck size={16} className="text-emerald-400" /> SITE CONDITIONS & HAZARDS
                       </h4>
-                      <span className="ld-badge-teal font-bold text-xs">
+                      <span className="review-badge-teal">
                         Site Profile Complete
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-6 rounded-2xl bg-[#030a05] border border-emerald-500/20 shadow-md">
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Access Availability</span>
-                        <strong className="text-base font-extrabold text-white block">{accessAvailability}</strong>
+                    <div className="review-grid-4">
+                      <div className="review-field-item">
+                        <span className="review-field-label">Access Availability:</span>
+                        <span className="review-field-value">{accessAvailability}</span>
                       </div>
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Road Condition</span>
-                        <strong className="text-base font-extrabold text-white block">{roadCondition} ({distanceFromRoad})</strong>
+                      <div className="review-field-item">
+                        <span className="review-field-label">Road Condition:</span>
+                        <span className="review-field-value">{roadCondition} ({distanceFromRoad})</span>
                       </div>
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Terrain Type</span>
-                        <strong className="text-base font-extrabold text-white block">{terrain}</strong>
+                      <div className="review-field-item">
+                        <span className="review-field-label">Terrain Type:</span>
+                        <span className="review-field-value">{terrain}</span>
                       </div>
-                      <div>
-                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1.5">Special Hazards</span>
-                        <strong className="text-base font-black text-amber-400 block">{hazards.join(', ') || 'None'}</strong>
+                      <div className="review-field-item">
+                        <span className="review-field-label">Special Hazards:</span>
+                        <span className={hazards && hazards.length > 0 ? "review-field-value-amber" : "review-field-value"}>
+                          {hazards.join(', ') || 'None'}
+                        </span>
                       </div>
                     </div>
 
                     {additionalNotes && (
-                      <div className="p-5 rounded-2xl bg-emerald-950/40 border border-emerald-500/20 text-sm text-slate-200 shadow-sm">
-                        <strong className="text-emerald-300 block mb-1 font-bold">Special Instructions / Site Notes:</strong>
+                      <div className="mt-2 p-3.5 rounded-xl bg-slate-900/80 border border-emerald-500/20 text-xs text-slate-300">
+                        <strong className="text-emerald-300 block mb-0.5 font-bold">Special Instructions / Site Notes:</strong>
                         <span className="italic">{additionalNotes}</span>
                       </div>
                     )}
                   </div>
 
                   {/* 5. ASSIGNED CONTRACTOR */}
-                  <div className="mt-10 pt-6 border-t border-emerald-500/25 space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20 flex-wrap gap-3">
-                      <h4 className="font-extrabold text-emerald-400 uppercase text-xs sm:text-sm tracking-widest flex items-center gap-2.5">
-                        <ShieldCheck size={18} className="text-emerald-400" /> ASSIGNED ADMIN-APPROVED CONTRACTOR (OPTIONAL)
+                  <div className="review-summary-card">
+                    <div className="review-section-header">
+                      <h4 className="review-section-title">
+                        <ShieldCheck size={16} className="text-emerald-400" /> ASSIGNED ADMIN-APPROVED CONTRACTOR (OPTIONAL)
                       </h4>
                       <button
                         type="button"
                         onClick={() => setShowContractorModal(true)}
-                        className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs shadow transition-all"
+                        className="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs shadow transition-all"
                       >
                         {selectedContractor ? 'Change Contractor' : '+ Select Approved Contractor'}
                       </button>
                     </div>
 
                     {selectedContractor ? (
-                      <div className="p-6 rounded-2xl bg-[#030a05] border-2 border-emerald-500/40 flex items-center justify-between flex-wrap gap-4 shadow-lg">
+                      <div className="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/30 flex items-center justify-between flex-wrap gap-4">
                         <div>
-                          <div className="font-extrabold text-white text-xl">{selectedContractor.companyName || selectedContractor.name}</div>
-                          <div className="text-sm font-semibold text-emerald-300 mt-1">{selectedContractor.location || selectedContractor.district} • Verified Contractor</div>
+                          <div className="font-extrabold text-white text-base">{selectedContractor.companyName || selectedContractor.name}</div>
+                          <div className="text-xs font-semibold text-emerald-300 mt-0.5">{selectedContractor.location || selectedContractor.district} • Verified Contractor</div>
                         </div>
                         <button
                           type="button"
                           onClick={() => setSelectedContractor(null)}
-                          className="px-4 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/50 text-red-300 text-xs font-bold transition-all shadow"
+                          className="px-3.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-500/50 text-red-300 text-xs font-bold transition-all"
                         >
                           Remove
                         </button>
                       </div>
                     ) : (
-                      <div className="p-5 rounded-2xl bg-[#030a05] border border-emerald-500/10 text-slate-300 text-sm font-medium">
+                      <div className="text-slate-400 text-xs font-medium">
                         No contractor selected yet. You can submit now to let approved contractors view and bid, or select a contractor directly above.
                       </div>
                     )}
                   </div>
+
                 </div>
               </div>
             )}

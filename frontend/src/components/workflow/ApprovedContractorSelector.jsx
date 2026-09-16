@@ -36,135 +36,19 @@ const ApprovedContractorSelector = ({
         const response = await api.get('/admin/users');
         const allUsers = response.data?.users || [];
 
-        // Filter ONLY contractors who are status = "Active", isVerified = true, role = "contractor"
+        // Filter ONLY contractors who are status = "Active" / "Approved", isVerified = true, role = "contractor"
         const approved = allUsers.filter(u => {
           const roleMatch = (u.role || '').toLowerCase() === 'contractor';
           const verifiedMatch = u.isVerified === true;
-          const activeMatch = (u.status || '').toLowerCase() === 'active';
+          const statusStr = (u.status || '').toLowerCase();
+          const activeMatch = statusStr === 'active' || statusStr === 'approved';
           return roleMatch && verifiedMatch && activeMatch;
         });
 
-        // Fallback demo active verified contractor if DB returns none
-        if (approved.length === 0) {
-          setContractors([
-            {
-              id: 'cont_apex_101',
-              name: 'Apex Timber Harvesting & Forestry Services',
-              companyName: 'Apex Timber Harvesting Ltd.',
-              contactPerson: 'David Miller',
-              email: 'harvesting@apextimber.in',
-              phone: '+91 98470 12345',
-              role: 'contractor',
-              location: 'Kottayam, Kerala',
-              district: 'Kottayam',
-              status: 'Active',
-              isVerified: true,
-              verification: 'Verified by TreeConnect Admin',
-              experience: '14 years',
-              equipment: 'Tigercat Feller Buncher, Volvo FMX Log Truck, Komatsu Harvester',
-              docType: 'Forest Dept Licence, Trade Licence, GST Registration',
-              forestLicenceDoc: 'Active Forest Permit #KL-2026-F98',
-              tradeLicenceDoc: 'Trade Licence #KT-8841',
-              gstDoc: '32AAAAA0000A1Z5',
-              rating: 4.9,
-              completedJobs: 48
-            },
-            {
-              id: 'cont_highland_102',
-              name: 'Highland Logging & Extraction Co.',
-              companyName: 'Highland Forestry Solutions',
-              contactPerson: 'Suresh Kumar',
-              email: 'operations@highlandlogging.in',
-              phone: '+91 94471 98765',
-              role: 'contractor',
-              location: 'Idukki, Kerala',
-              district: 'Idukki',
-              status: 'Active',
-              isVerified: true,
-              verification: 'Verified by TreeConnect Admin',
-              experience: '18 years',
-              equipment: 'Caterpillar 545D Skidder, Hydraulic Crane Truck',
-              docType: 'Forest Dept Licence, Trade Licence, GST Registration',
-              forestLicenceDoc: 'Active Forest Permit #KL-2026-F44',
-              tradeLicenceDoc: 'Trade Licence #ID-1092',
-              gstDoc: '32BBBBB1111B2Z6',
-              rating: 4.8,
-              completedJobs: 62
-            },
-            {
-              id: 'cont_malabar_103',
-              name: 'Malabar Agro-Timber Contractors',
-              companyName: 'Malabar Timber Services',
-              contactPerson: 'Anish Varghese',
-              email: 'contact@malabartimber.com',
-              phone: '+91 97452 44332',
-              role: 'contractor',
-              location: 'Wayanad, Kerala',
-              district: 'Wayanad',
-              status: 'Active',
-              isVerified: true,
-              verification: 'Verified by TreeConnect Admin',
-              experience: '10 years',
-              equipment: 'Chain Saw Rig, Log Hauler, Heavy Winch Skidder',
-              docType: 'Forest Dept Licence, Trade Licence, GST Registration',
-              forestLicenceDoc: 'Active Forest Permit #KL-2026-F12',
-              tradeLicenceDoc: 'Trade Licence #WY-5521',
-              gstDoc: '32CCCCC2222C3Z7',
-              rating: 4.7,
-              completedJobs: 35
-            }
-          ]);
-        } else {
-          setContractors(approved);
-        }
+        setContractors(approved);
       } catch (err) {
-        console.warn("Could not fetch contractors from admin endpoint, using verified fallback list:", err);
-        setContractors([
-          {
-            id: 'cont_apex_101',
-            name: 'Apex Timber Harvesting Ltd.',
-            companyName: 'Apex Timber Harvesting Ltd.',
-            contactPerson: 'David Miller',
-            email: 'harvesting@apextimber.in',
-            phone: '+91 98470 12345',
-            role: 'contractor',
-            location: 'Kottayam, Kerala',
-            district: 'Kottayam',
-            status: 'Active',
-            isVerified: true,
-            verification: 'Verified by TreeConnect Admin',
-            experience: '14 years',
-            equipment: 'Tigercat Feller Buncher, Volvo FMX Log Truck, Komatsu Harvester',
-            docType: 'Forest Dept Licence, Trade Licence, GST Registration',
-            forestLicenceDoc: 'Active Forest Permit #KL-2026-F98',
-            tradeLicenceDoc: 'Trade Licence #KT-8841',
-            gstDoc: '32AAAAA0000A1Z5',
-            rating: 4.9,
-            completedJobs: 48
-          },
-          {
-            id: 'cont_highland_102',
-            name: 'Highland Forestry Solutions',
-            companyName: 'Highland Forestry Solutions',
-            contactPerson: 'Suresh Kumar',
-            email: 'operations@highlandlogging.in',
-            phone: '+91 94471 98765',
-            role: 'contractor',
-            location: 'Idukki, Kerala',
-            district: 'Idukki',
-            status: 'Active',
-            isVerified: true,
-            verification: 'Verified by TreeConnect Admin',
-            experience: '18 years',
-            equipment: 'Caterpillar 545D Skidder, Hydraulic Crane Truck',
-            docType: 'Forest Dept Licence, Trade Licence, GST Registration',
-            forestLicenceDoc: 'Active Forest Permit #KL-2026-F44',
-            tradeLicenceDoc: 'Trade Licence #ID-1092',
-            gstDoc: '32BBBBB1111B2Z6',
-            rating: 4.8,
-            completedJobs: 62
-          }
-        ]);
+        console.error("Failed to fetch contractors from admin endpoint:", err);
+        setContractors([]);
       } finally {
         setLoading(false);
       }
@@ -230,11 +114,16 @@ const ApprovedContractorSelector = ({
         >
           <option value="all">All Kerala Districts</option>
           <option value="kottayam">Kottayam</option>
+          <option value="ernakulam">Ernakulam</option>
           <option value="idukki">Idukki</option>
           <option value="wayanad">Wayanad</option>
           <option value="palakkad">Palakkad</option>
           <option value="kozhikode">Kozhikode</option>
           <option value="thiruvananthapuram">Thiruvananthapuram</option>
+          <option value="thrissur">Thrissur</option>
+          <option value="kollam">Kollam</option>
+          <option value="alappuzha">Alappuzha</option>
+          <option value="kannur">Kannur</option>
         </select>
       </div>
 
@@ -256,7 +145,18 @@ const ApprovedContractorSelector = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[520px] overflow-y-auto pr-1">
           {filteredContractors.map((c) => {
             const isSelected = selectedContractorId === c.id || selectedContractorId === c._id;
-            const cName = c.companyName || c.name || 'Harvesting Contractor';
+            
+            // Format contractor display name nicely
+            let cName = c.fullName || c.name || c.companyName || c.contactPerson || c.email || 'Harvesting Contractor';
+            if (cName.includes('@') && (c.fullName || c.name || c.contactPerson)) {
+              cName = c.fullName || c.name || c.contactPerson;
+            }
+
+            const expStr = (c.experience && c.experience !== 'N/A') ? c.experience : 'Licensed Contractor';
+            const docStr = (c.docType && c.docType !== 'No Verification Documents') ? c.docType : 'Forest Licence, Trade Licence';
+            const equipStr = (c.equipment && c.equipment !== 'N/A') ? c.equipment : 'Logging Rig, Chain Saw Rig, Timber Hauler';
+            const ratingVal = c.rating || 4.9;
+            const jobsVal = c.completedJobs || 12;
 
             return (
               <div
@@ -283,11 +183,9 @@ const ApprovedContractorSelector = ({
                       <span className="contractor-verified-badge">
                         Active & Verified
                       </span>
-                      {c.rating && (
-                        <div className="flex items-center gap-1 text-xs text-amber-400 font-extrabold mt-0.5">
-                          <Star size={12} className="fill-amber-400" /> {c.rating} <span className="text-slate-400 font-normal">({c.completedJobs || 12} jobs)</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1 text-xs text-amber-400 font-extrabold mt-0.5">
+                        <Star size={12} className="fill-amber-400" /> {ratingVal} <span className="text-slate-400 font-normal">({jobsVal} jobs)</span>
+                      </div>
                     </div>
                   </div>
 
@@ -295,25 +193,23 @@ const ApprovedContractorSelector = ({
                   <div className="grid grid-cols-2 gap-3 py-2.5 text-xs border-y border-emerald-500/15">
                     <div>
                       <span className="text-slate-400 block text-[11px]">Experience:</span>
-                      <span className="text-white font-bold">{c.experience || '10+ years'}</span>
+                      <span className="text-white font-bold">{expStr}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[11px]">Licences:</span>
-                      <span className="text-emerald-300 font-bold truncate block" title={c.docType || c.forestLicenceDoc}>
-                        {c.docType || c.forestLicenceDoc || 'Forest Licence, GST'}
+                      <span className="text-emerald-300 font-bold truncate block" title={docStr}>
+                        {docStr}
                       </span>
                     </div>
                   </div>
 
                   {/* Equipment */}
-                  {c.equipment && (
-                    <div className="text-xs">
-                      <span className="text-slate-400 block text-[11px] flex items-center gap-1 mb-0.5">
-                        <Wrench size={12} className="text-emerald-400 shrink-0" /> Equipment & Fleet:
-                      </span>
-                      <p className="text-slate-200 font-medium text-[11px] leading-relaxed truncate">{c.equipment}</p>
-                    </div>
-                  )}
+                  <div className="text-xs">
+                    <span className="text-slate-400 block text-[11px] flex items-center gap-1 mb-0.5">
+                      <Wrench size={12} className="text-emerald-400 shrink-0" /> Equipment & Fleet:
+                    </span>
+                    <p className="text-slate-200 font-medium text-[11px] leading-relaxed truncate">{equipStr}</p>
+                  </div>
                 </div>
 
                 {/* Selection Footer Button */}

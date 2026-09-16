@@ -151,10 +151,29 @@ export const LandownerProvider = ({ children }) => {
         }
     }, [user?.email]);
 
+    // Sync tree inventories with backend database
+    const fetchDBInventories = useCallback(async () => {
+        try {
+            const data = await propertyService.getTreeInventories({ all_records: true });
+            if (data && Array.isArray(data.inventories)) {
+                const cleanDBInvs = filterOutMockData(data.inventories);
+                if (cleanDBInvs.length > 0) {
+                    setInventories(cleanDBInvs);
+                    try {
+                        localStorage.setItem('treeconnect_inventories', JSON.stringify(cleanDBInvs));
+                    } catch (e) { }
+                }
+            }
+        } catch (err) {
+            console.warn("Could not load tree inventories from backend database:", err);
+        }
+    }, []);
+
     useEffect(() => {
         fetchDBProperties();
         fetchDBHarvestRequests();
-    }, [fetchDBProperties, fetchDBHarvestRequests, user?.email]);
+        fetchDBInventories();
+    }, [fetchDBProperties, fetchDBHarvestRequests, fetchDBInventories, user?.email]);
 
     // Persist properties to localStorage whenever updated
     useEffect(() => {
@@ -238,22 +257,44 @@ export const LandownerProvider = ({ children }) => {
         return savedProp;
     };
 
-    const addInventory = (newInv) => {
-        const createdInv = {
-            ...newInv,
-            id: `inv_${Date.now()}`,
-            updatedAt: new Date().toISOString().split('T')[0]
-        };
+    const addInventory = async (newInv) => {
+        const storedUserStr = localStorage.getItem('treeconnect_user');
+        const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+        const userEmail = user?.email || storedUser?.email || '';
 
-        const updatedInventories = [createdInv, ...inventories];
-        setInventories(updatedInventories);
+        let createdInv;
         try {
-            localStorage.setItem('treeconnect_inventories', JSON.stringify(updatedInventories));
-        } catch (e) {
-            console.warn("Failed to persist tree inventories to localStorage:", e);
+            const res = await propertyService.addTreeInventory({
+                ...newInv,
+                userEmail: newInv.userEmail || userEmail
+            });
+            createdInv = res.inventory || {
+                ...newInv,
+                id: `inv_${Date.now()}`,
+                _id: `inv_${Date.now()}`,
+                updatedAt: new Date().toISOString().split('T')[0]
+            };
+        } catch (err) {
+            console.error("Error saving tree inventory to backend database:", err);
+            createdInv = {
+                ...newInv,
+                id: `inv_${Date.now()}`,
+                _id: `inv_${Date.now()}`,
+                updatedAt: new Date().toISOString().split('T')[0]
+            };
         }
 
-        // Calculate tree count and primary species to update property summary state
+        setInventories(prev => {
+            const updatedInventories = [createdInv, ...prev.filter(inv => inv.id !== createdInv.id && inv._id !== createdInv._id)];
+            try {
+                localStorage.setItem('treeconnect_inventories', JSON.stringify(updatedInventories));
+            } catch (e) {
+                console.warn("Failed to persist tree inventories to localStorage:", e);
+            }
+            return updatedInventories;
+        });
+
+        // Calculate tree count and primary species to update property summary state & DB
         let addedTreesCount = 0;
         let primarySpecies = '';
         if (newInv.speciesList && newInv.speciesList.length > 0) {
@@ -261,6 +302,25 @@ export const LandownerProvider = ({ children }) => {
             newInv.speciesList.forEach(sp => {
                 addedTreesCount += Number(sp.numberOfTrees || sp.count || 0);
             });
+        }
+
+        const targetPropId = newInv.propertyId;
+        const matchingProp = properties.find(p => p.id === targetPropId || p._id === targetPropId || String(p.id) === String(targetPropId) || String(p._id) === String(targetPropId));
+        if (matchingProp) {
+            const currentCount = typeof matchingProp.approxTreesCount === 'number'
+                ? matchingProp.approxTreesCount
+                : parseInt(matchingProp.approxTreesCount) || 0;
+            const newTotalCount = currentCount + addedTreesCount;
+            const updatedMainSpecies = primarySpecies || matchingProp.mainSpecies || 'Timber Trees';
+
+            try {
+                await propertyService.updateProperty(matchingProp.id || matchingProp._id, {
+                    approxTreesCount: newTotalCount,
+                    mainSpecies: updatedMainSpecies
+                });
+            } catch (err) {
+                console.warn("Could not update property tree count in DB:", err);
+            }
         }
 
         // Update target property summary fields in properties state

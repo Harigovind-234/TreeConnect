@@ -111,7 +111,7 @@ const AddTreeInventory = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
@@ -153,7 +153,7 @@ const AddTreeInventory = () => {
     };
 
     try {
-      addInventory(newInventoryRecord);
+      await addInventory(newInventoryRecord);
       setSuccessMessage('Tree inventory information saved successfully!');
       setTimeout(() => {
         setIsSubmitting(false);

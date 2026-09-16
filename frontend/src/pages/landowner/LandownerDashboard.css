@@ -1574,3 +1574,176 @@
   box-shadow: 0 6px 18px rgba(16, 185, 129, 0.4) !important;
 }
 
+/* ==================================================== */
+/* STEP 5: REVIEW & SUBMIT REQUEST SECTION SYSTEM       */
+/* (MATCHING IMAGE 1 DESIGN AESTHETICS)                 */
+/* ==================================================== */
+
+.review-summary-card {
+  background: rgba(3, 10, 5, 0.85) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border-radius: 20px !important;
+  padding: 22px 26px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.review-summary-card:hover {
+  border-color: rgba(16, 185, 129, 0.38) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 20px rgba(16, 185, 129, 0.05) !important;
+}
+
+.review-section-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding-bottom: 12px !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2) !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+.review-section-title {
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin: 0 !important;
+}
+
+.review-badge-green {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  color: #34d399 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 3px 12px !important;
+  border-radius: 9999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+}
+
+.review-badge-amber {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  color: #fbbf24 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 3px 12px !important;
+  border-radius: 9999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+}
+
+.review-badge-teal {
+  background: rgba(20, 184, 166, 0.12) !important;
+  border: 1px solid rgba(20, 184, 166, 0.35) !important;
+  color: #2dd4bf !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 3px 12px !important;
+  border-radius: 9999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+}
+
+.review-grid-4 {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 16px 24px !important;
+}
+
+@media (min-width: 640px) {
+  .review-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .review-grid-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+.review-field-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.review-field-label {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: #9ca3af !important;
+  display: block !important;
+}
+
+.review-field-value {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  line-height: 1.4 !important;
+  word-break: break-word !important;
+}
+
+.review-field-value-emerald {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  line-height: 1.4 !important;
+  word-break: break-word !important;
+}
+
+.review-field-value-amber {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: #fbbf24 !important;
+  line-height: 1.4 !important;
+  word-break: break-word !important;
+}
+
+.review-id-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  display: inline-block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.review-stand-box {
+  background: rgba(5, 14, 8, 0.8) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 14px !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.review-stand-box:hover {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+

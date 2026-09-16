@@ -25,6 +25,8 @@ class PropertyCreate(BaseModel):
     status: Optional[str] = "Active Estate"
     ownerId: Optional[str] = None
     userEmail: Optional[str] = None
+    approxTreesCount: Optional[int] = 0
+    mainSpecies: Optional[str] = ""
 
 class PropertyUpdate(BaseModel):
     propertyName: Optional[str] = None
@@ -45,3 +47,5 @@ class PropertyUpdate(BaseModel):
     photos: Optional[List[str]] = None
     videos: Optional[List[str]] = None
     status: Optional[str] = None
+    approxTreesCount: Optional[int] = None
+    mainSpecies: Optional[str] = None

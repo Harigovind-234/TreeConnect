@@ -272,20 +272,17 @@ const ContractorDashboard = () => {
                       let url = '';
                       if (typeof p === 'string') url = p.trim();
                       else if (typeof p === 'object' && p) url = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
-                      if (!url || typeof url !== 'string' || url.length < 5) return false;
-                      if (url.startsWith('blob:')) return false;
-                      if (url.includes('unsplash.com')) return false;
-                      return true;
+                      return url && typeof url === 'string' && url.length >= 5;
                     };
 
                     const getRealPhotoUrl = (p) => {
                       if (!p) return null;
                       if (typeof p === 'string') {
                         const s = p.trim();
-                        if (s.length > 5 && !s.startsWith('blob:') && !s.includes('unsplash.com')) return s;
+                        if (s.length >= 5) return s;
                       } else if (typeof p === 'object' && p) {
                         const s = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
-                        if (s.length > 5 && !s.startsWith('blob:') && !s.includes('unsplash.com')) return s;
+                        if (s.length >= 5) return s;
                       }
                       return null;
                     };
