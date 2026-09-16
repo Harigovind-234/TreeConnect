@@ -179,15 +179,16 @@ const TreeInventoryPage = () => {
                       propInventories = p.inventories;
                     } else if (p.speciesList && p.speciesList.length > 0) {
                       propInventories = [{ speciesList: p.speciesList, photos: p.photos }];
-                    } else if (p.mainSpecies || p.approxTreesCount) {
+                    } else if (p.mainSpecies || p.approxTreesCount || p.totalTrees) {
+                      const regCount = Number(p.approxTreesCount || p.totalTrees || 0);
                       propInventories = [{
                         speciesList: [{
-                          treeSpecies: p.mainSpecies || 'Teakwood',
-                          species: p.mainSpecies || 'Teakwood',
-                          numberOfTrees: p.approxTreesCount || 10,
+                          treeSpecies: p.mainSpecies || 'Teak',
+                          species: p.mainSpecies || 'Teak',
+                          numberOfTrees: regCount > 0 ? regCount : 5,
                           approxAge: '14 years',
                           treeCondition: 'Healthy',
-                          locationInProperty: 'Main Compound Plot',
+                          locationInProperty: 'Main Estate Plot',
                           photos: p.photos || []
                         }],
                         photos: p.photos || []
@@ -210,15 +211,15 @@ const TreeInventoryPage = () => {
                     }
 
                     (inv.speciesList || []).forEach(sp => {
-                      const count = Number(sp.numberOfTrees || sp.count || 0);
+                      const count = Number(sp.numberOfTrees || sp.count || p.approxTreesCount || 0);
                       totalTreesCount += count;
                       const spPhotos = (sp.photos && sp.photos.length > 0) ? sp.photos : (inv.photos || []);
                       allTreeGroups.push({
                         id: sp.id || `sp_${allTreeGroups.length + 1}`,
-                        groupName: sp.groupName || `${sp.treeSpecies || sp.species || 'Tree'} Group`,
-                        species: sp.treeSpecies || sp.species || 'Teak',
-                        count: count,
-                        age: sp.approxAge || sp.age || '15-20 years',
+                        groupName: sp.groupName || `${sp.treeSpecies || sp.species || 'Tree'} Stand`,
+                        species: sp.treeSpecies || sp.species || p.mainSpecies || 'Teak',
+                        count: count > 0 ? count : (Number(p.approxTreesCount) || 5),
+                        age: sp.approxAge || sp.age || '15 years',
                         condition: sp.treeCondition || sp.condition || 'Healthy',
                         notes: sp.notes || '',
                         location: sp.locationInProperty || sp.location || inv.treeAreaLocation || 'Main Compound Plot',
@@ -229,6 +230,10 @@ const TreeInventoryPage = () => {
                       });
                     });
                   });
+
+                  if (totalTreesCount === 0 && p.approxTreesCount && Number(p.approxTreesCount) > 0) {
+                    totalTreesCount = Number(p.approxTreesCount);
+                  }
 
                   // Property cover photos
                   const propertyPhotos = (Array.isArray(p.photos) && p.photos.length > 0 ? p.photos : (p.image ? [p.image] : []))

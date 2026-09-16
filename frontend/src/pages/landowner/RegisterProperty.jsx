@@ -43,6 +43,8 @@ const RegisterProperty = () => {
     longitude: 76.5222,
     totalArea: '',
     areaUnit: 'Acres',
+    approxTreesCount: '',
+    mainSpecies: 'Teak',
     photos: [],
     videos: [],
     riskFactors: [],
@@ -179,7 +181,9 @@ const RegisterProperty = () => {
     try {
       const created = await registerPropertyRecord({
         ...formData,
-        totalArea: formData.totalArea ? Number(formData.totalArea) : null
+        totalArea: formData.totalArea ? Number(formData.totalArea) : null,
+        approxTreesCount: formData.approxTreesCount ? parseInt(formData.approxTreesCount, 10) : 0,
+        mainSpecies: formData.mainSpecies || 'Teak'
       });
 
       setIsSubmitting(false);

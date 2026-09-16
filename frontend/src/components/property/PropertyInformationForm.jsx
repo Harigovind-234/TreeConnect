@@ -101,7 +101,7 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
           </div>
         </div>
 
-        {/* Property Area & Area Unit (2-Column Grid matching Owner Name & Contact Number) */}
+        {/* Property Area & Area Unit */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-1">
@@ -142,6 +142,49 @@ const PropertyInformationForm = ({ formData, onChange, propertyType, errors }) =
               <option value="Cents" className="bg-[#0b1710] text-white">Cents</option>
               <option value="Square Feet" className="bg-[#0b1710] text-white">Square Feet (sq ft)</option>
               <option value="Hectares" className="bg-[#0b1710] text-white">Hectares</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Tree Count & Main Species (Registered Quantity) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="space-y-2">
+            <label className="ld-label">
+              NUMBER OF STANDING TREES <span className="text-slate-400 font-normal text-xs">(logged quantity)</span>
+            </label>
+            <input
+              type="number"
+              name="approxTreesCount"
+              value={formData.approxTreesCount || ''}
+              onChange={onChange}
+              placeholder="e.g. 5, 12, 25, 50"
+              style={{ borderRadius: '8px' }}
+              className="ld-input font-extrabold text-emerald-300"
+              min="0"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="ld-label">
+              PRIMARY TREE SPECIES
+            </label>
+            <select
+              name="mainSpecies"
+              value={formData.mainSpecies || 'Teak'}
+              onChange={onChange}
+              style={{ borderRadius: '8px' }}
+              className="ld-select font-bold text-emerald-400 cursor-pointer"
+            >
+              <option value="Teak" className="bg-[#0b1710] text-white">Teak</option>
+              <option value="Teakwood" className="bg-[#0b1710] text-white">Teakwood</option>
+              <option value="Mahogany" className="bg-[#0b1710] text-white">Mahogany</option>
+              <option value="Rubber" className="bg-[#0b1710] text-white">Rubber</option>
+              <option value="Coconut" className="bg-[#0b1710] text-white">Coconut</option>
+              <option value="Rosewood" className="bg-[#0b1710] text-white">Rosewood</option>
+              <option value="Eucalyptus" className="bg-[#0b1710] text-white">Eucalyptus</option>
+              <option value="Pine" className="bg-[#0b1710] text-white">Pine</option>
+              <option value="Jackfruit" className="bg-[#0b1710] text-white">Jackfruit</option>
+              <option value="Other" className="bg-[#0b1710] text-white">Other</option>
             </select>
           </div>
         </div>

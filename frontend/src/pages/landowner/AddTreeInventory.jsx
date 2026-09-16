@@ -48,16 +48,22 @@ const AddTreeInventory = () => {
   ) || safeProperties[0] || null;
 
   // Helper for blank basic tree group
-  const createBlankTreeGroup = (idNum) => ({
-    id: `T-${Date.now()}-${idNum}`,
-    groupName: `Tree Group #${idNum}`,
-    species: 'Teak',
-    numberOfTrees: 5,
-    approxAge: '15 years',
-    condition: 'Healthy',
-    locationInProperty: 'Front yard / Boundary area',
-    notes: ''
-  });
+  const createBlankTreeGroup = (idNum) => {
+    const propTreeCount = Number(selectedProperty?.approxTreesCount);
+    const defaultTreesCount = (propTreeCount && propTreeCount > 0) ? propTreeCount : 5;
+    const defaultSpecies = selectedProperty?.mainSpecies || 'Teak';
+
+    return {
+      id: `T-${Date.now()}-${idNum}`,
+      groupName: `${defaultSpecies} Stand #${idNum}`,
+      species: defaultSpecies,
+      numberOfTrees: defaultTreesCount,
+      approxAge: '15 years',
+      condition: 'Healthy',
+      locationInProperty: 'Front yard / Boundary area',
+      notes: ''
+    };
+  };
 
   const [treeGroups, setTreeGroups] = useState([createBlankTreeGroup(1)]);
   const [photos, setPhotos] = useState(null);
