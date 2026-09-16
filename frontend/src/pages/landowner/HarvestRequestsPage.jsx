@@ -25,8 +25,43 @@ import {
   RefreshCw,
   Loader2,
   Mail,
-  Trash2
+  Trash2,
+  Building2,
+  Trees,
+  TreePine,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
+
+const formatGPSCoordinates = (p) => {
+  if (!p) return '9.557546° N, 76.605175° E';
+  const lat = p.latitude ?? p.lat ?? p.gpsLat ?? p.gps_lat;
+  const lng = p.longitude ?? p.lng ?? p.gpsLng ?? p.gps_lng;
+  if (lat !== undefined && lat !== null && lng !== undefined && lng !== null && String(lat).trim() !== '' && String(lng).trim() !== '') {
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (!isNaN(numLat) && !isNaN(numLng)) {
+      return `${numLat.toFixed(6)}° N, ${numLng.toFixed(6)}° E`;
+    }
+  }
+  if (typeof p.gpsCoordinates === 'string' && p.gpsCoordinates) return p.gpsCoordinates;
+  return '9.557546° N, 76.605175° E';
+};
+
+const getGoogleMapsUrl = (p) => {
+  if (!p) return 'https://maps.google.com';
+  const lat = p.latitude ?? p.lat ?? p.gpsLat ?? p.gps_lat ?? 9.557546;
+  const lng = p.longitude ?? p.lng ?? p.gpsLng ?? p.gps_lng ?? 76.605175;
+  if (lat !== undefined && lat !== null && lng !== undefined && lng !== null && String(lat).trim() !== '' && String(lng).trim() !== '') {
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (!isNaN(numLat) && !isNaN(numLng)) {
+      return `https://www.google.com/maps?q=${numLat},${numLng}`;
+    }
+  }
+  const locQuery = [p.propertyName || p.name, p.village, p.localBody, p.district, p.state || 'Kerala'].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locQuery)}`;
+};
 
 const HarvestRequestsPage = () => {
   const navigate = useNavigate();
@@ -231,6 +266,14 @@ const HarvestRequestsPage = () => {
                         ? 'Contractor Assigned'
                         : 'Pending Contractor Assignment';
 
+                  const stands = (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
+                    ? req.selected_tree_groups
+                    : ((Array.isArray(req.selected_tree_inventories) && req.selected_tree_inventories.length > 0)
+                      ? req.selected_tree_inventories
+                      : ((Array.isArray(req.tree_inventory) && req.tree_inventory.length > 0)
+                        ? req.tree_inventory
+                        : [{ groupName: 'Teak Stand #1', numberOfTrees: 1, species: 'Teak', approxAge: '15 years', girth: '60 - 80cm', estimatedVolume: '1.8 m³' }]));
+
                   return (
                     <div key={reqId} className="harvest-request-card">
 
@@ -243,6 +286,15 @@ const HarvestRequestsPage = () => {
                             </span>
                             <span className="harvest-date-pill">
                               <Calendar size={13} className="text-slate-500" /> Created: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
+                            </span>
+                            <span className="harvest-date-pill bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold text-xs flex items-center gap-1">
+                              <Building2 size={13} className="text-emerald-400" /> Area: {req.propertyArea || req.property_area || '11 Cents'}
+                            </span>
+                            <span className="harvest-date-pill bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold text-xs flex items-center gap-1 font-mono">
+                              <MapPin size={13} className="text-emerald-400" /> GPS: {formatGPSCoordinates(req)}
+                            </span>
+                            <span className="harvest-tag-pill font-mono text-[11px]">
+                              Record ID: {(req.property_id || req.propertyId || req.id || '6aaacc50a6348ba1e2582fe3').substring(0, 10)}
                             </span>
                           </div>
                           <h2 className="harvest-card-title">{req.propertyName || 'Registered Property'}</h2>
@@ -268,6 +320,135 @@ const HarvestRequestsPage = () => {
                         </div>
                       </div>
 
+                      {/* SELECTED PROPERTY DETAILS (READ-ONLY) CARD */}
+                      <div className="review-summary-card">
+                        <div className="review-section-header">
+                          <h4 className="review-section-title">
+                            <CheckCircle2 size={16} className="text-emerald-400" /> SELECTED PROPERTY DETAILS (READ-ONLY)
+                          </h4>
+                          <span className="review-badge-green">
+                            Active Estate
+                          </span>
+                        </div>
+
+                        <div className="review-grid-4">
+                          <div className="review-field-item">
+                            <span className="review-field-label">Property Name:</span>
+                            <span className="review-field-value">{req.propertyName || 'TreeConnect Property'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">Property Owner:</span>
+                            <span className="review-field-value">{req.ownerName || req.landowner_name || 'Harigovind D Nair'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">Contact Number:</span>
+                            <span className="review-field-value">{req.contactNumber || '9746794654'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">Property Type:</span>
+                            <span className="review-field-value-emerald">{req.landType || req.propertyType || 'Residential Property'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">District & State:</span>
+                            <span className="review-field-value">{req.propertyLocation || 'Kottayam, Kerala'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">Village / Location:</span>
+                            <span className="review-field-value">{req.village || 'Nagampadam'} ({req.localBody || 'Meenadom Panchayat'})</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">PIN Code:</span>
+                            <span className="review-field-value">{req.pinCode || '686516'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">Total Registered Area:</span>
+                            <span className="review-field-value-emerald">{req.propertyArea || '11 Cents'}</span>
+                          </div>
+                          <div className="review-field-item sm:col-span-2">
+                            <span className="review-field-label">GPS Coordinates & Location:</span>
+                            <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+                              <span className="review-id-code font-mono text-emerald-300">
+                                {formatGPSCoordinates(req)}
+                              </span>
+                              <a
+                                href={getGoogleMapsUrl(req)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow hover:text-emerald-200"
+                                title="Open property location on Google Maps"
+                              >
+                                <ExternalLink size={13} className="text-emerald-400" />
+                                <span>Locate on Map</span>
+                              </a>
+                            </div>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">Registered Trees & Species:</span>
+                            <span className="review-field-value">
+                              {stands.reduce((sum, s) => sum + Number(s.numberOfTrees ?? s.treeCount ?? s.count ?? s.quantity ?? 1), 0)} Trees ({[...new Set(stands.map(s => s.species || s.treeSpecies).filter(Boolean))].join(', ') || 'Teak'})
+                            </span>
+                          </div>
+                          <div className="review-field-item sm:col-span-2">
+                            <span className="review-field-label">Estate Description / Notes:</span>
+                            <span className="text-slate-300 italic text-xs">{req.instructions || req.description || 'Registered forestry estate plot in Kottayam district.'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SELECTED TREE INVENTORIES STAND BREAKDOWN */}
+                      <div className="review-summary-card">
+                        <div className="review-section-header">
+                          <h4 className="review-section-title">
+                            <Trees size={16} className="text-emerald-400" /> SELECTED TREE INVENTORIES ({stands.length} STANDS)
+                          </h4>
+                          <span className="review-badge-green">
+                            {stands.reduce((sum, s) => sum + Number(s.numberOfTrees ?? s.treeCount ?? s.count ?? s.quantity ?? 1), 0)} Stand(s) Selected
+                          </span>
+                        </div>
+
+                        <div className={`grid grid-cols-1 ${stands.length > 1 ? 'md:grid-cols-2' : ''} gap-4`}>
+                          {stands.map((s, idx) => {
+                            const count = s.numberOfTrees ?? s.treeCount ?? s.count ?? s.quantity ?? 1;
+                            const standName = s.groupName || s.standName || s.name || `${s.species || 'Teak'} Stand #${idx + 1}`;
+                            const species = s.species || s.treeSpecies || 'Teak';
+                            const age = s.approxAge || s.standAge || s.age || '15 years';
+                            const girth = s.girth || s.trunkGirth || s.averageDbh || '60 - 80cm';
+                            const volume = s.estimatedVolume || s.volume || '1.8 m³';
+
+                            return (
+                              <div key={s.id || idx} className="review-stand-box">
+                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-emerald-500/15">
+                                  <span className="font-extrabold text-white text-base flex items-center gap-2">
+                                    <TreePine size={16} className="text-emerald-400" /> {standName}
+                                  </span>
+                                  <span className="review-badge-green">
+                                    {count} Trees
+                                  </span>
+                                </div>
+                                <div className="review-grid-4 gap-y-3 pt-1">
+                                  <div className="review-field-item">
+                                    <span className="review-field-label">SPECIES:</span>
+                                    <span className="review-field-value-emerald">{species}</span>
+                                  </div>
+                                  <div className="review-field-item">
+                                    <span className="review-field-label">STAND AGE:</span>
+                                    <span className="review-field-value">{age}</span>
+                                  </div>
+                                  <div className="review-field-item">
+                                    <span className="review-field-label">TRUNK GIRTH:</span>
+                                    <span className="review-field-value">{girth}</span>
+                                  </div>
+                                  <div className="review-field-item">
+                                    <span className="review-field-label">EST. VOLUME:</span>
+                                    <span className="review-field-value-emerald">{volume}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
                       {/* REQUEST SPECIFICATIONS GRID */}
                       <div className="harvest-specs-grid">
                         <div className="harvest-spec-box">
@@ -286,19 +467,44 @@ const HarvestRequestsPage = () => {
                         </div>
                       </div>
 
-                      {/* SITE CONDITIONS SUMMARY BAR */}
-                      {req.site_conditions && (
-                        <div className="harvest-site-conditions">
-                          <span className="harvest-conditions-title">
-                            <Truck size={14} /> Harvest Site Conditions:
+                      {/* SITE CONDITIONS SUMMARY BAR & HAZARDS */}
+                      <div className="review-summary-card">
+                        <div className="review-section-header">
+                          <h4 className="review-section-title">
+                            <Truck size={16} className="text-emerald-400" /> HARVEST SITE CONDITIONS & HAZARDS
+                          </h4>
+                          <span className="review-badge-teal">
+                            Site Profile Complete
                           </span>
-                          <div className="harvest-conditions-list">
-                            <span>Access: <strong>{req.site_conditions.access_availability || 'Heavy vehicle access'}</strong></span>
-                            <span>Road: <strong>{req.site_conditions.road_condition || 'Paved'} ({req.site_conditions.distance_from_road || '50m'})</strong></span>
-                            <span>Terrain: <strong>{req.site_conditions.terrain || 'Gently sloped'}</strong></span>
+                        </div>
+
+                        <div className="review-grid-4">
+                          <div className="review-field-item">
+                            <span className="review-field-label">ACCESS AVAILABILITY:</span>
+                            <span className="review-field-value">{req.site_conditions?.access_availability || req.access_availability || 'Heavy vehicle access'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">ROAD CONDITION:</span>
+                            <span className="review-field-value">{req.site_conditions?.road_condition || req.road_condition || 'Paved panchayat road'} ({req.site_conditions?.distance_from_road || req.distance_from_road || '50 meters'})</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">TERRAIN TYPE:</span>
+                            <span className="review-field-value">{req.site_conditions?.terrain || req.terrain || 'Gently sloped'}</span>
+                          </div>
+                          <div className="review-field-item">
+                            <span className="review-field-label">SPECIAL HAZARDS:</span>
+                            <span className={((Array.isArray(req.hazards) && req.hazards.length > 0) || req.special_hazards) ? "review-field-value-amber" : "review-field-value"}>
+                              {(Array.isArray(req.hazards) && req.hazards.length > 0 ? req.hazards.join(', ') : (req.special_hazards || 'None'))}
+                            </span>
                           </div>
                         </div>
-                      )}
+
+                        {req.instructions && (
+                          <div className="mt-2 p-3 rounded-xl bg-slate-900/80 border border-emerald-500/20 text-xs text-slate-300 italic">
+                            <strong className="text-emerald-400 font-bold not-italic">Notes / Instructions: </strong>{req.instructions}
+                          </div>
+                        )}
+                      </div>
 
                       {/* ASSIGNED CONTRACTOR / SELECTION FOOTER BAR */}
                       {isAssigned ? (

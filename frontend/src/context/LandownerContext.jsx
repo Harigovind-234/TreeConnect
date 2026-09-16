@@ -388,11 +388,41 @@ export const LandownerProvider = ({ children }) => {
     };
 
     const assignContractorToRequest = async (requestId, contractorData) => {
+        const updatedAssignedName = contractorData.contractor_name || contractorData.companyName || contractorData.name || 'Assigned Contractor';
+        const updatedAssignedEmail = contractorData.contractor_email || contractorData.email || '';
+        const updatedAssignedId = contractorData.contractor_id || contractorData.id || contractorData._id || '';
+
+        // Optimistically update local React state & localStorage
+        setHarvestRequests(prev => {
+            const updated = prev.map(req => {
+                const isMatch = req.id === requestId || req._id === requestId || String(req.id) === String(requestId) || String(req._id) === String(requestId);
+                if (isMatch) {
+                    return {
+                        ...req,
+                        assigned_contractor_id: updatedAssignedId,
+                        assigned_contractor_name: updatedAssignedName,
+                        assigned_contractor_email: updatedAssignedEmail,
+                        status: 'CONTRACTOR_ASSIGNED',
+                        updatedAt: new Date().toISOString()
+                    };
+                }
+                return req;
+            });
+            try {
+                localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+            } catch (e) { }
+            return updated;
+        });
+
         try {
-            await harvestService.assignContractor(requestId, contractorData);
+            await harvestService.assignContractor(requestId, {
+                contractor_id: updatedAssignedId,
+                contractor_name: updatedAssignedName,
+                contractor_email: updatedAssignedEmail
+            });
             await fetchDBHarvestRequests();
         } catch (err) {
-            console.error("Error assigning contractor to harvest request:", err);
+            console.error("Error assigning contractor to harvest request on backend:", err);
         }
     };
 

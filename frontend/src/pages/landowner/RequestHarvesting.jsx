@@ -26,7 +26,8 @@ import {
   Check,
   AlertCircle,
   RefreshCw,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 
 const SPECIES_FALLBACK_IMAGES = {
@@ -90,6 +91,36 @@ const getTreePhoto = (g) => {
   return SPECIES_FALLBACK_IMAGES[g.species] || DEFAULT_PROPERTY_IMAGE;
 };
 
+const formatGPSCoordinates = (p) => {
+  if (!p) return '9.557546° N, 76.605175° E';
+  const lat = p.latitude ?? p.lat ?? p.gpsLat ?? p.gps_lat;
+  const lng = p.longitude ?? p.lng ?? p.gpsLng ?? p.gps_lng;
+  if (lat !== undefined && lat !== null && lng !== undefined && lng !== null && String(lat).trim() !== '' && String(lng).trim() !== '') {
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (!isNaN(numLat) && !isNaN(numLng)) {
+      return `${numLat.toFixed(6)}° N, ${numLng.toFixed(6)}° E`;
+    }
+  }
+  if (typeof p.gpsCoordinates === 'string' && p.gpsCoordinates) return p.gpsCoordinates;
+  return '9.557546° N, 76.605175° E';
+};
+
+const getGoogleMapsUrl = (p) => {
+  if (!p) return 'https://maps.google.com';
+  const lat = p.latitude ?? p.lat ?? p.gpsLat ?? p.gps_lat ?? 9.557546;
+  const lng = p.longitude ?? p.lng ?? p.gpsLng ?? p.gps_lng ?? 76.605175;
+  if (lat !== undefined && lat !== null && lng !== undefined && lng !== null && String(lat).trim() !== '' && String(lng).trim() !== '') {
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (!isNaN(numLat) && !isNaN(numLng)) {
+      return `https://www.google.com/maps?q=${numLat},${numLng}`;
+    }
+  }
+  const locQuery = [p.propertyName || p.name, p.village, p.localBody, p.district, p.state || 'Kerala'].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locQuery)}`;
+};
+
 const RequestHarvesting = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -150,20 +181,20 @@ const RequestHarvesting = () => {
 
   directGroups.forEach((g, idx) => {
     if (g) {
-      const treeCount = Number(g.numberOfTrees || g.count || g.quantity || 20);
+      const treeCount = Number(g.numberOfTrees ?? g.treeCount ?? g.count ?? g.quantity ?? activeProperty?.approxTreesCount ?? 1);
       const photos = Array.isArray(g.photos) ? g.photos : (g.photo ? [g.photo] : (g.image ? [g.image] : []));
       extractedTreeGroups.push({
         id: g.id || g._id || `direct_${idx}`,
-        groupName: g.groupName || g.standName || `${g.species || g.treeSpecies || 'Teak'} Stand #${idx + 1}`,
-        species: g.species || g.treeSpecies || 'Teakwood',
+        groupName: g.groupName || g.standName || `${g.species || g.treeSpecies || activeProperty?.mainSpecies || 'Teak'} Stand #${idx + 1}`,
+        species: g.species || g.treeSpecies || activeProperty?.mainSpecies || 'Teak',
         numberOfTrees: treeCount,
-        approxAge: g.approxAge || g.age || '14 years',
-        condition: g.condition || g.healthCondition || 'Healthy',
+        approxAge: g.approxAge || g.treeAge || g.age || '15 years',
+        condition: g.condition || g.healthCondition || g.treeCondition || 'Healthy',
         location: g.location || g.locationOnProperty || activeProperty?.village || activeProperty?.district || 'Kottayam',
-        girth: g.girth || g.girthInfo || g.averageDbh || '65 - 85 cm',
+        girth: g.girth || g.girthInfo || g.averageDbh || '60 - 80cm',
         image: photos[0] || g.image || null,
         photos: photos,
-        estimatedVolume: g.estimatedVolume || `${(treeCount * 0.75).toFixed(1)} m³`
+        estimatedVolume: g.estimatedVolume || g.volume || '1.8 m³'
       });
     }
   });
@@ -182,7 +213,7 @@ const RequestHarvesting = () => {
 
     if (Array.isArray(inv.speciesList) && inv.speciesList.length > 0) {
       inv.speciesList.forEach((sp, spIdx) => {
-        const count = Number(sp.numberOfTrees || sp.count || sp.quantity || 20);
+        const count = Number(sp.numberOfTrees ?? sp.treeCount ?? sp.count ?? sp.quantity ?? inv.numberOfTrees ?? inv.treeCount ?? inv.count ?? inv.approxTreesCount ?? activeProperty?.approxTreesCount ?? 1);
         const rawSpPhotos = Array.isArray(sp.photos) && sp.photos.length > 0
           ? sp.photos
           : (sp.photo ? [sp.photo] : (sp.image ? [sp.image] : (Array.isArray(sp.attachedPhotos) && sp.attachedPhotos.length > 0 ? sp.attachedPhotos : (invPhotos.length > 0 ? invPhotos : propPhotos))));
@@ -193,34 +224,34 @@ const RequestHarvesting = () => {
         extractedTreeGroups.push({
           id: sp.id || sp._id || `inv_${invIdx}_sp_${spIdx}`,
           groupName: sp.groupName || sp.standName || `${sp.treeSpecies || sp.species || 'Teak'} Stand #${spIdx + 1}`,
-          species: sp.treeSpecies || sp.species || 'Teakwood',
+          species: sp.treeSpecies || sp.species || activeProperty?.mainSpecies || 'Teak',
           numberOfTrees: count,
-          approxAge: sp.approxAge || sp.treeAge || sp.age || '14 years',
+          approxAge: sp.approxAge || sp.treeAge || sp.age || inv.approxAge || inv.treeAge || inv.age || '15 years',
           condition: sp.healthCondition || sp.condition || sp.treeCondition || 'Healthy',
           location: sp.locationOnProperty || sp.locationInProperty || sp.location || inv.treeAreaLocation || activeProperty?.district || 'Kottayam',
-          girth: sp.girth || sp.girthInfo || sp.averageDbh || '65 - 85 cm',
+          girth: sp.girth || sp.girthInfo || sp.averageDbh || inv.girth || inv.girthInfo || '60 - 80cm',
           image: spPhotos[0] || null,
           photos: spPhotos,
           attachedPhotos: spPhotos,
-          estimatedVolume: sp.estimatedVolume || `${(count * 0.75).toFixed(1)} m³`
+          estimatedVolume: sp.estimatedVolume || sp.volume || inv.estimatedVolume || inv.volume || '1.8 m³'
         });
       });
-    } else if (inv.species || inv.treeSpecies || inv.groupName) {
-      const count = Number(inv.numberOfTrees || inv.count || 20);
+    } else if (inv.species || inv.treeSpecies || inv.groupName || inv.numberOfTrees || inv.treeCount || inv.count || inv.approxTreesCount) {
+      const count = Number(inv.numberOfTrees ?? inv.treeCount ?? inv.count ?? inv.quantity ?? inv.approxTreesCount ?? activeProperty?.approxTreesCount ?? 1);
       const photosToUse = invPhotos.length > 0 ? invPhotos : propPhotos;
       extractedTreeGroups.push({
         id: inv.id || inv._id || `inv_${invIdx}`,
         groupName: inv.groupName || inv.standName || `${inv.species || inv.treeSpecies || 'Teak'} Stand #${invIdx + 1}`,
-        species: inv.species || inv.treeSpecies || 'Teakwood',
+        species: inv.species || inv.treeSpecies || activeProperty?.mainSpecies || 'Teak',
         numberOfTrees: count,
-        approxAge: inv.approxAge || inv.age || '14 years',
+        approxAge: inv.approxAge || inv.treeAge || inv.age || '15 years',
         condition: inv.condition || inv.healthCondition || 'Healthy',
         location: inv.location || inv.treeAreaLocation || activeProperty?.district || 'Kottayam',
-        girth: inv.girth || inv.girthInfo || '65 - 85 cm',
+        girth: inv.girth || inv.girthInfo || inv.averageDbh || '60 - 80cm',
         image: photosToUse[0] || null,
         photos: photosToUse,
         attachedPhotos: photosToUse,
-        estimatedVolume: inv.estimatedVolume || `${(count * 0.75).toFixed(1)} m³`
+        estimatedVolume: inv.estimatedVolume || inv.volume || '1.8 m³'
       });
     }
   });
@@ -233,22 +264,22 @@ const RequestHarvesting = () => {
   // New Stand Modal Form State
   const [newStandName, setNewStandName] = useState('Teakwood Stand #2');
   const [newStandSpecies, setNewStandSpecies] = useState('Teakwood');
-  const [newStandCount, setNewStandCount] = useState(24);
-  const [newStandGirth, setNewStandGirth] = useState('65 - 85 cm');
-  const [newStandVolume, setNewStandVolume] = useState('0.8 m³');
-  const [newStandAge, setNewStandAge] = useState('14 years');
+  const [newStandCount, setNewStandCount] = useState(1);
+  const [newStandGirth, setNewStandGirth] = useState('60 - 80cm');
+  const [newStandVolume, setNewStandVolume] = useState('1.8 m³');
+  const [newStandAge, setNewStandAge] = useState('15 years');
   const [newStandCondition, setNewStandCondition] = useState('Healthy');
 
   const getStandGirth = (g) => {
-    if (!g) return '65 - 85 cm';
+    if (!g) return '60 - 80cm';
     if (standMeasurements[g.id]?.girth !== undefined) return standMeasurements[g.id].girth;
-    return g.girth || '65 - 85 cm';
+    return g.girth || '60 - 80cm';
   };
 
   const getStandVolume = (g) => {
-    if (!g) return '0.8 m³';
+    if (!g) return '1.8 m³';
     if (standMeasurements[g.id]?.estimatedVolume !== undefined) return standMeasurements[g.id].estimatedVolume;
-    return g.estimatedVolume || '0.8 m³';
+    return g.estimatedVolume || '1.8 m³';
   };
 
   const baseTreeGroups = extractedTreeGroups.length > 0
@@ -256,16 +287,16 @@ const RequestHarvesting = () => {
     : [
       {
         id: 'group_demo_1',
-        groupName: 'Teak Stand #1',
-        species: 'Teakwood',
-        numberOfTrees: 24,
-        approxAge: '14 years',
+        groupName: `${activeProperty?.mainSpecies || 'Teak'} Stand #1`,
+        species: activeProperty?.mainSpecies || 'Teak',
+        numberOfTrees: Number(activeProperty?.approxTreesCount || 1),
+        approxAge: '15 years',
         condition: 'Healthy',
-        location: activeProperty?.district || 'Kottayam',
-        girth: '65 - 85 cm',
-        image: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-        photos: ['https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80'],
-        estimatedVolume: '0.8 m³'
+        location: activeProperty?.district || activeProperty?.village || 'Kottayam',
+        girth: '60 - 80cm',
+        image: (activeProperty?.photos && activeProperty.photos[0]) || activeProperty?.image || null,
+        photos: (activeProperty?.photos && activeProperty.photos.length > 0) ? activeProperty.photos : [],
+        estimatedVolume: '1.8 m³'
       }
     ];
 
@@ -364,6 +395,15 @@ const RequestHarvesting = () => {
         property_id: activeProperty.id || activeProperty._id,
         propertyName: activeProperty.propertyName || activeProperty.name || 'Registered Property',
         propertyLocation: `${activeProperty.district || 'Kottayam'}, ${activeProperty.state || 'Kerala'}`,
+        propertyArea: `${activeProperty.totalArea || activeProperty.area || '11'} ${activeProperty.areaUnit || 'Cents'}`,
+        landType: activeProperty.propertyType || activeProperty.landType || 'Residential Property',
+        ownerName: activeProperty.ownerName || activeProperty.landownerName || 'Harigovind D Nair',
+        contactNumber: activeProperty.contactNumber || activeProperty.phone || '9746794654',
+        village: activeProperty.village || activeProperty.district || 'Nagampadam',
+        localBody: activeProperty.localBody || activeProperty.panchayat || 'Meenadom Panchayat',
+        pinCode: activeProperty.pinCode || activeProperty.pincode || '686516',
+        latitude: activeProperty.latitude !== undefined && activeProperty.latitude !== null ? Number(activeProperty.latitude) : (activeProperty.lat !== undefined ? Number(activeProperty.lat) : null),
+        longitude: activeProperty.longitude !== undefined && activeProperty.longitude !== null ? Number(activeProperty.longitude) : (activeProperty.lng !== undefined ? Number(activeProperty.lng) : null),
         selected_inventory_ids: selectedTreeGroupIds,
         selected_tree_groups: selectedGroups,
         reason,
@@ -381,7 +421,8 @@ const RequestHarvesting = () => {
         photos: sitePhotos ? [sitePhotos] : [],
         instructions: additionalNotes,
         assigned_contractor_id: selectedContractor?.id || selectedContractor?._id || null,
-        assigned_contractor_name: selectedContractor?.companyName || selectedContractor?.name || null
+        assigned_contractor_name: selectedContractor?.companyName || selectedContractor?.fullName || selectedContractor?.name || null,
+        assigned_contractor_email: selectedContractor?.email || null
       };
 
       await addHarvestRequest(payload);
@@ -656,15 +697,47 @@ const RequestHarvesting = () => {
                         <span className="text-slate-400 block text-[11px]">Total Registered Area:</span>
                         <span className="font-extrabold text-emerald-400">{activeProperty.totalArea || '11.93'} {activeProperty.areaUnit || 'Cents'}</span>
                       </div>
-                      {activeProperty.latitude && activeProperty.longitude && (
-                        <div>
-                          <span className="text-slate-400 block text-[11px]">GPS Coordinates:</span>
-                          <span className="font-bold text-white font-mono text-[11px]">{activeProperty.latitude.toFixed(4)}, {activeProperty.longitude.toFixed(4)}</span>
+                      <div>
+                        <span className="text-slate-400 block text-[11px]">GPS Coordinates:</span>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="font-bold text-emerald-400 font-mono text-[11px]">
+                            {formatGPSCoordinates(activeProperty)}
+                          </span>
+                          <a
+                            href={getGoogleMapsUrl(activeProperty)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-[10.5px] font-extrabold transition-all inline-flex items-center gap-1 cursor-pointer shadow hover:text-emerald-200"
+                            title="Open property location on Google Maps"
+                          >
+                            <ExternalLink size={12} className="text-emerald-400" />
+                            <span>Locate on Map</span>
+                          </a>
                         </div>
-                      )}
+                      </div>
                       <div>
                         <span className="text-slate-400 block text-[11px]">Registered Trees & Species:</span>
-                        <span className="font-bold text-white">{activeProperty.approxTreesCount || 24} Trees ({activeProperty.mainSpecies || 'Teakwood'})</span>
+                        <span className="font-bold text-white">
+                          {(() => {
+                            let count = 0;
+                            if (Array.isArray(extractedTreeGroups) && extractedTreeGroups.length > 0) {
+                              count = extractedTreeGroups.reduce((acc, g) => acc + Number(g.numberOfTrees || g.count || g.quantity || 0), 0);
+                            }
+                            if (count <= 0) {
+                              count = typeof activeProperty.approxTreesCount === 'number' && activeProperty.approxTreesCount > 0
+                                ? activeProperty.approxTreesCount
+                                : (parseInt(activeProperty.approxTreesCount, 10) || activeProperty.totalTrees || activeProperty.numberOfTrees || 0);
+                            }
+
+                            let spList = [];
+                            if (Array.isArray(extractedTreeGroups) && extractedTreeGroups.length > 0) {
+                              spList = [...new Set(extractedTreeGroups.map(g => g.species).filter(Boolean))];
+                            }
+                            const speciesStr = spList.length > 0 ? spList.join(', ') : (activeProperty.mainSpecies || activeProperty.species || 'Teakwood');
+
+                            return `${count > 0 ? count : '0'} Trees (${speciesStr})`;
+                          })()}
+                        </span>
                       </div>
                       <div className="col-span-2">
                         <span className="text-slate-400 block text-[11px]">Estate Description / Notes:</span>
@@ -1262,6 +1335,24 @@ const RequestHarvesting = () => {
                         <span className="review-id-code">
                           {activeProperty?.id || activeProperty?._id}
                         </span>
+                      </div>
+                      <div className="review-field-item sm:col-span-2">
+                        <span className="review-field-label">GPS Location:</span>
+                        <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+                          <span className="review-id-code font-mono text-emerald-300">
+                            {formatGPSCoordinates(activeProperty)}
+                          </span>
+                          <a
+                            href={getGoogleMapsUrl(activeProperty)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 text-xs font-extrabold transition-all flex items-center gap-1.5 cursor-pointer shadow hover:text-emerald-200"
+                            title="Open property location on Google Maps"
+                          >
+                            <ExternalLink size={13} className="text-emerald-400" />
+                            <span>Locate on Map</span>
+                          </a>
+                        </div>
                       </div>
                     </div>
                   </div>
