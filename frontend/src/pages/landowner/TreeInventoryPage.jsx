@@ -214,6 +214,12 @@ const TreeInventoryPage = () => {
                       const count = Number(sp.numberOfTrees || sp.count || p.approxTreesCount || 0);
                       totalTreesCount += count;
                       const spPhotos = (sp.photos && sp.photos.length > 0) ? sp.photos : (inv.photos || []);
+                      const volStr = sp.estimatedVolume || sp.volume || '1.80 m³';
+                      const volNum = parseFloat(volStr) || 1.8;
+                      const snapshot = sp.rate_snapshot || {};
+                      const rate = snapshot.rate_per_m3 || sp.reference_rate || 139490;
+                      const approx = sp.approximate_timber_value || Math.round(volNum * rate);
+
                       allTreeGroups.push({
                         id: sp.id || `sp_${allTreeGroups.length + 1}`,
                         groupName: sp.groupName || `${sp.treeSpecies || sp.species || 'Tree'} Stand`,
@@ -223,6 +229,12 @@ const TreeInventoryPage = () => {
                         condition: sp.treeCondition || sp.condition || 'Healthy',
                         notes: sp.notes || '',
                         location: sp.locationInProperty || sp.location || inv.treeAreaLocation || 'Main Compound Plot',
+                        girth: sp.girth || '60 - 80cm',
+                        volume: typeof volStr === 'number' ? `${volStr} m³` : volStr,
+                        ratePerM3: rate,
+                        approxValue: approx,
+                        rateSource: sp.rate_source || snapshot.rate_source || 'Kerala Government timber market-price data',
+                        effectiveDate: sp.rate_effective_date || snapshot.rate_effective_date || '2026-01-01',
                         dbh: sp.averageDbh || sp.dbh || '',
                         height: sp.averageHeight || sp.height || '',
                         attachedPhotos: spPhotos,

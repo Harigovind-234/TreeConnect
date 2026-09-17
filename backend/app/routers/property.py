@@ -13,6 +13,325 @@ router = APIRouter()
 SECRET_KEY = "treeconnect_secret_key_forestry_platform_2026"
 ALGORITHM = "HS256"
 
+DEFAULT_TIMBER_RATES = [
+    {
+        "species": "Teak",
+        "rate_per_m3": 139490,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Teakwood",
+        "rate_per_m3": 139490,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Rosewood",
+        "rate_per_m3": 210000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Mahogany",
+        "rate_per_m3": 85000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Rubber",
+        "rate_per_m3": 38000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Sandalwood",
+        "rate_per_m3": 350000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Coconut",
+        "rate_per_m3": 22000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Jackfruit",
+        "rate_per_m3": 45000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Eucalyptus",
+        "rate_per_m3": 28000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Pine",
+        "rate_per_m3": 32000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Western Red Cedar",
+        "rate_per_m3": 65000,
+        "unit": "INR/m3",
+        "district": "Kottayam",
+        "rate_type": "Reference Market Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+
+    # State-level fallbacks (district = None)
+    {
+        "species": "Teak",
+        "rate_per_m3": 135000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Teakwood",
+        "rate_per_m3": 135000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Rosewood",
+        "rate_per_m3": 200000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Mahogany",
+        "rate_per_m3": 80000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Rubber",
+        "rate_per_m3": 35000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Sandalwood",
+        "rate_per_m3": 340000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Coconut",
+        "rate_per_m3": 20000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Jackfruit",
+        "rate_per_m3": 42000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Eucalyptus",
+        "rate_per_m3": 26000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Pine",
+        "rate_per_m3": 30000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Western Red Cedar",
+        "rate_per_m3": 60000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Douglas Fir",
+        "rate_per_m3": 55000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Mango",
+        "rate_per_m3": 32000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    },
+    {
+        "species": "Other",
+        "rate_per_m3": 30000,
+        "unit": "INR/m3",
+        "district": None,
+        "rate_type": "State Reference Rate",
+        "effective_from": "2026-01-01",
+        "effective_to": None,
+        "source": "Kerala Government timber market-price data"
+    }
+]
+
+def seed_timber_rates_if_needed():
+    if db is not None:
+        try:
+            if db.timber_reference_rates.count_documents({}) == 0:
+                db.timber_reference_rates.insert_many(DEFAULT_TIMBER_RATES)
+                print("[OK] Timber reference rates collection initialized.")
+        except Exception as err:
+            print(f"[WARN] Failed to seed timber reference rates: {err}")
+
+# Auto-seed on router load
+seed_timber_rates_if_needed()
+
+def find_timber_reference_rate(species: str, district: Optional[str] = None) -> Optional[dict]:
+    if not species:
+        return None
+    sp_norm = str(species).strip().lower()
+
+    if db is not None:
+        try:
+            seed_timber_rates_if_needed()
+            # 1. Check district-specific rate
+            if district and str(district).strip():
+                dist_norm = str(district).strip()
+                match = db.timber_reference_rates.find_one({
+                    "species": {"$regex": f"^{sp_norm}$", "$options": "i"},
+                    "district": {"$regex": f"^{dist_norm}$", "$options": "i"}
+                })
+                if match:
+                    return match
+
+            # 2. Check state-level fallback (district is None or null)
+            state_match = db.timber_reference_rates.find_one({
+                "species": {"$regex": f"^{sp_norm}$", "$options": "i"},
+                "$or": [{"district": None}, {"district": {"$exists": False}}]
+            })
+            if state_match:
+                return state_match
+
+            # 3. Fallback to species "Other"
+            other_match = db.timber_reference_rates.find_one({
+                "species": {"$regex": "^other$", "$options": "i"}
+            })
+            if other_match:
+                return other_match
+        except Exception as e:
+            print(f"[WARN] Error fetching timber rate from DB: {e}")
+
+    # Fallback to in-memory list if DB offline or query misses
+    if district and str(district).strip():
+        dist_norm = str(district).strip().lower()
+        for r in DEFAULT_TIMBER_RATES:
+            if r.get("species", "").lower() == sp_norm and r.get("district") and r.get("district").lower() == dist_norm:
+                return r
+
+    for r in DEFAULT_TIMBER_RATES:
+        if r.get("species", "").lower() == sp_norm and r.get("district") is None:
+            return r
+
+    for r in DEFAULT_TIMBER_RATES:
+        if r.get("species", "").lower() == "other":
+            return r
+
+    return None
+
 def get_current_user_email(authorization: Optional[str] = Header(None)) -> Optional[str]:
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -22,6 +341,102 @@ def get_current_user_email(authorization: Optional[str] = Header(None)) -> Optio
         return payload.get("email")
     except JWTError:
         return None
+
+@router.get("/timber-reference-rate")
+def get_timber_reference_rate(species: str, district: Optional[str] = None):
+    rate_doc = find_timber_reference_rate(species, district)
+    if not rate_doc:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "species": species,
+                "district": district,
+                "reference_rate": None,
+                "rate_unit": None,
+                "rate_source": None,
+                "rate_effective_date": None,
+                "message": "Reference rate unavailable"
+            }
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "species": rate_doc.get("species", species),
+            "district": rate_doc.get("district") or district,
+            "reference_rate": rate_doc.get("rate_per_m3"),
+            "rate_unit": rate_doc.get("unit", "INR/m3"),
+            "rate_source": rate_doc.get("source", "Kerala Government timber market-price data"),
+            "rate_effective_date": rate_doc.get("effective_from", "2026-01-01"),
+            "rate_type": rate_doc.get("rate_type", "Reference Market Rate")
+        }
+    )
+
+@router.post("/calculate-timber-value")
+def calculate_timber_value(payload: dict):
+    species = payload.get("species") or payload.get("treeSpecies") or "Teak"
+    district = payload.get("district") or ""
+    property_id = payload.get("propertyId") or payload.get("property_id")
+
+    if not district and property_id and db is not None:
+        try:
+            q = {"_id": ObjectId(property_id)} if ObjectId.is_valid(property_id) else {"_id": property_id}
+            p = db.properties.find_one(q)
+            if p and p.get("district"):
+                district = p.get("district")
+        except Exception:
+            pass
+
+    try:
+        vol_raw = payload.get("estimated_volume")
+        if vol_raw is None:
+            vol_raw = payload.get("estimatedVolume")
+        if vol_raw is None:
+            vol_raw = payload.get("volume")
+        vol = float(vol_raw) if vol_raw is not None else 0.0
+    except (ValueError, TypeError):
+        vol = 0.0
+
+    if vol < 0:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"message": "Estimated volume must be non-negative"}
+        )
+
+    rate_doc = find_timber_reference_rate(species, district)
+    if not rate_doc or vol == 0.0:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "species": species,
+                "district": district,
+                "estimated_volume": round(vol, 2),
+                "reference_rate": rate_doc.get("rate_per_m3") if rate_doc else None,
+                "rate_unit": rate_doc.get("unit", "INR/m3") if rate_doc else None,
+                "approximate_timber_value": int(round(vol * rate_doc["rate_per_m3"])) if rate_doc and vol > 0 else None,
+                "rate_source": rate_doc.get("source") if rate_doc else None,
+                "rate_effective_date": rate_doc.get("effective_from") if rate_doc else None,
+                "message": "Reference rate unavailable" if not rate_doc else "Volume is zero"
+            }
+        )
+
+    rate_per_m3 = float(rate_doc["rate_per_m3"])
+    approx_val = int(round(vol * rate_per_m3))
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "species": species,
+            "district": rate_doc.get("district") or district,
+            "estimated_volume": round(vol, 2),
+            "reference_rate": rate_per_m3,
+            "rate_unit": rate_doc.get("unit", "INR/m3"),
+            "approximate_timber_value": approx_val,
+            "rate_source": rate_doc.get("source", "Kerala Government timber market-price data"),
+            "rate_effective_date": rate_doc.get("effective_from", "2026-01-01"),
+            "rate_type": rate_doc.get("rate_type", "Reference Market Rate")
+        }
+    )
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -163,11 +578,57 @@ def add_tree_inventory(payload: dict, authorization: Optional[str] = Header(None
         user_email = payload.get("userEmail") or token_email or ""
         created_at = datetime.now(timezone.utc).isoformat()
 
+        prop_id = payload.get("propertyId")
+        prop_district = "Kottayam"
+        if prop_id:
+            try:
+                q = {"_id": ObjectId(prop_id)} if ObjectId.is_valid(prop_id) else {"_id": prop_id}
+                target_p = db.properties.find_one(q)
+                if target_p and target_p.get("district"):
+                    prop_district = target_p.get("district")
+            except Exception:
+                pass
+
+        raw_species_list = payload.get("speciesList", [])
+        enriched_species_list = []
+        for sp in raw_species_list:
+            if isinstance(sp, dict):
+                sp_item = dict(sp)
+                sp_name = sp_item.get("treeSpecies") or sp_item.get("species") or "Teak"
+                vol_val = sp_item.get("estimatedVolume") if sp_item.get("estimatedVolume") is not None else sp_item.get("volume")
+                try:
+                    vol_float = float(vol_val) if vol_val is not None else 0.0
+                except (ValueError, TypeError):
+                    vol_float = 0.0
+
+                rate_info = find_timber_reference_rate(sp_name, prop_district)
+                if rate_info and vol_float > 0:
+                    rate_per_m3 = float(rate_info["rate_per_m3"])
+                    approx_val = int(round(vol_float * rate_per_m3))
+                    sp_item["estimated_volume"] = round(vol_float, 2)
+                    sp_item["approximate_timber_value"] = approx_val
+                    sp_item["rate_unit"] = rate_info.get("unit", "INR/m3")
+                    sp_item["rate_source"] = rate_info.get("source", "Kerala Government timber market-price data")
+                    sp_item["rate_effective_date"] = rate_info.get("effective_from", "2026-01-01")
+                    sp_item["rate_snapshot"] = {
+                        "rate_per_m3": rate_per_m3,
+                        "rate_unit": rate_info.get("unit", "INR/m3"),
+                        "rate_source": rate_info.get("source", "Kerala Government timber market-price data"),
+                        "rate_effective_date": rate_info.get("effective_from", "2026-01-01"),
+                        "district": rate_info.get("district") or prop_district
+                    }
+                else:
+                    sp_item["estimated_volume"] = round(vol_float, 2) if vol_float > 0 else None
+                    sp_item["approximate_timber_value"] = None
+                    sp_item["rate_snapshot"] = None
+
+                enriched_species_list.append(sp_item)
+
         doc = {
             "propertyId": payload.get("propertyId"),
             "propertyName": payload.get("propertyName", ""),
             "treeAreaLocation": payload.get("treeAreaLocation", ""),
-            "speciesList": payload.get("speciesList", []),
+            "speciesList": enriched_species_list,
             "photos": payload.get("photos", []),
             "userEmail": user_email,
             "createdAt": created_at,

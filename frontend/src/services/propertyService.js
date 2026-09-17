@@ -76,6 +76,30 @@ export const propertyService = {
       console.error('Error in propertyService.getTreeInventories:', error);
       throw error.response?.data || error;
     }
+  },
+
+  // Get Timber Reference Rate for species & district
+  getTimberReferenceRate: async (species, district) => {
+    try {
+      const response = await api.get('/properties/timber-reference-rate', {
+        params: { species, district }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error in propertyService.getTimberReferenceRate:', error);
+      return { reference_rate: null, message: 'Reference rate unavailable' };
+    }
+  },
+
+  // Calculate Timber Value dynamically via backend API
+  calculateTimberValue: async (payload) => {
+    try {
+      const response = await api.post('/properties/calculate-timber-value', payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error in propertyService.calculateTimberValue:', error);
+      return { reference_rate: null, approximate_timber_value: null, message: 'Reference rate unavailable' };
+    }
   }
 };
 

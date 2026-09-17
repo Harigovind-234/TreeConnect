@@ -33,6 +33,28 @@ import {
   ExternalLink
 } from 'lucide-react';
 
+const calculateEstimatedPrice = (species = 'Teak', girthStr = '60 - 80cm', volumeStr = '1.8 m³', count = 1) => {
+  const volNum = parseFloat(volumeStr) || 1.8;
+  const treeCount = Number(count) || 1;
+  const sp = String(species || '').toLowerCase();
+  
+  let baseRatePerM3 = 25000;
+  if (sp.includes('rosewood')) baseRatePerM3 = 45000;
+  else if (sp.includes('sandalwood')) baseRatePerM3 = 75000;
+  else if (sp.includes('teak')) baseRatePerM3 = 30000;
+  else if (sp.includes('mahogany')) baseRatePerM3 = 22000;
+  else if (sp.includes('rubber')) baseRatePerM3 = 12000;
+  else if (sp.includes('pine') || sp.includes('cedar') || sp.includes('eucalyptus')) baseRatePerM3 = 15000;
+
+  let multiplier = 1.0;
+  const gStr = String(girthStr || '');
+  if (gStr.includes('100') || gStr.includes('120') || gStr.includes('150')) multiplier = 1.25;
+  else if (gStr.includes('80') || gStr.includes('90')) multiplier = 1.1;
+
+  const calculated = Math.round(volNum * baseRatePerM3 * multiplier * treeCount);
+  return calculated > 0 ? calculated : 45000;
+};
+
 const formatGPSCoordinates = (p) => {
   if (!p) return '9.557546° N, 76.605175° E';
   const lat = p.latitude ?? p.lat ?? p.gpsLat ?? p.gps_lat;
@@ -414,6 +436,7 @@ const HarvestRequestsPage = () => {
                             const age = s.approxAge || s.standAge || s.age || '15 years';
                             const girth = s.girth || s.trunkGirth || s.averageDbh || '60 - 80cm';
                             const volume = s.estimatedVolume || s.volume || '1.8 m³';
+                            const price = s.estimatedPrice || s.price || calculateEstimatedPrice(species, girth, volume, count);
 
                             return (
                               <div key={s.id || idx} className="review-stand-box">
@@ -441,6 +464,10 @@ const HarvestRequestsPage = () => {
                                   <div className="review-field-item">
                                     <span className="review-field-label">EST. VOLUME:</span>
                                     <span className="review-field-value-emerald">{volume}</span>
+                                  </div>
+                                  <div className="review-field-item sm:col-span-2">
+                                    <span className="review-field-label">EST. STAND PRICE:</span>
+                                    <span className="text-amber-400 font-black text-sm">₹ {Number(price).toLocaleString('en-IN')}</span>
                                   </div>
                                 </div>
                               </div>

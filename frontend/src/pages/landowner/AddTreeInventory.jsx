@@ -4,6 +4,7 @@ import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useLandowner } from '../../context/LandownerContext';
 import FileUploadCard from '../../components/FileUploadCard';
+import propertyService from '../../services/propertyService';
 import './LandownerDashboard.css';
 import {
   Trees,
@@ -16,7 +17,9 @@ import {
   MapPin,
   Camera,
   ShieldCheck,
-  Building2
+  Building2,
+  DollarSign,
+  AlertCircle
 } from 'lucide-react';
 
 const AddTreeInventory = () => {
@@ -73,15 +76,17 @@ const AddTreeInventory = () => {
 
   const speciesOptions = [
     'Teak',
-    'Coconut',
-    'Rubber',
-    'Mahogany',
-    'Western Red Cedar',
-    'Douglas Fir',
+    'Teakwood',
     'Rosewood',
+    'Mahogany',
+    'Rubber',
+    'Sandalwood',
+    'Coconut',
+    'Jackfruit',
     'Eucalyptus',
     'Pine',
-    'Jackfruit',
+    'Western Red Cedar',
+    'Douglas Fir',
     'Mango',
     'Other'
   ];
@@ -112,6 +117,7 @@ const AddTreeInventory = () => {
     treeGroups.forEach((tg, idx) => {
       if (!tg.species) newErrors[`species_${idx}`] = 'Species is required';
       if (!tg.numberOfTrees || Number(tg.numberOfTrees) <= 0) newErrors[`count_${idx}`] = 'Number of trees must be greater than 0';
+      if (tg.estimatedVolume && Number(tg.estimatedVolume) < 0) newErrors[`volume_${idx}`] = 'Estimated volume must be non-negative';
     });
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
