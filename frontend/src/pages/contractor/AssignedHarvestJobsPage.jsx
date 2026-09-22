@@ -610,10 +610,7 @@ const AssignedHarvestJobsPage = () => {
                             <span className="cd-spec-label">Preferred Period</span>
                             <strong className="cd-spec-value">{scheduleText}</strong>
                           </div>
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Services Required</span>
-                            <strong className="cd-spec-value-emerald">{servicesNeededText}</strong>
-                          </div>
+
                         </div>
 
                         {/* ACTION BAR */}

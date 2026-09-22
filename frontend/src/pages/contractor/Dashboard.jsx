@@ -568,10 +568,6 @@ const ContractorDashboard = () => {
                               <strong className="cd-spec-value">{scheduleText}</strong>
                             </div>
                             <div className="cd-spec-item">
-                              <span className="cd-spec-label">Services Required</span>
-                              <strong className="cd-spec-value-emerald">{servicesNeededText}</strong>
-                            </div>
-                            <div className="cd-spec-item">
                               <span className="cd-spec-label">Site Access & Road</span>
                               <strong className="cd-spec-value truncate">{req.site_conditions?.access_availability || 'Heavy vehicle access'} ({req.site_conditions?.road_condition || 'Paved panchayat road'})</strong>
                             </div>

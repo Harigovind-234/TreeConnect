@@ -19,6 +19,13 @@ import {
   Eye,
   ImageIcon
 } from 'lucide-react';
+import {
+  getTimberReferenceRate,
+  parseVolumeNumber,
+  calculateApproxTimberValue,
+  formatINR,
+  TIMBER_VALUE_DISCLAIMER
+} from '../../utils/timberCalculations';
 
 const isRealPhoto = (p) => {
   if (!p) return false;
@@ -214,23 +221,24 @@ const TreeInventoryPage = () => {
                       const count = Number(sp.numberOfTrees || sp.count || p.approxTreesCount || 0);
                       totalTreesCount += count;
                       const spPhotos = (sp.photos && sp.photos.length > 0) ? sp.photos : (inv.photos || []);
+                      const speciesTitle = sp.treeSpecies || sp.species || p.mainSpecies || 'Teak';
                       const volStr = sp.estimatedVolume || sp.volume || '1.80 m³';
-                      const volNum = parseFloat(volStr) || 1.8;
+                      const volNum = parseVolumeNumber(volStr);
                       const snapshot = sp.rate_snapshot || {};
-                      const rate = snapshot.rate_per_m3 || sp.reference_rate || 139490;
-                      const approx = sp.approximate_timber_value || Math.round(volNum * rate);
+                      const rate = snapshot.rate_per_m3 || sp.reference_rate || getTimberReferenceRate(speciesTitle);
+                      const approx = sp.approximate_timber_value || calculateApproxTimberValue(speciesTitle, volStr, rate);
 
                       allTreeGroups.push({
                         id: sp.id || `sp_${allTreeGroups.length + 1}`,
-                        groupName: sp.groupName || `${sp.treeSpecies || sp.species || 'Tree'} Stand`,
-                        species: sp.treeSpecies || sp.species || p.mainSpecies || 'Teak',
+                        groupName: sp.groupName || `${speciesTitle} Stand`,
+                        species: speciesTitle,
                         count: count > 0 ? count : (Number(p.approxTreesCount) || 5),
                         age: sp.approxAge || sp.age || '15 years',
                         condition: sp.treeCondition || sp.condition || 'Healthy',
                         notes: sp.notes || '',
                         location: sp.locationInProperty || sp.location || inv.treeAreaLocation || 'Main Compound Plot',
                         girth: sp.girth || '60 - 80cm',
-                        volume: typeof volStr === 'number' ? `${volStr} m³` : volStr,
+                        volume: `${volNum.toFixed(2)} m³`,
                         ratePerM3: rate,
                         approxValue: approx,
                         rateSource: sp.rate_source || snapshot.rate_source || 'Kerala Government timber market-price data',

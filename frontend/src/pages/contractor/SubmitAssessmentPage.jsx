@@ -281,7 +281,7 @@ const SubmitAssessmentPage = () => {
         <Sidebar />
 
         <div className="contractor-dashboard-workspace">
-          
+
           {/* HEADER BACK LINK & TITLE */}
           <div className="flex flex-col gap-4">
             <button
@@ -320,10 +320,10 @@ const SubmitAssessmentPage = () => {
             </div>
           ) : (
             <div className="flex flex-col gap-8 w-full">
-              
+
               {/* TOP SECTION: LANDOWNER HARVEST JOB & PROPERTY CONTEXT */}
               <div className="w-full flex flex-col gap-6">
-                
+
                 {/* Property & Owner Summary Card */}
                 <div className="cd-site-context-card">
                   <div className="cd-context-header">
@@ -387,7 +387,7 @@ const SubmitAssessmentPage = () => {
                           }
                         }
                       }
-                    } catch (e) {}
+                    } catch (e) { }
 
                     const realPhotos = [];
                     rawSources.forEach(item => {
@@ -788,11 +788,10 @@ const SubmitAssessmentPage = () => {
                                     <span className="px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
                                       {item.treeCount} Trees
                                     </span>
-                                    <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
-                                      (item.timberGrade || '').toLowerCase().includes('healthy') || (item.timberGrade || '').toLowerCase().includes('grade a')
+                                    <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${(item.timberGrade || '').toLowerCase().includes('healthy') || (item.timberGrade || '').toLowerCase().includes('grade a')
                                         ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
                                         : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                                    }`}>
+                                      }`}>
                                       {item.timberGrade || 'Healthy'}
                                     </span>
                                   </div>
@@ -835,19 +834,6 @@ const SubmitAssessmentPage = () => {
                     );
                   })()}
 
-                  {/* Services Required */}
-                  <div className="cd-services-block">
-                    <span className="cd-services-title">
-                      Required Contractor Services
-                    </span>
-                    <div className="cd-services-list">
-                      {servicesList.map((srv, idx) => (
-                        <span key={idx} className="cd-service-chip">
-                          {srv}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
 
                   {/* Site Access & Specifications Callout */}
                   {requestDetails?.site_conditions && (
@@ -910,11 +896,10 @@ const SubmitAssessmentPage = () => {
 
                   {/* Feedback Banner */}
                   {feedbackMessage.text && (
-                    <div className={`p-4 rounded-xl mb-6 text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-md ${
-                      feedbackMessage.type === 'success'
+                    <div className={`p-4 rounded-xl mb-6 text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-md ${feedbackMessage.type === 'success'
                         ? 'bg-emerald-950 border border-emerald-500 text-emerald-200'
                         : 'bg-red-950 border border-red-500 text-red-200'
-                    }`}>
+                      }`}>
                       {feedbackMessage.type === 'success' ? (
                         <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
                       ) : (
@@ -925,7 +910,7 @@ const SubmitAssessmentPage = () => {
                   )}
 
                   <form onSubmit={handleSubmit} className="cd-form">
-                    
+
                     {/* Volume & Value Inputs */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <div className="cd-form-group">
@@ -1102,74 +1087,74 @@ const SubmitAssessmentPage = () => {
             </div>
           )}
 
-            {/* FULL-SCREEN LIGHTBOX MODAL FOR PROPERTY & TREE PHOTOS */}
-            {activePhotoModal && (
-              <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[#0a0f0d]/95 backdrop-blur-md animate-fade-in">
-                <div className="max-w-4xl w-full p-6 border border-emerald-500/30 rounded-2xl bg-[#121a16] space-y-4 shadow-2xl relative">
+          {/* FULL-SCREEN LIGHTBOX MODAL FOR PROPERTY & TREE PHOTOS */}
+          {activePhotoModal && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[#0a0f0d]/95 backdrop-blur-md animate-fade-in">
+              <div className="max-w-4xl w-full p-6 border border-emerald-500/30 rounded-2xl bg-[#121a16] space-y-4 shadow-2xl relative">
 
-                  {/* Modal Header */}
-                  <div className="flex items-center justify-between border-b border-emerald-500/15 pb-3">
-                    <div>
-                      <h4 className="text-base font-bold text-white flex items-center gap-2">
-                        <ImageIcon size={18} className="text-emerald-400" /> {activePhotoModal.title}
-                      </h4>
-                      <p className="text-xs text-slate-400">
-                        Photo {activePhotoModal.index + 1} of {activePhotoModal.photos.length}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setActivePhotoModal(null)}
-                      className="p-1.5 rounded-lg bg-[#0e1612] border border-emerald-500/20 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                    >
-                      <X size={18} />
-                    </button>
+                {/* Modal Header */}
+                <div className="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+                  <div>
+                    <h4 className="text-base font-bold text-white flex items-center gap-2">
+                      <ImageIcon size={18} className="text-emerald-400" /> {activePhotoModal.title}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Photo {activePhotoModal.index + 1} of {activePhotoModal.photos.length}
+                    </p>
                   </div>
+                  <button
+                    onClick={() => setActivePhotoModal(null)}
+                    className="p-1.5 rounded-lg bg-[#0e1612] border border-emerald-500/20 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
 
-                  {/* Main Image View */}
-                  <div className="relative max-h-[65vh] flex items-center justify-center overflow-hidden rounded-xl bg-[#0a0f0d] border border-emerald-500/20 p-2">
-                    <img
-                      src={activePhotoModal.photos[activePhotoModal.index]}
-                      alt="Full View"
-                      className="max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
-                    />
+                {/* Main Image View */}
+                <div className="relative max-h-[65vh] flex items-center justify-center overflow-hidden rounded-xl bg-[#0a0f0d] border border-emerald-500/20 p-2">
+                  <img
+                    src={activePhotoModal.photos[activePhotoModal.index]}
+                    alt="Full View"
+                    className="max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
+                  />
 
-                    {/* Prev/Next Navigation Controls */}
-                    {activePhotoModal.photos.length > 1 && (
-                      <>
-                        <button
-                          onClick={() => setActivePhotoModal(prev => ({
-                            ...prev,
-                            index: prev.index === 0 ? prev.photos.length - 1 : prev.index - 1
-                          }))}
-                          className="absolute left-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
-                        >
-                          <ChevronLeft size={22} />
-                        </button>
-                        <button
-                          onClick={() => setActivePhotoModal(prev => ({
-                            ...prev,
-                            index: prev.index === prev.photos.length - 1 ? 0 : prev.index + 1
-                          }))}
-                          className="absolute right-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
-                        >
-                          <ChevronRight size={22} />
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  {/* Prev/Next Navigation Controls */}
+                  {activePhotoModal.photos.length > 1 && (
+                    <>
+                      <button
+                        onClick={() => setActivePhotoModal(prev => ({
+                          ...prev,
+                          index: prev.index === 0 ? prev.photos.length - 1 : prev.index - 1
+                        }))}
+                        className="absolute left-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
+                      >
+                        <ChevronLeft size={22} />
+                      </button>
+                      <button
+                        onClick={() => setActivePhotoModal(prev => ({
+                          ...prev,
+                          index: prev.index === prev.photos.length - 1 ? 0 : prev.index + 1
+                        }))}
+                        className="absolute right-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
+                      >
+                        <ChevronRight size={22} />
+                      </button>
+                    </>
+                  )}
+                </div>
 
-                  {/* Footer Close Button */}
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      onClick={() => setActivePhotoModal(null)}
-                      className="px-5 py-2 rounded-xl bg-[#0e1612] hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer"
-                    >
-                      Close Lightbox
-                    </button>
-                  </div>
+                {/* Footer Close Button */}
+                <div className="pt-2 flex justify-end">
+                  <button
+                    onClick={() => setActivePhotoModal(null)}
+                    className="px-5 py-2 rounded-xl bg-[#0e1612] hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer"
+                  >
+                    Close Lightbox
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
         </div>
       </div>

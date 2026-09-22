@@ -33,27 +33,13 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-const calculateEstimatedPrice = (species = 'Teak', girthStr = '60 - 80cm', volumeStr = '1.8 m³', count = 1) => {
-  const volNum = parseFloat(volumeStr) || 1.8;
-  const treeCount = Number(count) || 1;
-  const sp = String(species || '').toLowerCase();
-  
-  let baseRatePerM3 = 25000;
-  if (sp.includes('rosewood')) baseRatePerM3 = 45000;
-  else if (sp.includes('sandalwood')) baseRatePerM3 = 75000;
-  else if (sp.includes('teak')) baseRatePerM3 = 30000;
-  else if (sp.includes('mahogany')) baseRatePerM3 = 22000;
-  else if (sp.includes('rubber')) baseRatePerM3 = 12000;
-  else if (sp.includes('pine') || sp.includes('cedar') || sp.includes('eucalyptus')) baseRatePerM3 = 15000;
-
-  let multiplier = 1.0;
-  const gStr = String(girthStr || '');
-  if (gStr.includes('100') || gStr.includes('120') || gStr.includes('150')) multiplier = 1.25;
-  else if (gStr.includes('80') || gStr.includes('90')) multiplier = 1.1;
-
-  const calculated = Math.round(volNum * baseRatePerM3 * multiplier * treeCount);
-  return calculated > 0 ? calculated : 45000;
-};
+import {
+  getTimberReferenceRate,
+  parseVolumeNumber,
+  calculateApproxTimberValue,
+  formatINR,
+  TIMBER_VALUE_DISCLAIMER
+} from '../../utils/timberCalculations';
 
 const formatGPSCoordinates = (p) => {
   if (!p) return '9.557546° N, 76.605175° E';
@@ -436,7 +422,7 @@ const HarvestRequestsPage = () => {
                             const age = s.approxAge || s.standAge || s.age || '15 years';
                             const girth = s.girth || s.trunkGirth || s.averageDbh || '60 - 80cm';
                             const volume = s.estimatedVolume || s.volume || '1.8 m³';
-                            const price = s.estimatedPrice || s.price || calculateEstimatedPrice(species, girth, volume, count);
+                            const approxValue = calculateApproxTimberValue(species, volume);
 
                             return (
                               <div key={s.id || idx} className="review-stand-box">
@@ -466,13 +452,38 @@ const HarvestRequestsPage = () => {
                                     <span className="review-field-value-emerald">{volume}</span>
                                   </div>
                                   <div className="review-field-item sm:col-span-2">
-                                    <span className="review-field-label">EST. STAND PRICE:</span>
-                                    <span className="text-amber-400 font-black text-sm">₹ {Number(price).toLocaleString('en-IN')}</span>
+                                    <span className="review-field-label">APPROX. TIMBER VALUE:</span>
+                                    <span className="text-amber-400 font-black text-sm">{formatINR(approxValue)}</span>
                                   </div>
                                 </div>
                               </div>
                             );
                           })}
+                        </div>
+
+                        {/* Summary Totals & Disclaimer Notice */}
+                        <div className="p-4 rounded-xl bg-[#030a05] border border-emerald-500/30 space-y-2 mt-3">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                            <div>
+                              <span className="text-slate-400 block text-[11px]">Selected Stands:</span>
+                              <span className="font-bold text-white">{stands.length} Stand(s)</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block text-[11px]">Total Selected Trees:</span>
+                              <span className="font-bold text-white">{stands.reduce((sum, s) => sum + Number(s.numberOfTrees ?? s.treeCount ?? s.count ?? s.quantity ?? 1), 0)} trees</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block text-[11px]">Est. Total Volume:</span>
+                              <span className="font-bold text-emerald-400">{stands.reduce((sum, s) => sum + parseVolumeNumber(s.estimatedVolume || s.volume), 0).toFixed(2)} m³</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block text-[11px]">Approx. Total Timber Value:</span>
+                              <span className="font-black text-amber-400 text-sm">{formatINR(stands.reduce((sum, s) => sum + calculateApproxTimberValue(s.species || s.treeSpecies, s.estimatedVolume || s.volume), 0))}</span>
+                            </div>
+                          </div>
+                          <p className="text-[10.5px] text-slate-400 italic pt-2 border-t border-emerald-500/10 leading-tight">
+                            {TIMBER_VALUE_DISCLAIMER}
+                          </p>
                         </div>
                       </div>
 
@@ -481,10 +492,6 @@ const HarvestRequestsPage = () => {
                         <div className="harvest-spec-box">
                           <span className="harvest-spec-label">Reason for Harvest</span>
                           <strong className="harvest-spec-value">{req.reason || req.reasonForHarvesting || 'Mature timber'}</strong>
-                        </div>
-                        <div className="harvest-spec-box">
-                          <span className="harvest-spec-label">Services Needed</span>
-                          <span className="harvest-spec-value-highlight">{servicesNeededText}</span>
                         </div>
                         <div className="harvest-spec-box">
                           <span className="harvest-spec-label">Assigned Contractor</span>

@@ -30,6 +30,13 @@ import {
   ExternalLink,
   DollarSign
 } from 'lucide-react';
+import {
+  getTimberReferenceRate,
+  parseVolumeNumber,
+  calculateApproxTimberValue,
+  formatINR,
+  TIMBER_VALUE_DISCLAIMER
+} from '../../utils/timberCalculations';
 
 const SPECIES_FALLBACK_IMAGES = {
   'Teak': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
@@ -38,33 +45,10 @@ const SPECIES_FALLBACK_IMAGES = {
   'Rosewood': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
   'Sandalwood': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
   'Rubber': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  'Rubber': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
   'Coconut': 'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?auto=format&fit=crop&w=800&q=80',
   'Jackfruit': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
   'Eucalyptus': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
   'Pine': 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80'
-};
-
-const calculateEstimatedPrice = (species = 'Teak', girthStr = '60 - 80cm', volumeStr = '1.8 m³', count = 1) => {
-  const volNum = parseFloat(volumeStr) || 1.8;
-  const treeCount = Number(count) || 1;
-  const sp = String(species || '').toLowerCase();
-  
-  let baseRatePerM3 = 25000;
-  if (sp.includes('rosewood')) baseRatePerM3 = 45000;
-  else if (sp.includes('sandalwood')) baseRatePerM3 = 75000;
-  else if (sp.includes('teak')) baseRatePerM3 = 30000;
-  else if (sp.includes('mahogany')) baseRatePerM3 = 22000;
-  else if (sp.includes('rubber')) baseRatePerM3 = 12000;
-  else if (sp.includes('pine') || sp.includes('cedar') || sp.includes('eucalyptus')) baseRatePerM3 = 15000;
-
-  let multiplier = 1.0;
-  const gStr = String(girthStr || '');
-  if (gStr.includes('100') || gStr.includes('120') || gStr.includes('150')) multiplier = 1.25;
-  else if (gStr.includes('80') || gStr.includes('90')) multiplier = 1.1;
-
-  const calculated = Math.round(volNum * baseRatePerM3 * multiplier * treeCount);
-  return calculated > 0 ? calculated : 45000;
 };
 
 const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80';
@@ -295,7 +279,6 @@ const RequestHarvesting = () => {
   const [newStandCount, setNewStandCount] = useState(1);
   const [newStandGirth, setNewStandGirth] = useState('60 - 80cm');
   const [newStandVolume, setNewStandVolume] = useState('1.8 m³');
-  const [newStandPrice, setNewStandPrice] = useState(45000);
   const [newStandAge, setNewStandAge] = useState('15 years');
   const [newStandCondition, setNewStandCondition] = useState('Healthy');
 
@@ -311,14 +294,10 @@ const RequestHarvesting = () => {
     return g.estimatedVolume || '1.8 m³';
   };
 
-  const getStandPrice = (g) => {
-    if (!g || !g.id) return 45000;
-    if (standMeasurements && standMeasurements[g.id]?.estimatedPrice !== undefined) return standMeasurements[g.id].estimatedPrice;
-    if (g.estimatedPrice !== undefined && g.estimatedPrice !== null && g.estimatedPrice !== '') return g.estimatedPrice;
-    if (g.price !== undefined && g.price !== null && g.price !== '') return g.price;
-    const currentGirth = getStandGirth(g);
+  const getStandApproxValue = (g) => {
+    if (!g || !g.id) return 0;
     const currentVolume = getStandVolume(g);
-    return calculateEstimatedPrice(g.species, currentGirth, currentVolume, g.numberOfTrees);
+    return calculateApproxTimberValue(g.species, currentVolume);
   };
 
   const baseTreeGroups = (extractedTreeGroups && extractedTreeGroups.length > 0)
@@ -455,10 +434,11 @@ const RequestHarvesting = () => {
           ...g,
           girth: getStandGirth(g),
           estimatedVolume: getStandVolume(g),
-          estimatedPrice: getStandPrice(g)
+          estimatedPrice: getStandApproxValue(g),
+          approximate_timber_value: getStandApproxValue(g)
         }));
 
-      const totalEstPrice = selectedGroups.reduce((acc, curr) => acc + (Number(curr.estimatedPrice) || 0), 0);
+      const totalEstPrice = selectedGroups.reduce((acc, curr) => acc + getStandApproxValue(curr), 0);
 
       const payload = {
         property_id: activeProperty.id || activeProperty._id,
@@ -883,7 +863,7 @@ const RequestHarvesting = () => {
                         const treePhoto = getTreePhoto(g);
                         const currentGirth = getStandGirth(g);
                         const currentVolume = getStandVolume(g);
-                        const currentPrice = getStandPrice(g);
+                        const currentPrice = getStandApproxValue(g);
 
                         return (
                           <div
@@ -995,24 +975,9 @@ const RequestHarvesting = () => {
 
                                 {/* READ-ONLY TIMBER VALUE ESTIMATE SECTION */}
                                 {(() => {
-                                  const volNum = parseFloat(currentVolume) || 1.8;
-                                  const spName = g.species || 'Teak';
-                                  const spLower = String(spName).toLowerCase();
-                                  let ratePerM3 = 139490;
-                                  if (spLower.includes('sandalwood')) ratePerM3 = 350000;
-                                  else if (spLower.includes('rosewood')) ratePerM3 = 185000;
-                                  else if (spLower.includes('teak')) ratePerM3 = 139490;
-                                  else if (spLower.includes('mahogany')) ratePerM3 = 65000;
-                                  else if (spLower.includes('jackfruit')) ratePerM3 = 42000;
-                                  else if (spLower.includes('cedar')) ratePerM3 = 45000;
-                                  else if (spLower.includes('pine')) ratePerM3 = 32000;
-                                  else if (spLower.includes('rubber')) ratePerM3 = 28000;
-                                  else if (spLower.includes('eucalyptus')) ratePerM3 = 22000;
-                                  else if (spLower.includes('coconut')) ratePerM3 = 18000;
-                                  else if (spLower.includes('mango')) ratePerM3 = 25000;
-                                  else ratePerM3 = 30000;
-
-                                  const approxValue = Math.round(volNum * ratePerM3);
+                                  const volNum = parseVolumeNumber(currentVolume);
+                                  const ratePerM3 = getTimberReferenceRate(g.species);
+                                  const approxValue = calculateApproxTimberValue(g.species, currentVolume);
 
                                   return (
                                     <div className="p-4 rounded-xl bg-[#030a05] border border-emerald-500/30 space-y-3">
@@ -1032,16 +997,16 @@ const RequestHarvesting = () => {
                                         </div>
                                         <div>
                                           <span className="text-slate-400 block text-[10.5px]">Reference Rate</span>
-                                          <strong className="text-emerald-400 font-extrabold text-xs">₹ {ratePerM3.toLocaleString('en-IN')} / m³</strong>
+                                          <strong className="text-emerald-400 font-extrabold text-xs">{formatINR(ratePerM3)} / m³</strong>
                                         </div>
                                         <div>
                                           <span className="text-slate-400 block text-[10.5px]">Approx. Value</span>
-                                          <strong className="text-amber-400 font-black text-sm">₹ {approxValue.toLocaleString('en-IN')}</strong>
+                                          <strong className="text-amber-400 font-black text-sm">{formatINR(approxValue)}</strong>
                                         </div>
                                       </div>
 
                                       <p className="text-[10px] text-slate-400 italic pt-1 border-t border-emerald-500/10 leading-tight">
-                                        * Approximate value only. Final timber value determined after contractor site inspection &amp; negotiation.
+                                        {TIMBER_VALUE_DISCLAIMER}
                                       </p>
                                     </div>
                                   );
@@ -1086,16 +1051,19 @@ const RequestHarvesting = () => {
                           <div>
                             <span className="text-slate-400 block text-[11px]">Est. Total Timber Volume:</span>
                             <span className="font-bold text-emerald-400">
-                              {availableTreeGroups.filter(g => activeSelectedIds.includes(g.id)).reduce((acc, curr) => acc + (parseFloat(getStandVolume(curr)) || 0), 0).toFixed(1)} m³
+                              {availableTreeGroups.filter(g => activeSelectedIds.includes(g.id)).reduce((acc, curr) => acc + parseVolumeNumber(getStandVolume(curr)), 0).toFixed(2)} m³
                             </span>
                           </div>
                           <div>
-                            <span className="text-slate-400 block text-[11px]">Est. Total Stand Value:</span>
+                            <span className="text-slate-400 block text-[11px]">Approx. Total Timber Value:</span>
                             <span className="font-extrabold text-amber-400 text-sm">
-                              ₹ {availableTreeGroups.filter(g => activeSelectedIds.includes(g.id)).reduce((acc, curr) => acc + (Number(getStandPrice(curr)) || 0), 0).toLocaleString('en-IN')}
+                              {formatINR(availableTreeGroups.filter(g => activeSelectedIds.includes(g.id)).reduce((acc, curr) => acc + getStandApproxValue(curr), 0))}
                             </span>
                           </div>
                         </div>
+                        <p className="text-[10.5px] text-slate-400 italic pt-2 border-t border-emerald-500/10 leading-tight">
+                          {TIMBER_VALUE_DISCLAIMER}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -1229,7 +1197,7 @@ const RequestHarvesting = () => {
                                 location: activeProperty?.village || activeProperty?.district || 'Kottayam',
                                 girth: newStandGirth || '65 - 85 cm',
                                 estimatedVolume: newStandVolume || '0.8 m³',
-                                estimatedPrice: Number(newStandPrice) || calculateEstimatedPrice(newStandSpecies, newStandGirth, newStandVolume, newStandCount),
+                                estimatedPrice: calculateApproxTimberValue(newStandSpecies, newStandVolume),
                                 image: speciesImagesMap[newStandSpecies] || speciesImagesMap.Other,
                                 photos: [speciesImagesMap[newStandSpecies] || speciesImagesMap.Other]
                               };
@@ -1530,12 +1498,37 @@ const RequestHarvesting = () => {
                               <span className="review-field-value-emerald">{getStandVolume(g)}</span>
                             </div>
                             <div className="review-field-item sm:col-span-2">
-                              <span className="review-field-label">Est. Stand Price:</span>
-                              <span className="text-amber-400 font-black text-sm">₹ {Number(getStandPrice(g)).toLocaleString('en-IN')}</span>
+                              <span className="review-field-label">Approx. Timber Value:</span>
+                              <span className="text-amber-400 font-black text-sm">{formatINR(getStandApproxValue(g))}</span>
                             </div>
                           </div>
                         </div>
                       ))}
+                    </div>
+
+                    {/* Review Total Summary */}
+                    <div className="p-4 rounded-xl bg-[#030a05] border border-emerald-500/30 space-y-2 mt-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">Selected Stands:</span>
+                          <span className="font-bold text-white">{selectedTreeGroups.length} Stand(s)</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">Total Selected Trees:</span>
+                          <span className="font-bold text-white">{selectedTreeGroups.reduce((acc, curr) => acc + (curr.numberOfTrees || 0), 0)} trees</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">Est. Total Volume:</span>
+                          <span className="font-bold text-emerald-400">{selectedTreeGroups.reduce((acc, curr) => acc + parseVolumeNumber(getStandVolume(curr)), 0).toFixed(2)} m³</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[11px]">Approx. Total Timber Value:</span>
+                          <span className="font-black text-amber-400 text-sm">{formatINR(selectedTreeGroups.reduce((acc, curr) => acc + getStandApproxValue(curr), 0))}</span>
+                        </div>
+                      </div>
+                      <p className="text-[10.5px] text-slate-400 italic pt-2 border-t border-emerald-500/10 leading-tight">
+                        {TIMBER_VALUE_DISCLAIMER}
+                      </p>
                     </div>
                   </div>
 
