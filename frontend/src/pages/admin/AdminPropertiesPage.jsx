@@ -154,11 +154,21 @@ const AdminPropertiesPage = () => {
                 <div className="space-y-4">
                   {/* Property Image & Status Badges */}
                   <div className="relative h-52 sm:h-56 rounded-2xl overflow-hidden bg-[#0a0f0d] border border-emerald-500/20 shadow-md">
-                    <img
-                      src={p.image || p.photos?.[0] || 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80'}
-                      alt={p.propertyName}
-                      className="w-full h-full object-cover"
-                    />
+                    {(() => {
+                      const realImg = [p.image, ...(p.photos || [])].find(img => typeof img === 'string' && img.trim().length > 5 && !img.includes('unsplash.com'));
+                      return realImg ? (
+                        <img
+                          src={realImg}
+                          alt={p.propertyName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-4 text-center">
+                          <Trees size={36} className="text-emerald-500/30 mb-2" />
+                          <span className="text-xs font-bold text-slate-300">No Photo Uploaded</span>
+                        </div>
+                      );
+                    })()}
                     <div className="absolute top-3 left-3">
                       <span className="px-3 py-1.5 rounded-xl text-xs font-extrabold uppercase bg-[#0a0f0d]/90 text-emerald-300 border border-emerald-500/40 backdrop-blur-md shadow-lg">
                         {p.status || 'Active Estate'}

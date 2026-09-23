@@ -71,18 +71,26 @@ const RegisterProperty = () => {
       }
 
       if (activeProfile && isMounted) {
-        const resolvedPin = activeProfile.postalCode || activeProfile.pinCode || '';
+        const resolvedPin = activeProfile.postalCode || activeProfile.pinCode || activeProfile.pincode || '';
         let resolvedLocalBody = activeProfile.localBody || activeProfile.panchayat || '';
+        let resolvedDistrict = activeProfile.district || '';
+        let resolvedState = activeProfile.state || 'Kerala';
+        let resolvedLat = activeProfile.latitude;
+        let resolvedLng = activeProfile.longitude;
 
-        // If localBody is empty in database profile, auto-resolve Panchayat using PIN code
-        if (!resolvedLocalBody && resolvedPin && resolvedPin.length === 6) {
+        // Auto-resolve Panchayat or Lat/Lng from PIN code if needed
+        if (resolvedPin && resolvedPin.length === 6) {
           try {
             const pinLoc = await locationService.fetchLocationByPinCode(resolvedPin);
-            if (pinLoc?.localBody) {
-              resolvedLocalBody = pinLoc.localBody;
+            if (pinLoc) {
+              if (!resolvedLocalBody && pinLoc.localBody) resolvedLocalBody = pinLoc.localBody;
+              if (!resolvedDistrict && pinLoc.district) resolvedDistrict = pinLoc.district;
+              if (!resolvedState && pinLoc.state) resolvedState = pinLoc.state;
+              if (!resolvedLat && pinLoc.latitude) resolvedLat = pinLoc.latitude;
+              if (!resolvedLng && pinLoc.longitude) resolvedLng = pinLoc.longitude;
             }
           } catch (e) {
-            console.warn('Error auto-resolving Panchayat from PIN:', e);
+            console.warn('Error resolving PIN details:', e);
           }
         }
 
@@ -92,12 +100,19 @@ const RegisterProperty = () => {
             ownerName: activeProfile.fullName || activeProfile.name || prev.ownerName,
             contactNumber: activeProfile.phone || prev.contactNumber,
             address: activeProfile.address || prev.address,
-            state: activeProfile.state || prev.state,
-            district: activeProfile.district || prev.district,
+            state: resolvedState || prev.state,
+            district: resolvedDistrict || prev.district,
             localBody: resolvedLocalBody || prev.localBody,
             village: activeProfile.village || prev.village,
-            pinCode: resolvedPin || prev.pinCode
+            pinCode: resolvedPin || prev.pinCode,
+            ...(resolvedLat ? { latitude: resolvedLat } : {}),
+            ...(resolvedLng ? { longitude: resolvedLng } : {})
           }));
+
+          if (resolvedPin) {
+            const locationSummary = [resolvedLocalBody, resolvedDistrict, resolvedState].filter(Boolean).join(', ');
+            setPinStatusMessage(`✓ Pre-filled from account profile (PIN ${resolvedPin}): ${locationSummary}`);
+          }
         }
       }
     };
@@ -109,6 +124,71 @@ const RegisterProperty = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [registeredResult, setRegisteredResult] = useState(null);
+
+  // PIN Code Auto-Fetch State
+  const [isFetchingPin, setIsFetchingPin] = useState(false);
+  const [pinStatusMessage, setPinStatusMessage] = useState('');
+
+  // Handle manual or automatic PIN code fetching
+  const handlePinCodeFetch = async (pinOverride) => {
+    const targetPin = String(pinOverride !== undefined ? pinOverride : formData.pinCode || '').trim();
+    if (!targetPin || targetPin.length !== 6 || !/^\d{6}$/.test(targetPin)) {
+      return;
+    }
+
+    // If targetPin matches logged-in user profile PIN and user already has a saved localBody, preserve it
+    const userRegPin = user?.postalCode || user?.pinCode || user?.pincode;
+    const userRegLocalBody = user?.localBody || user?.panchayat;
+
+    setIsFetchingPin(true);
+    setPinStatusMessage('');
+    try {
+      const pinLoc = await locationService.fetchLocationByPinCode(targetPin);
+      if (pinLoc) {
+        const effectiveLocalBody = (targetPin === userRegPin && userRegLocalBody)
+          ? userRegLocalBody
+          : (pinLoc.localBody || '');
+
+        setFormData(prev => ({
+          ...prev,
+          state: pinLoc.state || prev.state,
+          district: pinLoc.district || prev.district,
+          localBody: effectiveLocalBody || prev.localBody,
+          village: pinLoc.village || pinLoc.placeName || prev.village,
+          pinCode: targetPin,
+          ...(pinLoc.latitude ? { latitude: pinLoc.latitude } : {}),
+          ...(pinLoc.longitude ? { longitude: pinLoc.longitude } : {})
+        }));
+
+        const locationSummary = [
+          effectiveLocalBody || pinLoc.village || pinLoc.placeName,
+          pinLoc.district,
+          pinLoc.state || 'Kerala'
+        ].filter(Boolean).join(', ');
+
+        setPinStatusMessage(`✓ Auto-filled for PIN ${targetPin}: ${locationSummary}`);
+      } else {
+        setPinStatusMessage(`No automatic location info found for PIN ${targetPin}. You can enter details manually.`);
+      }
+    } catch (err) {
+      console.warn('Error fetching location by PIN code:', err);
+    } finally {
+      setIsFetchingPin(false);
+    }
+  };
+
+  // Auto-fetch location when a 6-digit PIN code is typed
+  React.useEffect(() => {
+    const cleanPin = String(formData.pinCode || '').trim();
+    if (cleanPin.length === 6 && /^\d{6}$/.test(cleanPin)) {
+      const timer = setTimeout(() => {
+        handlePinCodeFetch(cleanPin);
+      }, 400);
+      return () => clearTimeout(timer);
+    } else {
+      setPinStatusMessage('');
+    }
+  }, [formData.pinCode]);
 
   // Form Field Change Handler
   const handleInputChange = (e) => {
@@ -260,6 +340,9 @@ const RegisterProperty = () => {
                     formData={formData}
                     onChange={handleInputChange}
                     errors={errors}
+                    isFetchingPin={isFetchingPin}
+                    pinStatusMessage={pinStatusMessage}
+                    onFetchPinLocation={() => handlePinCodeFetch(formData.pinCode)}
                   />
 
                   {/* 4. GIS MAP LOCATION */}

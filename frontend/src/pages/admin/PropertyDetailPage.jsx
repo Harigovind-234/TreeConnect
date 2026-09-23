@@ -129,11 +129,21 @@ const PropertyDetailPage = () => {
 
               {/* Main Banner Image / Photo Gallery */}
               <div className="relative h-72 sm:h-96 rounded-2xl overflow-hidden bg-[#0a0f0d] border border-emerald-500/20 shadow-2xl">
-                <img
-                  src={property.image || property.photos?.[0] || 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1200&q=80'}
-                  alt={property.propertyName}
-                  className="w-full h-full object-cover"
-                />
+                {(() => {
+                  const realImg = [property.image, ...(property.photos || [])].find(img => typeof img === 'string' && img.trim().length > 5 && !img.includes('unsplash.com'));
+                  return realImg ? (
+                    <img
+                      src={realImg}
+                      alt={property.propertyName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-4 text-center">
+                      <Trees size={48} className="text-emerald-500/30 mb-2" />
+                      <span className="text-sm font-bold text-slate-300">No Photo Uploaded</span>
+                    </div>
+                  );
+                })()}
                 {property.createdAt && (
                   <div className="absolute bottom-4 left-4">
                     <span className="px-3.5 py-2 rounded-xl text-xs font-bold bg-[#0a0f0d]/90 text-slate-200 border border-emerald-500/30 backdrop-blur-md flex items-center gap-2 shadow-lg">

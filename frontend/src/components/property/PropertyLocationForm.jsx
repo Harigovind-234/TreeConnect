@@ -1,6 +1,14 @@
 import React from 'react';
+import { Loader2, CheckCircle2, MapPin } from 'lucide-react';
 
-const PropertyLocationForm = ({ formData, onChange, errors }) => {
+const PropertyLocationForm = ({
+  formData,
+  onChange,
+  errors,
+  isFetchingPin,
+  pinStatusMessage,
+  onFetchPinLocation
+}) => {
   const stateOptions = Array.from(new Set([
     formData.state,
     'Kerala',
@@ -105,17 +113,46 @@ const PropertyLocationForm = ({ formData, onChange, errors }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="ld-label">
-              PIN CODE <span className="text-rose-400 font-bold">*</span>
-            </label>
-            <input
-              type="text"
-              name="pinCode"
-              value={formData.pinCode || ''}
-              onChange={onChange}
-              placeholder="e.g. 686516"
-              className={`ld-input ${errors?.pinCode ? 'border-rose-500' : ''}`}
-            />
+            <div className="flex items-center justify-between">
+              <label className="ld-label mb-0">
+                PIN CODE <span className="text-rose-400 font-bold">*</span>
+              </label>
+              {isFetchingPin && (
+                <span className="text-xs text-emerald-400 font-bold animate-pulse flex items-center gap-1">
+                  <Loader2 size={12} className="animate-spin text-emerald-400" /> Fetching location...
+                </span>
+              )}
+            </div>
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                name="pinCode"
+                value={formData.pinCode || ''}
+                onChange={onChange}
+                maxLength={6}
+                placeholder="e.g. 686516"
+                className={`ld-input pr-28 ${errors?.pinCode ? 'border-rose-500' : ''}`}
+              />
+              <button
+                type="button"
+                onClick={onFetchPinLocation}
+                disabled={isFetchingPin || !formData.pinCode || String(formData.pinCode).trim().length < 6}
+                className="absolute right-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                {isFetchingPin ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <MapPin size={12} className="text-emerald-400" />
+                )}
+                <span>Auto-Fill</span>
+              </button>
+            </div>
+            {pinStatusMessage && (
+              <p className="text-xs text-emerald-400 font-medium mt-1 flex items-center gap-1">
+                <CheckCircle2 size={13} className="shrink-0 text-emerald-400" />
+                <span>{pinStatusMessage}</span>
+              </p>
+            )}
             {errors?.pinCode && (
               <p className="text-xs sm:text-sm text-rose-400 font-semibold mt-1">{errors.pinCode}</p>
             )}

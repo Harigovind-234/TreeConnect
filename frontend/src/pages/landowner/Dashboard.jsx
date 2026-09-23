@@ -437,12 +437,20 @@ const LandownerDashboard = () => {
               <div className="ld-estates-grid">
                 {properties.slice(0, 3).map((p) => {
                   const pId = p.id || p._id;
-                  const coverPhoto = p.photos && p.photos.length > 0 ? p.photos[0] : (p.image || 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=600&q=80');
+                  const photos = (p.photos || []).filter(ph => typeof ph === 'string' && !ph.includes('unsplash.com'));
+                  const coverPhoto = photos.length > 0 ? photos[0] : (p.image && !p.image.includes('unsplash.com') ? p.image : null);
                   return (
                     <div key={pId} className="ld-estate-item group">
                       <div>
                         <div className="ld-estate-cover">
-                          <img src={coverPhoto} alt={p.propertyName} className="ld-estate-img" />
+                          {coverPhoto ? (
+                            <img src={coverPhoto} alt={p.propertyName} className="ld-estate-img" />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-4 text-center">
+                              <Trees size={32} className="text-emerald-500/30 mb-1" />
+                              <span className="text-[11px] font-bold text-slate-300">No Photo Uploaded</span>
+                            </div>
+                          )}
                           <span className="absolute top-3 right-3 ld-badge-green shadow">
                             {p.status || 'Active Estate'}
                           </span>

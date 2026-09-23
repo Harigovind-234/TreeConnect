@@ -51,11 +51,18 @@ const TimberMarketplacePage = () => {
                 <div key={listing.id} className="card border border-color rounded-xl overflow-hidden bg-card flex flex-col justify-between">
                   <div>
                     <div className="h-44 bg-surface relative overflow-hidden">
-                      <img
-                        src={listing.images?.[0] || 'https://images.unsplash.com/photo-1546484475-7f7bd55792da?auto=format&fit=crop&w=600&q=80'}
-                        alt={listing.timberSpecies}
-                        className="w-full h-full object-cover"
-                      />
+                      {listing.images?.[0] && !listing.images[0].includes('unsplash.com') ? (
+                        <img
+                          src={listing.images[0]}
+                          alt={listing.timberSpecies}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-4 text-center">
+                          <Trees size={32} className="text-emerald-500/30 mb-1" />
+                          <span className="text-[11px] font-bold text-slate-300">No Image Uploaded</span>
+                        </div>
+                      )}
                       <span className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald text-dark shadow">
                         {listing.status}
                       </span>

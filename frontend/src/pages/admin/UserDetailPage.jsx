@@ -762,11 +762,21 @@ const UserDetailPage = () => {
                           className="admin-subcard p-4 space-y-3"
                         >
                           <div className="relative h-36 rounded-xl overflow-hidden bg-slate-950 border border-emerald-500/20">
-                            <img
-                              src={p.image || p.photos?.[0] || 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80'}
-                              alt={p.propertyName}
-                              className="w-full h-full object-cover"
-                            />
+                            {(() => {
+                              const realImg = [p.image, ...(p.photos || [])].find(img => typeof img === 'string' && img.trim().length > 5 && !img.includes('unsplash.com'));
+                              return realImg ? (
+                                <img
+                                  src={realImg}
+                                  alt={p.propertyName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-2 text-center">
+                                  <Trees size={24} className="text-emerald-500/30 mb-1" />
+                                  <span className="text-[10px] font-bold text-slate-300">No Photo</span>
+                                </div>
+                              );
+                            })()}
                             <div className="absolute top-2 left-2">
                               <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase bg-slate-950/90 text-emerald-300 border border-emerald-500/40 backdrop-blur-md">
                                 {p.status || 'Active Estate'}

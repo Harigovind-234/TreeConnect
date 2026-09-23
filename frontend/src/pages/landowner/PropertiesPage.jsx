@@ -61,9 +61,10 @@ const PropertiesPage = () => {
   // Normalize property data safely across DB & local formats
   const getNormalizedProperty = (prop) => {
     const propId = prop.id || prop._id || `prop_${Math.random()}`;
-    const photos = Array.isArray(prop.photos) && prop.photos.length > 0
+    const photos = (Array.isArray(prop.photos) && prop.photos.length > 0
       ? prop.photos
-      : (prop.image ? [prop.image] : []);
+      : (prop.image ? [prop.image] : [])
+    ).filter(p => typeof p === 'string' && p.trim().length > 0 && !p.includes('unsplash.com'));
     const videos = Array.isArray(prop.videos) ? prop.videos : [];
     
     // Find matching inventories in LandownerContext
@@ -150,7 +151,7 @@ const PropertiesPage = () => {
       description: prop.description || '',
       photos,
       videos,
-      heroImage: photos.length > 0 ? photos[0] : DEFAULT_PROPERTY_IMAGE
+      heroImage: photos.length > 0 ? photos[0] : null
     };
   };
 
@@ -249,14 +250,15 @@ const PropertiesPage = () => {
 
   // Handlers for Media Viewer Modal
   const openMediaModal = (normProp, initialTab = 'photos') => {
-    const photos = normProp.photos.length > 0 ? normProp.photos : [DEFAULT_PROPERTY_IMAGE];
+    const photos = normProp.photos.filter(p => typeof p === 'string' && !p.includes('unsplash.com'));
     const videos = normProp.videos;
+    if (photos.length === 0 && videos.length === 0) return;
     setActiveMediaModal({
       title: normProp.name,
       photos,
       videos,
       index: 0,
-      activeTab: photos.length > 0 ? 'photos' : (videos.length > 0 ? 'videos' : 'photos')
+      activeTab: photos.length > 0 ? 'photos' : 'videos'
     });
   };
 
@@ -443,16 +445,23 @@ const PropertiesPage = () => {
                     <div className="space-y-4">
                       {/* Property Hero Image Cover */}
                       <div className="relative h-52 rounded-xl overflow-hidden bg-[#0e1612] border border-emerald-500/15 group">
-                        <img
-                          src={prop.heroImage}
-                          alt={prop.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            e.target.src = DEFAULT_PROPERTY_IMAGE;
-                          }}
-                        />
-                        {/* Gradient Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0d]/90 via-transparent to-[#0a0f0d]/30" />
+                        {prop.heroImage ? (
+                          <>
+                            <img
+                              src={prop.heroImage}
+                              alt={prop.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            {/* Gradient Overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0d]/90 via-transparent to-[#0a0f0d]/30" />
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-4 text-center">
+                            <Camera size={36} className="text-emerald-500/30 mb-2" />
+                            <span className="text-xs font-bold text-slate-300">No Photo Uploaded</span>
+                            <span className="text-[10px] text-slate-500 mt-0.5">Edit property to upload photos</span>
+                          </div>
+                        )}
 
                         {/* Top Left Status Badge */}
                         <div className="absolute top-3 left-3 z-10">

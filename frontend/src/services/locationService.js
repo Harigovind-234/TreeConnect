@@ -77,6 +77,8 @@ export const locationService = {
 
   /**
    * Fetch location info (District, State, Country) by PIN code
+  /**
+   * Fetch location info (District, State, Country, Local Body, Lat/Lng) by PIN code
    */
   async fetchLocationByPinCode(pincode) {
     const cleanPin = String(pincode || '').trim();
@@ -84,8 +86,8 @@ export const locationService = {
       return null;
     }
 
+    // 1. Try India Post API (Official Postal Directory)
     try {
-      // Try India Post API
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3500);
 
@@ -102,10 +104,12 @@ export const locationService = {
           const blockName = (po.Block && po.Block !== 'NA') ? po.Block.trim() : '';
 
           let localBodyName = '';
-          if (cleanPlace) {
+          if (cleanPlace && cleanPlace.toLowerCase() !== (po.District || '').toLowerCase()) {
             localBodyName = `${cleanPlace} Panchayat`;
-          } else if (blockName) {
+          } else if (blockName && blockName.toLowerCase() !== (po.District || '').toLowerCase()) {
             localBodyName = `${blockName} Panchayat`;
+          } else if (cleanPlace) {
+            localBodyName = `${cleanPlace} Municipality`;
           }
 
           return {
@@ -113,6 +117,7 @@ export const locationService = {
             state: po.State || 'Kerala',
             country: po.Country || 'India',
             placeName: cleanPlace,
+            village: cleanPlace,
             block: blockName,
             localBody: localBodyName,
             source: 'api'
@@ -120,16 +125,58 @@ export const locationService = {
         }
       }
     } catch (err) {
-      // API call failed or timed out, fallback to local PIN prefix lookup
+      console.warn("India Post API fetch failed/timed out, attempting Nominatim fallback:", err);
     }
 
-    // Fallback prefix lookup
+    // 2. Secondary Fallback: Nominatim OpenStreetMap Geocoding API
+    try {
+      const nomController = new AbortController();
+      const nomTimeoutId = setTimeout(() => nomController.abort(), 3500);
+
+      const nomRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?postalcode=${cleanPin}&country=India&format=json&addressdetails=1`,
+        {
+          signal: nomController.signal,
+          headers: { 'User-Agent': 'TreeConnectApp/1.0' }
+        }
+      );
+      clearTimeout(nomTimeoutId);
+
+      if (nomRes.ok) {
+        const nomData = await nomRes.json();
+        if (Array.isArray(nomData) && nomData.length > 0) {
+          const first = nomData[0];
+          const addr = first.address || {};
+          const dist = addr.state_district || addr.county || addr.city || addr.town || '';
+          const state = addr.state || 'Kerala';
+          const place = addr.suburb || addr.town || addr.village || addr.city || dist;
+          const lat = parseFloat(first.lat);
+          const lng = parseFloat(first.lon);
+
+          return {
+            district: dist,
+            state: state,
+            country: 'India',
+            placeName: place,
+            village: place,
+            localBody: place ? `${place} Panchayat` : '',
+            latitude: !isNaN(lat) ? lat : undefined,
+            longitude: !isNaN(lng) ? lng : undefined,
+            source: 'nominatim'
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("Nominatim API PIN fetch failed:", err);
+    }
+
+    // 3. Fallback prefix lookup dictionary
     const prefix3 = cleanPin.substring(0, 3);
     if (PIN_PREFIX_MAP[prefix3]) {
       const fallbackData = PIN_PREFIX_MAP[prefix3];
       return {
         ...fallbackData,
-        localBody: fallbackData.district ? `${fallbackData.district} Panchayat / Local Body` : '',
+        localBody: fallbackData.district ? `${fallbackData.district} Panchayat` : '',
         source: 'fallback'
       };
     }

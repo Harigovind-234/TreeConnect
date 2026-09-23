@@ -59,15 +59,16 @@ const speciesImagesMap = {
 };
 
 const getPropertyImage = (p) => {
-  if (!p) return DEFAULT_PROPERTY_IMAGE;
+  if (!p) return null;
   const extractUrl = (ph) => {
     if (!ph) return null;
-    if (typeof ph === 'string' && ph.trim().length > 5) return ph.trim();
-    if (typeof ph === 'object') {
-      const u = ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || '';
-      if (typeof u === 'string' && u.trim().length > 5) return u.trim();
+    let u = '';
+    if (typeof ph === 'string') u = ph.trim();
+    else if (typeof ph === 'object') {
+      u = (ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || '').trim();
     }
-    return null;
+    if (!u || typeof u !== 'string' || u.length < 5 || u.includes('unsplash.com')) return null;
+    return u;
   };
 
   if (Array.isArray(p.photos) && p.photos.length > 0) {
@@ -77,18 +78,18 @@ const getPropertyImage = (p) => {
   const direct = extractUrl(p.image || p.imageUrl || p.photo);
   if (direct) return direct;
 
-  return DEFAULT_PROPERTY_IMAGE;
+  return null;
 };
 
 const getTreePhoto = (g) => {
-  if (!g) return DEFAULT_PROPERTY_IMAGE;
+  if (!g) return null;
 
   const extractUrl = (ph) => {
     if (!ph) return null;
     let str = '';
     if (typeof ph === 'string') str = ph.trim();
     else if (typeof ph === 'object') str = (ph.previewUrl || ph.dataUrl || ph.fileUrl || ph.url || ph.src || '').trim();
-    if (!str || str.length < 5) return null;
+    if (!str || str.length < 5 || str.includes('unsplash.com')) return null;
     return str;
   };
 
@@ -101,7 +102,7 @@ const getTreePhoto = (g) => {
   const directImg = extractUrl(g.image || g.photo);
   if (directImg) return directImg;
 
-  return SPECIES_FALLBACK_IMAGES[g.species] || DEFAULT_PROPERTY_IMAGE;
+  return null;
 };
 
 const formatGPSCoordinates = (p) => {

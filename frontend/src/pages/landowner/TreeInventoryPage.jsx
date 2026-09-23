@@ -33,6 +33,7 @@ const isRealPhoto = (p) => {
   if (typeof p === 'string') url = p.trim();
   else if (typeof p === 'object') url = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
   if (!url || typeof url !== 'string') return false;
+  if (url.includes('unsplash.com')) return false;
   return url.length >= 5;
 };
 
@@ -41,24 +42,9 @@ const extractPhotoUrl = (p) => {
   let str = '';
   if (typeof p === 'string') str = p.trim();
   else if (typeof p === 'object') str = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
-  if (!str || str.length < 5) return null;
+  if (!str || str.length < 5 || str.includes('unsplash.com')) return null;
   return str;
 };
-
-const SPECIES_FALLBACK_IMAGES = {
-  'Teak': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-  'Teakwood': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-  'Mahogany': 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
-  'Rosewood': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  'Sandalwood': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
-  'Rubber': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
-  'Coconut': 'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?auto=format&fit=crop&w=800&q=80',
-  'Jackfruit': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
-  'Eucalyptus': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
-  'Pine': 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80'
-};
-
-const DEFAULT_TREE_FALLBACK = 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80';
 
 const getTreeSpeciesPhoto = (species, attachedPhotos = [], invPhotos = [], propPhotos = []) => {
   const allCandidates = [
@@ -74,7 +60,7 @@ const getTreeSpeciesPhoto = (species, attachedPhotos = [], invPhotos = [], propP
     }
   }
 
-  return SPECIES_FALLBACK_IMAGES[species] || DEFAULT_TREE_FALLBACK;
+  return null;
 };
 
 const TreeInventoryPage = () => {
@@ -386,21 +372,31 @@ const TreeInventoryPage = () => {
                                   <div className="space-y-4">
                                     {/* Prominent Tree Image Banner */}
                                     <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden bg-[#090e0b] border border-emerald-500/20 group/treeimg shadow-md">
-                                      <img
-                                        src={groupImage}
-                                        alt={tg.species}
-                                        className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
-                                      />
-                                      <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
+                                      {groupImage ? (
+                                        <>
+                                          <img
+                                            src={groupImage}
+                                            alt={tg.species}
+                                            className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
+                                          />
+                                          <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
 
-                                      <button
-                                        type="button"
-                                        onClick={() => openLightbox([groupImage], 0, `${p?.propertyName || 'Property'} - ${tg.species} Tree Group (${tg.count} Trees)`)}
-                                        className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur cursor-pointer transition-all z-10"
-                                      >
-                                        <ZoomIn size={14} className="text-emerald-400" />
-                                        <span>View Photo</span>
-                                      </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => openLightbox([groupImage], 0, `${p?.propertyName || 'Property'} - ${tg.species} Tree Group (${tg.count} Trees)`)}
+                                            className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur cursor-pointer transition-all z-10"
+                                          >
+                                            <ZoomIn size={14} className="text-emerald-400" />
+                                            <span>View Photo</span>
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-4 text-center">
+                                          <Trees size={38} className="text-emerald-500/30 mb-2" />
+                                          <span className="text-xs font-bold text-slate-300">No Photo Uploaded</span>
+                                          <span className="text-[10px] text-slate-500 mt-0.5">Standing tree specs for {tg.species}</span>
+                                        </div>
+                                      )}
 
                                       <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
                                         <span className="px-3 py-1 rounded-xl bg-[#090e0b]/90 backdrop-blur border border-emerald-500/35 text-white text-xs font-extrabold flex items-center gap-1.5 shadow">
@@ -428,10 +424,10 @@ const TreeInventoryPage = () => {
                                           {tg.count} Trees
                                         </span>
                                         <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${tg.condition === 'Healthy'
-                                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                                            : tg.condition === 'Damaged'
-                                              ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                                              : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                          : tg.condition === 'Damaged'
+                                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                                            : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
                                           }`}>
                                           {tg.condition}
                                         </span>
@@ -718,6 +714,56 @@ const TreeInventoryPage = () => {
                       style={{ width: 'auto' }}
                     >
                       Close Lightbox
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {inventoryToDelete && (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="ld-card max-w-md w-full p-6 space-y-5 bg-[#0b1710] border border-rose-500/40 rounded-2xl shadow-2xl relative">
+                  <button
+                    onClick={() => setInventoryToDelete(null)}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg bg-[#050e08] border border-slate-700/50 cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+
+                  <div className="flex items-center gap-3 text-rose-400">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center">
+                      <Trash2 size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-extrabold text-white">Delete Tree Inventory</h3>
+                      <p className="text-xs text-slate-400">Confirm inventory removal</p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-relaxed bg-[#050e08] p-4 rounded-xl border border-emerald-500/15">
+                    Are you sure you want to delete <strong className="text-white">{inventoryToDelete.species} Stand ({inventoryToDelete.count} trees)</strong> from <strong className="text-emerald-400">{inventoryToDelete.propertyName}</strong>? This will remove the tree group record and update the estate's tree count.
+                  </p>
+
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setInventoryToDelete(null)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-[#050e08] border border-slate-700/50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (inventoryToDelete.id && deleteInventory) {
+                          await deleteInventory(inventoryToDelete.id);
+                        }
+                        setInventoryToDelete(null);
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 shadow flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 size={14} /> Confirm Delete
                     </button>
                   </div>
                 </div>

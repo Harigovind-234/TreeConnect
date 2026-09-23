@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Search, Crosshair, CheckCircle2, Layers, Loader2, RefreshCw } from 'lucide-react';
+import { locationService } from '../../services/locationService';
 
 const KERALA_DISTRICT_COORDS = {
   'Kottayam': { lat: 9.5916, lng: 76.5222, label: 'Kottayam, Kerala' },
@@ -67,34 +68,72 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
     return { label: `Location (${lat}, ${lng})`, details: null };
   };
 
-  // Forward Geocode query helper
+  // Forward Geocode query helper with smart text cleaning & PIN fallback
   const geocodeQuery = async (queryStr) => {
     if (!queryStr || !queryStr.trim()) return null;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr.trim())}&limit=1`,
-        {
-          headers: { 'Accept-Language': 'en' },
-          signal: controller.signal
-        }
-      );
-      clearTimeout(timeoutId);
-      if (response.ok) {
-        const results = await response.json();
-        if (results && results.length > 0) {
-          const item = results[0];
-          const lat = parseFloat(parseFloat(item.lat).toFixed(6));
-          const lng = parseFloat(parseFloat(item.lon).toFixed(6));
-          const label = item.display_name;
+
+    const rawStr = queryStr.trim();
+
+    // 1. If query contains a 6-digit PIN code, try PIN code location service first
+    const pinMatch = rawStr.match(/\b\d{6}\b/);
+    if (pinMatch) {
+      try {
+        const pinLoc = await locationService.fetchLocationByPinCode(pinMatch[0]);
+        if (pinLoc && pinLoc.latitude && pinLoc.longitude) {
+          const lat = parseFloat(pinLoc.latitude.toFixed(6));
+          const lng = parseFloat(pinLoc.longitude.toFixed(6));
+          const label = `${pinLoc.placeName || pinLoc.localBody || 'Location'}, ${pinLoc.district}, ${pinLoc.state}`;
           const { details } = await reverseGeocode(lat, lng);
           return { lat, lng, label, details };
         }
+      } catch (e) {
+        console.warn("PIN geocode attempt error:", e);
       }
-    } catch (e) {
-      console.warn("Geocoding failed for query:", queryStr, e);
     }
+
+    // 2. Build cleaned query candidates (stripping noise words like Panchayat, Municipality, etc.)
+    const cleanedRaw = rawStr
+      .replace(/\s*(Panchayat|Municipality|Corporation|TreeConnect address)\b/gi, '')
+      .replace(/,\s*,/g, ',')
+      .replace(/^,\s*|\s*,\s*$/g, '')
+      .trim();
+
+    const candidates = Array.from(new Set([
+      rawStr,
+      cleanedRaw,
+      pinMatch ? `${cleanedRaw}, ${pinMatch[0]}, Kerala, India` : '',
+      cleanedRaw ? `${cleanedRaw}, Kerala, India` : '',
+      cleanedRaw ? `${cleanedRaw}, India` : ''
+    ])).filter(Boolean);
+
+    for (const cand of candidates) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cand)}&limit=1`,
+          {
+            headers: { 'Accept-Language': 'en' },
+            signal: controller.signal
+          }
+        );
+        clearTimeout(timeoutId);
+        if (response.ok) {
+          const results = await response.json();
+          if (results && results.length > 0) {
+            const item = results[0];
+            const lat = parseFloat(parseFloat(item.lat).toFixed(6));
+            const lng = parseFloat(parseFloat(item.lon).toFixed(6));
+            const label = item.display_name;
+            const { details } = await reverseGeocode(lat, lng);
+            return { lat, lng, label, details };
+          }
+        }
+      } catch (e) {
+        // Try next candidate
+      }
+    }
+
     return null;
   };
 
@@ -102,15 +141,30 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
   useEffect(() => {
     if (!addressData) return;
 
+    const cleanLocalBody = (addressData.localBody || '')
+      .replace(/\s*(Panchayat|Municipality|Corporation)\b/gi, '')
+      .trim();
+
     const parts = [
       addressData.village,
-      addressData.localBody,
+      cleanLocalBody || addressData.localBody,
       addressData.district,
       addressData.state || 'Kerala',
       addressData.pinCode
     ].filter(p => p && typeof p === 'string' && p.trim().length > 0 && !p.toLowerCase().includes('treeconnect address'));
 
     const queryStr = parts.join(', ');
+
+    // Update search bar input box text dynamically if location details exist
+    const displayQueryParts = [
+      addressData.localBody || addressData.village,
+      addressData.district,
+      addressData.pinCode ? `(${addressData.pinCode})` : ''
+    ].filter(Boolean);
+
+    if (displayQueryParts.length > 0) {
+      setSearchQuery(displayQueryParts.join(', '));
+    }
 
     let isMounted = true;
     const timer = setTimeout(async () => {
@@ -133,7 +187,7 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
           if (onCoordsChange) onCoordsChange(dCoord.lat, dCoord.lng, details);
         }
       }
-    }, 500);
+    }, 400);
 
     return () => {
       isMounted = false;
@@ -289,40 +343,30 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
     );
   };
 
-  // Search Location using OpenStreetMap Nominatim
+  // Search Location using Smart Multi-Candidate Geocoding
   const handleSearchSubmit = async (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
+    setLocationStatus(`Searching location for "${searchQuery.trim()}"...`);
+
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-
-      if (response.ok) {
-        const results = await response.json();
-        if (results && results.length > 0) {
-          const item = results[0];
-          const lat = parseFloat(parseFloat(item.lat).toFixed(6));
-          const lng = parseFloat(parseFloat(item.lon).toFixed(6));
-          const label = item.display_name;
-
-          setCoords({ lat, lng, locationLabel: label });
-          setIsPinned(true);
-
-          const { details } = await reverseGeocode(lat, lng);
-          if (onCoordsChange) onCoordsChange(lat, lng, details);
-        } else {
-          alert(`No location results found for "${searchQuery}"`);
-        }
+      const geo = await geocodeQuery(searchQuery);
+      if (geo) {
+        setCoords({ lat: geo.lat, lng: geo.lng, locationLabel: geo.label });
+        setIsPinned(true);
+        setLocationStatus(`✓ Location pinned for "${searchQuery.trim()}"`);
+        if (onCoordsChange) onCoordsChange(geo.lat, geo.lng, geo.details);
+      } else {
+        setLocationStatus(`No results found for "${searchQuery.trim()}". Pinned near district area.`);
       }
     } catch (err) {
       console.error("Location search error:", err);
-      alert("Error searching location. Please check network connection.");
+      setLocationStatus("Search failed. Please check network connection.");
     } finally {
       setIsSearching(false);
+      setTimeout(() => setLocationStatus(''), 4000);
     }
   };
 

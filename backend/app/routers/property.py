@@ -456,8 +456,8 @@ def register_property(
 
         created_at = datetime.now(timezone.utc).isoformat()
         
-        photos_list = prop.photos or []
-        first_photo = prop.image or (photos_list[0] if len(photos_list) > 0 else "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=600&q=80")
+        photos_list = [p for p in (prop.photos or []) if p and "unsplash.com" not in str(p)]
+        first_photo = prop.image if (prop.image and "unsplash.com" not in str(prop.image)) else (photos_list[0] if len(photos_list) > 0 else None)
 
         doc = {
             "propertyName": prop.propertyName,

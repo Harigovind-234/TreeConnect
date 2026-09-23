@@ -16,6 +16,24 @@ const filterOutMockData = (list) => {
     });
 };
 
+const cleanPropertyImages = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.map(item => {
+        if (!item) return item;
+        const photos = Array.isArray(item.photos)
+            ? item.photos.filter(p => typeof p === 'string' && !p.includes('unsplash.com'))
+            : [];
+        const image = (item.image && typeof item.image === 'string' && !item.image.includes('unsplash.com'))
+            ? item.image
+            : (photos.length > 0 ? photos[0] : null);
+        return {
+            ...item,
+            photos,
+            image
+        };
+    });
+};
+
 const DEFAULT_PROPERTIES = [];
 
 const DEFAULT_TREE_INVENTORIES = [];
@@ -32,7 +50,7 @@ export const LandownerProvider = ({ children }) => {
             const stored = localStorage.getItem('treeconnect_properties');
             if (stored !== null) {
                 const parsed = JSON.parse(stored);
-                return filterOutMockData(parsed);
+                return cleanPropertyImages(filterOutMockData(parsed));
             }
         } catch (e) {
             console.warn("Could not load properties from localStorage:", e);
@@ -114,7 +132,7 @@ export const LandownerProvider = ({ children }) => {
 
             const data = await propertyService.getProperties({ all_records: true });
             if (data && Array.isArray(data.properties)) {
-                const cleanDBProps = filterOutMockData(data.properties);
+                const cleanDBProps = cleanPropertyImages(filterOutMockData(data.properties));
                 if (cleanDBProps.length > 0) {
                     setProperties(cleanDBProps);
                     try {
