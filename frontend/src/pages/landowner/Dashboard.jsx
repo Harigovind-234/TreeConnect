@@ -38,10 +38,14 @@ const LandownerDashboard = () => {
   const timberListings = landownerCtx.timberListings || [];
   const completedHarvests = landownerCtx.completedHarvests || [];
   const refreshProperties = landownerCtx.refreshProperties;
+  const refreshHarvestRequests = landownerCtx.refreshHarvestRequests;
 
   useEffect(() => {
     if (refreshProperties) {
       refreshProperties();
+    }
+    if (refreshHarvestRequests) {
+      refreshHarvestRequests();
     }
   }, []);
 
@@ -483,9 +487,24 @@ const LandownerDashboard = () => {
                         <button onClick={() => navigate(`/landowner/add-inventory?propertyId=${pId}`)} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center">
                           + Inventory
                         </button>
-                        <button onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center text-amber-400 border-amber-500/30">
-                          Harvest
-                        </button>
+                        {(() => {
+                          const pIdStr = String(pId || '');
+                          const hasActiveReq = (harvestRequests || []).some((req) => {
+                            if (!req || req.status === 'CANCELLED' || req.status === 'DELETED' || req.status === 'COMPLETED') return false;
+                            const reqPropId = String(req.property_id || req.propertyId || '');
+                            return pIdStr && reqPropId === pIdStr;
+                          });
+
+                          return hasActiveReq ? (
+                            <button onClick={() => navigate('/landowner/harvest-requests')} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center text-emerald-400 border-emerald-500/30 font-bold" title="Harvest request already sent to contractor. Click to view request details.">
+                              <CheckCircle2 size={12} /> Request Sent
+                            </button>
+                          ) : (
+                            <button onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)} className="ld-btn-outline flex-1 text-xs py-2 px-2 justify-center text-amber-400 border-amber-500/30">
+                              Harvest
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
                   );

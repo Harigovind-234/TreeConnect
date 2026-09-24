@@ -121,6 +121,27 @@ def create_harvest_request(
         token_email = get_current_user_email(authorization)
         owner_email = payload.userEmail or token_email or ""
 
+        # Check if an active harvest request already exists for this property
+        or_prop_ids = [payload.property_id, str(payload.property_id)]
+        if ObjectId.is_valid(payload.property_id):
+            or_prop_ids.append(ObjectId(payload.property_id))
+
+        existing_active_request = db.harvest_requests.find_one({
+            "property_id": {"$in": or_prop_ids},
+            "status": {"$nin": ["CANCELLED", "DELETED", "COMPLETED"]}
+        })
+
+        if existing_active_request:
+            contractor_name = existing_active_request.get("assigned_contractor_name") or existing_active_request.get("assigned_contractor_email")
+            contractor_msg = f" to contractor '{contractor_name}'" if contractor_name else ""
+            req_status_str = existing_active_request.get("status", "ACTIVE")
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "message": f"A harvest request has already been sent for this property{contractor_msg} (Status: {req_status_str}). Duplicate harvest requests cannot be submitted."
+                }
+            )
+
         # Verify property exists
         prop_query = {}
         or_clauses = [{"_id": payload.property_id}, {"id": payload.property_id}]
@@ -212,15 +233,40 @@ def get_harvest_requests(
         token_email = get_current_user_email(authorization)
         target_email = userEmail or token_email
 
+        is_all_records = bool(all_records) or str(all_records).lower() in ["true", "1"]
+
         query = {}
-        if not all_records:
+        if not is_all_records:
+            or_conditions = []
             if contractorId:
-                query = {"$or": [{"assigned_contractor_id": contractorId}, {"assigned_contractor_email": target_email}]}
-            elif target_email:
+                or_conditions.extend([
+                    {"assigned_contractor_id": contractorId},
+                    {"assigned_contractor_id": str(contractorId)}
+                ])
+            if target_email:
                 clean_email = target_email.strip().lower()
-                query = {"$or": [{"owner_email": clean_email}, {"owner_email": target_email.strip()}]}
+                raw_email = target_email.strip()
+                or_conditions.extend([
+                    {"owner_email": clean_email},
+                    {"owner_email": raw_email},
+                    {"assigned_contractor_email": clean_email},
+                    {"assigned_contractor_email": raw_email},
+                    {"assigned_contractor_id": clean_email},
+                    {"assigned_contractor_id": raw_email}
+                ])
+                if db is not None:
+                    u_doc = db.users.find_one({"$or": [{"email": clean_email}, {"email": raw_email}]})
+                    if u_doc:
+                        u_name = u_doc.get("fullName") or u_doc.get("name") or u_doc.get("companyName")
+                        u_id = str(u_doc.get("_id", ""))
+                        if u_id:
+                            or_conditions.append({"assigned_contractor_id": u_id})
+                        if u_name:
+                            or_conditions.append({"assigned_contractor_name": {"$regex": u_name, "$options": "i"}})
+
+            if or_conditions:
+                query = {"$or": or_conditions}
             else:
-                # If no email/contractor filter provided and not all_records, return all
                 query = {}
 
         cursor = db.harvest_requests.find(query).sort("createdAt", -1)

@@ -27,6 +27,10 @@ import {
   Calendar,
   Layers,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Info,
   X,
   AlertTriangle,
   Award,
@@ -37,7 +41,10 @@ import {
   Camera,
   Loader2,
   Mail,
-  ExternalLink
+  ExternalLink,
+  UserCheck,
+  Phone,
+  Building2
 } from 'lucide-react';
 
 const DEFAULT_PROPERTY_PHOTOS = [];
@@ -52,6 +59,17 @@ const ContractorDashboard = () => {
   // Assigned harvest requests from backend DB
   const [assignedRequests, setAssignedRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+
+  // Compact / Expandable state for harvest requests
+  const [expandedReqs, setExpandedReqs] = useState({});
+  const [detailModalReq, setDetailModalReq] = useState(null);
+
+  const toggleExpandReq = (reqId) => {
+    setExpandedReqs(prev => ({
+      ...prev,
+      [reqId]: !prev[reqId]
+    }));
+  };
 
   // Legacy Bid Modal state
   const [showBidModal, setShowBidModal] = useState(false);
@@ -96,9 +114,13 @@ const ContractorDashboard = () => {
   const fetchAssignedRequests = async () => {
     setLoadingRequests(true);
     try {
-      const cId = user?.id || user?._id || '';
-      const cEmail = (user?.email || '').toLowerCase().trim();
-      const cName = (user?.fullName || user?.name || user?.companyName || '').toLowerCase().trim();
+      const storedUserStr = localStorage.getItem('treeconnect_user');
+      const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+      const currentUser = user || storedUser;
+
+      const cId = currentUser?.id || currentUser?._id || '';
+      const cEmail = (currentUser?.email || '').toLowerCase().trim();
+      const cName = (currentUser?.fullName || currentUser?.name || currentUser?.companyName || currentUser?.username || '').toLowerCase().trim();
 
       // Combine backend & local storage harvest requests, deduplicating by ID
       let backendRequests = [];
@@ -128,16 +150,33 @@ const ContractorDashboard = () => {
       });
       const combinedRequests = Array.from(allMap.values());
 
-      const assigned = combinedRequests.filter(r => {
+      let assigned = combinedRequests.filter(r => {
         if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
 
-        const reqCId = String(r.assigned_contractor_id || r.contractor_id || '');
-        const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || '').toLowerCase().trim();
-        const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
+        const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
+        const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
+        const reqCName = String(r.assigned_contractor_name || r.contractor_name || r.assignedContractorName || '').toLowerCase().trim();
 
-        const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || reqCId === String(user?._id)));
-        const isMatchEmail = Boolean(cEmail && reqCEmail && (reqCEmail === cEmail || reqCName === cEmail));
-        const isMatchName = Boolean(cName && reqCName && (reqCName === cName || reqCName.includes(cName) || cName.includes(reqCName)));
+        // 1. Direct ID match
+        const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || (currentUser?._id && reqCId === String(currentUser._id))));
+
+        // 2. Direct email match
+        const isMatchEmail = Boolean(cEmail && (
+          (reqCEmail && (reqCEmail === cEmail || reqCEmail.includes(cEmail) || cEmail.includes(reqCEmail))) ||
+          (reqCName && reqCName === cEmail)
+        ));
+
+        // 3. Name match (exact or partial / first name match e.g. "Rohith" vs "Rohith kumar")
+        const firstName = cName ? cName.split(' ')[0] : '';
+        const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
+
+        const isMatchName = Boolean(cName && reqCName && (
+          reqCName === cName ||
+          reqCName.includes(cName) ||
+          cName.includes(reqCName) ||
+          (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
+          (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName))
+        ));
 
         const isDirectlyAssigned = isMatchId || isMatchEmail || isMatchName;
 
@@ -146,8 +185,36 @@ const ContractorDashboard = () => {
           r.status === 'OPERATION_READY' ||
           r.status === 'IN_PROGRESS';
 
-        return isDirectlyAssigned || (isAssignedStatus && (!reqCName || reqCName === cName || reqCName.includes(cName) || cName.includes(reqCName)));
+        if (isDirectlyAssigned) return true;
+
+        if (isAssignedStatus) {
+          if (!reqCName && !reqCId && !reqCEmail) return true;
+          if (firstName && firstName.length >= 3 && reqCName && reqCName.includes(firstName)) return true;
+          if (reqFirstName && reqFirstName.length >= 3 && cName && cName.includes(reqFirstName)) return true;
+          if (currentUser?.role === 'contractor' && (reqCName || reqCId || reqCEmail)) return true;
+        }
+
+        return false;
       });
+
+      // Fallback matching if name/ID format had slight discrepancy
+      if (assigned.length === 0 && combinedRequests.length > 0) {
+        const activeAssigned = combinedRequests.filter(r => {
+          if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
+          if (!statusMatch) return false;
+
+          const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
+          if (!reqCName) return true;
+
+          const firstName = cName ? cName.split(' ')[0] : '';
+          const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
+          return !cName || (firstName && reqCName.includes(firstName)) || (reqFirstName && cName.includes(reqFirstName));
+        });
+        if (activeAssigned.length > 0) {
+          assigned = activeAssigned;
+        }
+      }
 
       if (assigned.length > 0) {
         const enriched = assigned.map(req => ({
@@ -155,7 +222,7 @@ const ContractorDashboard = () => {
           propertyArea: req.propertyArea || (req.property_details?.totalArea ? `${req.property_details?.totalArea} ${req.property_details?.areaUnit || 'Acres'}` : '14.5 Acres'),
           surveyNumber: req.surveyNumber || req.property_details?.surveyNumber || 'Sy. #184/3B',
           landType: req.landType || req.property_details?.propertyType || 'Commercial Hardwood Plantation',
-          propertyPhotos: (Array.isArray(req.propertyPhotos) && req.propertyPhotos.length > 0) ? req.propertyPhotos : [],
+          propertyPhotos: (Array.isArray(req.photos) && req.photos.length > 0) ? req.photos : ((Array.isArray(req.propertyPhotos) && req.propertyPhotos.length > 0) ? req.propertyPhotos : []),
           tree_inventory: (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
             ? req.selected_tree_groups
             : (Array.isArray(req.tree_inventory) && req.tree_inventory.length > 0)
@@ -182,7 +249,20 @@ const ContractorDashboard = () => {
 
   useEffect(() => {
     fetchAssignedRequests();
-  }, [user?.email]);
+
+    const handleStorageChange = (e) => {
+      if (!e || e.key === 'treeconnect_harvest_requests' || e.key === 'treeconnect_user') {
+        fetchAssignedRequests();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', fetchAssignedRequests);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', fetchAssignedRequests);
+    };
+  }, [user]);
 
   const handleOpenBidModal = (job) => {
     setSelectedJob(job);
@@ -291,36 +371,8 @@ const ContractorDashboard = () => {
                       ? req.required_services.join(', ')
                       : (req.servicesNeeded || 'Tree Felling & Extraction');
 
-                    const landownerEmail = req.owner_email || req.landowner_email || propDetails.userEmail || 'landowner@treeconnect.in';
-
-                    const isRealPhoto = (p) => {
-                      if (!p) return false;
-                      let url = '';
-                      if (typeof p === 'string') url = p.trim();
-                      else if (typeof p === 'object' && p) url = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
-                      return url && typeof url === 'string' && url.length >= 5;
-                    };
-
-                    const getRealPhotoUrl = (p) => {
-                      if (!p) return null;
-                      if (typeof p === 'string') {
-                        const s = p.trim();
-                        if (s.length >= 5) return s;
-                      } else if (typeof p === 'object' && p) {
-                        const s = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
-                        if (s.length >= 5) return s;
-                      }
-                      return null;
-                    };
-
-                    // Gather real landowner site & property photos across all DB & local sources
-                    const rawSitePhotoSources = [
-                      ...(Array.isArray(req.photos) ? req.photos : (req.photos ? [req.photos] : [])),
-                      ...(Array.isArray(req.propertyPhotos) ? req.propertyPhotos : (req.propertyPhotos ? [req.propertyPhotos] : [])),
-                      ...(Array.isArray(propDetails.photos) ? propDetails.photos : (propDetails.photos ? [propDetails.photos] : [])),
-                      propDetails.image
-                    ];
-
+                    // Resolve Landowner Details
+                    let matchingStoredProp = null;
                     try {
                       const storedPropsRaw = localStorage.getItem('treeconnect_properties');
                       if (storedPropsRaw) {
@@ -328,429 +380,246 @@ const ContractorDashboard = () => {
                         if (Array.isArray(storedProps)) {
                           const propId = req.property_id || req.propertyId;
                           const ownerEmail = req.owner_email || req.landowner_email || req.userEmail;
-                          const matchingProp = storedProps.find(item => {
+                          matchingStoredProp = storedProps.find(item => {
                             if (!item) return false;
                             if (propId && (item.id === propId || item._id === propId || String(item.id) === String(propId) || String(item._id) === String(propId))) return true;
                             if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
                             if (req.propertyName && item.propertyName && item.propertyName.toLowerCase() === req.propertyName.toLowerCase()) return true;
                             return false;
                           });
-                          if (matchingProp) {
-                            if (Array.isArray(matchingProp.photos)) rawSitePhotoSources.push(...matchingProp.photos);
-                            if (matchingProp.image) rawSitePhotoSources.push(matchingProp.image);
-                          }
                         }
                       }
                     } catch (e) {}
 
-                    const realSitePhotoUrls = [];
-                    rawSitePhotoSources.forEach(item => {
-                      const u = getRealPhotoUrl(item);
-                      if (u && !realSitePhotoUrls.includes(u)) {
-                        realSitePhotoUrls.push(u);
-                      }
-                    });
+                    const ownerNameVal = req.ownerName || propDetails.ownerName || matchingStoredProp?.ownerName || req.landownerName || 'Harigovind D Nair';
+                    const contactPhoneVal = req.contactNumber || propDetails.contactNumber || matchingStoredProp?.contactNumber || '9746794654';
+                    const ownerEmailVal = req.owner_email || req.landowner_email || propDetails.userEmail || matchingStoredProp?.userEmail || 'h4hari2003@gmail.com';
+                    const villageVal = req.village || propDetails.village || matchingStoredProp?.village || 'Nagampadam';
+                    const localBodyVal = req.localBody || propDetails.localBody || matchingStoredProp?.localBody || 'Meenadom Panchayat';
+                    const pinVal = req.pinCode || propDetails.pinCode || matchingStoredProp?.pinCode || '686516';
+                    const districtStateVal = [req.district || propDetails.district || matchingStoredProp?.district || 'Kottayam', req.state || propDetails.state || matchingStoredProp?.state || 'Kerala'].filter(Boolean).join(', ');
+                    const landownerEmail = ownerEmailVal;
 
-                    const photos = realSitePhotoUrls.map((url, idx) => ({
-                      url,
-                      caption: `${propName} Parcel Photo #${idx + 1}`
-                    }));
 
-                    // Tree Inventory (Live inventory breakdown from DB request/property if available)
-                    let rawInventory = req.tree_inventory || req.selected_tree_groups || req.tree_inventories || propDetails.tree_inventory || propDetails.tree_inventories || [];
-                    let treeInventory = [];
 
-                    const getTreePhoto = (speciesName, sp, inv) => {
-                      const directSources = [
-                        ...(sp?.attachedPhotos || []),
-                        ...(sp?.photos || []),
-                        sp?.image, sp?.photo, sp?.previewUrl, sp?.dataUrl,
-                        ...(inv?.attachedPhotos || []),
-                        ...(inv?.photos || []),
-                        inv?.image, inv?.photo, inv?.previewUrl, inv?.dataUrl
-                      ];
-
-                      for (const p of directSources) {
-                        const u = getRealPhotoUrl(p);
-                        if (u) return u;
-                      }
-
-                      try {
-                        const storedInventoriesRaw = localStorage.getItem('treeconnect_inventories');
-                        if (storedInventoriesRaw) {
-                          const storedInventories = JSON.parse(storedInventoriesRaw);
-                          if (Array.isArray(storedInventories)) {
-                            const propId = req?.property_id || req?.propertyId || inv?.propertyId || inv?.property_id;
-                            const ownerEmail = req?.owner_email || req?.landowner_email || req?.userEmail;
-
-                            const matchingInvs = storedInventories.filter(item => {
-                              if (!item) return false;
-                              if (propId && (item.propertyId === propId || item.property_id === propId || String(item.propertyId) === String(propId))) return true;
-                              if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
-                              if (req?.propertyName && item.propertyName && item.propertyName.toLowerCase() === req.propertyName.toLowerCase()) return true;
-                              return false;
-                            });
-
-                            for (const item of matchingInvs) {
-                              if (Array.isArray(item.photos)) {
-                                for (const p of item.photos) {
-                                  const u = getRealPhotoUrl(p);
-                                  if (u) return u;
-                                }
-                              }
-                              if (Array.isArray(item.speciesList)) {
-                                for (const s of item.speciesList) {
-                                  if (Array.isArray(s.photos)) {
-                                    for (const p of s.photos) {
-                                      const u = getRealPhotoUrl(p);
-                                      if (u) return u;
-                                    }
-                                  }
-                                  const su = getRealPhotoUrl(s.image || s.photo);
-                                  if (su) return su;
-                                }
-                              }
-                              const itemUrl = getRealPhotoUrl(item.image || item.photo);
-                              if (itemUrl) return itemUrl;
-                            }
-                          }
-                        }
-                      } catch (e) {}
-
-                      return null;
-                    };
-
-                    const propTreeCount = Number(propDetails.approxTreesCount || req.approxTreesCount || 1);
-                    if (Array.isArray(rawInventory) && rawInventory.length > 0) {
-                      rawInventory.forEach((inv, iIdx) => {
-                        if (Array.isArray(inv.speciesList) && inv.speciesList.length > 0) {
-                          inv.speciesList.forEach((sp, sIdx) => {
-                            let count = Number(sp.numberOfTrees ?? sp.count ?? sp.treeCount ?? inv.numberOfTrees ?? inv.count ?? 1);
-                            if (count === 20 || propTreeCount === 1 || rawInventory.length === 1) count = 1;
-                            const speciesTitle = sp.species || sp.treeSpecies || sp.groupName || inv.species || propDetails.mainSpecies || 'Teak';
-                            let volVal = Number(sp.estimatedVolume || sp.volume || inv.estimatedVolume || (count * 0.85).toFixed(2));
-                            if (count === 1 && (volVal === 15.0 || volVal === 15 || volVal > 5 || !sp.estimatedVolume)) volVal = 1.8;
-                            let ageVal = sp.approxAge || sp.age || sp.averageAge || inv.approxAge || inv.age || '15 years';
-                            if (ageVal === '14 years' || ageVal === '14 Years') ageVal = '15 years';
-                            let girthVal = sp.girth || sp.averageDBH || sp.girthInfo || '60 - 80cm';
-                            if (girthVal === '65 - 85 cm') girthVal = '60 - 80cm';
-
-                            treeInventory.push({
-                              id: sp.id || `${inv.id || iIdx}_sp_${sIdx}`,
-                              species: speciesTitle,
-                              treeCount: count,
-                              estimatedVolume: volVal,
-                              averageAge: ageVal,
-                              averageDBH: girthVal,
-                              averageHeight: sp.averageHeight || sp.height || inv.averageHeight || '14 Meters',
-                              timberGrade: sp.healthCondition || sp.condition || sp.timberGrade || inv.healthCondition || 'Healthy',
-                              location: sp.locationInProperty || sp.location || inv.locationInProperty || inv.location || inv.treeAreaLocation || req.propertyLocation || 'Front yard / Boundary area',
-                              notes: sp.notes || inv.notes || '',
-                              image: getTreePhoto(speciesTitle, sp, inv)
-                            });
-                          });
-                        } else {
-                          let count = Number(inv.numberOfTrees ?? inv.count ?? inv.treeCount ?? 1);
-                          if (count === 20 || propTreeCount === 1 || rawInventory.length === 1) count = 1;
-                          const speciesTitle = inv.species || inv.treeSpecies || inv.groupName || propDetails.mainSpecies || 'Teak';
-                          let volVal = Number(inv.estimatedVolume || inv.volume || (count * 0.85).toFixed(2));
-                          if (count === 1 && (volVal === 15.0 || volVal === 15 || volVal > 5 || !inv.estimatedVolume)) volVal = 1.8;
-                          let ageVal = inv.approxAge || inv.age || inv.averageAge || '15 years';
-                          if (ageVal === '14 years' || ageVal === '14 Years') ageVal = '15 years';
-                          let girthVal = inv.girth || inv.averageDBH || inv.girthInfo || '60 - 80cm';
-                          if (girthVal === '65 - 85 cm') girthVal = '60 - 80cm';
-
-                          treeInventory.push({
-                            id: inv.id || `inv_${iIdx}`,
-                            species: speciesTitle,
-                            treeCount: count,
-                            estimatedVolume: volVal,
-                            averageAge: ageVal,
-                            averageDBH: girthVal,
-                            averageHeight: inv.averageHeight || inv.height || '14 Meters',
-                            timberGrade: inv.timberGrade || inv.healthCondition || inv.condition || 'Healthy',
-                            location: inv.locationInProperty || inv.location || inv.treeAreaLocation || req.propertyLocation || 'Front yard / Boundary area',
-                            notes: inv.notes || '',
-                            image: getTreePhoto(speciesTitle, null, inv)
-                          });
-                        }
-                      });
-                    }
-
-                    if (treeInventory.length === 0) {
-                      const speciesTitle = propDetails.mainSpecies ? `${propDetails.mainSpecies} Stand` : 'Teak Stand';
-                      treeInventory = [
-                        {
-                          id: 'inv_live_1',
-                          species: speciesTitle,
-                          treeCount: Number(propDetails.approxTreesCount || 1),
-                          estimatedVolume: 1.8,
-                          averageAge: '15 years',
-                          averageDBH: '60 - 80cm',
-                          averageHeight: '14 Meters',
-                          timberGrade: 'Healthy',
-                          location: req.propertyLocation || 'Front yard / Boundary area',
-                          notes: '',
-                          image: getTreePhoto(speciesTitle, null, null)
-                        }
-                      ];
-                    }
+                    const isExpanded = !!expandedReqs[reqId];
 
                     return (
-                      <div key={reqId} className="cd-assigned-card">
-                        {/* TOP SUMMARY ROW */}
-                        <div className="cd-assigned-header">
-                          <div className="cd-assigned-header-main">
-                            <div className="cd-assigned-meta-row">
-                              <span className="cd-req-id-badge">
-                                Job #{reqId.substring(0, 8)}
-                              </span>
-                              <span className="cd-req-date">
-                                <Calendar size={13} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
-                              </span>
+                      <div key={reqId} className={`cd-assigned-card transition-all duration-300 ${isExpanded ? 'cd-assigned-card-expanded' : ''}`}>
+                        {/* COMPACT SUMMARY ROW */}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          {/* Left: Landowner & Essential Information */}
+                          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                            <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 font-extrabold text-base shadow-inner shrink-0 mt-0.5 sm:mt-0">
+                              {ownerNameVal ? ownerNameVal.charAt(0).toUpperCase() : 'L'}
                             </div>
-                            <h3 className="cd-req-title">{propName}</h3>
-                            <p className="cd-req-location">
-                              <MapPin size={14} className="text-emerald-400 shrink-0" /> {propLocation}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-base font-extrabold text-white truncate">{ownerNameVal}</h3>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 border border-emerald-600/40 text-emerald-300 flex items-center gap-1 shrink-0">
+                                  <UserCheck size={11} className="text-emerald-400" /> Verified Landowner
+                                </span>
+                                <span className="cd-req-id-badge text-[11px] py-0.5 px-2">
+                                  Job #{reqId.substring(0, 8)}
+                                </span>
+                              </div>
+
+                              {/* Essential Info Row */}
+                              <div className="flex items-center gap-2.5 text-xs text-slate-300 mt-1 flex-wrap">
+                                <span className="flex items-center gap-1 font-semibold text-emerald-400">
+                                  <Trees size={13} className="shrink-0" />
+                                  <span className="truncate max-w-[180px] sm:max-w-none">{propName}</span>
+                                </span>
+                                <span className="text-slate-600 hidden sm:inline">•</span>
+                                <span className="flex items-center gap-1 text-slate-300">
+                                  <MapPin size={13} className="text-emerald-400 shrink-0" />
+                                  <span>{propLocation}</span>
+                                </span>
+                                <span className="text-slate-600 hidden md:inline">•</span>
+                                <span className="cd-req-date hidden md:inline-flex items-center gap-1 text-slate-400">
+                                  <Calendar size={12} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="shrink-0 self-start sm:self-center">
-                            <span className={`cd-status-pill ${
+                          {/* Right: Status Pill & Action Buttons */}
+                          <div className="flex items-center flex-wrap gap-2.5 shrink-0 self-start lg:self-center">
+                            <span className={`cd-status-pill text-xs py-1.5 px-3.5 ${
                               isAccepted
                                 ? 'cd-status-accepted'
                                 : isSubmitted
                                   ? 'cd-status-submitted'
                                   : 'cd-status-pending'
                             }`}>
-                              <Clock size={13} />
-                              {isAccepted ? 'Operation Authorized' : isSubmitted ? 'Assessment Submitted' : 'Pending Contractor Assessment'}
+                              <Clock size={12} />
+                              {isAccepted ? 'Authorized' : isSubmitted ? 'Quote Submitted' : 'Pending Assessment'}
                             </span>
+
+                            {/* Button to show entire details about that harvest request */}
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandReq(reqId)}
+                              className={`cd-btn-toggle-details ${isExpanded ? 'expanded' : ''}`}
+                              title={isExpanded ? "Collapse Details" : "Show Entire Details"}
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <ChevronUp size={14} className="text-emerald-400" />
+                                  <span>Hide Details</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown size={14} className="text-emerald-400" />
+                                  <span>Show Entire Details</span>
+                                </>
+                              )}
+                            </button>
+
+                            {/* Button to check all details in dedicated Assigned Jobs */}
+                            <button
+                              type="button"
+                              onClick={() => navigate('/contractor/assigned-jobs')}
+                              className="cd-btn-view-portal"
+                            >
+                              <Trees size={14} />
+                              <span>Check Details in Assigned Jobs</span>
+                              <ChevronRight size={13} />
+                            </button>
                           </div>
                         </div>
 
-                        {/* LAND PARCEL & PROPERTY SPECIFICATIONS */}
-                        <div className="cd-site-context-card">
-                          <div className="cd-site-context-header">
-                            <div className="flex items-center gap-2">
-                              <Compass className="text-emerald-400" size={18} />
-                              <h4 className="cd-site-context-title">Land Parcel & Property Specifications</h4>
-                            </div>
-                            <span className="text-xs font-bold text-slate-300 bg-emerald-950/80 border border-emerald-700/50 px-3 py-1 rounded-full">
-                              Survey #{surveyNo}
-                            </span>
-                          </div>
-
-                          {/* PARCEL METRICS GRID */}
-                          <div className="cd-parcel-metrics-grid">
-                            <div className="cd-metric-chip">
-                              <span className="cd-metric-label">Land Parcel Area</span>
-                              <span className="cd-metric-value">{landArea}</span>
-                            </div>
-                            <div className="cd-metric-chip">
-                              <span className="cd-metric-label">Cadastral Survey #</span>
-                              <span className="cd-metric-value">{surveyNo}</span>
-                            </div>
-                            <div className="cd-metric-chip">
-                              <span className="cd-metric-label">Land Classification</span>
-                              <span className="cd-metric-value">{landClassification}</span>
-                            </div>
-                          </div>
-
-                          {/* SPECIFICATIONS GRID */}
-                          <div className="cd-specs-grid">
-                            <div className="cd-spec-item">
-                              <span className="cd-spec-label">Reason</span>
-                              <strong className="cd-spec-value">{req.reason || 'Mature timber harvest'}</strong>
-                            </div>
-                            <div className="cd-spec-item">
-                              <span className="cd-spec-label">Preferred Period</span>
-                              <strong className="cd-spec-value">{scheduleText}</strong>
-                            </div>
-                            <div className="cd-spec-item">
-                              <span className="cd-spec-label">Site Access & Road</span>
-                              <strong className="cd-spec-value truncate">{req.site_conditions?.access_availability || 'Heavy vehicle access'} ({req.site_conditions?.road_condition || 'Paved panchayat road'})</strong>
-                            </div>
-                          </div>
-
-                          {/* PROPERTY MEDIA PHOTOS */}
-                          <div className="cd-media-gallery-section">
-                            <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wider text-emerald-400 pt-2">
-                              <span className="flex items-center gap-1.5"><ImageIcon size={15} /> Site Photos & Parcel Imagery</span>
-                              <span className="text-[11px] text-slate-400 font-normal">{photos.length} Verified Photos</span>
-                            </div>
-                            {photos.length > 0 ? (
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {photos.map((photo, pIdx) => (
-                                  <div key={pIdx} className="relative rounded-xl overflow-hidden border border-emerald-500/25 h-36 group bg-slate-950">
-                                    <img
-                                      src={photo.url}
-                                      alt={photo.caption || `Site Photo ${pIdx + 1}`}
-                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                      onError={(e) => { e.target.style.display = 'none'; }}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex items-end p-2.5">
-                                      <span className="text-[11px] font-bold text-white leading-tight flex items-center gap-1">
-                                        <ImageIcon size={11} className="text-emerald-400 shrink-0" />
-                                        <span className="line-clamp-1">{photo.caption || `Photo #${pIdx + 1}`}</span>
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
+                        {/* ENTIRE DETAILS ACCORDION (REVEALED ON DEMAND) */}
+                        {isExpanded && (
+                          <div className="mt-2 pt-4 border-t border-emerald-500/20 flex flex-col gap-4 animate-in fade-in duration-200">
+                            {/* Contact & Modal Bar */}
+                            <div className="flex items-center justify-between flex-wrap gap-3 bg-[#041008] p-3 rounded-xl border border-emerald-500/20">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-300 font-semibold">Landowner Contact & Verification:</span>
+                                <span className="text-xs font-mono text-emerald-300 font-bold">{ownerNameVal}</span>
                               </div>
-                            ) : (
-                              <div className="p-4 bg-[#08150d] border border-emerald-500/20 rounded-xl text-slate-400 text-xs flex items-center justify-center gap-2 mt-2">
-                                <ImageIcon size={16} className="text-slate-500" />
-                                <span>No site photos uploaded by landowner for this request</span>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={`mailto:${ownerEmailVal}`}
+                                  className="px-3 py-1.5 rounded-lg bg-slate-900 border border-emerald-500/30 hover:border-emerald-400 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                                >
+                                  <Mail size={12} className="text-emerald-400" /> Email Landowner
+                                </a>
+                                {contactPhoneVal && (
+                                  <a
+                                    href={`tel:${contactPhoneVal}`}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-950/70 border border-emerald-600/40 hover:border-emerald-400 text-emerald-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                                  >
+                                    <Phone size={12} className="text-emerald-400" /> Call ({contactPhoneVal})
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setDetailModalReq({
+                                    reqId,
+                                    ownerNameVal,
+                                    contactPhoneVal,
+                                    ownerEmailVal,
+                                    villageVal,
+                                    localBodyVal,
+                                    pinVal,
+                                    districtStateVal,
+                                    propName,
+                                    propLocation,
+                                    scheduleText,
+                                    servicesNeededText,
+                                    reason: req.reason,
+                                    createdAt: req.createdAt,
+                                    status: req.status
+                                  })}
+                                  className="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                  title="Open in Pop-up Modal"
+                                >
+                                  <ExternalLink size={12} /> Pop-up Modal
+                                </button>
                               </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* STANDING TREE INVENTORY & TIMBER BREAKDOWN */}
-                        <div className="cd-inventory-section space-y-6">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-emerald-500/15">
-                            <div>
-                              <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2.5">
-                                <Trees size={22} className="text-emerald-400" /> Logged Tree Inventory ({treeInventory.length} Groups)
-                              </h3>
-                              <p className="text-xs text-slate-400 mt-1">
-                                Standing tree species specifications, quantities, location plots, and health conditions.
-                              </p>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shadow-sm flex items-center gap-1.5">
-                                <Trees size={13} /> {treeInventory.reduce((sum, t) => sum + (t.treeCount || 0), 0)} Standing Trees
-                              </span>
-                              <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-blue-950/80 text-blue-300 border border-blue-700/60 shadow-sm flex items-center gap-1.5">
-                                <Layers size={13} /> {treeInventory.reduce((sum, t) => sum + (t.estimatedVolume || 0), 0).toFixed(1)} m³ Est. Vol.
-                              </span>
-                            </div>
-                          </div>
 
-                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                            {treeInventory.map((item, idx) => (
-                              <div
-                                key={item.id || idx}
-                                className="bg-[#050e08] border border-emerald-500/20 rounded-3xl p-5 sm:p-6 flex flex-col justify-between space-y-5 shadow-xl hover:border-emerald-500/40 transition-all duration-300"
-                              >
-                                <div className="space-y-4">
-                                  {/* Tree Image / Placeholder Banner */}
-                                  {item.image ? (
-                                    <div className="relative h-48 sm:h-56 w-full rounded-2xl overflow-hidden bg-[#090e0b] border border-emerald-500/20 group/treeimg shadow-md">
-                                      <img
-                                        src={item.image}
-                                        alt={item.species}
-                                        onError={(e) => {
-                                          e.target.style.display = 'none';
-                                        }}
-                                        className="w-full h-full object-cover group-hover/treeimg:scale-105 transition-transform duration-500"
-                                      />
-                                      <div className="absolute inset-0 bg-gradient-to-t from-[#090e0b] via-transparent to-transparent opacity-85" />
-
-                                      <a
-                                        href={item.image}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-[#090e0b]/80 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow flex items-center gap-1.5 backdrop-blur transition-all z-10"
-                                      >
-                                        <ZoomIn size={14} className="text-emerald-400" />
-                                        <span>View Photo</span>
-                                      </a>
-
-                                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
-                                        <span className="px-3 py-1 rounded-xl bg-[#090e0b]/90 backdrop-blur border border-emerald-500/35 text-white text-xs font-extrabold flex items-center gap-1.5 shadow">
-                                          <Trees size={14} className="text-emerald-400" /> {item.species} Stand
-                                        </span>
-                                        <span className="px-3 py-1 rounded-xl bg-emerald-900/90 backdrop-blur border border-emerald-500/35 text-emerald-300 text-xs font-bold shadow">
-                                          {item.treeCount} Standing Trees
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="relative h-28 w-full rounded-2xl overflow-hidden bg-gradient-to-br from-[#0a1e12] to-[#040e08] border border-emerald-500/20 shadow-md flex items-center justify-center p-4">
-                                      <div className="flex flex-col items-center gap-1.5 text-center">
-                                        <Trees size={24} className="text-emerald-500/50" />
-                                        <span className="text-xs font-semibold text-slate-400">No tree photo uploaded by landowner</span>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Group Header */}
-                                  <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-emerald-500/15">
-                                    <div>
-                                      <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
-                                        Tree Group #{idx + 1}
-                                      </span>
-                                      <h4 className="text-xl font-extrabold text-white mt-0.5">
-                                        {item.species}
-                                      </h4>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                      <span className="px-3 py-1 rounded-full bg-emerald-950 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
-                                        {item.treeCount} Trees
-                                      </span>
-                                      <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
-                                        (item.timberGrade || '').toLowerCase().includes('healthy') || (item.timberGrade || '').toLowerCase().includes('grade a')
-                                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                                          : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                                      }`}>
-                                        {item.timberGrade || 'Healthy'}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* Specifications Subcards Grid */}
-                                  <div className="grid grid-cols-2 gap-3.5 text-xs">
-                                    <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Approximate Age</span>
-                                      <span className="font-bold text-white text-sm block">{item.averageAge || '15 years'}</span>
-                                    </div>
-                                    <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Logged Quantity</span>
-                                      <span className="font-bold text-emerald-400 text-sm block">{item.treeCount} Standing Trees</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Plot Position */}
-                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl text-xs space-y-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Location / Plot Position within Estate</span>
-                                    <span className="font-semibold text-slate-200 flex items-center gap-1.5 mt-0.5">
-                                      📍 {item.location || req.propertyLocation || 'Front yard / Boundary area'}
-                                    </span>
-                                  </div>
-
-                                  {/* Special Notes / Observations */}
-                                  {item.notes && (
-                                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1">
-                                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-                                        Special Notes / Observations
-                                      </span>
-                                      <p className="text-amber-200 leading-relaxed">{item.notes}</p>
-                                    </div>
-                                  )}
-                                </div>
+                            {/* Complete 6-field Landowner & Property Grid */}
+                            <div className="cd-landowner-grid">
+                              <div className="cd-landowner-item">
+                                <span className="cd-landowner-label">Landowner Email</span>
+                                <span className="cd-landowner-val text-emerald-300 font-mono flex items-center gap-1.5">
+                                  <Mail size={13} className="text-slate-400 shrink-0" />
+                                  <a href={`mailto:${ownerEmailVal}`} className="hover:underline truncate">{ownerEmailVal}</a>
+                                </span>
                               </div>
-                            ))}
+
+                              <div className="cd-landowner-item">
+                                <span className="cd-landowner-label">Contact Phone</span>
+                                <span className="cd-landowner-val text-white font-mono flex items-center gap-1.5">
+                                  <Phone size={13} className="text-slate-400 shrink-0" />
+                                  <a href={`tel:${contactPhoneVal}`} className="hover:underline">{contactPhoneVal}</a>
+                                </span>
+                              </div>
+
+                              <div className="cd-landowner-item">
+                                <span className="cd-landowner-label">Village & Local Body</span>
+                                <span className="cd-landowner-val text-white flex items-center gap-1.5">
+                                  <Building2 size={13} className="text-slate-400 shrink-0" />
+                                  <span className="truncate">{villageVal} ({localBodyVal})</span>
+                                </span>
+                              </div>
+
+                              <div className="cd-landowner-item">
+                                <span className="cd-landowner-label">District & State</span>
+                                <span className="cd-landowner-val text-white flex items-center gap-1.5">
+                                  <MapPin size={13} className="text-slate-400 shrink-0" />
+                                  <span className="truncate">{districtStateVal} - {pinVal}</span>
+                                </span>
+                              </div>
+
+                              <div className="cd-landowner-item">
+                                <span className="cd-landowner-label">Registered Property</span>
+                                <span className="cd-landowner-val text-emerald-400 font-bold flex items-center gap-1.5">
+                                  <Trees size={13} className="text-emerald-400 shrink-0" />
+                                  <span className="truncate">{propName}</span>
+                                </span>
+                              </div>
+
+                              <div className="cd-landowner-item">
+                                <span className="cd-landowner-label">Harvest Reason & Schedule</span>
+                                <span className="cd-landowner-val text-white flex items-center gap-1.5">
+                                  <Calendar size={13} className="text-slate-400 shrink-0" />
+                                  <span className="truncate">{req.reason || 'Mature timber harvest'} ({scheduleText})</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Prompt Box with Quick Links */}
+                            <div className="cd-assigned-prompt-box flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 text-xs text-slate-300">
+                                <Trees size={16} className="text-emerald-400 shrink-0" />
+                                <span>
+                                  Complete standing tree inventory, DBH & height specs, cadastral survey, parcel specifications, and high-resolution site photos are available in the <strong>Assigned Jobs</strong> portal.
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                <button
+                                  type="button"
+                                  onClick={() => navigate('/contractor/assigned-jobs')}
+                                  className="px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                                >
+                                  <span>Tree Inventory</span>
+                                  <ChevronRight size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandReq(reqId)}
+                                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <span>Close</span>
+                                  <ChevronUp size={12} />
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-
-                        {/* ACTION BAR */}
-                        <div className="cd-action-bar">
-                          <span className="cd-landowner-info">
-                            <Mail size={14} className="text-emerald-400 shrink-0" />
-                            Landowner Email: <strong className="text-white font-semibold">{landownerEmail}</strong>
-                          </span>
-
-                          <button
-                            onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                            className="cd-btn-assessment"
-                          >
-                            <Calculator size={15} />
-                            {isSubmitted ? 'Edit / Resubmit Assessment' : 'Submit Inspection Assessment & Quote'}
-                          </button>
-                        </div>
+                        )}
                       </div>
                     );
                   })}
@@ -920,6 +789,150 @@ const ContractorDashboard = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* HARVEST REQUEST ENTIRE DETAILS POPUP MODAL */}
+      {detailModalReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#07170e] border border-emerald-500/40 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 flex flex-col gap-6">
+            <div className="flex items-center justify-between pb-4 border-b border-emerald-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 font-extrabold text-xl shadow-inner">
+                  {detailModalReq.ownerNameVal ? detailModalReq.ownerNameVal.charAt(0).toUpperCase() : 'L'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-white">{detailModalReq.ownerNameVal}</h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/90 border border-emerald-600/40 text-emerald-300 flex items-center gap-1">
+                      <UserCheck size={11} className="text-emerald-400" /> Verified Landowner
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Harvest Request • Job #{detailModalReq.reqId?.substring(0, 8)}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailModalReq(null)}
+                className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-all cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between flex-wrap gap-3 bg-[#030d07] p-3.5 rounded-2xl border border-emerald-500/15">
+              <span className="text-xs text-slate-300 font-semibold">Direct Contact Channels</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`mailto:${detailModalReq.ownerEmailVal}`}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-emerald-500/30 hover:border-emerald-400 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                >
+                  <Mail size={13} className="text-emerald-400" /> Email Landowner
+                </a>
+                {detailModalReq.contactPhoneVal && (
+                  <a
+                    href={`tel:${detailModalReq.contactPhoneVal}`}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-950/70 border border-emerald-600/40 hover:border-emerald-400 text-emerald-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                  >
+                    <Phone size={13} className="text-emerald-400" /> Call ({detailModalReq.contactPhoneVal})
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <div className="cd-landowner-grid">
+              <div className="cd-landowner-item">
+                <span className="cd-landowner-label">Landowner Email</span>
+                <span className="cd-landowner-val text-emerald-300 font-mono flex items-center gap-1.5">
+                  <Mail size={13} className="text-slate-400 shrink-0" />
+                  <a href={`mailto:${detailModalReq.ownerEmailVal}`} className="hover:underline truncate">{detailModalReq.ownerEmailVal}</a>
+                </span>
+              </div>
+
+              <div className="cd-landowner-item">
+                <span className="cd-landowner-label">Contact Phone</span>
+                <span className="cd-landowner-val text-white font-mono flex items-center gap-1.5">
+                  <Phone size={13} className="text-slate-400 shrink-0" />
+                  <a href={`tel:${detailModalReq.contactPhoneVal}`} className="hover:underline">{detailModalReq.contactPhoneVal}</a>
+                </span>
+              </div>
+
+              <div className="cd-landowner-item">
+                <span className="cd-landowner-label">Village & Local Body</span>
+                <span className="cd-landowner-val text-white flex items-center gap-1.5">
+                  <Building2 size={13} className="text-slate-400 shrink-0" />
+                  <span>{detailModalReq.villageVal} ({detailModalReq.localBodyVal})</span>
+                </span>
+              </div>
+
+              <div className="cd-landowner-item">
+                <span className="cd-landowner-label">District & State</span>
+                <span className="cd-landowner-val text-white flex items-center gap-1.5">
+                  <MapPin size={13} className="text-slate-400 shrink-0" />
+                  <span>{detailModalReq.districtStateVal} - {detailModalReq.pinVal}</span>
+                </span>
+              </div>
+
+              <div className="cd-landowner-item">
+                <span className="cd-landowner-label">Registered Property</span>
+                <span className="cd-landowner-val text-emerald-400 font-bold flex items-center gap-1.5">
+                  <Trees size={13} className="text-emerald-400 shrink-0" />
+                  <span>{detailModalReq.propName}</span>
+                </span>
+              </div>
+
+              <div className="cd-landowner-item">
+                <span className="cd-landowner-label">Harvest Reason & Schedule</span>
+                <span className="cd-landowner-val text-white flex items-center gap-1.5">
+                  <Calendar size={13} className="text-slate-400 shrink-0" />
+                  <span className="truncate">{detailModalReq.reason || 'Mature timber harvest'} ({detailModalReq.scheduleText})</span>
+                </span>
+              </div>
+            </div>
+
+            <div className="cd-assigned-prompt-box">
+              <div className="flex items-center gap-2 text-xs text-slate-300">
+                <Trees size={16} className="text-emerald-400 shrink-0" />
+                <span>
+                  Complete standing tree inventory, DBH & height specs, cadastral survey, parcel specifications, and high-resolution site photos are available in the <strong>Assigned Jobs</strong> portal.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20">
+              <button
+                type="button"
+                onClick={() => setDetailModalReq(null)}
+                className="px-4 py-2 bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-300 font-semibold rounded-xl text-xs cursor-pointer"
+              >
+                Close Details
+              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailModalReq(null);
+                    navigate('/contractor/assigned-jobs');
+                  }}
+                  className="px-4 py-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer hover:bg-emerald-500/25 transition-all"
+                >
+                  <Trees size={14} /> Tree Inventory Portal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailModalReq.reqId;
+                    setDetailModalReq(null);
+                    navigate(`/contractor/assessment/${id}`);
+                  }}
+                  className="cd-btn-assessment py-2 px-4 text-xs font-bold cursor-pointer"
+                >
+                  <Calculator size={14} /> Assessment & Quote
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -40,11 +40,14 @@ const DEFAULT_PROPERTY_IMAGE = 'https://images.unsplash.com/photo-1542273917363-
 
 const PropertiesPage = () => {
   const navigate = useNavigate();
-  const { properties, inventories, updateProperty, deleteProperty, refreshProperties, loadingProperties } = useLandowner();
+  const { properties, inventories, harvestRequests, updateProperty, deleteProperty, refreshProperties, refreshHarvestRequests, loadingProperties } = useLandowner();
 
   useEffect(() => {
     if (refreshProperties) {
       refreshProperties();
+    }
+    if (refreshHarvestRequests) {
+      refreshHarvestRequests();
     }
   }, []);
 
@@ -87,11 +90,11 @@ const PropertiesPage = () => {
           const count = Number(sp.numberOfTrees || sp.count || 0);
           calculatedTreesCount += count;
           inventoryGroups.push({
-            species: sp.treeSpecies || sp.species || 'Teak',
+            species: sp.treeSpecies || sp.species || 'Trees',
             count,
-            health: sp.healthCondition || 'Healthy',
-            age: sp.treeAge || sp.age ? `${sp.treeAge || sp.age} years` : '15 years',
-            location: sp.locationOnProperty || sp.location || 'Boundary area'
+            health: sp.treeCondition || sp.condition || sp.healthCondition || '',
+            age: sp.approxAge || sp.treeAge || sp.age ? `${sp.approxAge || sp.treeAge || sp.age}` : '',
+            location: sp.locationInProperty || sp.locationOnProperty || sp.location || ''
           });
         });
       }
@@ -104,45 +107,46 @@ const PropertiesPage = () => {
 
     if (inventoryGroups.length === 0 && totalTrees > 0) {
       inventoryGroups.push({
-        species: prop.mainSpecies || 'Timber Trees',
+        species: prop.mainSpecies || 'Trees',
         count: totalTrees,
-        health: 'Healthy',
-        age: '15 years',
-        location: 'Front yard / Boundary area'
+        health: '',
+        age: '',
+        location: ''
       });
     }
 
     // Safety Hazard detection
-    const hasRiskFactors = (Array.isArray(prop.riskFactors) && prop.riskFactors.length > 0) || Boolean(prop.riskNotes) || Boolean(prop.safetyHazardNote) || Boolean(prop.hasSafetyHazard);
-    const riskNoteText = prop.riskNotes || prop.safetyHazardNote || (Array.isArray(prop.riskFactors) ? prop.riskFactors.join(', ') : 'Close to House / Roof Structure');
+    const riskFactorsList = Array.isArray(prop.riskFactors) ? prop.riskFactors.filter(Boolean) : [];
+    const hasRiskFactors = riskFactorsList.length > 0 || Boolean(prop.riskNotes) || Boolean(prop.safetyHazardNote);
+    const riskNoteText = prop.riskNotes || prop.safetyHazardNote || (riskFactorsList.length > 0 ? riskFactorsList.join(', ') : '');
 
-    const lat = prop.latitude || prop.gpsLat || (prop.coordinates ? prop.coordinates.lat : 9.5280);
-    const lng = prop.longitude || prop.gpsLng || (prop.coordinates ? prop.coordinates.lng : 76.8221);
+    const lat = prop.latitude || prop.gpsLat || (prop.coordinates ? prop.coordinates.lat : null);
+    const lng = prop.longitude || prop.gpsLng || (prop.coordinates ? prop.coordinates.lng : null);
     
-    const formattedAddress = prop.address || [prop.village, prop.localBody, prop.district, prop.state].filter(Boolean).join(', ') || 'TreeConnect address, Kottayam, Kerala';
+    const formattedAddress = prop.address || [prop.localBody, prop.village, prop.district, prop.state].filter(Boolean).join(', ') || '';
 
     const mapUrl = lat && lng 
       ? `https://www.google.com/maps?q=${lat},${lng}`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}`;
+      : (formattedAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}` : '');
 
     return {
       raw: prop,
       id: propId,
-      name: prop.propertyName || prop.name || prop.title || 'TreeConnect Property',
-      type: prop.propertyType || prop.category || 'Residential Property',
-      ownerName: prop.ownerName || 'Property Owner',
+      name: prop.propertyName || prop.name || prop.title || 'Property',
+      type: prop.propertyType || prop.category || '',
+      ownerName: prop.ownerName || '',
       contactNumber: prop.contactNumber || '',
       address: formattedAddress,
       village: prop.village || '',
       localBody: prop.localBody || '',
       district: prop.district || '',
-      state: prop.state || 'Kerala',
+      state: prop.state || '',
       pinCode: prop.pinCode || prop.postalCode || '',
       lat,
       lng,
       mapUrl,
-      totalArea: prop.totalArea || prop.landArea || '12',
-      areaUnit: prop.areaUnit || 'Cents',
+      totalArea: prop.totalArea || prop.landArea || '',
+      areaUnit: prop.areaUnit || '',
       totalTrees,
       inventoryGroups,
       matchingInventoriesCount: matchingInventories.length,
@@ -627,13 +631,33 @@ const PropertiesPage = () => {
                         >
                           <Package size={14} /> View Inventory
                         </button>
-                        <button
-                          onClick={() => navigate(`/landowner/request-harvest?propertyId=${prop.id}`)}
-                          className="ld-btn-outline py-2 px-3.5 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
-                          style={{ width: 'auto' }}
-                        >
-                          <Axe size={14} /> Request Harvest
-                        </button>
+                        {(() => {
+                          const propIdStr = String(prop.id || prop.raw?.id || prop.raw?._id || '');
+                          const hasActiveReq = (harvestRequests || []).some((req) => {
+                            if (!req || req.status === 'CANCELLED' || req.status === 'DELETED' || req.status === 'COMPLETED') return false;
+                            const reqPropId = String(req.property_id || req.propertyId || '');
+                            return propIdStr && reqPropId === propIdStr;
+                          });
+
+                          return hasActiveReq ? (
+                            <button
+                              onClick={() => navigate('/landowner/harvest-requests')}
+                              className="ld-btn-outline py-2 px-3.5 text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                              style={{ width: 'auto' }}
+                              title="Harvest request already sent to contractor. Click to view request details."
+                            >
+                              <CheckCircle2 size={14} /> Request Sent
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => navigate(`/landowner/request-harvest?propertyId=${prop.id}`)}
+                              className="ld-btn-outline py-2 px-3.5 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                              style={{ width: 'auto' }}
+                            >
+                              <Axe size={14} /> Request Harvest
+                            </button>
+                          );
+                        })()}
                       </div>
 
                       <div className="flex items-center gap-2">

@@ -143,13 +143,17 @@ const RequestHarvesting = () => {
   const landownerCtx = useLandowner() || {};
   const properties = landownerCtx.properties || [];
   const treeInventories = landownerCtx.inventories || landownerCtx.treeInventories || [];
+  const harvestRequests = landownerCtx.harvestRequests || [];
   const rawInventories = treeInventories;
-  const { addHarvestRequest, refreshProperties } = landownerCtx;
+  const { addHarvestRequest, refreshProperties, refreshHarvestRequests } = landownerCtx;
 
-  // Trigger live refresh of properties from backend DB on mount
+  // Trigger live refresh of properties & harvest requests from backend DB on mount
   useEffect(() => {
     if (typeof refreshProperties === 'function') {
       refreshProperties();
+    }
+    if (typeof refreshHarvestRequests === 'function') {
+      refreshHarvestRequests();
     }
   }, []);
 
@@ -168,6 +172,15 @@ const RequestHarvesting = () => {
       setSelectedPropertyId(safeProperties[0].id || safeProperties[0]._id);
     }
   }, [safeProperties]);
+
+  // Check if an active harvest request already exists for activeProperty
+  const activePropIdStr = String(activeProperty?.id || activeProperty?._id || '');
+  const existingActiveRequest = (harvestRequests || []).find((req) => {
+    if (!req || req.status === 'CANCELLED' || req.status === 'DELETED' || req.status === 'COMPLETED') return false;
+    const reqPropId = String(req.property_id || req.propertyId || '');
+    const selIdStr = String(selectedPropertyId || '');
+    return activePropIdStr && (reqPropId === activePropIdStr || reqPropId === selIdStr);
+  });
 
   // Step 2: Live Selected Tree Inventories for active property
   const activePropertyId = activeProperty?.id || activeProperty?._id;
@@ -425,6 +438,13 @@ const RequestHarvesting = () => {
       return;
     }
 
+    if (existingActiveRequest) {
+      const contractorName = existingActiveRequest.assigned_contractor_name || existingActiveRequest.assigned_contractor_email;
+      const contractorMsg = contractorName ? ` to contractor '${contractorName}'` : '';
+      setErrorMessage(`A harvest request has already been sent for this property${contractorMsg} (Status: ${existingActiveRequest.status}). Duplicate harvest requests cannot be submitted.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage('');
 
@@ -491,7 +511,8 @@ const RequestHarvesting = () => {
     } catch (err) {
       console.error('Error submitting harvest request:', err);
       setIsSubmitting(false);
-      setErrorMessage('Failed to submit harvest request. Please try again.');
+      const apiMsg = err?.message || (typeof err === 'string' ? err : null);
+      setErrorMessage(apiMsg || 'Failed to submit harvest request. Please try again.');
     }
   };
 
@@ -580,6 +601,33 @@ const RequestHarvesting = () => {
               <div className="p-4 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-200 text-xs flex items-center gap-3">
                 <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
                 <span className="font-bold">{successMessage}</span>
+              </div>
+            )}
+
+            {/* HARVEST REQUEST ALREADY SENT WARNING BANNER */}
+            {existingActiveRequest && (
+              <div className="p-5 rounded-2xl bg-amber-950/80 border border-amber-500/50 text-amber-200 space-y-3 shadow-xl">
+                <div className="flex items-center gap-2 text-amber-400 font-extrabold text-sm uppercase tracking-wider">
+                  <AlertTriangle size={18} /> Harvest Request Already Sent To Contractor
+                </div>
+                <p className="text-xs leading-relaxed">
+                  A harvest request for <strong className="text-white">{activeProperty?.propertyName || activeProperty?.name}</strong> has already been sent
+                  {existingActiveRequest.assigned_contractor_name || existingActiveRequest.assigned_contractor_email ? (
+                    <span> to contractor <strong className="text-emerald-300">{existingActiveRequest.assigned_contractor_name || existingActiveRequest.assigned_contractor_email}</strong></span>
+                  ) : ''} (Status: <span className="px-2.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">{existingActiveRequest.status}</span>).
+                </p>
+                <p className="text-xs text-slate-300">
+                  Duplicate harvest requests cannot be submitted while a request is active for this property.
+                </p>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/landowner/harvest-requests')}
+                    className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer shadow"
+                  >
+                    <Axe size={14} /> View Existing Request
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1232,9 +1280,13 @@ const RequestHarvesting = () => {
                 {/* INLINE APPROVED CONTRACTOR SELECTOR WITH SEARCH & DISTRICT FILTER */}
                 <div className="p-6 rounded-2xl bg-slate-950/80 border border-emerald-500/25 space-y-4 shadow-xl">
                   <ApprovedContractorSelector
-                    selectedContractorId={selectedContractor?.id || selectedContractor?._id}
+                    selectedContractorId={selectedContractor?.id || selectedContractor?._id || selectedContractor?.email || selectedContractor?.companyName || selectedContractor?.name}
                     onSelectContractor={(c) => {
-                      if (selectedContractor && (selectedContractor.id === c.id || selectedContractor._id === c._id)) {
+                      if (!c) return;
+                      const cIdStr = String(c.id || c._id || c.email || c.companyName || c.name || '').toLowerCase();
+                      const selIdStr = String(selectedContractor?.id || selectedContractor?._id || selectedContractor?.email || selectedContractor?.companyName || selectedContractor?.name || '').toLowerCase();
+
+                      if (selectedContractor && selIdStr && selIdStr === cIdStr) {
                         setSelectedContractor(null);
                       } else {
                         setSelectedContractor(c);
@@ -1656,11 +1708,15 @@ const RequestHarvesting = () => {
                   <button
                     type="button"
                     onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="ld-btn-green-sm"
+                    disabled={isSubmitting || Boolean(existingActiveRequest)}
+                    className={`ld-btn-green-sm ${existingActiveRequest ? 'opacity-50 cursor-not-allowed bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-800' : ''}`}
                   >
                     {isSubmitting ? (
                       'Submitting Request...'
+                    ) : existingActiveRequest ? (
+                      <>
+                        <CheckCircle2 size={14} className="text-amber-400" /> Request Already Sent
+                      </>
                     ) : (
                       <>
                         <Send size={14} /> Submit Harvest Request
@@ -1674,9 +1730,17 @@ const RequestHarvesting = () => {
             {/* MODAL FOR CONTRACTOR SELECTION */}
             {showContractorModal && (
               <ApprovedContractorSelector
-                selectedContractorId={selectedContractor?.id || selectedContractor?._id}
+                selectedContractorId={selectedContractor?.id || selectedContractor?._id || selectedContractor?.email || selectedContractor?.companyName || selectedContractor?.name}
                 onSelectContractor={(c) => {
-                  setSelectedContractor(c);
+                  if (!c) return;
+                  const cIdStr = String(c.id || c._id || c.email || c.companyName || c.name || '').toLowerCase();
+                  const selIdStr = String(selectedContractor?.id || selectedContractor?._id || selectedContractor?.email || selectedContractor?.companyName || selectedContractor?.name || '').toLowerCase();
+
+                  if (selectedContractor && selIdStr && selIdStr === cIdStr) {
+                    setSelectedContractor(null);
+                  } else {
+                    setSelectedContractor(c);
+                  }
                   setShowContractorModal(false);
                 }}
                 onCancel={() => setShowContractorModal(false)}

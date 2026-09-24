@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
@@ -18,7 +18,8 @@ import {
   ShieldCheck,
   Eye,
   ImageIcon,
-  Trash2
+  Trash2,
+  CheckCircle2
 } from 'lucide-react';
 import {
   getTimberReferenceRate,
@@ -88,7 +89,15 @@ const TreeInventoryPage = () => {
   const landownerCtx = useLandowner() || {};
   const properties = landownerCtx.properties || [];
   const inventories = landownerCtx.inventories || landownerCtx.treeInventories || [];
+  const harvestRequests = landownerCtx.harvestRequests || [];
   const deleteInventory = landownerCtx.deleteInventory || landownerCtx.deleteTreeInventory;
+  const refreshHarvestRequests = landownerCtx.refreshHarvestRequests;
+
+  useEffect(() => {
+    if (typeof refreshHarvestRequests === 'function') {
+      refreshHarvestRequests();
+    }
+  }, []);
 
   // State for image lightbox modal
   const [activePhotoModal, setActivePhotoModal] = useState(null); // { photos: [], index: 0, title: '' }
@@ -212,26 +221,26 @@ const TreeInventoryPage = () => {
                       const count = Number(sp.numberOfTrees || sp.count || 0);
                       totalTreesCount += count;
                       const spPhotos = (sp.photos && sp.photos.length > 0) ? sp.photos : (inv.photos || []);
-                      const speciesTitle = sp.treeSpecies || sp.species || p.mainSpecies || 'Trees';
+                      const speciesTitle = sp.treeSpecies || sp.species || p.mainSpecies || '';
                       const volStr = sp.estimatedVolume || sp.volume || null;
                       const volNum = volStr ? parseVolumeNumber(volStr) : 0;
                       const snapshot = sp.rate_snapshot || {};
-                      const rate = snapshot.rate_per_m3 || sp.reference_rate || (speciesTitle ? getTimberReferenceRate(speciesTitle) : 0) || 0;
-                      const approx = sp.approximate_timber_value || (volNum > 0 ? calculateApproxTimberValue(speciesTitle, volStr, rate) : null);
+                      const rate = snapshot.rate_per_m3 || sp.reference_rate || 0;
+                      const approx = sp.approximate_timber_value || (volNum > 0 && rate > 0 ? calculateApproxTimberValue(speciesTitle, volStr, rate) : null);
 
                       allTreeGroups.push({
                         id: sp.id || inv.id || inv._id || `sp_${allTreeGroups.length + 1}`,
                         invId: inv.id || inv._id || sp.id,
-                        groupName: sp.groupName || `${speciesTitle} Stand`,
-                        species: speciesTitle,
+                        groupName: sp.groupName || (speciesTitle ? `${speciesTitle} Stand` : 'Tree Stand'),
+                        species: speciesTitle || 'Unspecified Species',
                         count: count,
                         age: sp.approxAge || sp.age || '',
-                        condition: sp.treeCondition || sp.condition || 'Healthy',
+                        condition: sp.treeCondition || sp.condition || '',
                         notes: sp.notes || '',
                         location: sp.locationInProperty || sp.location || inv.treeAreaLocation || '',
                         girth: sp.girth || '',
-                        volume: volNum > 0 ? `${volNum.toFixed(2)} m³` : '',
-                        ratePerM3: rate,
+                        volume: volNum > 0 ? `${volNum.toFixed(2)} m³` : (volStr ? String(volStr) : ''),
+                        ratePerM3: rate > 0 ? rate : null,
                         approxValue: approx,
                         rateSource: sp.rate_source || snapshot.rate_source || '',
                         effectiveDate: sp.rate_effective_date || snapshot.rate_effective_date || '',
@@ -260,9 +269,11 @@ const TreeInventoryPage = () => {
                         <div className="flex flex-wrap items-start justify-between gap-4">
                           <div className="space-y-2 max-w-2xl">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="ld-badge-green">
-                                {p.propertyType || 'Residential Property'}
-                              </span>
+                              {p.propertyType ? (
+                                <span className="ld-badge-green">
+                                  {p.propertyType}
+                                </span>
+                              ) : null}
                               <span className="ld-pill text-[11px] py-0.5 px-2.5 font-mono">
                                 ID: {pId}
                               </span>
@@ -272,14 +283,19 @@ const TreeInventoryPage = () => {
                               {p.propertyName}
                             </h2>
 
-                            <p className="text-xs sm:text-sm text-slate-300 flex items-center gap-1.5 font-medium">
-                              <MapPin size={15} className="text-emerald-400 shrink-0" />
-                              <span>
-                                {p.address && `${p.address}, `}
-                                {p.localBody ? `${p.localBody}, ` : ''}
-                                {p.district}, {p.state} {p.pinCode && `(${p.pinCode})`}
-                              </span>
-                            </p>
+                            {(() => {
+                              const addressParts = [p.address, p.localBody, p.village, p.district, p.state].filter(Boolean);
+                              if (addressParts.length === 0) return null;
+                              return (
+                                <p className="text-xs sm:text-sm text-slate-300 flex items-center gap-1.5 font-medium">
+                                  <MapPin size={15} className="text-emerald-400 shrink-0" />
+                                  <span>
+                                    {addressParts.join(', ')}
+                                    {p.pinCode ? ` (${p.pinCode})` : ''}
+                                  </span>
+                                </p>
+                              );
+                            })()}
                           </div>
 
                           <div className="flex items-center gap-2.5 flex-wrap">
@@ -290,13 +306,33 @@ const TreeInventoryPage = () => {
                             >
                               <Plus size={15} /> Add More Trees
                             </button>
-                            <button
-                              onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)}
-                              className="ld-btn-outline py-2 px-3.5 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
-                              style={{ width: 'auto' }}
-                            >
-                              <Axe size={15} /> Request Harvest
-                            </button>
+                            {(() => {
+                              const pIdStr = String(pId || '');
+                              const hasActiveReq = (harvestRequests || []).some((req) => {
+                                if (!req || req.status === 'CANCELLED' || req.status === 'DELETED' || req.status === 'COMPLETED') return false;
+                                const reqPropId = String(req.property_id || req.propertyId || '');
+                                return pIdStr && reqPropId === pIdStr;
+                              });
+
+                              return hasActiveReq ? (
+                                <button
+                                  onClick={() => navigate('/landowner/harvest-requests')}
+                                  className="ld-btn-outline py-2 px-3.5 text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                  style={{ width: 'auto' }}
+                                  title="Harvest request already sent to contractor. Click to view request details."
+                                >
+                                  <CheckCircle2 size={15} /> Request Sent
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)}
+                                  className="ld-btn-outline py-2 px-3.5 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                                  style={{ width: 'auto' }}
+                                >
+                                  <Axe size={15} /> Request Harvest
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -305,7 +341,7 @@ const TreeInventoryPage = () => {
                           <div className="ld-kpi-box">
                             <span className="ld-kpi-label">Land Area</span>
                             <span className="ld-kpi-number text-white">
-                              {p.totalArea ? `${p.totalArea} ${p.areaUnit || 'Acres'}` : 'Residential Plot'}
+                              {p.totalArea ? `${p.totalArea}${p.areaUnit ? ' ' + p.areaUnit : ''}` : 'Not Specified'}
                             </span>
                           </div>
 
@@ -327,14 +363,14 @@ const TreeInventoryPage = () => {
                             <span className="ld-kpi-label">Status</span>
                             <div>
                               <span className="ld-pill text-xs py-1 px-3 bg-emerald-500/15 border-emerald-500/30 text-emerald-300 font-bold">
-                                Active Inventory
+                                {p.status || 'Active Estate'}
                               </span>
                             </div>
                           </div>
                         </div>
 
                         {/* Safety & Risk Banner */}
-                        {p.riskFactors && p.riskFactors.length > 0 && (
+                        {((p.riskFactors && p.riskFactors.length > 0) || p.riskNotes) && (
                           <div
                             className="p-5 rounded-xl bg-amber-500/10 border border-amber-500/35 space-y-2.5 text-xs shadow-lg"
                             style={{ marginTop: '32px', marginBottom: '32px' }}
@@ -342,13 +378,18 @@ const TreeInventoryPage = () => {
                             <div className="flex items-center gap-2 text-amber-400 font-bold uppercase tracking-wider text-[11.5px]">
                               <ShieldCheck size={18} /> Flagged Safety &amp; Hazard Factors
                             </div>
-                            <div className="flex flex-wrap gap-2.5 pt-1">
-                              {p.riskFactors.map((rf, idx) => (
-                                <span key={idx} className="px-3.5 py-2 rounded-xl bg-amber-500/20 text-amber-200 text-xs font-bold border border-amber-500/40 shadow-sm">
-                                  {rf}
-                                </span>
-                              ))}
-                            </div>
+                            {p.riskFactors && p.riskFactors.length > 0 && (
+                              <div className="flex flex-wrap gap-2.5 pt-1">
+                                {p.riskFactors.map((rf, idx) => (
+                                  <span key={idx} className="px-3.5 py-2 rounded-xl bg-amber-500/20 text-amber-200 text-xs font-bold border border-amber-500/40 shadow-sm">
+                                    {rf}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {p.riskNotes && (
+                              <p className="text-amber-200 text-xs mt-1">{p.riskNotes}</p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -429,34 +470,77 @@ const TreeInventoryPage = () => {
                                         <span className="ld-pill text-xs py-1 px-3">
                                           {tg.count} Trees
                                         </span>
-                                        <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${tg.condition === 'Healthy'
-                                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                                          : tg.condition === 'Damaged'
-                                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                                            : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                                        {tg.condition ? (
+                                          <span className={`px-3 py-1 rounded-lg text-xs font-bold border ${
+                                            tg.condition.toLowerCase() === 'healthy'
+                                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                              : tg.condition.toLowerCase() === 'damaged'
+                                                ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                                                : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
                                           }`}>
-                                          {tg.condition}
-                                        </span>
+                                            {tg.condition}
+                                          </span>
+                                        ) : null}
                                       </div>
                                     </div>
 
                                     {/* Specifications Subcards Grid */}
-                                    <div className="grid grid-cols-2 gap-3.5 text-xs">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                      <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 space-y-1.5 shadow-sm">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Logged Quantity</span>
+                                        <span className="font-extrabold text-emerald-400 text-base block">
+                                          {tg.count} {Number(tg.count) === 1 ? 'Standing Tree' : 'Standing Trees'}
+                                        </span>
+                                      </div>
+
                                       {tg.age ? (
-                                        <div className="ld-subcard space-y-1">
+                                        <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 space-y-1.5 shadow-sm">
                                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Approximate Age</span>
-                                          <span className="font-bold text-white text-sm block">{tg.age}</span>
+                                          <span className="font-extrabold text-white text-base block">
+                                            {/^\d+$/.test(String(tg.age).trim()) ? `${tg.age} Years` : tg.age}
+                                          </span>
                                         </div>
                                       ) : null}
-                                      <div className={`ld-subcard space-y-1 ${!tg.age ? 'col-span-2' : ''}`}>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Logged Quantity</span>
-                                        <span className="font-bold text-emerald-400 text-sm block">{tg.count} Standing Trees</span>
-                                      </div>
+
+                                      {tg.girth ? (
+                                        <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 space-y-1.5 shadow-sm">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Girth / Circumference</span>
+                                          <span className="font-bold text-white text-sm block">{tg.girth}</span>
+                                        </div>
+                                      ) : null}
+
+                                      {tg.dbh ? (
+                                        <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 space-y-1.5 shadow-sm">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Average DBH</span>
+                                          <span className="font-bold text-white text-sm block">{tg.dbh}</span>
+                                        </div>
+                                      ) : null}
+
+                                      {tg.height ? (
+                                        <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 space-y-1.5 shadow-sm">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Average Height</span>
+                                          <span className="font-bold text-white text-sm block">{tg.height}</span>
+                                        </div>
+                                      ) : null}
+
+                                      {tg.volume ? (
+                                        <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 space-y-1.5 shadow-sm">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimated Volume</span>
+                                          <span className="font-bold text-white text-sm block">{tg.volume}</span>
+                                        </div>
+                                      ) : null}
+
+                                      {tg.approxValue ? (
+                                        <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 space-y-1.5 shadow-sm">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimated Timber Value</span>
+                                          <span className="font-bold text-emerald-400 text-sm block">{typeof tg.approxValue === 'number' ? formatINR(tg.approxValue) : tg.approxValue}</span>
+                                        </div>
+                                      ) : null}
                                     </div>
 
                                     {/* Plot Position */}
                                     {tg.location ? (
-                                      <div className="ld-subcard text-xs space-y-1">
+                                      <div className="p-4 rounded-xl bg-[#090e0b]/90 border border-emerald-500/20 text-xs space-y-1.5 shadow-sm">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Location / Plot Position within Estate</span>
                                         <span className="font-semibold text-slate-200 flex items-center gap-1.5 mt-0.5">
                                           📍 {tg.location}
@@ -492,14 +576,35 @@ const TreeInventoryPage = () => {
                                       >
                                         <Trash2 size={14} /> Delete
                                       </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)}
-                                        className="ld-btn-outline py-2 px-3.5 text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
-                                        style={{ width: 'auto' }}
-                                      >
-                                        <Axe size={14} /> Request Harvest
-                                      </button>
+                                      {(() => {
+                                        const pIdStr = String(pId || '');
+                                        const hasActiveReq = (harvestRequests || []).some((req) => {
+                                          if (!req || req.status === 'CANCELLED' || req.status === 'DELETED' || req.status === 'COMPLETED') return false;
+                                          const reqPropId = String(req.property_id || req.propertyId || '');
+                                          return pIdStr && reqPropId === pIdStr;
+                                        });
+
+                                        return hasActiveReq ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => navigate('/landowner/harvest-requests')}
+                                            className="ld-btn-outline py-2 px-3.5 text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                            style={{ width: 'auto' }}
+                                            title="Harvest request already sent to contractor. Click to view request details."
+                                          >
+                                            <CheckCircle2 size={14} /> Request Sent
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)}
+                                            className="ld-btn-outline py-2 px-3.5 text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                            style={{ width: 'auto' }}
+                                          >
+                                            <Axe size={14} /> Request Harvest
+                                          </button>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
                                 </div>

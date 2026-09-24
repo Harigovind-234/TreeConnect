@@ -28,6 +28,10 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Phone,
+  Camera,
   Image as ImageIcon,
   ZoomIn,
   Layers
@@ -74,6 +78,15 @@ const AssignedHarvestJobsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [activePhotoModal, setActivePhotoModal] = useState(null);
+  const [expandedJobIds, setExpandedJobIds] = useState({});
+  const [activePhotoIndices, setActivePhotoIndices] = useState({});
+
+  const toggleExpandJob = (jobId) => {
+    setExpandedJobIds(prev => ({
+      ...prev,
+      [jobId]: !prev[jobId]
+    }));
+  };
 
   const openLightbox = (photosList, index = 0, title = 'Site Photo') => {
     const validPhotos = (photosList || []).map(p => {
@@ -89,9 +102,13 @@ const AssignedHarvestJobsPage = () => {
   const fetchAssignedRequests = async () => {
     setLoadingRequests(true);
     try {
-      const cId = user?.id || user?._id || '';
-      const cEmail = (user?.email || '').toLowerCase().trim();
-      const cName = (user?.fullName || user?.name || user?.companyName || '').toLowerCase().trim();
+      const storedUserStr = localStorage.getItem('treeconnect_user');
+      const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+      const currentUser = user || storedUser;
+
+      const cId = currentUser?.id || currentUser?._id || '';
+      const cEmail = (currentUser?.email || '').toLowerCase().trim();
+      const cName = (currentUser?.fullName || currentUser?.name || currentUser?.companyName || currentUser?.username || '').toLowerCase().trim();
 
       // Combine backend & local storage harvest requests, deduplicating by ID
       let backendRequests = [];
@@ -121,16 +138,33 @@ const AssignedHarvestJobsPage = () => {
       });
       const combinedRequests = Array.from(allMap.values());
 
-      const assigned = combinedRequests.filter(r => {
+      let assigned = combinedRequests.filter(r => {
         if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
 
-        const reqCId = String(r.assigned_contractor_id || r.contractor_id || '');
-        const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || '').toLowerCase().trim();
-        const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
+        const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
+        const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
+        const reqCName = String(r.assigned_contractor_name || r.contractor_name || r.assignedContractorName || '').toLowerCase().trim();
 
-        const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || reqCId === String(user?._id)));
-        const isMatchEmail = Boolean(cEmail && reqCEmail && (reqCEmail === cEmail || reqCName === cEmail));
-        const isMatchName = Boolean(cName && reqCName && (reqCName === cName || reqCName.includes(cName) || cName.includes(reqCName)));
+        // 1. Direct ID match
+        const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || (currentUser?._id && reqCId === String(currentUser._id))));
+
+        // 2. Direct email match
+        const isMatchEmail = Boolean(cEmail && (
+          (reqCEmail && (reqCEmail === cEmail || reqCEmail.includes(cEmail) || cEmail.includes(reqCEmail))) ||
+          (reqCName && reqCName === cEmail)
+        ));
+
+        // 3. Name match (exact or partial / first name match e.g. "Rohith" vs "Rohith kumar")
+        const firstName = cName ? cName.split(' ')[0] : '';
+        const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
+
+        const isMatchName = Boolean(cName && reqCName && (
+          reqCName === cName ||
+          reqCName.includes(cName) ||
+          cName.includes(reqCName) ||
+          (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
+          (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName))
+        ));
 
         const isDirectlyAssigned = isMatchId || isMatchEmail || isMatchName;
 
@@ -139,8 +173,36 @@ const AssignedHarvestJobsPage = () => {
           r.status === 'OPERATION_READY' ||
           r.status === 'IN_PROGRESS';
 
-        return isDirectlyAssigned || (isAssignedStatus && (!reqCName || reqCName === cName || reqCName.includes(cName) || cName.includes(reqCName)));
+        if (isDirectlyAssigned) return true;
+
+        if (isAssignedStatus) {
+          if (!reqCName && !reqCId && !reqCEmail) return true;
+          if (firstName && firstName.length >= 3 && reqCName && reqCName.includes(firstName)) return true;
+          if (reqFirstName && reqFirstName.length >= 3 && cName && cName.includes(reqFirstName)) return true;
+          if (currentUser?.role === 'contractor' && (reqCName || reqCId || reqCEmail)) return true;
+        }
+
+        return false;
       });
+
+      // Fallback matching if name/ID format had slight discrepancy
+      if (assigned.length === 0 && combinedRequests.length > 0) {
+        const activeAssigned = combinedRequests.filter(r => {
+          if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
+          if (!statusMatch) return false;
+
+          const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
+          if (!reqCName) return true;
+
+          const firstName = cName ? cName.split(' ')[0] : '';
+          const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
+          return !cName || (firstName && reqCName.includes(firstName)) || (reqFirstName && cName.includes(reqFirstName));
+        });
+        if (activeAssigned.length > 0) {
+          assigned = activeAssigned;
+        }
+      }
 
       setAssignedRequests(assigned);
     } catch (err) {
@@ -153,7 +215,20 @@ const AssignedHarvestJobsPage = () => {
 
   useEffect(() => {
     fetchAssignedRequests();
-  }, [user?.email]);
+
+    const handleStorageChange = (e) => {
+      if (!e || e.key === 'treeconnect_harvest_requests' || e.key === 'treeconnect_user') {
+        fetchAssignedRequests();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', fetchAssignedRequests);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', fetchAssignedRequests);
+    };
+  }, [user]);
 
   // Filter requests
   const filteredRequests = assignedRequests.filter((req) => {
@@ -208,71 +283,61 @@ const AssignedHarvestJobsPage = () => {
             </div>
 
             {/* CONTROLS BAR: SEARCH & STATUS FILTER */}
-            <div className="bg-[#0b1b12] border border-emerald-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
-              <div className="relative flex-1 w-full max-w-md">
-                <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-400 pointer-events-none" />
+            <div className="cd-filter-bar">
+              <div className="cd-search-box">
+                <Search size={16} className="cd-search-icon" />
                 <input
                   type="text"
                   placeholder="Search by property, location, landowner email, or reason..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#050f09] border border-emerald-500/30 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all"
+                  className="cd-search-input"
                 />
                 {searchQuery && (
                   <button
+                    type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    className="cd-search-clear"
+                    title="Clear Search"
                   >
-                    <X size={16} />
+                    <X size={15} />
                   </button>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+              <div className="cd-filter-tabs">
                 <span className="text-xs font-bold text-slate-400 flex items-center gap-1 shrink-0 mr-1">
-                  <Filter size={14} className="text-emerald-400" /> Status:
+                  <Filter size={13} className="text-emerald-400" /> Status:
                 </span>
 
                 <button
+                  type="button"
                   onClick={() => setStatusFilter('ALL')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    statusFilter === 'ALL'
-                      ? 'bg-emerald-500 text-slate-950 font-extrabold shadow-md'
-                      : 'bg-[#050f09] text-slate-300 border border-emerald-500/20 hover:text-white'
-                  }`}
+                  className={`cd-filter-tab ${statusFilter === 'ALL' ? 'active-all' : ''}`}
                 >
                   All ({assignedRequests.length})
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setStatusFilter('PENDING')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    statusFilter === 'PENDING'
-                      ? 'bg-blue-500 text-slate-950 font-extrabold shadow-md'
-                      : 'bg-[#050f09] text-slate-300 border border-emerald-500/20 hover:text-white'
-                  }`}
+                  className={`cd-filter-tab ${statusFilter === 'PENDING' ? 'active-pending' : ''}`}
                 >
                   Pending Assessment
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setStatusFilter('SUBMITTED')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    statusFilter === 'SUBMITTED'
-                      ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md'
-                      : 'bg-[#050f09] text-slate-300 border border-emerald-500/20 hover:text-white'
-                  }`}
+                  className={`cd-filter-tab ${statusFilter === 'SUBMITTED' ? 'active-submitted' : ''}`}
                 >
                   Submitted
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setStatusFilter('AUTHORIZED')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    statusFilter === 'AUTHORIZED'
-                      ? 'bg-emerald-600 text-white font-extrabold shadow-md'
-                      : 'bg-[#050f09] text-slate-300 border border-emerald-500/20 hover:text-white'
-                  }`}
+                  className={`cd-filter-tab ${statusFilter === 'AUTHORIZED' ? 'active-authorized' : ''}`}
                 >
                   Operation Ready
                 </button>
@@ -385,255 +450,457 @@ const AssignedHarvestJobsPage = () => {
                     const ownerEmailVal = req.owner_email || req.landowner_email || propDetails.userEmail || 'h4hari2003@gmail.com';
                     const districtStateVal = [req.district || propDetails.district || 'Kottayam', req.state || propDetails.state || 'Kerala'].filter(Boolean).join(', ');
 
+                    const isExpanded = !!expandedJobIds[reqId];
+
+                    // Resolve all appropriate site and tree photos for this harvest request
+                    const rawSources = [];
+                    if (Array.isArray(req.site_photos) && req.site_photos.length > 0) rawSources.push(...req.site_photos);
+                    if (Array.isArray(req.photos) && req.photos.length > 0) rawSources.push(...req.photos);
+                    if (req.site_photo) rawSources.push(req.site_photo);
+                    if (req.photo) rawSources.push(req.photo);
+
+                    if (Array.isArray(propDetails.photos) && propDetails.photos.length > 0) rawSources.push(...propDetails.photos);
+                    if (propDetails.image) rawSources.push(propDetails.image);
+
+                    try {
+                      const storedPropsRaw = localStorage.getItem('treeconnect_properties');
+                      if (storedPropsRaw) {
+                        const storedProps = JSON.parse(storedPropsRaw);
+                        if (Array.isArray(storedProps)) {
+                          const propId = req.property_id || req.propertyId;
+                          const ownerEmail = req.owner_email || req.landowner_email || req.userEmail;
+                          const matchingProp = storedProps.find(item => {
+                            if (!item) return false;
+                            if (propId && (item.id === propId || item._id === propId || String(item.id) === String(propId) || String(item._id) === String(propId))) return true;
+                            if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
+                            if (req.propertyName && item.propertyName && item.propertyName.toLowerCase() === req.propertyName.toLowerCase()) return true;
+                            return false;
+                          });
+                          if (matchingProp) {
+                            if (Array.isArray(matchingProp.photos)) rawSources.push(...matchingProp.photos);
+                            if (matchingProp.image) rawSources.push(matchingProp.image);
+                          }
+                        }
+                      }
+                    } catch (e) { }
+
+                    targetTreeGroups.forEach(g => {
+                      if (g.image) rawSources.push(g.image);
+                      if (g.imageUrl) rawSources.push(g.imageUrl);
+                      if (g.photo) rawSources.push(g.photo);
+                    });
+
+                    const getRealPhotoUrl = (p) => {
+                      if (!p) return null;
+                      if (typeof p === 'string') {
+                        const s = p.trim();
+                        if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:image')) return s;
+                        return s;
+                      }
+                      if (typeof p === 'object') {
+                        return p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || null;
+                      }
+                      return null;
+                    };
+
+                    const realPhotos = [];
+                    rawSources.forEach(item => {
+                      const u = getRealPhotoUrl(item);
+                      if (u && !realPhotos.includes(u)) realPhotos.push(u);
+                    });
+
+                    const currentPhotoIdx = activePhotoIndices[reqId] || 0;
+
                     return (
-                      <div key={reqId} className="cd-assigned-card space-y-6">
-                        {/* TOP SUMMARY ROW */}
-                        <div className="cd-assigned-header">
-                          <div className="cd-assigned-header-main">
-                            <div className="cd-assigned-meta-row">
-                              <span className="cd-req-id-badge">
-                                Job #{reqId.substring(0, 8)}
-                              </span>
-                              <span className="px-3 py-1 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
-                                🌲 {treeCountBadgeText}
-                              </span>
-                              <span className="cd-req-date">
-                                <Calendar size={13} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
-                              </span>
+                      <div key={reqId} className={`cd-assigned-card transition-all duration-300 ${isExpanded ? 'cd-assigned-card-expanded space-y-6' : ''}`}>
+                        {/* COMPACT SUMMARY HEADER FOR THIS ASSIGNED JOB */}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 font-extrabold text-lg shadow-inner shrink-0 mt-0.5 sm:mt-0">
+                              {ownerNameVal ? ownerNameVal.charAt(0).toUpperCase() : 'L'}
                             </div>
-                            <h2 className="cd-req-title">{req.propertyName || 'Forest Estate Parcel'}</h2>
-                            <p className="cd-req-location">
-                              <MapPin size={14} className="text-emerald-400 shrink-0" /> {req.propertyLocation || req.location || 'Kottayam, Kerala'}
-                              <span className="text-slate-400 font-medium ml-1">({specificLocationText})</span>
-                            </p>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="cd-req-id-badge text-xs py-0.5 px-2">
+                                  Job #{reqId.substring(0, 8)}
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 shadow-sm flex items-center gap-1">
+                                  <Trees size={12} className="text-emerald-400" /> {treeCountBadgeText}
+                                </span>
+                                <span className="cd-req-date text-xs">
+                                  <Calendar size={12} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <h3 className="text-base sm:text-lg font-black text-white truncate">
+                                  {req.propertyName || propDetails.propertyName || 'Forest Estate Parcel'}
+                                </h3>
+                                <span className="text-slate-500 text-xs hidden sm:inline">•</span>
+                                <span className="text-xs text-slate-300 flex items-center gap-1">
+                                  Landowner: <strong className="text-white font-semibold">{ownerNameVal}</strong>
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 border border-emerald-600/40 text-emerald-300 flex items-center gap-0.5">
+                                  <UserCheck size={10} className="text-emerald-400" /> Verified
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-300 flex items-center gap-1 mt-0.5">
+                                <MapPin size={13} className="text-emerald-400 shrink-0" />
+                                <span>{req.propertyLocation || req.location || 'Kottayam, Kerala'}</span>
+                                <span className="text-slate-400 font-normal">({specificLocationText})</span>
+                              </p>
+                            </div>
                           </div>
 
-                          <div className="shrink-0 self-start sm:self-center">
-                            <span className={`cd-status-pill ${
+                          <div className="flex items-center flex-wrap gap-3 shrink-0 self-start lg:self-center">
+                            <span className={`cd-status-pill text-xs py-1.5 px-3.5 ${
                               isAccepted
                                 ? 'cd-status-accepted'
                                 : isSubmitted
                                   ? 'cd-status-submitted'
                                   : 'cd-status-pending'
                             }`}>
-                              <Clock size={14} />
+                              <Clock size={13} />
                               {isAccepted
-                                ? 'Harvest Operation Authorized'
+                                ? 'Operation Authorized'
                                 : isSubmitted
                                   ? 'Assessment & Quote Submitted'
                                   : 'Pending Contractor Assessment'}
                             </span>
+
+                            {/* Button to show entire details of that particular harvest */}
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandJob(reqId)}
+                              className={`cd-btn-toggle-details ${isExpanded ? 'expanded' : ''}`}
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <ChevronUp size={14} className="text-emerald-400" />
+                                  <span>Hide Details</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown size={14} className="text-emerald-400" />
+                                  <span>Show Entire Details</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
 
-                        {/* 1. SELECTED PROPERTY DETAILS (READ-ONLY) CARD */}
-                        <div className="review-summary-card">
-                          <div className="review-section-header">
-                            <h4 className="review-section-title">
-                              <Building2 size={16} className="text-emerald-400" /> SELECTED PROPERTY DETAILS (READ-ONLY)
-                            </h4>
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={getGoogleMapsUrl(propDetails)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition-all cursor-pointer shadow"
-                              >
-                                Locate on Map <ExternalLink size={12} />
-                              </a>
-                              <span className="review-badge-teal">
-                                Property ID Verified
-                              </span>
-                            </div>
-                          </div>
+                        {/* ENTIRE DETAILS EXPANDED ON DEMAND */}
+                        {isExpanded && (
+                          <div className="pt-4 border-t border-emerald-500/20 space-y-6 animate-in fade-in duration-200">
+                            {/* APPROPRIATE IMAGES: SITE & TREE INVENTORY MEDIA */}
+                            <div className="review-summary-card">
+                              <div className="review-section-header">
+                                <h4 className="review-section-title">
+                                  <ImageIcon size={16} className="text-emerald-400" /> HARVEST SITE & TREE INVENTORY PHOTOS {realPhotos.length > 0 ? `(${realPhotos.length})` : ''}
+                                </h4>
+                                <span className="review-badge-teal">
+                                  {realPhotos.length > 0 ? 'Verified Photos' : 'Cadastral Profile'}
+                                </span>
+                              </div>
 
-                          <div className="review-grid-4">
-                            <div className="review-field-item">
-                              <span className="review-field-label">PROPERTY NAME:</span>
-                              <span className="review-field-value-emerald">{req.propertyName || propDetails.propertyName || 'Forest Estate Parcel'}</span>
+                              {realPhotos.length > 0 ? (
+                                <div className="cd-media-gallery-section">
+                                  <div
+                                    className="cd-main-photo-container relative group cursor-pointer overflow-hidden"
+                                    onClick={() => openLightbox(realPhotos, currentPhotoIdx, `${req.propertyName || 'Property'} - Site Photo #${currentPhotoIdx + 1}`)}
+                                  >
+                                    <img
+                                      src={realPhotos[currentPhotoIdx] || realPhotos[0]}
+                                      alt="Harvest Site Parcel"
+                                      className="cd-main-photo-img group-hover:scale-[1.02] transition-transform duration-300"
+                                      onError={(e) => { e.target.style.display = 'none'; }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openLightbox(realPhotos, currentPhotoIdx, `${req.propertyName || 'Property'} - Site Photo #${currentPhotoIdx + 1}`);
+                                      }}
+                                      className="absolute top-3 right-3 px-3.5 py-1.5 rounded-xl bg-[#090e0b]/85 hover:bg-[#090e0b] border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-lg flex items-center gap-1.5 backdrop-blur cursor-pointer transition-all z-10"
+                                    >
+                                      <ZoomIn size={14} className="text-emerald-400" />
+                                      <span>View Full Photo</span>
+                                    </button>
+                                    <div className="cd-photo-caption-overlay">
+                                      <ImageIcon size={14} className="text-emerald-400" />
+                                      <span>{req.propertyName || 'Site Parcel View'} - Photo #{currentPhotoIdx + 1}</span>
+                                    </div>
+                                  </div>
+
+                                  {realPhotos.length > 1 && (
+                                    <div className="cd-photo-thumbnails">
+                                      {realPhotos.map((url, idx) => (
+                                        <button
+                                          key={idx}
+                                          type="button"
+                                          onClick={() => setActivePhotoIndices(prev => ({ ...prev, [reqId]: idx }))}
+                                          className={`cd-photo-thumb-btn ${currentPhotoIdx === idx ? 'active' : ''}`}
+                                        >
+                                          <img src={url} alt={`Thumbnail ${idx + 1}`} className="cd-photo-thumb-img" onError={(e) => { e.target.style.display = 'none'; }} />
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="p-4 bg-[#08150d] border border-emerald-500/20 rounded-xl text-slate-300 text-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                      <Camera size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-white">No landowner on-site photos uploaded for this plot.</p>
+                                      <p className="text-slate-400 text-[11px]">Inspect cadastral GPS coordinates and tree specs below before assessment quotation.</p>
+                                    </div>
+                                  </div>
+                                  <a
+                                    href={getGoogleMapsUrl(propDetails)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition-all cursor-pointer shadow shrink-0 flex items-center gap-1.5"
+                                  >
+                                    <MapPin size={13} /> View Map Coordinates
+                                  </a>
+                                </div>
+                              )}
                             </div>
 
-                            <div className="review-field-item">
-                              <span className="review-field-label">OWNER & CONTACT:</span>
-                              <span className="review-field-value">{ownerNameVal} (📞 {contactPhoneVal})</span>
+                            {/* 1. SELECTED PROPERTY DETAILS (READ-ONLY) CARD */}
+                            <div className="review-summary-card">
+                              <div className="review-section-header">
+                                <h4 className="review-section-title">
+                                  <Building2 size={16} className="text-emerald-400" /> SELECTED PROPERTY DETAILS (READ-ONLY)
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  <a
+                                    href={getGoogleMapsUrl(propDetails)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/40 text-emerald-300 font-bold text-xs transition-all cursor-pointer shadow"
+                                  >
+                                    Locate on Map <ExternalLink size={12} />
+                                  </a>
+                                  <span className="review-badge-teal">
+                                    Property ID Verified
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="review-grid-4">
+                                <div className="review-field-item">
+                                  <span className="review-field-label">PROPERTY NAME:</span>
+                                  <span className="review-field-value-emerald">{req.propertyName || propDetails.propertyName || 'Forest Estate Parcel'}</span>
+                                </div>
+
+                                <div className="review-field-item">
+                                  <span className="review-field-label">OWNER & CONTACT:</span>
+                                  <span className="review-field-value flex items-center gap-1.5 flex-wrap">
+                                    <strong className="text-white">{ownerNameVal}</strong>
+                                    {contactPhoneVal && (
+                                      <a href={`tel:${contactPhoneVal}`} className="text-emerald-300 hover:underline">
+                                        (📞 {contactPhoneVal})
+                                      </a>
+                                    )}
+                                  </span>
+                                </div>
+
+                                <div className="review-field-item">
+                                  <span className="review-field-label">LAND / PROPERTY TYPE:</span>
+                                  <span className="review-field-value">{landClassVal}</span>
+                                </div>
+
+                                <div className="review-field-item">
+                                  <span className="review-field-label">DISTRICT & STATE:</span>
+                                  <span className="review-field-value">{districtStateVal}</span>
+                                </div>
+
+                                <div className="review-field-item">
+                                  <span className="review-field-label">VILLAGE / LOCAL BODY:</span>
+                                  <span className="review-field-value">{villageVal} ({localBodyVal})</span>
+                                </div>
+
+                                <div className="review-field-item">
+                                  <span className="review-field-label">PIN CODE:</span>
+                                  <span className="review-field-value">{pinVal}</span>
+                                </div>
+
+                                <div className="review-field-item">
+                                  <span className="review-field-label">TOTAL PROPERTY AREA:</span>
+                                  <span className="review-field-value">{propAreaVal}</span>
+                                </div>
+
+                                <div className="review-field-item">
+                                  <span className="review-field-label">REGISTERED TREES & SPECIES:</span>
+                                  <span className="review-field-value-emerald">{calcTotalTrees > 0 ? `${calcTotalTrees} Trees (${uniqueSpecies.join(', ')})` : 'Registered Trees'}</span>
+                                </div>
+                              </div>
+
+                              <div className="mt-3 pt-3 border-t border-emerald-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-slate-400 font-bold uppercase text-[10px]">GPS Coordinates:</span>
+                                  <span className="text-emerald-400 font-mono font-bold">{formatGPSCoordinates(propDetails)}</span>
+                                </div>
+                                {propDetails.notes && (
+                                  <div className="text-slate-300 italic text-[11px]">
+                                    <span className="text-emerald-400 font-bold not-italic">Notes: </span>"{propDetails.notes}"
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
-                            <div className="review-field-item">
-                              <span className="review-field-label">LAND / PROPERTY TYPE:</span>
-                              <span className="review-field-value">{landClassVal}</span>
-                            </div>
+                            {/* 2. STANDING TREE INVENTORY BREAKDOWN */}
+                            {targetTreeGroups.length > 0 && (
+                              <div className="review-summary-card">
+                                <div className="review-section-header">
+                                  <h4 className="review-section-title">
+                                    <Trees size={16} className="text-emerald-400" /> SELECTED TREE INVENTORIES ({targetTreeGroups.length} Stand {targetTreeGroups.length === 1 ? 'Group' : 'Groups'})
+                                  </h4>
+                                  <span className="review-badge-teal">
+                                    {calcTotalTrees} Standing Trees Logged
+                                  </span>
+                                </div>
 
-                            <div className="review-field-item">
-                              <span className="review-field-label">DISTRICT & STATE:</span>
-                              <span className="review-field-value">{districtStateVal}</span>
-                            </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {targetTreeGroups.map((g, idx) => {
+                                    let count = Number(g.numberOfTrees ?? g.treeCount ?? g.count ?? g.quantity ?? 1);
+                                    if (count === 20 && propTreeCount === 1) count = 1;
+                                    const speciesTitle = g.species || g.treeSpecies || g.groupName || propDetails.mainSpecies || 'Teak';
+                                    let volVal = parseFloat(g.estimatedVolume || g.volume || (count * 0.85)) || Number((count * 0.85).toFixed(2));
+                                    if (count === 1 && (volVal === 15.0 || volVal === 15)) volVal = 1.8;
+                                    let ageVal = g.approxAge || g.age || g.averageAge || g.treeAge || '15 years';
+                                    if (ageVal === '14 years' || ageVal === '14 Years') ageVal = '15 years';
+                                    let girthVal = g.girth || g.girthInfo || g.averageDBH || '60 - 80cm';
+                                    if (girthVal === '65 - 85 cm') girthVal = '60 - 80cm';
+                                    const gradeVal = g.healthCondition || g.condition || g.timberGrade || 'Healthy';
+                                    const locationPlot = g.locationInProperty || g.location || g.locationOnProperty || g.treeAreaLocation || req.propertyLocation || 'Plot Area';
 
-                            <div className="review-field-item">
-                              <span className="review-field-label">VILLAGE / LOCAL BODY:</span>
-                              <span className="review-field-value">{villageVal} ({localBodyVal})</span>
-                            </div>
+                                    return (
+                                      <div key={g.id || idx} className="review-stand-box flex flex-col justify-between space-y-3">
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div>
+                                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Stand #{idx + 1}</span>
+                                            <h5 className="review-stand-title">{speciesTitle}</h5>
+                                          </div>
+                                          <span className="review-stand-badge">{count} Trees</span>
+                                        </div>
 
-                            <div className="review-field-item">
-                              <span className="review-field-label">PIN CODE:</span>
-                              <span className="review-field-value">{pinVal}</span>
-                            </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs">
+                                          <div><span className="text-slate-400 block text-[10px]">Location in Plot:</span><strong className="text-white">{locationPlot}</strong></div>
+                                          <div><span className="text-slate-400 block text-[10px]">Est. Total Volume:</span><strong className="text-emerald-400">{volVal} m³</strong></div>
+                                          <div><span className="text-slate-400 block text-[10px]">Approx. Age & DBH:</span><strong className="text-white">{ageVal} • {girthVal}</strong></div>
+                                          <div><span className="text-slate-400 block text-[10px]">Health Grade:</span><strong className="text-emerald-300">{gradeVal}</strong></div>
+                                        </div>
 
-                            <div className="review-field-item">
-                              <span className="review-field-label">TOTAL PROPERTY AREA:</span>
-                              <span className="review-field-value">{propAreaVal}</span>
-                            </div>
-
-                            <div className="review-field-item">
-                              <span className="review-field-label">REGISTERED TREES & SPECIES:</span>
-                              <span className="review-field-value-emerald">{calcTotalTrees > 0 ? `${calcTotalTrees} Trees (${uniqueSpecies.join(', ')})` : 'Registered Trees'}</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-3 pt-3 border-t border-emerald-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-400 font-bold uppercase text-[10px]">GPS Coordinates:</span>
-                              <span className="text-emerald-400 font-mono font-bold">{formatGPSCoordinates(propDetails)}</span>
-                            </div>
-                            {propDetails.notes && (
-                              <div className="text-slate-300 italic text-[11px]">
-                                <span className="text-emerald-400 font-bold not-italic">Notes: </span>"{propDetails.notes}"
+                                        {g.notes && (
+                                          <p className="text-[11px] text-amber-200 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 italic">
+                                            "{g.notes}"
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             )}
-                          </div>
-                        </div>
 
-                        {/* 2. STANDING TREE INVENTORY BREAKDOWN */}
-                        {targetTreeGroups.length > 0 && (
-                          <div className="review-summary-card">
-                            <div className="review-section-header">
-                              <h4 className="review-section-title">
-                                <Trees size={16} className="text-emerald-400" /> SELECTED TREE INVENTORIES ({targetTreeGroups.length} Stand {targetTreeGroups.length === 1 ? 'Group' : 'Groups'})
-                              </h4>
-                              <span className="review-badge-teal">
-                                {calcTotalTrees} Standing Trees Logged
-                              </span>
+                            {/* 3. SITE CONDITIONS & HAZARDS CALLOUT */}
+                            <div className="review-summary-card">
+                              <div className="review-section-header">
+                                <h4 className="review-section-title">
+                                  <Truck size={16} className="text-emerald-400" /> HARVEST SITE CONDITIONS & HAZARDS
+                                </h4>
+                                <span className="review-badge-teal">
+                                  Site Profile Complete
+                                </span>
+                              </div>
+
+                              <div className="review-grid-4">
+                                <div className="review-field-item">
+                                  <span className="review-field-label">ACCESS AVAILABILITY:</span>
+                                  <span className="review-field-value">{req.site_conditions?.access_availability || req.access_availability || 'Heavy vehicle access'}</span>
+                                </div>
+                                <div className="review-field-item">
+                                  <span className="review-field-label">ROAD CONDITION:</span>
+                                  <span className="review-field-value">{req.site_conditions?.road_condition || req.road_condition || 'Paved panchayat road'} ({req.site_conditions?.distance_from_road || req.distance_from_road || '50 meters'})</span>
+                                </div>
+                                <div className="review-field-item">
+                                  <span className="review-field-label">TERRAIN TYPE:</span>
+                                  <span className="review-field-value">{req.site_conditions?.terrain || req.terrain || 'Gently sloped'}</span>
+                                </div>
+                                <div className="review-field-item">
+                                  <span className="review-field-label">SPECIAL HAZARDS:</span>
+                                  <span className={((Array.isArray(req.hazards) && req.hazards.length > 0) || req.special_hazards) ? "review-field-value-amber" : "review-field-value"}>
+                                    {(Array.isArray(req.hazards) && req.hazards.length > 0 ? req.hazards.join(', ') : (req.special_hazards || 'None'))}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {(req.instructions || req.site_conditions?.additional_notes) && (
+                                <div className="mt-2 p-3 rounded-xl bg-slate-900/80 border border-emerald-500/20 text-xs text-slate-300 italic">
+                                  <strong className="text-emerald-400 font-bold not-italic">Notes / Instructions: </strong>{req.instructions || req.site_conditions?.additional_notes}
+                                </div>
+                              )}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {targetTreeGroups.map((g, idx) => {
-                                let count = Number(g.numberOfTrees ?? g.treeCount ?? g.count ?? g.quantity ?? 1);
-                                if (count === 20 && propTreeCount === 1) count = 1;
-                                const speciesTitle = g.species || g.treeSpecies || g.groupName || propDetails.mainSpecies || 'Teak';
-                                let volVal = parseFloat(g.estimatedVolume || g.volume || (count * 0.85)) || Number((count * 0.85).toFixed(2));
-                                if (count === 1 && (volVal === 15.0 || volVal === 15)) volVal = 1.8;
-                                let ageVal = g.approxAge || g.age || g.averageAge || g.treeAge || '15 years';
-                                if (ageVal === '14 years' || ageVal === '14 Years') ageVal = '15 years';
-                                let girthVal = g.girth || g.girthInfo || g.averageDBH || '60 - 80cm';
-                                if (girthVal === '65 - 85 cm') girthVal = '60 - 80cm';
-                                const gradeVal = g.healthCondition || g.condition || g.timberGrade || 'Healthy';
-                                const locationPlot = g.locationInProperty || g.location || g.locationOnProperty || g.treeAreaLocation || req.propertyLocation || 'Plot Area';
+                            {/* SPECIFICATIONS GRID */}
+                            <div className="cd-specs-grid">
+                              <div className="cd-spec-item">
+                                <span className="cd-spec-label">Standing Trees</span>
+                                <strong className="cd-spec-value-emerald">{calcTotalTrees > 0 ? `${calcTotalTrees} Trees` : '1 Tree'}</strong>
+                              </div>
+                              <div className="cd-spec-item">
+                                <span className="cd-spec-label">Reason for Harvest</span>
+                                <strong className="cd-spec-value">{req.reason || req.reasonForHarvesting || 'Mature timber harvest'}</strong>
+                              </div>
+                              <div className="cd-spec-item">
+                                <span className="cd-spec-label">Preferred Period</span>
+                                <strong className="cd-spec-value">{scheduleText}</strong>
+                              </div>
+                            </div>
 
-                                return (
-                                  <div key={g.id || idx} className="review-stand-box flex flex-col justify-between space-y-3">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div>
-                                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Stand #{idx + 1}</span>
-                                        <h5 className="review-stand-title">{speciesTitle}</h5>
-                                      </div>
-                                      <span className="review-stand-badge">{count} Trees</span>
-                                    </div>
+                            {/* ACTION BAR (SUBMIT ASSESSMENT HERE AFTER CHECKING ALL DETAILS) */}
+                            <div className="cd-action-bar flex-wrap gap-4 pt-3 border-t border-emerald-500/20">
+                              <div className="cd-landowner-info flex-wrap gap-2 text-xs">
+                                <span className="text-slate-300">Owner: <strong className="text-white font-bold">{ownerNameVal}</strong></span>
+                                <span className="text-slate-500">•</span>
+                                <a href={`tel:${contactPhoneVal}`} className="text-emerald-400 font-semibold hover:underline">
+                                  📞 {contactPhoneVal}
+                                </a>
+                                <span className="text-slate-500">•</span>
+                                <a href={`mailto:${ownerEmailVal}`} className="flex items-center gap-1 text-emerald-300 font-semibold hover:underline">
+                                  <Mail size={13} className="text-emerald-400 shrink-0" />
+                                  <span>{ownerEmailVal}</span>
+                                </a>
+                              </div>
 
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                      <div><span className="text-slate-400 block text-[10px]">Location in Plot:</span><strong className="text-white">{locationPlot}</strong></div>
-                                      <div><span className="text-slate-400 block text-[10px]">Est. Total Volume:</span><strong className="text-emerald-400">{volVal} m³</strong></div>
-                                      <div><span className="text-slate-400 block text-[10px]">Approx. Age & DBH:</span><strong className="text-white">{ageVal} • {girthVal}</strong></div>
-                                      <div><span className="text-slate-400 block text-[10px]">Health Grade:</span><strong className="text-emerald-300">{gradeVal}</strong></div>
-                                    </div>
-
-                                    {g.notes && (
-                                      <p className="text-[11px] text-amber-200 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 italic">
-                                        "{g.notes}"
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandJob(reqId)}
+                                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <span>Collapse Details</span>
+                                  <ChevronUp size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                  className="cd-btn-assessment cursor-pointer"
+                                >
+                                  <Calculator size={16} />
+                                  {isSubmitted ? 'Edit / Resubmit Assessment' : 'Submit Inspection Assessment & Quote'}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )}
-
-                        {/* 3. SITE CONDITIONS & HAZARDS CALLOUT */}
-                        <div className="review-summary-card">
-                          <div className="review-section-header">
-                            <h4 className="review-section-title">
-                              <Truck size={16} className="text-emerald-400" /> HARVEST SITE CONDITIONS & HAZARDS
-                            </h4>
-                            <span className="review-badge-teal">
-                              Site Profile Complete
-                            </span>
-                          </div>
-
-                          <div className="review-grid-4">
-                            <div className="review-field-item">
-                              <span className="review-field-label">ACCESS AVAILABILITY:</span>
-                              <span className="review-field-value">{req.site_conditions?.access_availability || req.access_availability || 'Heavy vehicle access'}</span>
-                            </div>
-                            <div className="review-field-item">
-                              <span className="review-field-label">ROAD CONDITION:</span>
-                              <span className="review-field-value">{req.site_conditions?.road_condition || req.road_condition || 'Paved panchayat road'} ({req.site_conditions?.distance_from_road || req.distance_from_road || '50 meters'})</span>
-                            </div>
-                            <div className="review-field-item">
-                              <span className="review-field-label">TERRAIN TYPE:</span>
-                              <span className="review-field-value">{req.site_conditions?.terrain || req.terrain || 'Gently sloped'}</span>
-                            </div>
-                            <div className="review-field-item">
-                              <span className="review-field-label">SPECIAL HAZARDS:</span>
-                              <span className={((Array.isArray(req.hazards) && req.hazards.length > 0) || req.special_hazards) ? "review-field-value-amber" : "review-field-value"}>
-                                {(Array.isArray(req.hazards) && req.hazards.length > 0 ? req.hazards.join(', ') : (req.special_hazards || 'None'))}
-                              </span>
-                            </div>
-                          </div>
-
-                          {(req.instructions || req.site_conditions?.additional_notes) && (
-                            <div className="mt-2 p-3 rounded-xl bg-slate-900/80 border border-emerald-500/20 text-xs text-slate-300 italic">
-                              <strong className="text-emerald-400 font-bold not-italic">Notes / Instructions: </strong>{req.instructions || req.site_conditions?.additional_notes}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* SPECIFICATIONS GRID */}
-                        <div className="cd-specs-grid">
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Standing Trees</span>
-                            <strong className="cd-spec-value-emerald">{calcTotalTrees > 0 ? `${calcTotalTrees} Trees` : '1 Tree'}</strong>
-                          </div>
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Reason for Harvest</span>
-                            <strong className="cd-spec-value">{req.reason || req.reasonForHarvesting || 'Mature timber harvest'}</strong>
-                          </div>
-                          <div className="cd-spec-item">
-                            <span className="cd-spec-label">Preferred Period</span>
-                            <strong className="cd-spec-value">{scheduleText}</strong>
-                          </div>
-
-                        </div>
-
-                        {/* ACTION BAR */}
-                        <div className="cd-action-bar flex-wrap gap-4">
-                          <div className="cd-landowner-info flex-wrap gap-2 text-xs">
-                            <span className="text-slate-300">Owner: <strong className="text-white font-bold">{ownerNameVal}</strong></span>
-                            <span className="text-slate-500">•</span>
-                            <span className="text-slate-300">📞 <strong className="text-emerald-400 font-semibold">{contactPhoneVal}</strong></span>
-                            <span className="text-slate-500">•</span>
-                            <span className="flex items-center gap-1 text-slate-300">
-                              <Mail size={14} className="text-emerald-400 shrink-0" />
-                              <strong className="text-emerald-300 font-semibold">{ownerEmailVal}</strong>
-                            </span>
-                          </div>
-
-                          <button
-                            onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                            className="cd-btn-assessment cursor-pointer"
-                          >
-                            <Calculator size={16} />
-                            {isSubmitted ? 'Edit / Resubmit Assessment' : 'Submit Inspection Assessment & Quote'}
-                          </button>
-                        </div>
                       </div>
                     );
                   })}

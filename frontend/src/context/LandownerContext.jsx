@@ -385,6 +385,9 @@ export const LandownerProvider = ({ children }) => {
             };
         } catch (err) {
             console.error("Error storing harvest request in DB:", err);
+            if (err && err.message) {
+                throw err;
+            }
             savedReq = {
                 ...newReq,
                 id: `hr_${Date.now()}`,
