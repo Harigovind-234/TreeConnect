@@ -195,12 +195,11 @@ const Login = () => {
                         </span>
                         <span className="text-[11px] text-slate-400 truncate">{u.name || u.email}</span>
                       </div>
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
-                        u.role === 'admin' ? 'bg-amber-950/80 text-amber-300 border-amber-800' :
-                        u.role === 'contractor' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
-                        u.role === 'buyer' ? 'bg-blue-950/80 text-blue-300 border-blue-800' :
-                        'bg-emerald-950/80 text-emerald-300 border-emerald-800'
-                      }`}>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${u.role === 'admin' ? 'bg-amber-950/80 text-amber-300 border-amber-800' :
+                          u.role === 'contractor' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
+                            u.role === 'buyer' ? 'bg-blue-950/80 text-blue-300 border-blue-800' :
+                              'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                        }`}>
                         {u.role}
                       </span>
                     </button>

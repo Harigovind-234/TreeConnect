@@ -78,6 +78,17 @@ export const propertyService = {
     }
   },
 
+  // Delete tree inventory record from DB
+  deleteTreeInventory: async (id) => {
+    try {
+      const response = await api.delete(`/properties/tree-inventory/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in propertyService.deleteTreeInventory (${id}):`, error);
+      throw error.response?.data || error;
+    }
+  },
+
   // Get Timber Reference Rate for species & district
   getTimberReferenceRate: async (species, district) => {
     try {

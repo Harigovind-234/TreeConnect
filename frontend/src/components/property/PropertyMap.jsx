@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Search, Crosshair, CheckCircle2, Layers, Loader2, RefreshCw } from 'lucide-react';
 import { locationService } from '../../services/locationService';
 
@@ -26,6 +26,9 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
   const [isPinned, setIsPinned] = useState(true);
   const [mapMode, setMapMode] = useState('live'); // 'live' or 'grid'
   const [locationStatus, setLocationStatus] = useState('');
+
+  // Ref to track if map coordinates were set via GPS, explicit search, or map click
+  const isUserPinnedRef = useRef(false);
 
   const [coords, setCoords] = useState({
     lat: initialLat,
@@ -141,6 +144,22 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
   useEffect(() => {
     if (!addressData) return;
 
+    // Update search bar input box text dynamically if location details exist
+    const displayQueryParts = [
+      addressData.localBody || addressData.village,
+      addressData.district,
+      addressData.pinCode ? `(${addressData.pinCode})` : ''
+    ].filter(Boolean);
+
+    if (displayQueryParts.length > 0) {
+      setSearchQuery(displayQueryParts.join(', '));
+    }
+
+    // Do not auto-re-geocode and overwrite coordinates if user explicitly set GPS location or pinned the map
+    if (isUserPinnedRef.current) {
+      return;
+    }
+
     const cleanLocalBody = (addressData.localBody || '')
       .replace(/\s*(Panchayat|Municipality|Corporation)\b/gi, '')
       .trim();
@@ -155,22 +174,11 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
 
     const queryStr = parts.join(', ');
 
-    // Update search bar input box text dynamically if location details exist
-    const displayQueryParts = [
-      addressData.localBody || addressData.village,
-      addressData.district,
-      addressData.pinCode ? `(${addressData.pinCode})` : ''
-    ].filter(Boolean);
-
-    if (displayQueryParts.length > 0) {
-      setSearchQuery(displayQueryParts.join(', '));
-    }
-
     let isMounted = true;
     const timer = setTimeout(async () => {
-      if (queryStr) {
+      if (queryStr && !isUserPinnedRef.current) {
         const geo = await geocodeQuery(queryStr);
-        if (geo && isMounted) {
+        if (geo && isMounted && !isUserPinnedRef.current) {
           setCoords({ lat: geo.lat, lng: geo.lng, locationLabel: geo.label });
           setIsPinned(true);
           if (onCoordsChange) onCoordsChange(geo.lat, geo.lng, geo.details);
@@ -178,10 +186,10 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
         }
       }
 
-      if (addressData.district && KERALA_DISTRICT_COORDS[addressData.district] && isMounted) {
+      if (addressData.district && KERALA_DISTRICT_COORDS[addressData.district] && isMounted && !isUserPinnedRef.current) {
         const dCoord = KERALA_DISTRICT_COORDS[addressData.district];
         const { label, details } = await reverseGeocode(dCoord.lat, dCoord.lng);
-        if (isMounted) {
+        if (isMounted && !isUserPinnedRef.current) {
           setCoords({ lat: dCoord.lat, lng: dCoord.lng, locationLabel: label || dCoord.label });
           setIsPinned(true);
           if (onCoordsChange) onCoordsChange(dCoord.lat, dCoord.lng, details);
@@ -239,6 +247,7 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
     setLocationStatus('Acquiring location...');
 
     const applyPosition = async (lat, lng, statusMsg) => {
+      isUserPinnedRef.current = true;
       const initialLabel = `Lat: ${lat}°, Lng: ${lng}°`;
       setCoords({ lat, lng, locationLabel: initialLabel });
       setIsPinned(true);
@@ -354,6 +363,7 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
     try {
       const geo = await geocodeQuery(searchQuery);
       if (geo) {
+        isUserPinnedRef.current = true;
         setCoords({ lat: geo.lat, lng: geo.lng, locationLabel: geo.label });
         setIsPinned(true);
         setLocationStatus(`✓ Location pinned for "${searchQuery.trim()}"`);
@@ -383,6 +393,7 @@ const PropertyMap = ({ onCoordsChange, initialLat = 9.5916, initialLng = 76.5222
     const newLat = parseFloat((coords.lat + latDelta).toFixed(6));
     const newLng = parseFloat((coords.lng + lngDelta).toFixed(6));
 
+    isUserPinnedRef.current = true;
     const { label, details } = await reverseGeocode(newLat, newLng);
 
     setCoords({ lat: newLat, lng: newLng, locationLabel: label });

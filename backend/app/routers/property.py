@@ -717,6 +717,67 @@ def get_tree_inventories(
             content={"message": f"Failed to fetch tree inventories: {str(e)}"}
         )
 
+@router.delete("/inventories/{inventory_id}")
+@router.delete("/tree-inventory/{inventory_id}")
+def delete_tree_inventory(inventory_id: str):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        query = {"_id": ObjectId(inventory_id)} if ObjectId.is_valid(inventory_id) else {"_id": inventory_id}
+        target_inv = db.tree_inventories.find_one(query)
+
+        if not target_inv:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Tree inventory not found for deletion"}
+            )
+
+        prop_id = target_inv.get("propertyId")
+        result = db.tree_inventories.delete_one(query)
+
+        if result.deleted_count == 0:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Tree inventory not found for deletion"}
+            )
+
+        # Update property total tree count & main species after deletion
+        if prop_id:
+            try:
+                remaining_invs = list(db.tree_inventories.find({"propertyId": prop_id}))
+                remaining_tree_count = 0
+                remaining_main_species = ""
+                for inv in remaining_invs:
+                    for sp in inv.get("speciesList", []):
+                        if isinstance(sp, dict):
+                            remaining_tree_count += int(sp.get("numberOfTrees") or sp.get("count") or 0)
+                            if not remaining_main_species:
+                                remaining_main_species = sp.get("treeSpecies") or sp.get("species") or ""
+
+                p_query = {"_id": ObjectId(prop_id)} if ObjectId.is_valid(prop_id) else {"_id": prop_id}
+                db.properties.update_one(p_query, {
+                    "$set": {
+                        "approxTreesCount": remaining_tree_count,
+                        "mainSpecies": remaining_main_species
+                    }
+                })
+            except Exception as prop_upd_err:
+                print(f"[WARN] Failed to update property tree count after inventory deletion: {prop_upd_err}")
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Tree inventory record deleted successfully"}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to delete tree inventory: {str(e)}"}
+        )
+
 @router.get("/{property_id}")
 def get_property_by_id(property_id: str):
     try:

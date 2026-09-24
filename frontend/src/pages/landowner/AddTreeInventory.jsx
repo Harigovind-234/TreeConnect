@@ -52,18 +52,16 @@ const AddTreeInventory = () => {
 
   // Helper for blank basic tree group
   const createBlankTreeGroup = (idNum) => {
-    const propTreeCount = Number(selectedProperty?.approxTreesCount);
-    const defaultTreesCount = (propTreeCount && propTreeCount > 0) ? propTreeCount : 5;
     const defaultSpecies = selectedProperty?.mainSpecies || 'Teak';
 
     return {
       id: `T-${Date.now()}-${idNum}`,
       groupName: `${defaultSpecies} Stand #${idNum}`,
       species: defaultSpecies,
-      numberOfTrees: defaultTreesCount,
-      approxAge: '15 years',
+      numberOfTrees: '',
+      approxAge: '',
       condition: 'Healthy',
-      locationInProperty: 'Front yard / Boundary area',
+      locationInProperty: '',
       notes: ''
     };
   };

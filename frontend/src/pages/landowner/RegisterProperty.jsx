@@ -95,6 +95,7 @@ const RegisterProperty = () => {
         }
 
         if (isMounted) {
+          const isDefaultCoords = !formData.latitude || !formData.longitude || (formData.latitude === 9.5916 && formData.longitude === 76.5222);
           setFormData(prev => ({
             ...prev,
             ownerName: activeProfile.fullName || activeProfile.name || prev.ownerName,
@@ -105,8 +106,8 @@ const RegisterProperty = () => {
             localBody: resolvedLocalBody || prev.localBody,
             village: activeProfile.village || prev.village,
             pinCode: resolvedPin || prev.pinCode,
-            ...(resolvedLat ? { latitude: resolvedLat } : {}),
-            ...(resolvedLng ? { longitude: resolvedLng } : {})
+            ...(isDefaultCoords && resolvedLat ? { latitude: resolvedLat } : {}),
+            ...(isDefaultCoords && resolvedLng ? { longitude: resolvedLng } : {})
           }));
 
           if (resolvedPin) {
@@ -149,6 +150,8 @@ const RegisterProperty = () => {
           ? userRegLocalBody
           : (pinLoc.localBody || '');
 
+        const isDefaultCoords = !formData.latitude || !formData.longitude || (formData.latitude === 9.5916 && formData.longitude === 76.5222);
+
         setFormData(prev => ({
           ...prev,
           state: pinLoc.state || prev.state,
@@ -156,8 +159,8 @@ const RegisterProperty = () => {
           localBody: effectiveLocalBody || prev.localBody,
           village: pinLoc.village || pinLoc.placeName || prev.village,
           pinCode: targetPin,
-          ...(pinLoc.latitude ? { latitude: pinLoc.latitude } : {}),
-          ...(pinLoc.longitude ? { longitude: pinLoc.longitude } : {})
+          ...(isDefaultCoords && pinLoc.latitude ? { latitude: pinLoc.latitude } : {}),
+          ...(isDefaultCoords && pinLoc.longitude ? { longitude: pinLoc.longitude } : {})
         }));
 
         const locationSummary = [

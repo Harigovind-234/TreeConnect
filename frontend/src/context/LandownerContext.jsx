@@ -548,6 +548,72 @@ export const LandownerProvider = ({ children }) => {
         });
     };
 
+    const deleteInventory = async (inventoryId, propertyId) => {
+        try {
+            if (inventoryId && !String(inventoryId).startsWith('sp_')) {
+                await propertyService.deleteTreeInventory(inventoryId);
+            }
+        } catch (err) {
+            console.warn("Could not delete inventory from DB API:", err);
+        }
+
+        setInventories(prev => {
+            const updated = prev.filter(inv => {
+                if (!inv) return false;
+                if (inv.id === inventoryId || inv._id === inventoryId) return false;
+                if (String(inv.id) === String(inventoryId) || String(inv._id) === String(inventoryId)) return false;
+                return true;
+            });
+            try {
+                localStorage.setItem('treeconnect_inventories', JSON.stringify(updated));
+            } catch (e) { }
+
+            if (propertyId) {
+                const remainingPropInvs = updated.filter(i => i && (String(i.propertyId) === String(propertyId) || String(i.property_id) === String(propertyId)));
+                let remainingTreeCount = 0;
+                let remainingMainSpecies = '';
+                remainingPropInvs.forEach(i => {
+                    (i.speciesList || []).forEach(sp => {
+                        remainingTreeCount += Number(sp.numberOfTrees || sp.count || 0);
+                        if (!remainingMainSpecies) remainingMainSpecies = sp.treeSpecies || sp.species || '';
+                    });
+                });
+
+                setProperties(prevProps => {
+                    const updatedProps = prevProps.map(p => {
+                        const isMatch = p.id === propertyId || p._id === propertyId || String(p.id) === String(propertyId) || String(p._id) === String(propertyId);
+                        if (isMatch) {
+                            const updatedP = {
+                                ...p,
+                                approxTreesCount: remainingTreeCount,
+                                mainSpecies: remainingMainSpecies || (remainingTreeCount === 0 ? '' : p.mainSpecies),
+                                treeInventories: remainingPropInvs,
+                                inventories: remainingPropInvs,
+                                inventoryCleared: remainingTreeCount === 0
+                            };
+                            try {
+                                propertyService.updateProperty(p.id || p._id, {
+                                    approxTreesCount: remainingTreeCount,
+                                    mainSpecies: remainingMainSpecies || (remainingTreeCount === 0 ? '' : p.mainSpecies),
+                                    treeInventories: remainingPropInvs,
+                                    inventories: remainingPropInvs
+                                });
+                            } catch (e) { }
+                            return updatedP;
+                        }
+                        return p;
+                    });
+                    try {
+                        localStorage.setItem('treeconnect_properties', JSON.stringify(updatedProps));
+                    } catch (e) { }
+                    return updatedProps;
+                });
+            }
+
+            return updated;
+        });
+    };
+
     return (
         <LandownerContext.Provider
             value={{
@@ -565,6 +631,8 @@ export const LandownerProvider = ({ children }) => {
                 updateProperty,
                 deleteProperty,
                 addInventory,
+                deleteInventory,
+                deleteTreeInventory: deleteInventory,
                 addHarvestRequest,
                 deleteHarvestRequest,
                 assignContractorToRequest,

@@ -17,7 +17,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Eye,
-  ImageIcon
+  ImageIcon,
+  Trash2
 } from 'lucide-react';
 import {
   getTimberReferenceRate,
@@ -26,6 +27,19 @@ import {
   formatINR,
   TIMBER_VALUE_DISCLAIMER
 } from '../../utils/timberCalculations';
+
+const SPECIES_TREE_PHOTOS = {
+  'Teak': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Teakwood': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Mahogany': 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80',
+  'Rosewood': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+  'Sandalwood': 'https://images.unsplash.com/photo-1502082553048-f009c37129b9?auto=format&fit=crop&w=800&q=80',
+  'Rubber': 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=800&q=80',
+  'Coconut': 'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?auto=format&fit=crop&w=800&q=80',
+  'Jackfruit': 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?auto=format&fit=crop&w=800&q=80',
+  'Eucalyptus': 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=800&q=80',
+  'Pine': 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=800&q=80'
+};
 
 const isRealPhoto = (p) => {
   if (!p) return false;
@@ -47,15 +61,18 @@ const extractPhotoUrl = (p) => {
 };
 
 const getTreeSpeciesPhoto = (species, attachedPhotos = [], invPhotos = [], propPhotos = []) => {
-  const allCandidates = [
+  const propUrls = (Array.isArray(propPhotos) ? propPhotos : (propPhotos ? [propPhotos] : []))
+    .map(ph => extractPhotoUrl(ph))
+    .filter(Boolean);
+
+  const treeCandidates = [
     ...(Array.isArray(attachedPhotos) ? attachedPhotos : (attachedPhotos ? [attachedPhotos] : [])),
-    ...(Array.isArray(invPhotos) ? invPhotos : (invPhotos ? [invPhotos] : [])),
-    ...(Array.isArray(propPhotos) ? propPhotos : (propPhotos ? [propPhotos] : []))
+    ...(Array.isArray(invPhotos) ? invPhotos : (invPhotos ? [invPhotos] : []))
   ];
 
-  for (const item of allCandidates) {
+  for (const item of treeCandidates) {
     const u = extractPhotoUrl(item);
-    if (u && isRealPhoto(u)) {
+    if (u && isRealPhoto(u) && !propUrls.includes(u)) {
       return u;
     }
   }
@@ -71,9 +88,11 @@ const TreeInventoryPage = () => {
   const landownerCtx = useLandowner() || {};
   const properties = landownerCtx.properties || [];
   const inventories = landownerCtx.inventories || landownerCtx.treeInventories || [];
+  const deleteInventory = landownerCtx.deleteInventory || landownerCtx.deleteTreeInventory;
 
   // State for image lightbox modal
   const [activePhotoModal, setActivePhotoModal] = useState(null); // { photos: [], index: 0, title: '' }
+  const [inventoryToDelete, setInventoryToDelete] = useState(null); // { id, species, count, propertyName }
 
   // Filter properties based on URL param
   const displayedProperties = targetPropertyId
@@ -171,21 +190,7 @@ const TreeInventoryPage = () => {
                     } else if (Array.isArray(p.inventories) && p.inventories.length > 0) {
                       propInventories = p.inventories;
                     } else if (p.speciesList && p.speciesList.length > 0) {
-                      propInventories = [{ speciesList: p.speciesList, photos: p.photos }];
-                    } else if (p.mainSpecies || p.approxTreesCount || p.totalTrees) {
-                      const regCount = Number(p.approxTreesCount || p.totalTrees || 0);
-                      propInventories = [{
-                        speciesList: [{
-                          treeSpecies: p.mainSpecies || 'Teak',
-                          species: p.mainSpecies || 'Teak',
-                          numberOfTrees: regCount > 0 ? regCount : 5,
-                          approxAge: '14 years',
-                          treeCondition: 'Healthy',
-                          locationInProperty: 'Main Estate Plot',
-                          photos: p.photos || []
-                        }],
-                        photos: p.photos || []
-                      }];
+                      propInventories = [{ speciesList: p.speciesList, photos: [] }];
                     }
                   }
 
@@ -204,31 +209,32 @@ const TreeInventoryPage = () => {
                     }
 
                     (inv.speciesList || []).forEach(sp => {
-                      const count = Number(sp.numberOfTrees || sp.count || p.approxTreesCount || 0);
+                      const count = Number(sp.numberOfTrees || sp.count || 0);
                       totalTreesCount += count;
                       const spPhotos = (sp.photos && sp.photos.length > 0) ? sp.photos : (inv.photos || []);
-                      const speciesTitle = sp.treeSpecies || sp.species || p.mainSpecies || 'Teak';
-                      const volStr = sp.estimatedVolume || sp.volume || '1.80 m³';
-                      const volNum = parseVolumeNumber(volStr);
+                      const speciesTitle = sp.treeSpecies || sp.species || p.mainSpecies || 'Trees';
+                      const volStr = sp.estimatedVolume || sp.volume || null;
+                      const volNum = volStr ? parseVolumeNumber(volStr) : 0;
                       const snapshot = sp.rate_snapshot || {};
-                      const rate = snapshot.rate_per_m3 || sp.reference_rate || getTimberReferenceRate(speciesTitle);
-                      const approx = sp.approximate_timber_value || calculateApproxTimberValue(speciesTitle, volStr, rate);
+                      const rate = snapshot.rate_per_m3 || sp.reference_rate || (speciesTitle ? getTimberReferenceRate(speciesTitle) : 0) || 0;
+                      const approx = sp.approximate_timber_value || (volNum > 0 ? calculateApproxTimberValue(speciesTitle, volStr, rate) : null);
 
                       allTreeGroups.push({
-                        id: sp.id || `sp_${allTreeGroups.length + 1}`,
+                        id: sp.id || inv.id || inv._id || `sp_${allTreeGroups.length + 1}`,
+                        invId: inv.id || inv._id || sp.id,
                         groupName: sp.groupName || `${speciesTitle} Stand`,
                         species: speciesTitle,
-                        count: count > 0 ? count : (Number(p.approxTreesCount) || 5),
-                        age: sp.approxAge || sp.age || '15 years',
+                        count: count,
+                        age: sp.approxAge || sp.age || '',
                         condition: sp.treeCondition || sp.condition || 'Healthy',
                         notes: sp.notes || '',
-                        location: sp.locationInProperty || sp.location || inv.treeAreaLocation || 'Main Compound Plot',
-                        girth: sp.girth || '60 - 80cm',
-                        volume: `${volNum.toFixed(2)} m³`,
+                        location: sp.locationInProperty || sp.location || inv.treeAreaLocation || '',
+                        girth: sp.girth || '',
+                        volume: volNum > 0 ? `${volNum.toFixed(2)} m³` : '',
                         ratePerM3: rate,
                         approxValue: approx,
-                        rateSource: sp.rate_source || snapshot.rate_source || 'Kerala Government timber market-price data',
-                        effectiveDate: sp.rate_effective_date || snapshot.rate_effective_date || '2026-01-01',
+                        rateSource: sp.rate_source || snapshot.rate_source || '',
+                        effectiveDate: sp.rate_effective_date || snapshot.rate_effective_date || '',
                         dbh: sp.averageDbh || sp.dbh || '',
                         height: sp.averageHeight || sp.height || '',
                         attachedPhotos: spPhotos,
@@ -363,7 +369,7 @@ const TreeInventoryPage = () => {
                         {allTreeGroups.length > 0 ? (
                           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                             {allTreeGroups.map((tg, idx) => {
-                              const groupImage = getTreeSpeciesPhoto(tg.species, tg.attachedPhotos, tg.photos, p?.photos || p?.propertyPhotos);
+                              const groupImage = getTreeSpeciesPhoto(tg.species, tg.attachedPhotos, tg.photos, propertyPhotos);
                               return (
                                 <div
                                   key={idx}
@@ -436,23 +442,27 @@ const TreeInventoryPage = () => {
 
                                     {/* Specifications Subcards Grid */}
                                     <div className="grid grid-cols-2 gap-3.5 text-xs">
-                                      <div className="ld-subcard space-y-1">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Approximate Age</span>
-                                        <span className="font-bold text-white text-sm block">{tg.age}</span>
-                                      </div>
-                                      <div className="ld-subcard space-y-1">
+                                      {tg.age ? (
+                                        <div className="ld-subcard space-y-1">
+                                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Approximate Age</span>
+                                          <span className="font-bold text-white text-sm block">{tg.age}</span>
+                                        </div>
+                                      ) : null}
+                                      <div className={`ld-subcard space-y-1 ${!tg.age ? 'col-span-2' : ''}`}>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Logged Quantity</span>
                                         <span className="font-bold text-emerald-400 text-sm block">{tg.count} Standing Trees</span>
                                       </div>
                                     </div>
 
                                     {/* Plot Position */}
-                                    <div className="ld-subcard text-xs space-y-1">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Location / Plot Position within Estate</span>
-                                      <span className="font-semibold text-slate-200 flex items-center gap-1.5 mt-0.5">
-                                        📍 {tg.location}
-                                      </span>
-                                    </div>
+                                    {tg.location ? (
+                                      <div className="ld-subcard text-xs space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Location / Plot Position within Estate</span>
+                                        <span className="font-semibold text-slate-200 flex items-center gap-1.5 mt-0.5">
+                                          📍 {tg.location}
+                                        </span>
+                                      </div>
+                                    ) : null}
 
                                     {/* Special Notes / Observations */}
                                     {tg.notes && (
@@ -468,14 +478,29 @@ const TreeInventoryPage = () => {
                                   {/* Action Footer */}
                                   <div className="pt-3 border-t border-emerald-500/15 flex items-center justify-between gap-3">
                                     <span className="text-xs text-slate-400 font-medium">Ready for contractor bidding</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)}
-                                      className="ld-btn-outline py-2 px-3.5 text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
-                                      style={{ width: 'auto' }}
-                                    >
-                                      <Axe size={14} /> Request Harvest
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => setInventoryToDelete({
+                                          id: tg.invId || tg.id,
+                                          species: tg.species,
+                                          count: tg.count,
+                                          propertyName: p.propertyName,
+                                          propertyId: pId
+                                        })}
+                                        className="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                                      >
+                                        <Trash2 size={14} /> Delete
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => navigate(`/landowner/request-harvest?propertyId=${pId}`)}
+                                        className="ld-btn-outline py-2 px-3.5 text-xs text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                        style={{ width: 'auto' }}
+                                      >
+                                        <Axe size={14} /> Request Harvest
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               );
@@ -498,32 +523,35 @@ const TreeInventoryPage = () => {
 
                       {/* 3. DEDICATED STANDING TREE PHOTOS & SPECIES MEDIA GALLERY SECTION */}
                       {(() => {
-                        // Collect attached standing tree photos for each logged tree stand (excluding property house photos)
+                        // Collect attached standing tree photos for each logged tree stand (only real user uploaded photos)
                         const realTreePhotos = [];
                         allTreeGroups.forEach((tg, idx) => {
+                          const propUrls = (Array.isArray(propertyPhotos) ? propertyPhotos : []).map(ph => extractPhotoUrl(ph)).filter(Boolean);
+
                           const standPhotos = [
                             ...(Array.isArray(tg.attachedPhotos) ? tg.attachedPhotos : []),
                             ...(Array.isArray(tg.photos) ? tg.photos : []),
                             ...(tg.image ? [tg.image] : [])
-                          ].map(ph => extractPhotoUrl(ph)).filter(Boolean);
+                          ]
+                            .map(ph => extractPhotoUrl(ph))
+                            .filter(u => u && isRealPhoto(u) && !propUrls.includes(u));
 
-                          const photoToDisplay = standPhotos.length > 0
-                            ? standPhotos[0]
-                            : getTreeSpeciesPhoto(tg.species);
-
-                          if (photoToDisplay && !realTreePhotos.some(item => item.url === photoToDisplay)) {
-                            realTreePhotos.push({
-                              url: photoToDisplay,
-                              species: tg.species,
-                              count: tg.count,
-                              location: tg.location,
-                              condition: tg.condition,
-                              standIndex: idx + 1
-                            });
-                          }
+                          standPhotos.forEach(photoUrl => {
+                            if (photoUrl && !realTreePhotos.some(item => item.url === photoUrl)) {
+                              realTreePhotos.push({
+                                id: tg.invId || tg.id,
+                                invId: tg.invId || tg.id,
+                                url: photoUrl,
+                                species: tg.species,
+                                count: tg.count,
+                                location: tg.location || 'Estate Plot',
+                                condition: tg.condition || 'Healthy',
+                                standIndex: idx + 1,
+                                isUserUploaded: true
+                              });
+                            }
+                          });
                         });
-
-                        if (realTreePhotos.length === 0) return null;
 
                         return (
                           <div
@@ -544,8 +572,9 @@ const TreeInventoryPage = () => {
                               </span>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                              {realTreePhotos.map((item, idx) => (
+                            {realTreePhotos.length > 0 ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {realTreePhotos.map((item, idx) => (
                                 <div
                                   key={idx}
                                   className="ld-subcard p-0 rounded-2xl overflow-hidden shadow-lg group flex flex-col justify-between"
@@ -584,22 +613,43 @@ const TreeInventoryPage = () => {
                                     </div>
                                   </div>
 
-                                  {/* Card Action Footer with View Tree Photo button */}
+                                  {/* Card Action Footer with View & Delete buttons */}
                                   <div className="p-4 bg-[#0e1612] border-t border-emerald-500/15 flex items-center justify-between gap-2">
                                     <span className="text-xs text-slate-400 font-medium">Tree Stand #{item.standIndex}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => openLightbox([item.url], 0, `${p.propertyName} - ${item.species} (${item.count} Trees)`)}
-                                      className="ld-btn-outline py-1.5 px-3 text-xs"
-                                      style={{ width: 'auto' }}
-                                    >
-                                      <ZoomIn size={14} className="text-emerald-400" />
-                                      <span>View Tree Photo</span>
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => openLightbox([item.url], 0, `${p.propertyName} - ${item.species} (${item.count} Trees)`)}
+                                        className="ld-btn-outline py-1.5 px-3 text-xs"
+                                        style={{ width: 'auto' }}
+                                      >
+                                        <ZoomIn size={14} className="text-emerald-400" />
+                                        <span>View</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setInventoryToDelete({
+                                          id: item.invId || item.id,
+                                          species: item.species,
+                                          count: item.count,
+                                          propertyName: p.propertyName,
+                                          propertyId: pId
+                                        })}
+                                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                                      >
+                                        <Trash2 size={13} /> Delete
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
                             </div>
+                            ) : (
+                              <div className="ld-subcard p-6 text-center space-y-2">
+                                <Camera size={32} className="mx-auto text-emerald-500/30" />
+                                <p className="text-xs text-slate-400">No tree species photos uploaded for this property yet.</p>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -756,8 +806,8 @@ const TreeInventoryPage = () => {
                     <button
                       type="button"
                       onClick={async () => {
-                        if (inventoryToDelete.id && deleteInventory) {
-                          await deleteInventory(inventoryToDelete.id);
+                        if (inventoryToDelete?.id && deleteInventory) {
+                          await deleteInventory(inventoryToDelete.id, inventoryToDelete.propertyId);
                         }
                         setInventoryToDelete(null);
                       }}
