@@ -130,16 +130,14 @@ export const LandownerProvider = ({ children }) => {
             const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
             const userEmail = user?.email || storedUser?.email || '';
 
-            const data = await propertyService.getProperties({ all_records: true });
+            const data = await propertyService.getProperties(userEmail ? { userEmail } : {});
             if (data && Array.isArray(data.properties)) {
                 const cleanDBProps = cleanPropertyImages(filterOutMockData(data.properties));
-                if (cleanDBProps.length > 0) {
-                    setProperties(cleanDBProps);
-                    try {
-                        localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
-                    } catch (e) {
-                        console.warn("Could not cache properties to localStorage due to size limit, using React state.", e);
-                    }
+                setProperties(cleanDBProps);
+                try {
+                    localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
+                } catch (e) {
+                    console.warn("Could not cache properties to localStorage due to size limit, using React state.", e);
                 }
             }
         } catch (err) {
@@ -172,20 +170,22 @@ export const LandownerProvider = ({ children }) => {
     // Sync tree inventories with backend database
     const fetchDBInventories = useCallback(async () => {
         try {
-            const data = await propertyService.getTreeInventories({ all_records: true });
+            const storedUserStr = localStorage.getItem('treeconnect_user');
+            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+            const userEmail = user?.email || storedUser?.email || '';
+
+            const data = await propertyService.getTreeInventories(userEmail ? { userEmail } : {});
             if (data && Array.isArray(data.inventories)) {
                 const cleanDBInvs = filterOutMockData(data.inventories);
-                if (cleanDBInvs.length > 0) {
-                    setInventories(cleanDBInvs);
-                    try {
-                        localStorage.setItem('treeconnect_inventories', JSON.stringify(cleanDBInvs));
-                    } catch (e) { }
-                }
+                setInventories(cleanDBInvs);
+                try {
+                    localStorage.setItem('treeconnect_inventories', JSON.stringify(cleanDBInvs));
+                } catch (e) { }
             }
         } catch (err) {
             console.warn("Could not load tree inventories from backend database:", err);
         }
-    }, []);
+    }, [user?.email]);
 
     useEffect(() => {
         fetchDBProperties();
