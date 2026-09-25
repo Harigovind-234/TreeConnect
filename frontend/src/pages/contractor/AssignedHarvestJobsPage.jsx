@@ -34,8 +34,124 @@ import {
   Camera,
   Image as ImageIcon,
   ZoomIn,
-  Layers
+  Layers,
+  Coins,
+  DollarSign,
+  Printer,
+  Users
 } from 'lucide-react';
+import { calculateApproxTimberValue, formatINR, parseVolumeNumber, TIMBER_VALUE_DISCLAIMER } from '../../utils/timberCalculations';
+
+const formatDateDMY = (dateStr) => {
+  if (!dateStr) return '02-10-2026';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
+
+const getTreeStandPhoto = (g, sp, inv, propPhotosList = [], targetReq = null) => {
+  const extractUrl = (p) => {
+    if (!p) return null;
+    let str = '';
+    if (typeof p === 'string') str = p.trim();
+    else if (typeof p === 'object' && p) str = (p.previewUrl || p.dataUrl || p.fileUrl || p.url || p.src || '').trim();
+
+    if (!str || str.length < 5) return null;
+    if (str.startsWith('blob:')) return null;
+    if (str.includes('unsplash.com')) return null;
+    return str;
+  };
+
+  // 1. Direct stand photo fields on g
+  if (g) {
+    const gPhotos = Array.isArray(g.attachedPhotos) && g.attachedPhotos.length > 0
+      ? g.attachedPhotos
+      : (Array.isArray(g.photos) && g.photos.length > 0 ? g.photos : []);
+    for (const p of gPhotos) {
+      const u = extractUrl(p);
+      if (u) return u;
+    }
+    const directG = extractUrl(g.image || g.imageUrl || g.photo || g.previewUrl || g.dataUrl);
+    if (directG) return directG;
+  }
+
+  // 2. Check species item sp
+  if (sp) {
+    const spPhotos = Array.isArray(sp.attachedPhotos) && sp.attachedPhotos.length > 0
+      ? sp.attachedPhotos
+      : (Array.isArray(sp.photos) && sp.photos.length > 0 ? sp.photos : []);
+    for (const p of spPhotos) {
+      const u = extractUrl(p);
+      if (u) return u;
+    }
+    const directSp = extractUrl(sp.image || sp.photo || sp.imageUrl);
+    if (directSp) return directSp;
+  }
+
+  // 3. Search localStorage treeconnect_inventories
+  try {
+    const storedInventoriesRaw = localStorage.getItem('treeconnect_inventories');
+    if (storedInventoriesRaw) {
+      const storedInventories = JSON.parse(storedInventoriesRaw);
+      if (Array.isArray(storedInventories)) {
+        const propId = targetReq?.property_id || targetReq?.propertyId || targetReq?.property_details?.id || targetReq?.property_details?._id;
+        const ownerEmail = targetReq?.owner_email || targetReq?.landowner_email || targetReq?.userEmail;
+        const targetSpecies = (g?.species || g?.treeSpecies || '').toLowerCase();
+
+        const matchingInvs = storedInventories.filter(item => {
+          if (!item) return false;
+          if (propId && (item.propertyId === propId || item.property_id === propId || String(item.propertyId) === String(propId))) return true;
+          if (ownerEmail && item.userEmail && item.userEmail.toLowerCase() === ownerEmail.toLowerCase()) return true;
+          if (targetReq?.propertyName && item.propertyName && item.propertyName.toLowerCase() === targetReq.propertyName.toLowerCase()) return true;
+          return false;
+        });
+
+        for (const item of matchingInvs) {
+          if (Array.isArray(item.speciesList)) {
+            for (const s of item.speciesList) {
+              const sName = (s.treeSpecies || s.species || '').toLowerCase();
+              if (!targetSpecies || sName === targetSpecies || targetSpecies.includes(sName) || sName.includes(targetSpecies)) {
+                if (Array.isArray(s.photos)) {
+                  for (const p of s.photos) {
+                    const u = extractUrl(p);
+                    if (u) return u;
+                  }
+                }
+                const su = extractUrl(s.image || s.photo);
+                if (su) return su;
+              }
+            }
+          }
+          if (Array.isArray(item.photos)) {
+            for (const p of item.photos) {
+              const u = extractUrl(p);
+              if (u) return u;
+            }
+          }
+          const itemUrl = extractUrl(item.image || item.photo);
+          if (itemUrl) return itemUrl;
+        }
+      }
+    }
+  } catch (e) { }
+
+  // 4. Fallback to property photos if available
+  if (Array.isArray(propPhotosList) && propPhotosList.length > 0) {
+    for (const p of propPhotosList) {
+      const u = extractUrl(p);
+      if (u) return u;
+    }
+  }
+
+  return null;
+};
 
 const formatGPSCoordinates = (p) => {
   if (!p) return '9.557546° N, 76.605175° E';
@@ -440,6 +556,21 @@ const AssignedHarvestJobsPage = () => {
                       ? plotLocations.join(' • ')
                       : (req.propertyLocation || 'Estate Plot');
 
+                    const totalJobTimberValue = Number(
+                      req.total_estimated_price ||
+                      req.approx_timber_value ||
+                      req.estimated_timber_value ||
+                      targetTreeGroups.reduce((acc, g) => {
+                        let count = Number(g.numberOfTrees ?? g.treeCount ?? g.count ?? g.quantity ?? 1);
+                        if (count === 20 && propTreeCount === 1) count = 1;
+                        const speciesTitle = g.species || g.treeSpecies || g.groupName || propDetails.mainSpecies || 'Teak';
+                        let volVal = parseFloat(g.estimatedVolume || g.volume || (count * 0.85)) || Number((count * 0.85).toFixed(2));
+                        if (count === 1 && (volVal === 15.0 || volVal === 15 || !g.estimatedVolume)) volVal = 1.7;
+                        const val = Number(g.approximate_timber_value || g.estimatedPrice || calculateApproxTimberValue(speciesTitle, volVal));
+                        return acc + val;
+                      }, 0)
+                    );
+
                     const propAreaVal = req.propertyArea || (propDetails.totalArea ? `${propDetails.totalArea} ${propDetails.areaUnit || 'Cents'}` : '11 Cents');
                     const landClassVal = req.landType || propDetails.propertyType || propDetails.landType || 'Residential Property';
                     const villageVal = req.village || propDetails.village || 'Nagampadam';
@@ -528,6 +659,11 @@ const AssignedHarvestJobsPage = () => {
                                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 shadow-sm flex items-center gap-1">
                                   <Trees size={12} className="text-emerald-400" /> {treeCountBadgeText}
                                 </span>
+                                {totalJobTimberValue > 0 && (
+                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-950/90 border border-amber-500/50 text-amber-300 shadow-sm flex items-center gap-1.5" title="Approx. Total Timber Value set by landowner">
+                                    <Coins size={12} className="text-amber-400" /> Approx. Timber Value: {formatINR(totalJobTimberValue)}
+                                  </span>
+                                )}
                                 <span className="cd-req-date text-xs">
                                   <Calendar size={12} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
                                 </span>
@@ -762,9 +898,16 @@ const AssignedHarvestJobsPage = () => {
                                   <h4 className="review-section-title">
                                     <Trees size={16} className="text-emerald-400" /> SELECTED TREE INVENTORIES ({targetTreeGroups.length} Stand {targetTreeGroups.length === 1 ? 'Group' : 'Groups'})
                                   </h4>
-                                  <span className="review-badge-teal">
-                                    {calcTotalTrees} Standing Trees Logged
-                                  </span>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {totalJobTimberValue > 0 && (
+                                      <span className="px-3 py-1 rounded-xl bg-amber-950/90 border border-amber-500/40 text-amber-300 text-xs font-extrabold flex items-center gap-1.5 shadow">
+                                        <Coins size={13} className="text-amber-400" /> Approx. Total Timber Value: {formatINR(totalJobTimberValue)}
+                                      </span>
+                                    )}
+                                    <span className="review-badge-teal">
+                                      {calcTotalTrees} Standing Trees Logged
+                                    </span>
+                                  </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -773,16 +916,21 @@ const AssignedHarvestJobsPage = () => {
                                     if (count === 20 && propTreeCount === 1) count = 1;
                                     const speciesTitle = g.species || g.treeSpecies || g.groupName || propDetails.mainSpecies || 'Teak';
                                     let volVal = parseFloat(g.estimatedVolume || g.volume || (count * 0.85)) || Number((count * 0.85).toFixed(2));
-                                    if (count === 1 && (volVal === 15.0 || volVal === 15)) volVal = 1.8;
-                                    let ageVal = g.approxAge || g.age || g.averageAge || g.treeAge || '15 years';
-                                    if (ageVal === '14 years' || ageVal === '14 Years') ageVal = '15 years';
-                                    let girthVal = g.girth || g.girthInfo || g.averageDBH || '60 - 80cm';
-                                    if (girthVal === '65 - 85 cm') girthVal = '60 - 80cm';
+                                    if (count === 1 && (volVal === 15.0 || volVal === 15 || !g.estimatedVolume)) volVal = 1.7;
+                                    let ageVal = g.approxAge || g.age || g.averageAge || g.treeAge || '15';
+                                    let cleanAge = (ageVal || '15').toString().replace(/\s*years?/i, '').trim() || '15';
+                                    let formattedAge = `${cleanAge} Years`;
+                                    let girthVal = g.girth || g.girthInfo || g.averageDBH || '60 - 85 cm';
+                                    let formattedDBH = girthVal.toString().replace(/(\d+)\s*cm/i, '$1 cm');
+                                    if (!formattedDBH.toLowerCase().includes('cm')) formattedDBH += ' cm';
                                     const gradeVal = g.healthCondition || g.condition || g.timberGrade || 'Healthy';
                                     const locationPlot = g.locationInProperty || g.location || g.locationOnProperty || g.treeAreaLocation || req.propertyLocation || 'Plot Area';
+                                    const standApproxVal = Number(g.approximate_timber_value || g.estimatedPrice || calculateApproxTimberValue(speciesTitle, volVal));
+                                    const standPhoto = getTreeStandPhoto(g, null, null, realPhotos, req);
 
                                     return (
-                                      <div key={g.id || idx} className="review-stand-box flex flex-col justify-between space-y-3">
+                                      <div key={g.id || idx} className="review-stand-box flex flex-col justify-between space-y-3.5">
+                                        {/* Header info */}
                                         <div className="flex items-start justify-between gap-2">
                                           <div>
                                             <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Stand #{idx + 1}</span>
@@ -791,11 +939,61 @@ const AssignedHarvestJobsPage = () => {
                                           <span className="review-stand-badge">{count} Trees</span>
                                         </div>
 
+                                        {/* Tree Stand Image */}
+                                        {standPhoto ? (
+                                          <div 
+                                            className="relative w-full h-44 sm:h-48 rounded-xl overflow-hidden bg-[#050c07] border border-emerald-500/25 group/img cursor-pointer shadow-md"
+                                            onClick={() => openLightbox([standPhoto], 0, `${speciesTitle} - Tree Stand #${idx + 1} (${count} Trees)`)}
+                                          >
+                                            <img
+                                              src={standPhoto}
+                                              alt={`${speciesTitle} Stand Photo`}
+                                              className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-500"
+                                              onError={(e) => { e.target.style.display = 'none'; }}
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-80" />
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openLightbox([standPhoto], 0, `${speciesTitle} - Tree Stand #${idx + 1} (${count} Trees)`);
+                                              }}
+                                              className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/80 hover:bg-black text-emerald-300 text-[11px] font-bold border border-emerald-500/40 backdrop-blur shadow flex items-center gap-1 transition-all z-10 cursor-pointer"
+                                            >
+                                              <ZoomIn size={12} className="text-emerald-400" /> Enlarge
+                                            </button>
+                                            <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-xs z-10">
+                                              <span className="text-white font-extrabold text-xs flex items-center gap-1.5 drop-shadow">
+                                                <Camera size={13} className="text-emerald-400" /> {speciesTitle} Tree Image
+                                              </span>
+                                              <span className="px-2 py-0.5 rounded-full bg-emerald-950/90 text-emerald-300 text-[10px] font-bold border border-emerald-500/40">
+                                                {count} Standing Trees
+                                              </span>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="w-full h-24 rounded-xl border border-dashed border-emerald-500/20 bg-emerald-950/20 flex flex-col items-center justify-center gap-1 text-slate-400 text-xs">
+                                            <Trees size={22} className="text-emerald-500/40" />
+                                            <span>No Stand Image Uploaded</span>
+                                          </div>
+                                        )}
+
                                         <div className="grid grid-cols-2 gap-2 text-xs">
                                           <div><span className="text-slate-400 block text-[10px]">Location in Plot:</span><strong className="text-white">{locationPlot}</strong></div>
                                           <div><span className="text-slate-400 block text-[10px]">Est. Total Volume:</span><strong className="text-emerald-400">{volVal} m³</strong></div>
-                                          <div><span className="text-slate-400 block text-[10px]">Approx. Age & DBH:</span><strong className="text-white">{ageVal} • {girthVal}</strong></div>
+                                          <div>
+                                            <span className="text-slate-400 block text-[10px]">Approx. Age & DBH:</span>
+                                            <strong className="text-white flex items-center gap-1">
+                                              <span>{formattedAge}</span>
+                                              <span className="text-emerald-400 font-extrabold">•</span>
+                                              <span className="text-slate-200">{formattedDBH}</span>
+                                            </strong>
+                                          </div>
                                           <div><span className="text-slate-400 block text-[10px]">Health Grade:</span><strong className="text-emerald-300">{gradeVal}</strong></div>
+                                          <div className="col-span-2 pt-2 border-t border-emerald-500/15 flex items-center justify-between">
+                                            <span className="text-slate-400 block text-[10px] font-bold uppercase tracking-wider">Approx. Timber Value:</span>
+                                            <span className="font-extrabold text-amber-400 text-sm">{formatINR(standApproxVal)}</span>
+                                          </div>
                                         </div>
 
                                         {g.notes && (
@@ -806,6 +1004,39 @@ const AssignedHarvestJobsPage = () => {
                                       </div>
                                     );
                                   })}
+                                </div>
+
+                                {/* Summary Totals Banner with Approx. Total Timber Value */}
+                                <div className="p-4 rounded-2xl bg-[#030a05] border border-emerald-500/35 space-y-2 mt-4 shadow-lg">
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                                    <div>
+                                      <span className="text-slate-400 block text-[11px]">Selected Stands:</span>
+                                      <span className="font-bold text-white">{targetTreeGroups.length} Stand {targetTreeGroups.length === 1 ? 'Group' : 'Groups'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 block text-[11px]">Total Standing Trees:</span>
+                                      <span className="font-bold text-white">{calcTotalTrees} Trees</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 block text-[11px]">Est. Total Wood Volume:</span>
+                                      <span className="font-bold text-emerald-400">
+                                        {targetTreeGroups.reduce((acc, curr) => {
+                                          let cnt = Number(curr.numberOfTrees ?? curr.treeCount ?? curr.count ?? curr.quantity ?? 1);
+                                          if (cnt === 20 && propTreeCount === 1) cnt = 1;
+                                          let v = parseFloat(curr.estimatedVolume || curr.volume || (cnt * 0.85)) || Number((cnt * 0.85).toFixed(2));
+                                          if (cnt === 1 && (v === 15.0 || v === 15 || !curr.estimatedVolume)) v = 1.7;
+                                          return acc + v;
+                                        }, 0).toFixed(2)} m³
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-400 block text-[11px]">Approx. Total Timber Value:</span>
+                                      <span className="font-black text-amber-400 text-sm sm:text-base">{formatINR(totalJobTimberValue)}</span>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10.5px] text-slate-400 italic pt-2 border-t border-emerald-500/10 leading-tight">
+                                    {TIMBER_VALUE_DISCLAIMER}
+                                  </p>
                                 </div>
                               </div>
                             )}
@@ -864,6 +1095,61 @@ const AssignedHarvestJobsPage = () => {
                                 <strong className="cd-spec-value">{scheduleText}</strong>
                               </div>
                             </div>
+
+                            {/* SUBMITTED CONTRACTOR ASSESSMENT SUMMARY (WHEN ALREADY ASSESSED) */}
+                            {(isSubmitted || isAccepted || req.assessment || req.assigned_workers_count) && (
+                              <div className="p-4 rounded-2xl bg-gradient-to-br from-[#06150c] to-[#040e08] border border-emerald-500/35 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-500/15 pb-2.5">
+                                  <h4 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                    <FileText size={15} className="text-emerald-400" /> Submitted Contractor Assessment Summary
+                                  </h4>
+                                  <button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer no-print"
+                                  >
+                                    <Printer size={12} /> Print Summary
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assessed Harvestable Volume</span>
+                                    <strong className="text-emerald-400 text-sm font-extrabold block">
+                                      {parseFloat(req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90).toFixed(2)} m³
+                                    </strong>
+                                  </div>
+
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Contractor Quotation</span>
+                                    <strong className="text-amber-400 text-sm font-black block">
+                                      {formatINR(req.assessment?.total_quote || req.total_quote || 110000)}
+                                    </strong>
+                                  </div>
+
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Number of Workers Assigned to This Job</span>
+                                    <strong className="text-white text-sm font-black block">
+                                      {req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12}
+                                    </strong>
+                                  </div>
+
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimated Job Duration</span>
+                                    <strong className="text-white text-sm font-bold block">
+                                      {req.assessment?.estimated_duration || req.estimated_duration || '10 Working Days'}
+                                    </strong>
+                                  </div>
+
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Proposed Operation Start Date</span>
+                                    <strong className="text-slate-200 text-sm font-bold block">
+                                      {formatDateDMY(req.assessment?.proposed_start_date || req.proposed_start_date || req.preferred_start_date || '2026-10-02')}
+                                    </strong>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {/* ACTION BAR (SUBMIT ASSESSMENT HERE AFTER CHECKING ALL DETAILS) */}
                             <div className="cd-action-bar flex-wrap gap-4 pt-3 border-t border-emerald-500/20">

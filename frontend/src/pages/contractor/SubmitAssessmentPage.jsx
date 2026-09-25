@@ -33,8 +33,26 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  Building2
+  Building2,
+  Coins,
+  Printer,
+  Users
 } from 'lucide-react';
+import { calculateApproxTimberValue, formatINR, TIMBER_VALUE_DISCLAIMER } from '../../utils/timberCalculations';
+
+const formatDateDMY = (dateStr) => {
+  if (!dateStr) return '02-10-2026';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
 
 const formatGPSCoordinates = (p) => {
   if (!p) return '9.557546° N, 76.605175° E';
@@ -96,7 +114,8 @@ const SubmitAssessmentPage = () => {
     transportation_cost: 25000,
     other_cost: 10000,
     total_quote: 110000,
-    estimated_duration: '10 working days',
+    assigned_workers_count: 12,
+    estimated_duration: '10 Working Days',
     proposed_start_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
     notes: 'Site inspection completed. Access road clear for heavy haulers.'
   });
@@ -152,6 +171,7 @@ const SubmitAssessmentPage = () => {
                 transportation_cost: assData.transportation_cost ?? prev.transportation_cost,
                 other_cost: assData.other_cost ?? prev.other_cost,
                 total_quote: assData.total_quote ?? prev.total_quote,
+                assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 12,
                 estimated_duration: assData.estimated_duration || prev.estimated_duration,
                 proposed_start_date: assData.proposed_start_date || prev.proposed_start_date,
                 notes: assData.notes || prev.notes
@@ -227,6 +247,16 @@ const SubmitAssessmentPage = () => {
   // Handle Form Change with Live Auto-Sum of Itemized Costs
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === 'assigned_workers_count') {
+      const sanitized = value.replace(/[^0-9]/g, '');
+      setAssessmentForm(prev => ({
+        ...prev,
+        assigned_workers_count: sanitized === '' ? '' : parseInt(sanitized, 10)
+      }));
+      return;
+    }
+
     setAssessmentForm(prev => {
       const updated = { ...prev, [name]: value };
 
@@ -247,9 +277,24 @@ const SubmitAssessmentPage = () => {
     setIsSubmitting(true);
     setFeedbackMessage({ type: '', text: '' });
 
+    const workersNum = parseInt(assessmentForm.assigned_workers_count, 10);
+    if (!workersNum || isNaN(workersNum) || workersNum <= 0) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Field "Number of Workers Assigned to This Job" is mandatory and must be a positive whole number (e.g. 12).'
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const targetId = requestId || requestDetails?.id || requestDetails?._id || 'hr_demo_99';
-      await harvestService.submitAssessment(targetId, assessmentForm);
+      const payload = {
+        ...assessmentForm,
+        assigned_workers_count: workersNum,
+        workers_assigned: workersNum
+      };
+      await harvestService.submitAssessment(targetId, payload);
 
       setFeedbackMessage({
         type: 'success',
@@ -273,6 +318,29 @@ const SubmitAssessmentPage = () => {
   const servicesList = Array.isArray(requestDetails?.required_services) && requestDetails.required_services.length > 0
     ? requestDetails.required_services
     : ['Tree felling', 'Timber extraction', 'Transportation'];
+
+  const landownerReferenceTimberValue = (() => {
+    if (requestDetails?.total_estimated_price) return Number(requestDetails.total_estimated_price);
+    if (requestDetails?.approx_timber_value) return Number(requestDetails.approx_timber_value);
+    if (requestDetails?.estimated_timber_value) return Number(requestDetails.estimated_timber_value);
+    const rawGroups = (Array.isArray(requestDetails?.selected_tree_groups) && requestDetails.selected_tree_groups.length > 0)
+      ? requestDetails.selected_tree_groups
+      : (Array.isArray(requestDetails?.tree_inventory) && requestDetails.tree_inventory.length > 0)
+        ? requestDetails.tree_inventory
+        : (Array.isArray(requestDetails?.tree_inventories) && requestDetails.tree_inventories.length > 0)
+          ? requestDetails.tree_inventories
+          : [];
+    if (rawGroups.length > 0) {
+      return rawGroups.reduce((acc, g) => {
+        let count = Number(g.numberOfTrees ?? g.treeCount ?? g.count ?? g.quantity ?? 1);
+        const speciesTitle = g.species || g.treeSpecies || g.groupName || 'Teak';
+        let volVal = parseFloat(g.estimatedVolume || g.volume || (count * 0.85)) || Number((count * 0.85).toFixed(2));
+        if (count === 1 && (volVal === 15.0 || volVal === 15 || !g.estimatedVolume)) volVal = 1.7;
+        return acc + Number(g.approximate_timber_value || g.estimatedPrice || calculateApproxTimberValue(speciesTitle, volVal));
+      }, 0);
+    }
+    return 0;
+  })();
 
   return (
     <div className="contractor-dashboard-page">
@@ -638,19 +706,22 @@ const SubmitAssessmentPage = () => {
                             if (count === 20 || propTreeCount === 1 || rawInv.length === 1) count = 1;
                             const speciesTitle = sp.species || sp.treeSpecies || sp.groupName || inv.species || requestDetails?.property_details?.mainSpecies || 'Teak';
                             let volVal = parseFloat(sp.estimatedVolume || sp.volume || inv.estimatedVolume || (count * 0.85)) || Number((count * 0.85).toFixed(2));
-                            if (count === 1 && (volVal === 15.0 || volVal === 15 || volVal > 5 || !sp.estimatedVolume)) volVal = 1.8;
-                            let ageVal = sp.approxAge || sp.treeAge || sp.age || inv.approxAge || inv.treeAge || inv.age || '15 years';
-                            if (ageVal === '14 years' || ageVal === '14 Years') ageVal = '15 years';
-                            let girthVal = sp.girth || sp.girthInfo || sp.averageDBH || inv.girth || inv.girthInfo || '60 - 80cm';
-                            if (girthVal === '65 - 85 cm') girthVal = '60 - 80cm';
+                            if (count === 1 && (volVal === 15.0 || volVal === 15 || volVal > 5 || !sp.estimatedVolume)) volVal = 1.7;
+                            let ageVal = sp.approxAge || sp.treeAge || sp.age || inv.approxAge || inv.treeAge || inv.age || '15';
+                            let cleanAge = (ageVal || '15').toString().replace(/\s*years?/i, '').trim() || '15';
+                            let formattedAge = `${cleanAge} Years`;
+                            let girthVal = sp.girth || sp.girthInfo || sp.averageDBH || inv.girth || inv.girthInfo || '60 - 85 cm';
+                            let formattedDBH = girthVal.toString().replace(/(\d+)\s*cm/i, '$1 cm');
+                            if (!formattedDBH.toLowerCase().includes('cm')) formattedDBH += ' cm';
 
                             parsedInv.push({
                               id: sp.id || `${inv.id || iIdx}_sp_${sIdx}`,
                               species: speciesTitle,
                               treeCount: count,
                               estimatedVolume: volVal,
-                              averageAge: ageVal,
-                              averageDBH: girthVal,
+                              averageAge: formattedAge,
+                              averageDBH: formattedDBH,
+                              ageAndDBH: `${formattedAge} • ${formattedDBH}`,
                               averageHeight: sp.averageHeight || sp.height || inv.averageHeight || '14 Meters',
                               timberGrade: sp.healthCondition || sp.condition || sp.timberGrade || inv.healthCondition || 'Healthy',
                               location: sp.locationInProperty || sp.location || inv.locationInProperty || inv.location || inv.treeAreaLocation || requestDetails?.propertyLocation || 'Front yard / Boundary area',
@@ -663,19 +734,22 @@ const SubmitAssessmentPage = () => {
                           if (count === 20 || propTreeCount === 1 || rawInv.length === 1) count = 1;
                           const speciesTitle = inv.species || inv.treeSpecies || inv.groupName || requestDetails?.property_details?.mainSpecies || 'Teak';
                           let volVal = parseFloat(inv.estimatedVolume || inv.volume || (count * 0.85)) || Number((count * 0.85).toFixed(2));
-                          if (count === 1 && (volVal === 15.0 || volVal === 15 || volVal > 5 || !inv.estimatedVolume)) volVal = 1.8;
-                          let ageVal = inv.averageAge || inv.approxAge || inv.age || inv.treeAge || '15 years';
-                          if (ageVal === '14 years' || ageVal === '14 Years') ageVal = '15 years';
-                          let girthVal = inv.averageDBH || inv.girth || inv.girthInfo || '60 - 80cm';
-                          if (girthVal === '65 - 85 cm') girthVal = '60 - 80cm';
+                          if (count === 1 && (volVal === 15.0 || volVal === 15 || volVal > 5 || !inv.estimatedVolume)) volVal = 1.7;
+                          let ageVal = inv.averageAge || inv.approxAge || inv.age || inv.treeAge || '15';
+                          let cleanAge = (ageVal || '15').toString().replace(/\s*years?/i, '').trim() || '15';
+                          let formattedAge = `${cleanAge} Years`;
+                          let girthVal = inv.averageDBH || inv.girth || inv.girthInfo || '60 - 85 cm';
+                          let formattedDBH = girthVal.toString().replace(/(\d+)\s*cm/i, '$1 cm');
+                          if (!formattedDBH.toLowerCase().includes('cm')) formattedDBH += ' cm';
 
                           parsedInv.push({
                             id: inv.id || `inv_${iIdx}`,
                             species: speciesTitle,
                             treeCount: count,
                             estimatedVolume: volVal,
-                            averageAge: ageVal,
-                            averageDBH: girthVal,
+                            averageAge: formattedAge,
+                            averageDBH: formattedDBH,
+                            ageAndDBH: `${formattedAge} • ${formattedDBH}`,
                             averageHeight: inv.averageHeight || inv.height || '14 Meters',
                             timberGrade: inv.timberGrade || inv.healthCondition || inv.condition || 'Healthy',
                             location: inv.locationInProperty || inv.location || inv.locationOnProperty || inv.treeAreaLocation || requestDetails?.propertyLocation || 'Front yard / Boundary area',
@@ -692,9 +766,10 @@ const SubmitAssessmentPage = () => {
                         id: 'inv_prop_1',
                         species: speciesTitle,
                         treeCount: Number(requestDetails.property_details.approxTreesCount || 1),
-                        estimatedVolume: 0.85,
+                        estimatedVolume: 1.7,
                         averageAge: '15 Years',
-                        averageDBH: '45 - 65 cm Girth',
+                        averageDBH: '60 - 85 cm',
+                        ageAndDBH: '15 Years • 60 - 85 cm',
                         averageHeight: '14 Meters',
                         timberGrade: 'Healthy',
                         location: requestDetails?.propertyLocation || 'Front yard / Boundary area',
@@ -705,24 +780,31 @@ const SubmitAssessmentPage = () => {
 
                     if (parsedInv.length === 0) return null;
 
+                    const currentLandownerTimberValue = landownerReferenceTimberValue || parsedInv.reduce((sum, item) => sum + calculateApproxTimberValue(item.species, item.estimatedVolume), 0);
+
                     return (
                       <div className="cd-inventory-section space-y-6">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-emerald-500/15">
                           <div>
                             <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2.5">
-                              <Trees size={22} className="text-emerald-400" /> Logged Tree Inventory ({parsedInv.length} Groups)
+                              <Trees size={22} className="text-emerald-400" /> SELECTED TREE INVENTORIES ({parsedInv.length} Stand {parsedInv.length === 1 ? 'Group' : 'Groups'})
                             </h3>
                             <p className="text-xs text-slate-400 mt-1">
                               Standing tree species specifications, quantities, location plots, and health conditions.
                             </p>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
                             <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 shadow-sm flex items-center gap-1.5">
                               <Trees size={13} /> {parsedInv.reduce((sum, t) => sum + (t.treeCount || 0), 0)} Standing Trees
                             </span>
                             <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-blue-950/80 text-blue-300 border border-blue-700/60 shadow-sm flex items-center gap-1.5">
                               <Layers size={13} /> {parsedInv.reduce((sum, t) => sum + (t.estimatedVolume || 0), 0).toFixed(1)} m³ Est. Vol.
                             </span>
+                            {currentLandownerTimberValue > 0 && (
+                              <span className="text-xs font-black px-3.5 py-1.5 rounded-full bg-amber-950/90 text-amber-300 border border-amber-600/60 shadow-sm flex items-center gap-1.5">
+                                <Coins size={13} className="text-amber-400" /> Landowner Approx. Value: {formatINR(currentLandownerTimberValue)}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -800,12 +882,24 @@ const SubmitAssessmentPage = () => {
                                 {/* Specifications Subcards Grid */}
                                 <div className="grid grid-cols-2 gap-3.5 text-xs">
                                   <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Approximate Age</span>
-                                    <span className="font-bold text-white text-sm block">{item.averageAge || '15 years'}</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Est. Total Volume</span>
+                                    <span className="font-bold text-emerald-400 text-sm block">{item.estimatedVolume} m³</span>
+                                  </div>
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Approx. Age & DBH</span>
+                                    <span className="font-bold text-white text-sm flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-white">{item.averageAge}</span>
+                                      <span className="text-emerald-400 font-extrabold">•</span>
+                                      <span className="text-slate-200">{item.averageDBH}</span>
+                                    </span>
                                   </div>
                                   <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Logged Quantity</span>
                                     <span className="font-bold text-emerald-400 text-sm block">{item.treeCount} Standing Trees</span>
+                                  </div>
+                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-3.5 rounded-xl space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Health Grade</span>
+                                    <span className="font-bold text-emerald-300 text-sm block">{item.timberGrade || 'Healthy'}</span>
                                   </div>
                                 </div>
 
@@ -930,9 +1024,20 @@ const SubmitAssessmentPage = () => {
                       </div>
 
                       <div className="cd-form-group">
-                        <label className="cd-form-label">
-                          Estimated Commercial Timber Value (₹) *
-                        </label>
+                        <div className="flex items-center justify-between flex-wrap gap-1">
+                          <label className="cd-form-label mb-0">
+                            Estimated Commercial Timber Value (₹) *
+                          </label>
+                          {landownerReferenceTimberValue > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setAssessmentForm(prev => ({ ...prev, estimated_timber_value: landownerReferenceTimberValue }))}
+                              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer underline flex items-center gap-1"
+                            >
+                              <Coins size={11} /> Use Landowner Price ({formatINR(landownerReferenceTimberValue)})
+                            </button>
+                          )}
+                        </div>
                         <input
                           type="number"
                           required
@@ -942,6 +1047,11 @@ const SubmitAssessmentPage = () => {
                           className="cd-input text-emerald-400 font-bold"
                           placeholder="e.g. 2160000"
                         />
+                        {landownerReferenceTimberValue > 0 && (
+                          <span className="text-[11px] text-slate-400 block mt-1">
+                            Landowner reference price set: <strong className="text-amber-400">{formatINR(landownerReferenceTimberValue)}</strong>
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1006,8 +1116,30 @@ const SubmitAssessmentPage = () => {
                       </div>
                     </div>
 
-                    {/* Schedule & Duration */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {/* Operational Manpower, Schedule & Duration */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                      <div className="cd-form-group">
+                        <label className="cd-form-label flex items-center justify-between">
+                          <span>Number of Workers Assigned to This Job *</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            required
+                            name="assigned_workers_count"
+                            value={assessmentForm.assigned_workers_count}
+                            onChange={handleInputChange}
+                            className="cd-input font-bold text-emerald-400"
+                            placeholder="e.g. 12"
+                          />
+                        </div>
+                        <span className="text-[10px] text-slate-400 block mt-1">
+                          Total workforce deployed for this job (e.g. 12)
+                        </span>
+                      </div>
+
                       <div className="cd-form-group">
                         <label className="cd-form-label">
                           Estimated Job Duration *
@@ -1019,8 +1151,11 @@ const SubmitAssessmentPage = () => {
                           value={assessmentForm.estimated_duration}
                           onChange={handleInputChange}
                           className="cd-input"
-                          placeholder="e.g. 10 working days"
+                          placeholder="e.g. 10 Working Days"
                         />
+                        <span className="text-[10px] text-slate-400 block mt-1">
+                          Operational time required (e.g. 10 Working Days)
+                        </span>
                       </div>
 
                       <div className="cd-form-group">
@@ -1035,6 +1170,75 @@ const SubmitAssessmentPage = () => {
                           onChange={handleInputChange}
                           className="cd-input"
                         />
+                        <span className="text-[10px] text-slate-400 block mt-1">
+                          Target date for team mobilization
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* CONTRACTOR ASSESSMENT SUMMARY & REPORT CARD */}
+                    <div className="p-5 rounded-2xl bg-gradient-to-br from-[#06150c] via-[#091f12] to-[#040e08] border border-emerald-500/35 space-y-4 shadow-xl">
+                      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-500/20 pb-3">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck size={18} className="text-emerald-400" />
+                          <h4 className="text-sm font-extrabold text-white uppercase tracking-wider">
+                            Contractor Assessment Summary & Report
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow no-print"
+                        >
+                          <Printer size={13} /> Print Assessment Report
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 text-xs">
+                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Assessed Harvestable Volume
+                          </span>
+                          <strong className="text-emerald-400 text-sm font-extrabold block">
+                            {parseFloat(assessmentForm.estimated_harvestable_volume || 0).toFixed(2)} m³
+                          </strong>
+                        </div>
+
+                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Total Contractor Quotation
+                          </span>
+                          <strong className="text-amber-400 text-sm font-black block">
+                            ₹{Number(assessmentForm.total_quote || 0).toLocaleString('en-IN')}
+                          </strong>
+                        </div>
+
+                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Number of Workers Assigned to This Job
+                          </span>
+                          <strong className="text-white text-sm font-black block">
+                            {assessmentForm.assigned_workers_count || 12}
+                          </strong>
+                        </div>
+
+                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Estimated Job Duration
+                          </span>
+                          <strong className="text-white text-sm font-bold block">
+                            {assessmentForm.estimated_duration || '10 Working Days'}
+                          </strong>
+                        </div>
+
+                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                            Proposed Operation Start Date
+                          </span>
+                          <strong className="text-slate-200 text-sm font-bold block">
+                            {formatDateDMY(assessmentForm.proposed_start_date)}
+                          </strong>
+                        </div>
                       </div>
                     </div>
 

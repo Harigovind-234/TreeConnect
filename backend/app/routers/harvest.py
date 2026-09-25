@@ -39,6 +39,8 @@ class HarvestRequestCreate(BaseModel):
     longitude: Optional[float] = None
     selected_inventory_ids: List[str] = []
     selected_tree_groups: Optional[List[Dict[str, Any]]] = []
+    total_estimated_price: Optional[float] = None
+    approx_timber_value: Optional[float] = None
     reason: str
     preferred_start_date: Optional[str] = ""
     preferred_end_date: Optional[str] = ""
@@ -65,6 +67,8 @@ class ContractorAssessmentCreate(BaseModel):
     transportation_cost: Optional[float] = 0.0
     other_cost: Optional[float] = 0.0
     total_quote: float
+    assigned_workers_count: Optional[int] = None
+    workers_assigned: Optional[int] = None
     estimated_duration: str
     proposed_start_date: str
     notes: Optional[str] = ""
@@ -182,6 +186,8 @@ def create_harvest_request(
             "longitude": longitude_val,
             "selected_inventory_ids": payload.selected_inventory_ids,
             "selected_tree_groups": payload.selected_tree_groups or [],
+            "total_estimated_price": payload.total_estimated_price,
+            "approx_timber_value": payload.approx_timber_value or payload.total_estimated_price,
             "owner_email": owner_email,
             "reason": payload.reason,
             "preferred_start_date": payload.preferred_start_date,
@@ -559,6 +565,14 @@ def submit_contractor_assessment(
         token_email = get_current_user_email(authorization)
         created_at = datetime.now(timezone.utc).isoformat()
 
+        workers = payload.assigned_workers_count if payload.assigned_workers_count is not None else payload.workers_assigned
+        if workers is None or int(workers) <= 0:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"message": "Field 'Number of Workers Assigned to This Job' is mandatory and must be a positive whole number (e.g. 12)."}
+            )
+        workers_count = int(workers)
+
         # Check existing assessment for this harvest request
         assessment_doc = {
             "harvest_request_id": request_id,
@@ -570,6 +584,8 @@ def submit_contractor_assessment(
             "transportation_cost": payload.transportation_cost or 0.0,
             "other_cost": payload.other_cost or 0.0,
             "total_quote": payload.total_quote,
+            "assigned_workers_count": workers_count,
+            "workers_assigned": workers_count,
             "estimated_duration": payload.estimated_duration,
             "proposed_start_date": payload.proposed_start_date,
             "notes": payload.notes or "",
@@ -589,6 +605,8 @@ def submit_contractor_assessment(
         req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
         db.harvest_requests.update_one(req_query, {"$set": {
             "status": "ASSESSMENT_SUBMITTED",
+            "assigned_workers_count": workers_count,
+            "workers_assigned": workers_count,
             "updatedAt": created_at
         }})
 

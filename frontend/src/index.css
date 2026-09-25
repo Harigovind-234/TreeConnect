@@ -3405,3 +3405,9 @@ select option:disabled {
 .admin-select-filter:focus {
   border-color: #10b981 !important;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

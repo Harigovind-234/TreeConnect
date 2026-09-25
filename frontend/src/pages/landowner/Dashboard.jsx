@@ -145,11 +145,12 @@ const LandownerDashboard = () => {
       path: '/landowner/request-harvest'
     },
     {
-      id: 'list-timber',
-      emoji: '🪵',
-      title: 'List Timber Logs',
-      description: 'Sell harvested timber on the marketplace.',
-      path: '/landowner/create-timber-listing'
+      id: 'assigned-jobs',
+      emoji: '👷',
+      title: 'Assigned Jobs',
+      description: 'Track assigned contractors, quotes, and harvest operations.',
+      path: '/landowner/harvest-requests',
+      linkText: 'Track'
     }
   ];
 
@@ -303,7 +304,7 @@ const LandownerDashboard = () => {
                     <p className="ld-quick-sub">{action.description}</p>
                   </div>
                   <div className="ld-quick-link">
-                    <span>Initiate</span>
+                    <span>{action.linkText || 'Initiate'}</span>
                     <ArrowRight size={16} className="transform group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>

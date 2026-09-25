@@ -30,7 +30,9 @@ import {
   Trees,
   TreePine,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Printer,
+  Users
 } from 'lucide-react';
 
 import {
@@ -40,6 +42,20 @@ import {
   formatINR,
   TIMBER_VALUE_DISCLAIMER
 } from '../../utils/timberCalculations';
+
+const formatDateDMY = (dateStr) => {
+  if (!dateStr) return '02-10-2026';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
 
 const formatGPSCoordinates = (p) => {
   if (!p) return '9.557546° N, 76.605175° E';
@@ -280,7 +296,7 @@ const HarvestRequestsPage = () => {
                       ? req.selected_tree_inventories
                       : ((Array.isArray(req.tree_inventory) && req.tree_inventory.length > 0)
                         ? req.tree_inventory
-                        : [{ groupName: 'Teak Stand #1', numberOfTrees: 1, species: 'Teak', approxAge: '15 years', girth: '60 - 80cm', estimatedVolume: '1.8 m³' }]));
+                        : [{ groupName: 'Teak Stand #1', numberOfTrees: 1, species: 'Teak', approxAge: '15', girth: '60 - 85cm', estimatedVolume: '1.7 m³' }]));
 
                   return (
                     <div key={reqId} className="harvest-request-card">
@@ -419,9 +435,9 @@ const HarvestRequestsPage = () => {
                             const count = s.numberOfTrees ?? s.treeCount ?? s.count ?? s.quantity ?? 1;
                             const standName = s.groupName || s.standName || s.name || `${s.species || 'Teak'} Stand #${idx + 1}`;
                             const species = s.species || s.treeSpecies || 'Teak';
-                            const age = s.approxAge || s.standAge || s.age || '15 years';
-                            const girth = s.girth || s.trunkGirth || s.averageDbh || '60 - 80cm';
-                            const volume = s.estimatedVolume || s.volume || '1.8 m³';
+                            const age = (s.approxAge || s.standAge || s.age || '15').toString().replace(/\s*years?/i, '').trim() || '15';
+                            const girth = s.girth || s.trunkGirth || s.averageDbh || '60 - 85cm';
+                            const volume = s.estimatedVolume || s.volume || '1.7 m³';
                             const approxValue = calculateApproxTimberValue(species, volume);
 
                             return (
@@ -539,6 +555,91 @@ const HarvestRequestsPage = () => {
                           </div>
                         )}
                       </div>
+
+                      {/* CONTRACTOR ASSESSMENT & QUOTATION SUBMITTED (WHEN ASSESSED) */}
+                      {(isAssessmentSubmitted || isAccepted || activeAssessmentMap[reqId] || req.assessment) && (
+                        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#06150c] to-[#040e08] border border-emerald-500/35 space-y-3 shadow-lg">
+                          <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-500/15 pb-2.5">
+                            <div>
+                              <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">
+                                Formal Site Assessment
+                              </span>
+                              <h4 className="text-sm font-extrabold text-white flex items-center gap-1.5 mt-0.5">
+                                <FileText size={16} className="text-emerald-400" /> Contractor Quotation & Manpower Assessment
+                              </h4>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
+                                {isAccepted ? 'Accepted' : 'Assessment Under Review'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer no-print"
+                              >
+                                <Printer size={12} /> Print Report
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assessed Harvestable Volume</span>
+                              <strong className="text-emerald-400 text-sm font-extrabold block">
+                                {parseFloat(activeAssessmentMap[reqId]?.estimated_harvestable_volume || req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90).toFixed(2)} m³
+                              </strong>
+                            </div>
+
+                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Contractor Quotation</span>
+                              <strong className="text-amber-400 text-sm font-black block">
+                                {formatINR(activeAssessmentMap[reqId]?.total_quote || req.assessment?.total_quote || req.total_quote || 110000)}
+                              </strong>
+                            </div>
+
+                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Number of Workers Assigned to This Job</span>
+                              <strong className="text-white text-sm font-black block">
+                                {activeAssessmentMap[reqId]?.assigned_workers_count || activeAssessmentMap[reqId]?.workers_assigned || req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12}
+                              </strong>
+                            </div>
+
+                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimated Job Duration</span>
+                              <strong className="text-white text-sm font-bold block">
+                                {activeAssessmentMap[reqId]?.estimated_duration || req.assessment?.estimated_duration || req.estimated_duration || '10 Working Days'}
+                              </strong>
+                            </div>
+
+                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Proposed Operation Start Date</span>
+                              <strong className="text-slate-200 text-sm font-bold block">
+                                {formatDateDMY(activeAssessmentMap[reqId]?.proposed_start_date || req.assessment?.proposed_start_date || req.proposed_start_date || '2026-10-02')}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {/* Landowner Assessment Actions if under review */}
+                          {isAssessmentSubmitted && (
+                            <div className="pt-3 border-t border-emerald-500/15 flex items-center justify-end gap-2.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => handleAssessmentAction(reqId, 'REVISION_REQUESTED', 'Please adjust timeline and quotation.')}
+                                className="px-3.5 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 text-xs font-bold transition-all cursor-pointer"
+                              >
+                                Request Revision
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
+                                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-black text-xs font-black transition-all cursor-pointer shadow-lg"
+                              >
+                                Accept Assessment & Authorize Operation
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* ASSIGNED CONTRACTOR / SELECTION FOOTER BAR */}
                       {isAssigned ? (

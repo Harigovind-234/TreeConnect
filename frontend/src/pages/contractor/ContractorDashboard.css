@@ -1446,3 +1446,35 @@
   transform: translateY(-1px);
 }
 
+/* ==========================================================
+   PRINT VIEW / REPORT STYLES FOR CONTRACTOR ASSESSMENT
+   ========================================================== */
+@media print {
+  nav, .navbar, .contractor-sidebar, .sidebar, .cd-modal-actions, button.cd-btn-cancel, button.cd-btn-primary, .no-print {
+    display: none !important;
+  }
+  body, .contractor-dashboard-page, .contractor-dashboard-container, .contractor-dashboard-workspace {
+    background: #ffffff !important;
+    color: #111827 !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+  .cd-card, .review-summary-card, .cd-cost-breakdown-box {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+    page-break-inside: avoid;
+  }
+  .text-white, .text-slate-200, .text-slate-300, .text-slate-400 {
+    color: #111827 !important;
+  }
+  .text-emerald-400, .text-emerald-300 {
+    color: #065f46 !important;
+  }
+  .text-amber-400, .text-amber-300 {
+    color: #92400e !important;
+  }
+}
+
