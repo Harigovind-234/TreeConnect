@@ -247,6 +247,7 @@ const HarvestRequestsPage = () => {
                   const isAssigned = Boolean(req.assigned_contractor_id || req.assigned_contractor_email);
                   const isAssessmentSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
                   const isOperationReady = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                  const isAccepted = isOperationReady;
 
                   // Format schedule dates cleanly
                   const startDate = req.preferred_start_date || req.preferredStartDate;
@@ -306,7 +307,7 @@ const HarvestRequestsPage = () => {
                         <div>
                           <div className="harvest-pills-row">
                             <span className="harvest-tag-pill">
-                              Request #{reqId.substring(0, 8)}
+                              Request #{String(reqId).substring(0, 8)}
                             </span>
                             <span className="harvest-date-pill">
                               <Calendar size={13} className="text-slate-500" /> Created: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
@@ -318,7 +319,7 @@ const HarvestRequestsPage = () => {
                               <MapPin size={13} className="text-emerald-400" /> GPS: {formatGPSCoordinates(req)}
                             </span>
                             <span className="harvest-tag-pill font-mono text-[11px]">
-                              Record ID: {(req.property_id || req.propertyId || req.id || '6aaacc50a6348ba1e2582fe3').substring(0, 10)}
+                              Record ID: {String(req.property_id || req.propertyId || req.id || '6aaacc50a6348ba1e2582fe3').substring(0, 10)}
                             </span>
                           </div>
                           <h2 className="harvest-card-title">{req.propertyName || 'Registered Property'}</h2>
@@ -558,84 +559,131 @@ const HarvestRequestsPage = () => {
 
                       {/* CONTRACTOR ASSESSMENT & QUOTATION SUBMITTED (WHEN ASSESSED) */}
                       {(isAssessmentSubmitted || isAccepted || activeAssessmentMap[reqId] || req.assessment) && (
-                        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-[#06150c] to-[#040e08] border border-emerald-500/35 space-y-3 shadow-lg">
-                          <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-500/15 pb-2.5">
-                            <div>
-                              <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">
-                                Formal Site Assessment
-                              </span>
-                              <h4 className="text-sm font-extrabold text-white flex items-center gap-1.5 mt-0.5">
-                                <FileText size={16} className="text-emerald-400" /> Contractor Quotation & Manpower Assessment
-                              </h4>
+                        <div className="assessment-summary-card">
+                          <div className="review-section-header">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                <FileText size={16} />
+                              </div>
+                              <div>
+                                <h4 className="review-section-title">
+                                  CONTRACTOR QUOTATION & MANPOWER ASSESSMENT
+                                </h4>
+                                <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
+                                  Formal on-site evaluation, estimated harvest yield, and operational quotation submitted by assigned contractor.
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-1 rounded-full bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold">
-                                {isAccepted ? 'Accepted' : 'Assessment Under Review'}
+
+                            <div className="flex items-center gap-3">
+                              <span className={isAccepted ? "review-badge-green" : "review-badge-amber"}>
+                                {isAccepted ? (
+                                  <>
+                                    <CheckCircle2 size={13} className="text-emerald-400" />
+                                    <span>Assessment Accepted & Authorized</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Clock size={13} className="text-amber-400" />
+                                    <span>Quotation Under Review</span>
+                                  </>
+                                )}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => window.print()}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer no-print"
+                                className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
+                                title="Print Formal Assessment Report"
                               >
-                                <Printer size={12} /> Print Report
+                                <Printer size={13} />
+                                <span>Print Report</span>
                               </button>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
-                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assessed Harvestable Volume</span>
-                              <strong className="text-emerald-400 text-sm font-extrabold block">
-                                {parseFloat(activeAssessmentMap[reqId]?.estimated_harvestable_volume || req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90).toFixed(2)} m³
+                          {/* 5-METRIC RESPONSIVE SPECIFICATION GRID */}
+                          <div className="assessment-metrics-grid">
+                            <div className="assessment-metric-item">
+                              <span className="assessment-metric-label">
+                                <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
+                              </span>
+                              <strong className="assessment-metric-value-emerald">
+                                {(() => {
+                                  const raw = activeAssessmentMap[reqId]?.estimated_harvestable_volume || req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90;
+                                  const num = parseFloat(raw);
+                                  return !isNaN(num) ? `${num.toFixed(2)} m³` : `${raw} m³`;
+                                })()}
                               </strong>
                             </div>
 
-                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Contractor Quotation</span>
-                              <strong className="text-amber-400 text-sm font-black block">
+                            <div className="assessment-metric-item">
+                              <span className="assessment-metric-label">
+                                <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
+                              </span>
+                              <strong className="assessment-metric-value-amber">
                                 {formatINR(activeAssessmentMap[reqId]?.total_quote || req.assessment?.total_quote || req.total_quote || 110000)}
                               </strong>
                             </div>
 
-                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Number of Workers Assigned to This Job</span>
-                              <strong className="text-white text-sm font-black block">
-                                {activeAssessmentMap[reqId]?.assigned_workers_count || activeAssessmentMap[reqId]?.workers_assigned || req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12}
+                            <div className="assessment-metric-item">
+                              <span className="assessment-metric-label">
+                                <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
+                              </span>
+                              <strong className="assessment-metric-value">
+                                {activeAssessmentMap[reqId]?.assigned_workers_count || activeAssessmentMap[reqId]?.workers_assigned || req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12} Workers
                               </strong>
                             </div>
 
-                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimated Job Duration</span>
-                              <strong className="text-white text-sm font-bold block">
+                            <div className="assessment-metric-item">
+                              <span className="assessment-metric-label">
+                                <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
+                              </span>
+                              <strong className="assessment-metric-value">
                                 {activeAssessmentMap[reqId]?.estimated_duration || req.assessment?.estimated_duration || req.estimated_duration || '10 Working Days'}
                               </strong>
                             </div>
 
-                            <div className="bg-[#0b1b12] border border-emerald-500/15 p-3 rounded-xl space-y-0.5">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Proposed Operation Start Date</span>
-                              <strong className="text-slate-200 text-sm font-bold block">
+                            <div className="assessment-metric-item">
+                              <span className="assessment-metric-label">
+                                <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
+                              </span>
+                              <strong className="assessment-metric-value">
                                 {formatDateDMY(activeAssessmentMap[reqId]?.proposed_start_date || req.assessment?.proposed_start_date || req.proposed_start_date || '2026-10-02')}
                               </strong>
                             </div>
                           </div>
 
-                          {/* Landowner Assessment Actions if under review */}
+                          {/* OPTIONAL CONTRACTOR SITE NOTES / REMARKS IF PRESENT */}
+                          {(activeAssessmentMap[reqId]?.site_notes || req.assessment?.site_notes || activeAssessmentMap[reqId]?.notes || req.assessment?.notes) && (
+                            <div className="p-3.5 rounded-xl bg-[#07130c] border border-emerald-500/15 text-xs text-slate-300">
+                              <strong className="text-emerald-400 font-bold">Contractor Site Notes: </strong>
+                              <span>{activeAssessmentMap[reqId]?.site_notes || req.assessment?.site_notes || activeAssessmentMap[reqId]?.notes || req.assessment?.notes}</span>
+                            </div>
+                          )}
+
+                          {/* LANDOWNER DECISION ACTIONS (WHEN PENDING REVIEW) */}
                           {isAssessmentSubmitted && (
-                            <div className="pt-3 border-t border-emerald-500/15 flex items-center justify-end gap-2.5 flex-wrap">
-                              <button
-                                type="button"
-                                onClick={() => handleAssessmentAction(reqId, 'REVISION_REQUESTED', 'Please adjust timeline and quotation.')}
-                                className="px-3.5 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 text-xs font-bold transition-all cursor-pointer"
-                              >
-                                Request Revision
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
-                                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-black text-xs font-black transition-all cursor-pointer shadow-lg"
-                              >
-                                Accept Assessment & Authorize Operation
-                              </button>
+                            <div className="assessment-action-bar">
+                              <div className="flex items-center gap-2 text-xs text-slate-300">
+                                <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
+                                <span>Authorizing the assessment confirms the quotation and schedules the contractor for harvesting operations.</span>
+                              </div>
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAssessmentAction(reqId, 'REVISION_REQUESTED', 'Please adjust timeline and quotation.')}
+                                  className="assessment-btn-revision"
+                                >
+                                  <RefreshCw size={14} /> Request Revision
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
+                                  className="assessment-btn-accept"
+                                >
+                                  <CheckCircle2 size={16} /> Accept Assessment & Authorize Operation
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>

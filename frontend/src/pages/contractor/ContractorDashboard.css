@@ -133,38 +133,42 @@
 }
 
 .cd-assigned-card {
-  background: #07170e;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: 20px;
-  padding: 16px 22px;
+  background: linear-gradient(145deg, #07170e 0%, #0c2014 100%);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 24px;
+  padding: 22px 26px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  gap: 16px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
   transition: all 0.25s ease;
 }
 
 .cd-assigned-card:hover {
-  border-color: rgba(16, 185, 129, 0.45);
-  background: #091f13;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6), 0 0 25px rgba(16, 185, 129, 0.1);
 }
 
 .cd-assigned-card-expanded {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: #06160d;
-  padding: 20px 24px;
+  border-color: rgba(16, 185, 129, 0.45);
+  background: #07180f;
+  padding: 24px 28px;
 }
 
 .cd-assigned-header {
   display: flex;
-  flex-direction: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid rgba(16, 185, 129, 0.18);
+}
+
+@media (min-width: 1024px) {
+  .cd-assigned-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
 }
 
 .cd-assigned-header-main {
@@ -181,14 +185,14 @@
 }
 
 .cd-req-id-badge {
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.75rem;
   font-weight: 700;
   color: #34d399;
-  background: #04120a;
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  padding: 4px 10px;
-  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 3px 10px;
+  border-radius: 8px;
 }
 
 .cd-req-date {
@@ -196,11 +200,11 @@
   color: #9ca3af;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .cd-req-title {
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-weight: 900;
   color: #ffffff;
   margin-top: 4px;
@@ -220,34 +224,36 @@
 .cd-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 18px;
+  gap: 7px;
+  padding: 6px 14px;
   border-radius: 9999px;
-  font-size: 0.78rem;
+  font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.02em;
   border: 1px solid transparent;
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  align-self: flex-start;
 }
 
 .cd-status-pending {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(59, 130, 246, 0.12);
   border-color: rgba(59, 130, 246, 0.4);
   color: #93c5fd;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.12);
 }
 
 .cd-status-submitted {
-  background: rgba(245, 158, 11, 0.15);
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #fde047;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.14);
 }
 
 .cd-status-accepted {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.55);
   color: #34d399;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.18);
 }
 
 /* 4-Column Specifications Grid */
@@ -1446,6 +1452,159 @@
   transform: translateY(-1px);
 }
 
+/* ==================================================== */
+/* CONTRACTOR FORMAL ASSESSMENT & QUOTATION CARD CSS    */
+/* ==================================================== */
+
+.assessment-summary-card {
+  background: rgba(3, 10, 5, 0.92) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 20px !important;
+  padding: 24px 28px !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+  transition: all 0.25s ease !important;
+}
+
+.assessment-summary-card:hover {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.65), 0 0 25px rgba(16, 185, 129, 0.08) !important;
+}
+
+.assessment-metrics-grid {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+@media (min-width: 640px) {
+  .assessment-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .assessment-metrics-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .assessment-metrics-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+.assessment-metric-item {
+  background: #07130c !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+  border-radius: 14px !important;
+  padding: 16px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  min-height: 84px !important;
+  transition: all 0.2s ease !important;
+}
+
+.assessment-metric-item:hover {
+  background: #0a1a10 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.assessment-metric-label {
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  color: #9ca3af !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.assessment-metric-value {
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+
+.assessment-metric-value-emerald {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  color: #34d399 !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+
+.assessment-metric-value-amber {
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  color: #fbbf24 !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+
+.assessment-action-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 16px !important;
+  padding-top: 18px !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.18) !important;
+}
+
+.assessment-btn-revision {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  color: #fbbf24 !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  padding: 10px 20px !important;
+  border-radius: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+.assessment-btn-revision:hover {
+  background: rgba(245, 158, 11, 0.22) !important;
+  color: #fde68a !important;
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+.assessment-btn-accept {
+  background: #10b981 !important;
+  color: #030a05 !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  padding: 10px 24px !important;
+  border-radius: 12px !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35) !important;
+}
+
+.assessment-btn-accept:hover {
+  background: #34d399 !important;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.5) !important;
+  transform: translateY(-1px) !important;
+}
+
 /* ==========================================================
    PRINT VIEW / REPORT STYLES FOR CONTRACTOR ASSESSMENT
    ========================================================== */
@@ -1460,7 +1619,7 @@
     margin: 0 !important;
     max-width: 100% !important;
   }
-  .cd-card, .review-summary-card, .cd-cost-breakdown-box {
+  .cd-card, .review-summary-card, .cd-cost-breakdown-box, .assessment-summary-card {
     background: #ffffff !important;
     border: 1px solid #d1d5db !important;
     color: #111827 !important;
@@ -1477,4 +1636,5 @@
     color: #92400e !important;
   }
 }
+
 

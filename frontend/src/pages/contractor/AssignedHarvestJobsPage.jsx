@@ -367,6 +367,10 @@ const AssignedHarvestJobsPage = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const pendingCount = assignedRequests.filter(r => r.status !== 'ASSESSMENT_SUBMITTED' && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED').length;
+  const submittedCount = assignedRequests.filter(r => r.status === 'ASSESSMENT_SUBMITTED').length;
+  const authorizedCount = assignedRequests.filter(r => r.status === 'OPERATION_READY' || r.status === 'ACCEPTED').length;
+
   return (
     <div className="dashboard-layout">
       <Navbar />
@@ -376,25 +380,54 @@ const AssignedHarvestJobsPage = () => {
         <div className="dashboard-workspace">
           <main className="w-full max-w-6xl mx-auto py-6 flex flex-col gap-8">
 
-            {/* HERO HEADER CARD */}
-            <div className="flex flex-wrap items-center justify-between gap-6 bg-gradient-to-r from-[#07170e] via-[#0b2416] to-[#07170e] border border-emerald-500/25 rounded-3xl p-6 sm:p-8 shadow-2xl">
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 text-xs font-bold mb-3">
-                  <Axe size={14} /> CONTRACTOR JOBS PORTAL
+            {/* HERO HEADER CARD WITH PIPELINE METRICS */}
+            <div className="cd-hero-card">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="max-w-2xl">
+                  <div className="cd-hero-badge mb-3">
+                    <Axe size={14} className="text-emerald-400" />
+                    <span>CONTRACTOR OPERATIONS PORTAL</span>
+                  </div>
+                  <h1 className="cd-hero-title text-2xl sm:text-3xl font-black text-white">
+                    Assigned Harvest Jobs & Assessment Quotations
+                  </h1>
+                  <p className="cd-hero-subtext text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                    Inspect landowner harvest specifications, verify standing timber inventory, and submit formal contractor quotations for client authorization.
+                  </p>
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2">
-                  Assigned Harvest Jobs & Assessment Quotations
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed max-w-2xl">
-                  Inspect landowner harvest site specifications, evaluate standing timber inventories, and submit formal contractor quotations for client authorization.
-                </p>
-              </div>
 
-              <div className="flex items-center gap-3">
-                <span className="px-4 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 text-xs font-extrabold flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-emerald-400" />
-                  {assignedRequests.length} Active {assignedRequests.length === 1 ? 'Job' : 'Jobs'} Assigned
-                </span>
+                {/* PIPELINE STATS COUNTERS */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 self-stretch lg:self-center shrink-0">
+                  <div className="p-3 sm:p-3.5 rounded-2xl bg-[#05140b] border border-emerald-500/25 flex items-center gap-3 shadow-md">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <Axe size={18} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assigned</span>
+                      <span className="text-lg font-black text-white">{assignedRequests.length}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 sm:p-3.5 rounded-2xl bg-[#05140b] border border-amber-500/25 flex items-center gap-3 shadow-md">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                      <Clock size={18} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Quotes Sent</span>
+                      <span className="text-lg font-black text-amber-400">{submittedCount}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 sm:p-3.5 rounded-2xl bg-[#05140b] border border-emerald-500/25 flex items-center gap-3 col-span-2 sm:col-span-1 shadow-md">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <ShieldCheck size={18} />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Authorized</span>
+                      <span className="text-lg font-black text-emerald-400">{authorizedCount}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -404,7 +437,7 @@ const AssignedHarvestJobsPage = () => {
                 <Search size={16} className="cd-search-icon" />
                 <input
                   type="text"
-                  placeholder="Search by property, location, landowner email, or reason..."
+                  placeholder="Search by property, location, landowner, or species..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="cd-search-input"
@@ -422,8 +455,8 @@ const AssignedHarvestJobsPage = () => {
               </div>
 
               <div className="cd-filter-tabs">
-                <span className="text-xs font-bold text-slate-400 flex items-center gap-1 shrink-0 mr-1">
-                  <Filter size={13} className="text-emerald-400" /> Status:
+                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5 shrink-0 mr-1">
+                  <Filter size={13} className="text-emerald-400" /> Filter:
                 </span>
 
                 <button
@@ -439,7 +472,7 @@ const AssignedHarvestJobsPage = () => {
                   onClick={() => setStatusFilter('PENDING')}
                   className={`cd-filter-tab ${statusFilter === 'PENDING' ? 'active-pending' : ''}`}
                 >
-                  Pending Assessment
+                  Pending Assessment ({pendingCount})
                 </button>
 
                 <button
@@ -447,7 +480,7 @@ const AssignedHarvestJobsPage = () => {
                   onClick={() => setStatusFilter('SUBMITTED')}
                   className={`cd-filter-tab ${statusFilter === 'SUBMITTED' ? 'active-submitted' : ''}`}
                 >
-                  Submitted
+                  Quotation Submitted ({submittedCount})
                 </button>
 
                 <button
@@ -455,7 +488,7 @@ const AssignedHarvestJobsPage = () => {
                   onClick={() => setStatusFilter('AUTHORIZED')}
                   className={`cd-filter-tab ${statusFilter === 'AUTHORIZED' ? 'active-authorized' : ''}`}
                 >
-                  Operation Ready
+                  Operation Ready ({authorizedCount})
                 </button>
               </div>
             </div>
@@ -645,68 +678,82 @@ const AssignedHarvestJobsPage = () => {
                     return (
                       <div key={reqId} className={`cd-assigned-card transition-all duration-300 ${isExpanded ? 'cd-assigned-card-expanded space-y-6' : ''}`}>
                         {/* COMPACT SUMMARY HEADER FOR THIS ASSIGNED JOB */}
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 font-extrabold text-lg shadow-inner shrink-0 mt-0.5 sm:mt-0">
-                              {ownerNameVal ? ownerNameVal.charAt(0).toUpperCase() : 'L'}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                          <div className="flex items-start sm:items-center gap-4 min-w-0">
+                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-950/70 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-black text-xl shadow-lg shrink-0 mt-0.5 sm:mt-0">
+                              <Trees size={24} className="text-emerald-400" />
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="cd-req-id-badge text-xs py-0.5 px-2">
-                                  Job #{reqId.substring(0, 8)}
+                              {/* BADGES ROW */}
+                              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                                <span className="cd-req-id-badge text-xs py-0.5 px-2.5">
+                                  Job #{String(reqId).substring(0, 8)}
                                 </span>
-                                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 shadow-sm flex items-center gap-1">
-                                  <Trees size={12} className="text-emerald-400" /> {treeCountBadgeText}
+                                <span className="review-badge-green text-xs">
+                                  <Trees size={12} /> {treeCountBadgeText}
                                 </span>
                                 {totalJobTimberValue > 0 && (
-                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-950/90 border border-amber-500/50 text-amber-300 shadow-sm flex items-center gap-1.5" title="Approx. Total Timber Value set by landowner">
-                                    <Coins size={12} className="text-amber-400" /> Approx. Timber Value: {formatINR(totalJobTimberValue)}
+                                  <span className="review-badge-amber text-xs font-bold" title="Approx. Total Timber Value set by landowner">
+                                    <Coins size={12} /> Approx. Value: {formatINR(totalJobTimberValue)}
                                   </span>
                                 )}
-                                <span className="cd-req-date text-xs">
+                                <span className="cd-req-date text-xs text-slate-400">
                                   <Calendar size={12} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
                                 </span>
                               </div>
 
-                              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <h3 className="text-base sm:text-lg font-black text-white truncate">
+                              {/* TITLE & LANDOWNER ROW */}
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <h3 className="text-lg sm:text-xl font-black text-white truncate">
                                   {req.propertyName || propDetails.propertyName || 'Forest Estate Parcel'}
                                 </h3>
-                                <span className="text-slate-500 text-xs hidden sm:inline">•</span>
-                                <span className="text-xs text-slate-300 flex items-center gap-1">
-                                  Landowner: <strong className="text-white font-semibold">{ownerNameVal}</strong>
+                                <span className="text-slate-600 text-xs hidden sm:inline">•</span>
+                                <span className="text-xs text-slate-300 flex items-center gap-1.5">
+                                  Landowner: <strong className="text-white font-bold">{ownerNameVal}</strong>
                                 </span>
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 border border-emerald-600/40 text-emerald-300 flex items-center gap-0.5">
-                                  <UserCheck size={10} className="text-emerald-400" /> Verified
+                                <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 flex items-center gap-1">
+                                  <UserCheck size={11} className="text-emerald-400" /> Verified Owner
                                 </span>
                               </div>
 
-                              <p className="text-xs text-slate-300 flex items-center gap-1 mt-0.5">
+                              {/* LOCATION */}
+                              <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-1">
                                 <MapPin size={13} className="text-emerald-400 shrink-0" />
-                                <span>{req.propertyLocation || req.location || 'Kottayam, Kerala'}</span>
-                                <span className="text-slate-400 font-normal">({specificLocationText})</span>
+                                <span className="font-semibold text-slate-200">{req.propertyLocation || req.location || 'Kottayam, Kerala'}</span>
+                                <span className="text-slate-400">({specificLocationText})</span>
                               </p>
                             </div>
                           </div>
 
+                          {/* RIGHT SIDE STATUS & ACTIONS */}
                           <div className="flex items-center flex-wrap gap-3 shrink-0 self-start lg:self-center">
-                            <span className={`cd-status-pill text-xs py-1.5 px-3.5 ${
+                            <span className={`cd-status-pill ${
                               isAccepted
                                 ? 'cd-status-accepted'
                                 : isSubmitted
                                   ? 'cd-status-submitted'
                                   : 'cd-status-pending'
                             }`}>
-                              <Clock size={13} />
-                              {isAccepted
-                                ? 'Operation Authorized'
-                                : isSubmitted
-                                  ? 'Assessment & Quote Submitted'
-                                  : 'Pending Contractor Assessment'}
+                              {isAccepted ? (
+                                <>
+                                  <CheckCircle2 size={14} className="text-emerald-400" />
+                                  <span>Operation Authorized</span>
+                                </>
+                              ) : isSubmitted ? (
+                                <>
+                                  <Clock size={14} className="text-amber-400" />
+                                  <span>Quotation Under Review</span>
+                                </>
+                              ) : (
+                                <>
+                                  <AlertTriangle size={14} className="text-blue-400" />
+                                  <span>Inspection & Quote Needed</span>
+                                </>
+                              )}
                             </span>
 
-                            {/* Button to show entire details of that particular harvest */}
+                            {/* Show/Hide details toggle */}
                             <button
                               type="button"
                               onClick={() => toggleExpandJob(reqId)}
@@ -724,8 +771,42 @@ const AssignedHarvestJobsPage = () => {
                                 </>
                               )}
                             </button>
+
+                            {/* Direct Assessment CTA */}
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer shadow-lg shadow-emerald-500/25 flex items-center gap-1.5 hover:scale-[1.02]"
+                            >
+                              <Calculator size={14} />
+                              <span>{isSubmitted ? 'Edit Quote' : 'Assess & Quote'}</span>
+                            </button>
                           </div>
                         </div>
+
+                        {/* QUICK HIGHLIGHTS STRIP (VISIBLE WHEN COLLAPSED) */}
+                        {!isExpanded && (
+                          <div className="mt-2 pt-3 border-t border-emerald-500/10 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
+                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Standing Trees</span>
+                              <strong className="text-white text-xs font-bold truncate block">{treeCountBadgeText}</strong>
+                            </div>
+                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
+                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Harvest Reason</span>
+                              <strong className="text-white text-xs font-bold truncate block">{req.reason || req.reasonForHarvesting || 'Mature timber'}</strong>
+                            </div>
+                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
+                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Site Access</span>
+                              <strong className="text-white text-xs font-bold truncate block">{req.site_conditions?.access_availability || req.access_availability || 'Heavy vehicle access'}</strong>
+                            </div>
+                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
+                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Assessment Status</span>
+                              <strong className={isAccepted ? "text-emerald-400 text-xs font-bold block" : isSubmitted ? "text-amber-400 text-xs font-bold block" : "text-blue-400 text-xs font-bold block"}>
+                                {isAccepted ? 'Authorized by Owner' : isSubmitted ? 'Quotation Submitted' : 'Pending Site Visit'}
+                              </strong>
+                            </div>
+                          </div>
+                        )}
 
                         {/* ENTIRE DETAILS EXPANDED ON DEMAND */}
                         {isExpanded && (
@@ -1098,52 +1179,94 @@ const AssignedHarvestJobsPage = () => {
 
                             {/* SUBMITTED CONTRACTOR ASSESSMENT SUMMARY (WHEN ALREADY ASSESSED) */}
                             {(isSubmitted || isAccepted || req.assessment || req.assigned_workers_count) && (
-                              <div className="p-4 rounded-2xl bg-gradient-to-br from-[#06150c] to-[#040e08] border border-emerald-500/35 space-y-3">
-                                <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-500/15 pb-2.5">
-                                  <h4 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
-                                    <FileText size={15} className="text-emerald-400" /> Submitted Contractor Assessment Summary
-                                  </h4>
-                                  <button
-                                    type="button"
-                                    onClick={() => window.print()}
-                                    className="px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer no-print"
-                                  >
-                                    <Printer size={12} /> Print Summary
-                                  </button>
+                              <div className="assessment-summary-card">
+                                <div className="review-section-header">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                      <FileText size={16} />
+                                    </div>
+                                    <div>
+                                      <h4 className="review-section-title">
+                                        SUBMITTED CONTRACTOR ASSESSMENT SUMMARY
+                                      </h4>
+                                      <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
+                                        Formally submitted quotation and operation schedule for landowner authorization.
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-3">
+                                    <span className={isAccepted ? "review-badge-green" : "review-badge-amber"}>
+                                      {isAccepted ? (
+                                        <>
+                                          <CheckCircle2 size={13} className="text-emerald-400" />
+                                          <span>Authorized by Landowner</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Clock size={13} className="text-amber-400" />
+                                          <span>Awaiting Landowner Approval</span>
+                                        </>
+                                      )}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => window.print()}
+                                      className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
+                                      title="Print Formal Assessment Summary"
+                                    >
+                                      <Printer size={13} />
+                                      <span>Print Summary</span>
+                                    </button>
+                                  </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
-                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Assessed Harvestable Volume</span>
-                                    <strong className="text-emerald-400 text-sm font-extrabold block">
-                                      {parseFloat(req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90).toFixed(2)} m³
+                                <div className="assessment-metrics-grid">
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
+                                    </span>
+                                    <strong className="assessment-metric-value-emerald">
+                                      {(() => {
+                                        const raw = req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90;
+                                        const num = parseFloat(raw);
+                                        return !isNaN(num) ? `${num.toFixed(2)} m³` : `${raw} m³`;
+                                      })()}
                                     </strong>
                                   </div>
 
-                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Contractor Quotation</span>
-                                    <strong className="text-amber-400 text-sm font-black block">
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
+                                    </span>
+                                    <strong className="assessment-metric-value-amber">
                                       {formatINR(req.assessment?.total_quote || req.total_quote || 110000)}
                                     </strong>
                                   </div>
 
-                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Number of Workers Assigned to This Job</span>
-                                    <strong className="text-white text-sm font-black block">
-                                      {req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12}
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12} Workers
                                     </strong>
                                   </div>
 
-                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estimated Job Duration</span>
-                                    <strong className="text-white text-sm font-bold block">
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
+                                    </span>
+                                    <strong className="assessment-metric-value">
                                       {req.assessment?.estimated_duration || req.estimated_duration || '10 Working Days'}
                                     </strong>
                                   </div>
 
-                                  <div className="bg-[#0b1b12] border border-emerald-500/15 p-2.5 rounded-xl space-y-0.5">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Proposed Operation Start Date</span>
-                                    <strong className="text-slate-200 text-sm font-bold block">
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
+                                    </span>
+                                    <strong className="assessment-metric-value">
                                       {formatDateDMY(req.assessment?.proposed_start_date || req.proposed_start_date || req.preferred_start_date || '2026-10-02')}
                                     </strong>
                                   </div>

@@ -1746,4 +1746,158 @@
   border-color: rgba(16, 185, 129, 0.35) !important;
 }
 
+/* ==================================================== */
+/* CONTRACTOR FORMAL ASSESSMENT & QUOTATION CARD CSS    */
+/* ==================================================== */
+
+.assessment-summary-card {
+  background: rgba(3, 10, 5, 0.92) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 20px !important;
+  padding: 24px 28px !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 20px !important;
+  transition: all 0.25s ease !important;
+}
+
+.assessment-summary-card:hover {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.65), 0 0 25px rgba(16, 185, 129, 0.08) !important;
+}
+
+.assessment-metrics-grid {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+@media (min-width: 640px) {
+  .assessment-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .assessment-metrics-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .assessment-metrics-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+}
+
+.assessment-metric-item {
+  background: #07130c !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+  border-radius: 14px !important;
+  padding: 16px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  min-height: 84px !important;
+  transition: all 0.2s ease !important;
+}
+
+.assessment-metric-item:hover {
+  background: #0a1a10 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.assessment-metric-label {
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  color: #9ca3af !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.assessment-metric-value {
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+
+.assessment-metric-value-emerald {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  color: #34d399 !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+
+.assessment-metric-value-amber {
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  color: #fbbf24 !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+
+.assessment-action-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 16px !important;
+  padding-top: 18px !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.18) !important;
+}
+
+.assessment-btn-revision {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  color: #fbbf24 !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  padding: 10px 20px !important;
+  border-radius: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+.assessment-btn-revision:hover {
+  background: rgba(245, 158, 11, 0.22) !important;
+  color: #fde68a !important;
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+.assessment-btn-accept {
+  background: #10b981 !important;
+  color: #030a05 !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  padding: 10px 24px !important;
+  border-radius: 12px !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35) !important;
+}
+
+.assessment-btn-accept:hover {
+  background: #34d399 !important;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.5) !important;
+  transform: translateY(-1px) !important;
+}
+
+
 

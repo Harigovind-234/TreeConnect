@@ -216,7 +216,7 @@ const Sidebar = () => {
               {user?.name || (role === 'admin' ? 'TreeConnect Admin' : 'Harigovind D Nair')}
             </span>
             <span className="sidebar-user-role">
-              {user?.title || (role === 'admin' ? 'Platform Administrator' : 'Forest Estate Owner')}
+              {user?.title || (role === 'admin' ? 'Platform Administrator' : role === 'contractor' ? 'Verified Contractor' : role === 'buyer' ? 'Timber Buyer' : 'Forest Estate Owner')}
             </span>
           </div>
           <button
