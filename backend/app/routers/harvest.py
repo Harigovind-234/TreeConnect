@@ -573,6 +573,27 @@ def submit_contractor_assessment(
             )
         workers_count = int(workers)
 
+        # Validate proposed_start_date
+        if not payload.proposed_start_date or not str(payload.proposed_start_date).strip():
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"message": "Field 'Proposed Operation Start Date' is mandatory."}
+            )
+
+        try:
+            start_date_obj = datetime.strptime(str(payload.proposed_start_date).strip()[:10], "%Y-%m-%d").date()
+            now_utc_date = datetime.now(timezone.utc).date()
+            if start_date_obj < now_utc_date:
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Proposed Operation Start Date cannot be in the past. Please select today or a future date."}
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"message": "Proposed Operation Start Date must be in a valid YYYY-MM-DD format."}
+            )
+
         # Check existing assessment for this harvest request
         assessment_doc = {
             "harvest_request_id": request_id,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
@@ -41,7 +41,7 @@ import {
 import { calculateApproxTimberValue, formatINR, TIMBER_VALUE_DISCLAIMER } from '../../utils/timberCalculations';
 
 const formatDateDMY = (dateStr) => {
-  if (!dateStr) return '02-10-2026';
+  if (!dateStr) return '-';
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
@@ -52,6 +52,62 @@ const formatDateDMY = (dateStr) => {
   } catch (e) {
     return dateStr;
   }
+};
+
+const getTodayDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getMaxDateString = () => {
+  const max = new Date();
+  max.setFullYear(max.getFullYear() + 1);
+  const year = max.getFullYear();
+  const month = String(max.getMonth() + 1).padStart(2, '0');
+  const day = String(max.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addDaysToToday = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const validateProposedDate = (dateVal) => {
+  if (!dateVal || !String(dateVal).trim()) {
+    return 'Proposed Operation Start Date is mandatory.';
+  }
+  const cleanVal = String(dateVal).trim().substring(0, 10);
+  const today = getTodayDateString();
+  if (cleanVal < today) {
+    return 'Proposed Operation Start Date cannot be in the past. Please select today or a future date.';
+  }
+  const maxDate = getMaxDateString();
+  if (cleanVal > maxDate) {
+    return 'Proposed Operation Start Date cannot be more than 1 year in advance.';
+  }
+  return '';
+};
+
+const getRelativeDaysDescription = (dateVal) => {
+  if (!dateVal) return '';
+  const cleanVal = String(dateVal).trim().substring(0, 10);
+  const today = getTodayDateString();
+  if (cleanVal === today) return 'Starts today';
+  const start = new Date(cleanVal);
+  const now = new Date(today);
+  const diffTime = start.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays === 1) return 'Starts tomorrow';
+  if (diffDays > 1) return `Starts in ${diffDays} days`;
+  return '';
 };
 
 const formatGPSCoordinates = (p) => {
@@ -95,6 +151,8 @@ const SubmitAssessmentPage = () => {
   const [feedbackMessage, setFeedbackMessage] = useState({ type: '', text: '' });
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [activePhotoModal, setActivePhotoModal] = useState(null);
+  const [dateError, setDateError] = useState('');
+  const dateInputRef = useRef(null);
 
   const openLightbox = (photosList, index = 0, title = 'Site Photo') => {
     const validPhotos = (photosList || []).map(p => {
@@ -162,6 +220,11 @@ const SubmitAssessmentPage = () => {
             const existingAssessment = await harvestService.getAssessment(requestId);
             if (existingAssessment && (existingAssessment.assessment || existingAssessment.id)) {
               const assData = existingAssessment.assessment || existingAssessment;
+              const cleanExistingDate = assData.proposed_start_date ? String(assData.proposed_start_date).substring(0, 10) : '';
+              if (cleanExistingDate) {
+                const initialDateErr = validateProposedDate(cleanExistingDate);
+                if (initialDateErr) setDateError(initialDateErr);
+              }
               setAssessmentForm(prev => ({
                 ...prev,
                 estimated_harvestable_volume: assData.estimated_harvestable_volume ?? prev.estimated_harvestable_volume,
@@ -173,7 +236,7 @@ const SubmitAssessmentPage = () => {
                 total_quote: assData.total_quote ?? prev.total_quote,
                 assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 12,
                 estimated_duration: assData.estimated_duration || prev.estimated_duration,
-                proposed_start_date: assData.proposed_start_date || prev.proposed_start_date,
+                proposed_start_date: cleanExistingDate || prev.proposed_start_date,
                 notes: assData.notes || prev.notes
               }));
             }
@@ -257,6 +320,11 @@ const SubmitAssessmentPage = () => {
       return;
     }
 
+    if (name === 'proposed_start_date') {
+      const dateErr = validateProposedDate(value);
+      setDateError(dateErr);
+    }
+
     setAssessmentForm(prev => {
       const updated = { ...prev, [name]: value };
 
@@ -282,6 +350,17 @@ const SubmitAssessmentPage = () => {
       setFeedbackMessage({
         type: 'error',
         text: 'Field "Number of Workers Assigned to This Job" is mandatory and must be a positive whole number (e.g. 12).'
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    const proposedDateError = validateProposedDate(assessmentForm.proposed_start_date);
+    if (proposedDateError) {
+      setDateError(proposedDateError);
+      setFeedbackMessage({
+        type: 'error',
+        text: proposedDateError
       });
       setIsSubmitting(false);
       return;
@@ -1159,85 +1238,207 @@ const SubmitAssessmentPage = () => {
                       </div>
 
                       <div className="cd-form-group">
-                        <label className="cd-form-label">
-                          Proposed Operation Start Date *
-                        </label>
-                        <input
-                          type="date"
-                          required
-                          name="proposed_start_date"
-                          value={assessmentForm.proposed_start_date}
-                          onChange={handleInputChange}
-                          className="cd-input"
-                        />
-                        <span className="text-[10px] text-slate-400 block mt-1">
-                          Target date for team mobilization
-                        </span>
+                        <div className="flex items-center justify-between flex-wrap gap-1 mb-1">
+                          <label className="cd-form-label mb-0 flex items-center gap-1.5 font-bold">
+                            <Calendar size={15} className="text-emerald-400" />
+                            Proposed Operation Start Date *
+                          </label>
+                          {requestDetails?.preferred_start_date && requestDetails.preferred_start_date.substring(0, 10) >= getTodayDateString() && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const prefDate = requestDetails.preferred_start_date.substring(0, 10);
+                                setAssessmentForm(prev => ({ ...prev, proposed_start_date: prefDate }));
+                                setDateError(validateProposedDate(prefDate));
+                              }}
+                              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer underline flex items-center gap-1"
+                            >
+                              <Calendar size={11} /> Use Landowner Preferred ({formatDateDMY(requestDetails.preferred_start_date)})
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative flex items-center">
+                          <input
+                            ref={dateInputRef}
+                            type="date"
+                            required
+                            min={getTodayDateString()}
+                            max={getMaxDateString()}
+                            name="proposed_start_date"
+                            value={assessmentForm.proposed_start_date}
+                            onChange={handleInputChange}
+                            onClick={(e) => {
+                              try {
+                                if (typeof e.target.showPicker === 'function') {
+                                  e.target.showPicker();
+                                }
+                              } catch (err) {
+                                // showPicker fallback
+                              }
+                            }}
+                            style={{ colorScheme: 'dark' }}
+                            className={`cd-input pr-32 cursor-pointer ${dateError ? '!border-red-500 !ring-1 !ring-red-500 !bg-red-950/20 text-red-200' : ''}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                if (dateInputRef.current && typeof dateInputRef.current.showPicker === 'function') {
+                                  dateInputRef.current.showPicker();
+                                } else {
+                                  dateInputRef.current?.focus();
+                                }
+                              } catch (err) {
+                                dateInputRef.current?.focus();
+                              }
+                            }}
+                            className="absolute right-2 px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                            title="Open Calendar Picker"
+                          >
+                            <Calendar size={14} className="text-emerald-400" />
+                            <span>Calendar</span>
+                          </button>
+                        </div>
+
+                        {/* QUICK CALENDAR PRESETS */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                          <span className="text-[10px] text-slate-400 font-medium">Quick Pick:</span>
+                          {[
+                            { label: 'Today', days: 0 },
+                            { label: '+3 Days', days: 3 },
+                            { label: '+1 Week', days: 7 },
+                            { label: '+2 Weeks', days: 14 },
+                            { label: '+1 Month', days: 30 }
+                          ].map((preset) => {
+                            const pDate = addDaysToToday(preset.days);
+                            const isSelected = assessmentForm.proposed_start_date === pDate;
+                            return (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() => {
+                                  setAssessmentForm(prev => ({ ...prev, proposed_start_date: pDate }));
+                                  setDateError(validateProposedDate(pDate));
+                                }}
+                                className={`text-[10px] px-2.5 py-0.5 rounded-lg font-medium border transition-colors cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold shadow'
+                                    : 'bg-[#06180e] hover:bg-emerald-950/80 text-slate-300 hover:text-emerald-300 border-emerald-500/30'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {dateError ? (
+                          <span className="text-[11px] text-red-400 font-semibold flex items-center gap-1.5 mt-1.5 animate-fade-in">
+                            <AlertTriangle size={13} className="shrink-0 text-red-400" />
+                            {dateError}
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-between flex-wrap gap-1 text-[10px] text-slate-400 mt-1.5">
+                            <span>Target date for team mobilization (today or future)</span>
+                            {assessmentForm.proposed_start_date && (
+                              <span className="text-emerald-400 font-medium flex items-center gap-1">
+                                <CheckCircle2 size={11} className="text-emerald-400" />
+                                {getRelativeDaysDescription(assessmentForm.proposed_start_date)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* CONTRACTOR ASSESSMENT SUMMARY & REPORT CARD */}
-                    <div className="p-5 rounded-2xl bg-gradient-to-br from-[#06150c] via-[#091f12] to-[#040e08] border border-emerald-500/35 space-y-4 shadow-xl">
-                      <div className="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-500/20 pb-3">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck size={18} className="text-emerald-400" />
-                          <h4 className="text-sm font-extrabold text-white uppercase tracking-wider">
-                            Contractor Assessment Summary & Report
-                          </h4>
+                    <div className="assessment-summary-card">
+                      <div className="assessment-summary-header">
+                        <div className="assessment-summary-title-wrap">
+                          <div className="assessment-summary-icon">
+                            <ShieldCheck size={20} />
+                          </div>
+                          <div>
+                            <h4 className="assessment-summary-title">
+                              Contractor Assessment Summary & Report
+                            </h4>
+                            <p className="assessment-summary-subtitle">
+                              Live calculated operational parameters & formal quotation overview
+                            </p>
+                          </div>
                         </div>
+
                         <button
                           type="button"
                           onClick={() => window.print()}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow no-print"
+                          className="assessment-print-btn no-print"
                         >
-                          <Printer size={13} /> Print Assessment Report
+                          <Printer size={14} /> Print Assessment Report
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5 text-xs">
-                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Assessed Harvestable Volume
-                          </span>
-                          <strong className="text-emerald-400 text-sm font-extrabold block">
+                      <div className="assessment-metrics-grid">
+                        {/* 1. Volume */}
+                        <div className="assessment-metric-card">
+                          <div className="assessment-metric-label-row">
+                            <span className="assessment-metric-label">Harvestable Volume</span>
+                            <Trees size={16} className="text-emerald-400 assessment-metric-icon" />
+                          </div>
+                          <div className="assessment-metric-value text-emerald-400 font-mono">
                             {parseFloat(assessmentForm.estimated_harvestable_volume || 0).toFixed(2)} m³
-                          </strong>
+                          </div>
+                          <span className="assessment-metric-caption">Commercial yield</span>
                         </div>
 
-                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Total Contractor Quotation
-                          </span>
-                          <strong className="text-amber-400 text-sm font-black block">
+                        {/* 2. Quotation */}
+                        <div className="assessment-metric-card">
+                          <div className="assessment-metric-label-row">
+                            <span className="assessment-metric-label">Contractor Quotation</span>
+                            <DollarSign size={16} className="text-amber-400 assessment-metric-icon" />
+                          </div>
+                          <div className="assessment-metric-value text-amber-400">
                             ₹{Number(assessmentForm.total_quote || 0).toLocaleString('en-IN')}
-                          </strong>
+                          </div>
+                          <span className="assessment-metric-caption">All itemized charges</span>
                         </div>
 
-                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Number of Workers Assigned to This Job
-                          </span>
-                          <strong className="text-white text-sm font-black block">
-                            {assessmentForm.assigned_workers_count || 12}
-                          </strong>
+                        {/* 3. Workers Assigned */}
+                        <div className="assessment-metric-card">
+                          <div className="assessment-metric-label-row">
+                            <span className="assessment-metric-label">Workforce Deployed</span>
+                            <Users size={16} className="text-sky-400 assessment-metric-icon" />
+                          </div>
+                          <div className="assessment-metric-value text-white flex items-baseline gap-1.5">
+                            <span>{assessmentForm.assigned_workers_count || 12}</span>
+                            <span className="text-xs font-semibold text-slate-400">Crew</span>
+                          </div>
+                          <span className="assessment-metric-caption">Site logging crew</span>
                         </div>
 
-                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Estimated Job Duration
-                          </span>
-                          <strong className="text-white text-sm font-bold block">
+                        {/* 4. Estimated Duration */}
+                        <div className="assessment-metric-card">
+                          <div className="assessment-metric-label-row">
+                            <span className="assessment-metric-label">Job Duration</span>
+                            <Clock size={16} className="text-emerald-400 assessment-metric-icon" />
+                          </div>
+                          <div className="assessment-metric-value text-slate-100 text-sm sm:text-base font-bold truncate">
                             {assessmentForm.estimated_duration || '10 Working Days'}
-                          </strong>
+                          </div>
+                          <span className="assessment-metric-caption">Target operational span</span>
                         </div>
 
-                        <div className="bg-[#0b1b12] border border-emerald-500/20 p-3.5 rounded-xl space-y-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Proposed Operation Start Date
-                          </span>
-                          <strong className="text-slate-200 text-sm font-bold block">
+                        {/* 5. Proposed Start Date */}
+                        <div className={`assessment-metric-card ${dateError ? '!border-red-500/50 !bg-red-950/20' : ''}`}>
+                          <div className="assessment-metric-label-row">
+                            <span className="assessment-metric-label">Operation Start Date</span>
+                            <Calendar size={16} className={`assessment-metric-icon ${dateError ? 'text-red-400' : 'text-emerald-400'}`} />
+                          </div>
+                          <div className={`assessment-metric-value text-sm sm:text-base font-bold truncate ${dateError ? 'text-red-400' : 'text-emerald-300'}`}>
                             {formatDateDMY(assessmentForm.proposed_start_date)}
-                          </strong>
+                          </div>
+                          <span className={`assessment-metric-caption ${dateError ? 'text-red-400 font-semibold' : ''}`}>
+                            {dateError ? '⚠️ Invalid date' : (getRelativeDaysDescription(assessmentForm.proposed_start_date) || 'Mobilization date')}
+                          </span>
                         </div>
                       </div>
                     </div>

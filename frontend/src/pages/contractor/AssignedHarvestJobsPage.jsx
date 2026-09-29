@@ -678,41 +678,41 @@ const AssignedHarvestJobsPage = () => {
                     return (
                       <div key={reqId} className={`cd-assigned-card transition-all duration-300 ${isExpanded ? 'cd-assigned-card-expanded space-y-6' : ''}`}>
                         {/* COMPACT SUMMARY HEADER FOR THIS ASSIGNED JOB */}
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-                          <div className="flex items-start sm:items-center gap-4 min-w-0">
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-950/70 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-black text-xl shadow-lg shrink-0 mt-0.5 sm:mt-0">
-                              <Trees size={24} className="text-emerald-400" />
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5 sm:mt-0 shadow-sm">
+                              <Trees size={22} className="text-emerald-400" />
                             </div>
 
                             <div className="min-w-0 flex-1">
                               {/* BADGES ROW */}
-                              <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                                <span className="cd-req-id-badge text-xs py-0.5 px-2.5">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="cd-req-id-badge">
                                   Job #{String(reqId).substring(0, 8)}
                                 </span>
-                                <span className="review-badge-green text-xs">
+                                <span className="review-badge-green">
                                   <Trees size={12} /> {treeCountBadgeText}
                                 </span>
                                 {totalJobTimberValue > 0 && (
-                                  <span className="review-badge-amber text-xs font-bold" title="Approx. Total Timber Value set by landowner">
+                                  <span className="review-badge-amber font-bold" title="Approx. Total Timber Value set by landowner">
                                     <Coins size={12} /> Approx. Value: {formatINR(totalJobTimberValue)}
                                   </span>
                                 )}
-                                <span className="cd-req-date text-xs text-slate-400">
+                                <span className="cd-req-date">
                                   <Calendar size={12} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
                                 </span>
                               </div>
 
                               {/* TITLE & LANDOWNER ROW */}
                               <div className="flex items-center gap-2.5 flex-wrap">
-                                <h3 className="text-lg sm:text-xl font-black text-white truncate">
+                                <h3 className="text-base sm:text-lg font-extrabold text-white truncate">
                                   {req.propertyName || propDetails.propertyName || 'Forest Estate Parcel'}
                                 </h3>
                                 <span className="text-slate-600 text-xs hidden sm:inline">•</span>
                                 <span className="text-xs text-slate-300 flex items-center gap-1.5">
                                   Landowner: <strong className="text-white font-bold">{ownerNameVal}</strong>
                                 </span>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 flex items-center gap-1">
+                                <span className="px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center gap-1">
                                   <UserCheck size={11} className="text-emerald-400" /> Verified Owner
                                 </span>
                               </div>
@@ -727,7 +727,7 @@ const AssignedHarvestJobsPage = () => {
                           </div>
 
                           {/* RIGHT SIDE STATUS & ACTIONS */}
-                          <div className="flex items-center flex-wrap gap-3 shrink-0 self-start lg:self-center">
+                          <div className="flex items-center flex-wrap gap-2.5 shrink-0 self-start lg:self-center">
                             <span className={`cd-status-pill ${
                               isAccepted
                                 ? 'cd-status-accepted'
@@ -776,7 +776,7 @@ const AssignedHarvestJobsPage = () => {
                             <button
                               type="button"
                               onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all cursor-pointer shadow-lg shadow-emerald-500/25 flex items-center gap-1.5 hover:scale-[1.02]"
+                              className="cd-btn-assess-cta"
                             >
                               <Calculator size={14} />
                               <span>{isSubmitted ? 'Edit Quote' : 'Assess & Quote'}</span>
@@ -786,23 +786,24 @@ const AssignedHarvestJobsPage = () => {
 
                         {/* QUICK HIGHLIGHTS STRIP (VISIBLE WHEN COLLAPSED) */}
                         {!isExpanded && (
-                          <div className="mt-2 pt-3 border-t border-emerald-500/10 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
-                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Standing Trees</span>
-                              <strong className="text-white text-xs font-bold truncate block">{treeCountBadgeText}</strong>
+                          <div className="cd-highlights-strip">
+                            <div className="cd-highlight-item">
+                              <span className="cd-highlight-label">Standing Trees</span>
+                              <strong className="cd-highlight-val text-white">{treeCountBadgeText}</strong>
                             </div>
-                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
-                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Harvest Reason</span>
-                              <strong className="text-white text-xs font-bold truncate block">{req.reason || req.reasonForHarvesting || 'Mature timber'}</strong>
+                            <div className="cd-highlight-item">
+                              <span className="cd-highlight-label">Harvest Reason</span>
+                              <strong className="cd-highlight-val text-slate-200">{req.reason || req.reasonForHarvesting || 'Mature timber'}</strong>
                             </div>
-                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
-                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Site Access</span>
-                              <strong className="text-white text-xs font-bold truncate block">{req.site_conditions?.access_availability || req.access_availability || 'Heavy vehicle access'}</strong>
+                            <div className="cd-highlight-item">
+                              <span className="cd-highlight-label">Site Access</span>
+                              <strong className="cd-highlight-val text-slate-200">{req.site_conditions?.access_availability || req.access_availability || 'Heavy vehicle access'}</strong>
                             </div>
-                            <div className="bg-[#051109] border border-emerald-500/15 rounded-xl p-2.5">
-                              <span className="text-[10px] text-slate-400 uppercase font-bold block">Assessment Status</span>
-                              <strong className={isAccepted ? "text-emerald-400 text-xs font-bold block" : isSubmitted ? "text-amber-400 text-xs font-bold block" : "text-blue-400 text-xs font-bold block"}>
-                                {isAccepted ? 'Authorized by Owner' : isSubmitted ? 'Quotation Submitted' : 'Pending Site Visit'}
+                            <div className="cd-highlight-item">
+                              <span className="cd-highlight-label">Assessment Status</span>
+                              <strong className={`cd-highlight-val flex items-center gap-1.5 ${isAccepted ? 'text-emerald-400' : isSubmitted ? 'text-amber-400' : 'text-blue-400'}`}>
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]' : isSubmitted ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.7)]' : 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]'}`} />
+                                <span>{isAccepted ? 'Authorized by Owner' : isSubmitted ? 'Quotation Submitted' : 'Pending Site Visit'}</span>
                               </strong>
                             </div>
                           </div>
