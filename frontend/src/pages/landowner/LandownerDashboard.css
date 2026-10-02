@@ -1810,14 +1810,15 @@
 }
 
 .assessment-metric-label {
-  font-size: 10.5px !important;
+  font-size: 11px !important;
   font-weight: 800 !important;
-  color: #9ca3af !important;
+  color: #94a3b8 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
+  letter-spacing: 0.06em !important;
   display: flex !important;
   align-items: center !important;
   gap: 6px !important;
+  white-space: nowrap !important;
 }
 
 .assessment-metric-value {
@@ -1852,6 +1853,29 @@
   gap: 16px !important;
   padding-top: 18px !important;
   border-top: 1px solid rgba(16, 185, 129, 0.18) !important;
+}
+
+.assessment-btn-decline {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  color: #f87171 !important;
+  font-size: 12.5px !important;
+  font-weight: 800 !important;
+  padding: 10px 20px !important;
+  border-radius: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+.assessment-btn-decline:hover {
+  background: rgba(239, 68, 68, 0.22) !important;
+  color: #fca5a5 !important;
+  border-color: rgba(239, 68, 68, 0.65) !important;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.25) !important;
+  transform: translateY(-1px) !important;
 }
 
 .assessment-btn-revision {
@@ -1897,6 +1921,131 @@
   background: #34d399 !important;
   box-shadow: 0 8px 24px rgba(16, 185, 129, 0.5) !important;
   transform: translateY(-1px) !important;
+}
+
+/* ==================================================== */
+/* COMMERCIAL BANNER & PROPOSAL CALLOUT STYLES         */
+/* ==================================================== */
+
+.commercial-flow-banner {
+  border-radius: 16px !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  transition: all 0.2s ease !important;
+}
+
+@media (min-width: 640px) {
+  .commercial-flow-banner {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.commercial-flow-banner-service {
+  background: linear-gradient(135deg, rgba(6, 28, 18, 0.95) 0%, rgba(3, 16, 10, 0.98) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.32) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(16, 185, 129, 0.15) !important;
+}
+
+.commercial-flow-banner-purchase {
+  background: linear-gradient(135deg, rgba(32, 20, 6, 0.95) 0%, rgba(18, 12, 3, 0.98) 100%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.38) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(245, 158, 11, 0.15) !important;
+}
+
+.commercial-flow-banner-hybrid {
+  background: linear-gradient(135deg, rgba(6, 26, 24, 0.95) 0%, rgba(3, 16, 15, 0.98) 100%) !important;
+  border: 1px solid rgba(20, 184, 166, 0.38) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(20, 184, 166, 0.15) !important;
+}
+
+.commercial-flow-icon {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+.commercial-flow-icon-service {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+}
+
+.commercial-flow-icon-purchase {
+  background: rgba(245, 158, 11, 0.16) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  color: #fbbf24 !important;
+}
+
+.commercial-flow-icon-hybrid {
+  background: rgba(20, 184, 166, 0.16) !important;
+  border: 1px solid rgba(20, 184, 166, 0.35) !important;
+  color: #2dd4bf !important;
+}
+
+.commercial-flow-badge {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  padding: 5px 14px !important;
+  border-radius: 9999px !important;
+  white-space: nowrap !important;
+  align-self: flex-start !important;
+  line-height: 1.35 !important;
+}
+
+@media (min-width: 640px) {
+  .commercial-flow-badge {
+    align-self: center !important;
+  }
+}
+
+.commercial-flow-badge-service {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.45) !important;
+  color: #34d399 !important;
+}
+
+.commercial-flow-badge-purchase {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border: 1px solid rgba(245, 158, 11, 0.45) !important;
+  color: #fbbf24 !important;
+}
+
+.commercial-flow-badge-hybrid {
+  background: rgba(20, 184, 166, 0.14) !important;
+  border: 1px solid rgba(20, 184, 166, 0.45) !important;
+  color: #2dd4bf !important;
+}
+
+.assessment-remarks-callout {
+  background: #05130b !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  font-size: 12px !important;
+  color: #cbd5e1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.assessment-action-hint {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  font-size: 12px !important;
+  color: #cbd5e1 !important;
 }
 
 

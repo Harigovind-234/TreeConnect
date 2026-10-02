@@ -33,6 +33,7 @@ import {
 import {
   getTimberReferenceRate,
   parseVolumeNumber,
+  formatVolume,
   calculateApproxTimberValue,
   formatINR,
   TIMBER_VALUE_DISCLAIMER
@@ -460,6 +461,7 @@ const RequestHarvesting = () => {
         }));
 
       const totalEstPrice = selectedGroups.reduce((acc, curr) => acc + getStandApproxValue(curr), 0);
+      const totalEstVol = selectedGroups.reduce((acc, curr) => acc + parseVolumeNumber(curr.estimatedVolume), 0);
 
       const payload = {
         property_id: activeProperty.id || activeProperty._id,
@@ -476,7 +478,9 @@ const RequestHarvesting = () => {
         longitude: activeProperty.longitude !== undefined && activeProperty.longitude !== null ? Number(activeProperty.longitude) : (activeProperty.lng !== undefined ? Number(activeProperty.lng) : null),
         selected_inventory_ids: selectedTreeGroupIds,
         selected_tree_groups: selectedGroups,
+        total_estimated_volume: Number(totalEstVol.toFixed(2)),
         total_estimated_price: totalEstPrice,
+        approx_timber_value: totalEstPrice,
         reason,
         preferred_start_date: new Date().toISOString().split('T')[0],
         preferred_end_date: "",
@@ -489,7 +493,9 @@ const RequestHarvesting = () => {
           additional_notes: additionalNotes
         },
         hazards,
-        photos: sitePhotos ? [sitePhotos] : [],
+        photos: sitePhotos
+          ? [sitePhotos.dataUrl || sitePhotos.previewUrl || (typeof sitePhotos === 'string' ? sitePhotos : null)].filter(Boolean)
+          : [],
         instructions: additionalNotes,
         assigned_contractor_id: selectedContractor?.id || selectedContractor?._id || null,
         assigned_contractor_name: selectedContractor?.companyName || selectedContractor?.fullName || selectedContractor?.name || null,
@@ -1438,10 +1444,18 @@ const RequestHarvesting = () => {
                     </p>
                   </div>
                   <FileUploadCard
-                    title="Harvest Site & Access Road Photos"
-                    description="Upload clear site photos for contractor quotation inspection"
-                    onFileSelect={(fileData) => setSitePhotos(fileData)}
+                    id="harvest-site-photos-uploader"
+                    label="Harvest Site & Access Road Photos"
+                    helperText="Upload clear site photos for contractor quotation inspection (JPG, PNG, WEBP, PDF up to 10MB)"
+                    acceptedFormatsText="PDF, JPG, PNG, WEBP"
+                    acceptedMimeTypes="image/jpeg,image/png,image/webp,image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
+                    maxSizeMB={10}
+                    fileData={sitePhotos}
+                    file={sitePhotos}
                     selectedFile={sitePhotos}
+                    onFileChange={(fileData) => setSitePhotos(fileData)}
+                    onFileSelect={(fileData) => setSitePhotos(fileData)}
+                    onFileRemove={() => setSitePhotos(null)}
                   />
                 </div>
               </div>
@@ -1637,9 +1651,41 @@ const RequestHarvesting = () => {
                     </div>
 
                     {additionalNotes && (
-                      <div className="mt-2 p-3.5 rounded-xl bg-slate-900/80 border border-emerald-500/20 text-xs text-slate-300">
-                        <strong className="text-emerald-300 block mb-0.5 font-bold">Special Instructions / Site Notes:</strong>
-                        <span className="italic">{additionalNotes}</span>
+                      <div className="mt-2 p-3.5 rounded-xl bg-[#06140b]/90 border border-emerald-500/20 text-xs text-slate-300 flex items-start gap-2.5">
+                        <FileText size={15} className="text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-emerald-300 block mb-0.5 font-bold uppercase tracking-wide text-[11px]">Special Instructions / Site Notes:</strong>
+                          <span className="italic text-slate-200">{additionalNotes}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {sitePhotos && (
+                      <div className="mt-3 p-3.5 rounded-xl bg-[#06140b]/90 border border-emerald-500/20 flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-14 h-14 rounded-xl overflow-hidden border border-emerald-500/35 flex-shrink-0 bg-[#030a05] shadow-md">
+                            {(sitePhotos.previewUrl || sitePhotos.dataUrl || (typeof sitePhotos === 'string' && sitePhotos)) ? (
+                              <img
+                                src={sitePhotos.previewUrl || sitePhotos.dataUrl || sitePhotos}
+                                alt={sitePhotos.name || 'Harvest Site Photo'}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-emerald-400">
+                                <Camera size={20} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <strong className="text-emerald-300 block text-xs font-bold uppercase tracking-wide">Uploaded Harvest Site Photo:</strong>
+                            <span className="text-xs text-slate-300 font-medium truncate max-w-[280px] block mt-0.5">
+                              {sitePhotos.name || 'Site inspection photo attached'}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          Ready for Submission
+                        </span>
                       </div>
                     )}
                   </div>

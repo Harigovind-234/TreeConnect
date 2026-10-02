@@ -32,12 +32,20 @@ import {
   AlertTriangle,
   ExternalLink,
   Printer,
-  Users
+  Users,
+  ZoomIn,
+  Camera,
+  ChevronLeft,
+  X,
+  Coins,
+  Handshake,
+  Briefcase
 } from 'lucide-react';
 
 import {
   getTimberReferenceRate,
   parseVolumeNumber,
+  formatVolume,
   calculateApproxTimberValue,
   formatINR,
   TIMBER_VALUE_DISCLAIMER
@@ -99,6 +107,16 @@ const HarvestRequestsPage = () => {
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [loadingAssessments, setLoadingAssessments] = useState({});
   const [actionMessage, setActionMessage] = useState('');
+  const [activePhotoModal, setActivePhotoModal] = useState(null); // { photos: [], index: 0, title: '' }
+
+  const openPhotoLightbox = (photos, index = 0, title = 'Harvest Site Photo') => {
+    const rawList = Array.isArray(photos) ? photos : [photos];
+    const validPhotos = rawList
+      .map(p => (typeof p === 'string' ? p : (p?.previewUrl || p?.dataUrl || p?.url || '')))
+      .filter(p => typeof p === 'string' && p.length > 5);
+    if (validPhotos.length === 0) return;
+    setActivePhotoModal({ photos: validPhotos, index, title });
+  };
 
   const handleDeleteHarvestRequest = async (requestId) => {
     if (window.confirm("Are you sure you want to cancel and delete this harvest request? This action cannot be undone.")) {
@@ -466,7 +484,7 @@ const HarvestRequestsPage = () => {
                                   </div>
                                   <div className="review-field-item">
                                     <span className="review-field-label">EST. VOLUME:</span>
-                                    <span className="review-field-value-emerald">{volume}</span>
+                                    <span className="review-field-value-emerald">{formatVolume(volume)}</span>
                                   </div>
                                   <div className="review-field-item sm:col-span-2">
                                     <span className="review-field-label">APPROX. TIMBER VALUE:</span>
@@ -491,7 +509,7 @@ const HarvestRequestsPage = () => {
                             </div>
                             <div>
                               <span className="text-slate-400 block text-[11px]">Est. Total Volume:</span>
-                              <span className="font-bold text-emerald-400">{stands.reduce((sum, s) => sum + parseVolumeNumber(s.estimatedVolume || s.volume), 0).toFixed(2)} m³</span>
+                              <span className="font-bold text-emerald-400">{formatVolume(stands.reduce((sum, s) => sum + parseVolumeNumber(s.estimatedVolume || s.volume), 0))}</span>
                             </div>
                             <div>
                               <span className="text-slate-400 block text-[11px]">Approx. Total Timber Value:</span>
@@ -550,144 +568,394 @@ const HarvestRequestsPage = () => {
                           </div>
                         </div>
 
+                        {/* Special Instructions / Site Notes */}
                         {req.instructions && (
-                          <div className="mt-2 p-3 rounded-xl bg-slate-900/80 border border-emerald-500/20 text-xs text-slate-300 italic">
-                            <strong className="text-emerald-400 font-bold not-italic">Notes / Instructions: </strong>{req.instructions}
+                          <div className="mt-1 p-3.5 rounded-xl bg-[#06140b]/90 border border-emerald-500/20 text-xs text-slate-300 flex items-start gap-2.5 shadow-sm">
+                            <FileText size={15} className="text-emerald-400 shrink-0 mt-0.5" />
+                            <div>
+                              <strong className="text-emerald-300 font-bold block mb-0.5 uppercase tracking-wide text-[11px]">
+                                Special Instructions / Site Notes:
+                              </strong>
+                              <span className="text-slate-200 leading-relaxed italic">{req.instructions}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Uploaded Site Photos Gallery Bar */}
+                        {Array.isArray(req.photos) && req.photos.length > 0 && req.photos[0] && (
+                          <div className="mt-2 p-3.5 rounded-xl bg-[#06140b]/90 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <div
+                                onClick={() => openPhotoLightbox(req.photos, 0, `${req.property_name || 'Harvest Site'} - Inspection Photo`)}
+                                className="relative w-14 h-14 rounded-xl overflow-hidden border border-emerald-500/35 shrink-0 bg-[#030a05] cursor-pointer group shadow-md"
+                                title="Click to view photo"
+                              >
+                                <img
+                                  src={typeof req.photos[0] === 'string' ? req.photos[0] : (req.photos[0]?.previewUrl || req.photos[0]?.dataUrl)}
+                                  alt="Harvest Site Photo"
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                  onError={(e) => { e.target.style.display = 'none'; }}
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
+                                  <ZoomIn size={16} className="text-white" />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <strong className="text-emerald-300 text-xs font-bold uppercase tracking-wider">
+                                    Harvest Site Photo Attached
+                                  </strong>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    {req.photos.length} Photo{req.photos.length > 1 ? 's' : ''}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-300 mt-0.5">
+                                  Visual parcel logs uploaded for contractor quotation &amp; site inspection.
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => openPhotoLightbox(req.photos, 0, `${req.property_name || 'Harvest Site'} - Inspection Photo`)}
+                              className="self-start sm:self-center px-3.5 py-1.5 rounded-lg bg-[#0e2013] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 text-xs font-bold border border-emerald-500/30 transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-sm"
+                            >
+                              <ZoomIn size={13} />
+                              <span>View Full Photo</span>
+                            </button>
                           </div>
                         )}
                       </div>
 
-                      {/* CONTRACTOR ASSESSMENT & QUOTATION SUBMITTED (WHEN ASSESSED) */}
-                      {(isAssessmentSubmitted || isAccepted || activeAssessmentMap[reqId] || req.assessment) && (
-                        <div className="assessment-summary-card">
-                          <div className="review-section-header">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                                <FileText size={16} />
+                      {/* CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL SUBMITTED (WHEN ASSESSED) */}
+                      {(isAssessmentSubmitted || isAccepted || activeAssessmentMap[reqId] || req.assessment) && (() => {
+                        const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
+                        const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
+                        const isPurchase = propType === 'Timber Purchase Offer';
+                        const isHybrid = propType === 'Purchase + Harvesting';
+                        const isService = propType === 'Harvesting Service Quotation';
+
+                        const assessedVolume = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume || stands.reduce((sum, s) => sum + parseVolumeNumber(s.estimatedVolume || s.volume), 0);
+                        const totalQuoteVal = assDoc.total_quote ?? req.total_quote ?? 110000;
+                        const purchaseOfferVal = assDoc.contractor_purchase_offer ?? req.contractor_purchase_offer;
+                        const purchasePriceVal = assDoc.timber_purchase_price ?? req.timber_purchase_price;
+                        const harvestArrangementCostVal = assDoc.harvesting_arrangement_cost ?? req.harvesting_arrangement_cost;
+                        const refVal = assDoc.estimated_timber_value ?? req.estimated_timber_value;
+                        const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
+                        const validUntilVal = assDoc.offer_valid_until || req.offer_valid_until;
+
+                        return (
+                          <div className="assessment-summary-card">
+                            <div className="review-section-header">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                  {isPurchase ? <Coins size={16} /> : isHybrid ? <Handshake size={16} /> : <FileText size={16} />}
+                                </div>
+                                <div>
+                                  <h4 className="review-section-title uppercase tracking-wide">
+                                    {isPurchase
+                                      ? 'Contractor Timber Purchase Offer'
+                                      : isHybrid
+                                        ? 'Purchase + Harvesting Commercial Proposal'
+                                        : 'Contractor Quotation & Manpower Assessment'}
+                                  </h4>
+                                  <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
+                                    {isPurchase
+                                      ? 'Formal offer by contractor to purchase the timber from you.'
+                                      : isHybrid
+                                        ? 'Combined agreement: contractor purchases timber and undertakes harvesting operations.'
+                                        : 'Formal on-site evaluation, estimated harvest yield, and operational quotation.'}
+                                  </span>
+                                </div>
                               </div>
-                              <div>
-                                <h4 className="review-section-title">
-                                  CONTRACTOR QUOTATION & MANPOWER ASSESSMENT
-                                </h4>
-                                <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
-                                  Formal on-site evaluation, estimated harvest yield, and operational quotation submitted by assigned contractor.
+
+                              <div className="flex items-center gap-3">
+                                <span className={isAccepted ? "review-badge-green" : "review-badge-amber"}>
+                                  {isAccepted ? (
+                                    <>
+                                      <CheckCircle2 size={13} className="text-emerald-400" />
+                                      <span>Proposal Accepted & Authorized</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Clock size={13} className="text-amber-400" />
+                                      <span>Proposal Under Review</span>
+                                    </>
+                                  )}
                                 </span>
+                                <button
+                                  type="button"
+                                  onClick={() => window.print()}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
+                                  title="Print Formal Assessment Report"
+                                >
+                                  <Printer size={13} />
+                                  <span>Print Report</span>
+                                </button>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                              <span className={isAccepted ? "review-badge-green" : "review-badge-amber"}>
-                                {isAccepted ? (
-                                  <>
-                                    <CheckCircle2 size={13} className="text-emerald-400" />
-                                    <span>Assessment Accepted & Authorized</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Clock size={13} className="text-amber-400" />
-                                    <span>Quotation Under Review</span>
-                                  </>
+                            {/* COMMERCIAL ARRANGEMENT EXPLANATORY BANNER (REQUIREMENT 10) */}
+                            <div className={`commercial-flow-banner ${
+                              isPurchase
+                                ? 'commercial-flow-banner-purchase'
+                                : isHybrid
+                                  ? 'commercial-flow-banner-hybrid'
+                                  : 'commercial-flow-banner-service'
+                            }`}>
+                              <div className="flex items-center gap-3.5">
+                                <div className={`commercial-flow-icon ${
+                                  isPurchase
+                                    ? 'commercial-flow-icon-purchase'
+                                    : isHybrid
+                                      ? 'commercial-flow-icon-hybrid'
+                                      : 'commercial-flow-icon-service'
+                                }`}>
+                                  {isPurchase ? (
+                                    <Coins size={20} />
+                                  ) : isHybrid ? (
+                                    <Handshake size={20} />
+                                  ) : (
+                                    <Truck size={20} />
+                                  )}
+                                </div>
+                                <div>
+                                  <strong className="block text-sm sm:text-base font-extrabold text-white tracking-tight">
+                                    {isService && (
+                                      <>
+                                        Contractor is offering harvesting services for{' '}
+                                        <span className="text-amber-300 font-black">{formatINR(totalQuoteVal)}</span>.
+                                      </>
+                                    )}
+                                    {isPurchase && (
+                                      <>
+                                        Contractor is offering to purchase the timber for{' '}
+                                        <span className="text-emerald-400 font-black">{formatINR(purchaseOfferVal || 0)}</span>.
+                                      </>
+                                    )}
+                                    {isHybrid && (
+                                      <>
+                                        Contractor is offering to purchase the timber for{' '}
+                                        <span className="text-emerald-400 font-black">{formatINR(purchasePriceVal || 0)}</span>{' '}
+                                        and undertake the harvesting operation under the stated terms.
+                                      </>
+                                    )}
+                                  </strong>
+                                  <span className="text-xs text-slate-300 font-medium block mt-1">
+                                    {isService && 'Money flow: Landowner → Contractor (You pay contractor for harvesting operations).'}
+                                    {isPurchase && 'Money flow: Contractor → Landowner (Contractor pays you to purchase the timber. No harvesting charges).'}
+                                    {isHybrid && 'Money flow: Commercial purchase with agreed operational harvesting arrangement.'}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className={`commercial-flow-badge ${
+                                isPurchase
+                                  ? 'commercial-flow-badge-purchase'
+                                  : isHybrid
+                                    ? 'commercial-flow-badge-hybrid'
+                                    : 'commercial-flow-badge-service'
+                              }`}>
+                                {propType}
+                              </span>
+                            </div>
+
+                            {/* RESPONSIVE SPECIFICATION GRID (TAILORED TO PROPOSAL TYPE) */}
+                            <div className="assessment-metrics-grid">
+                              {/* 1. Assessed Volume */}
+                              <div className="assessment-metric-item">
+                                <span className="assessment-metric-label">
+                                  <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
+                                </span>
+                                <strong className="assessment-metric-value-emerald">
+                                  {formatVolume(assessedVolume)}
+                                </strong>
+                              </div>
+
+                              {/* 2 & 3: Proposal Specific Financial Values */}
+                              {isService && (
+                                <>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
+                                    </span>
+                                    <strong className="assessment-metric-value-amber">
+                                      {formatINR(totalQuoteVal)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {assDoc.assigned_workers_count || assDoc.workers_assigned || req.assigned_workers_count || req.workers_assigned || 12} Workers
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {assDoc.estimated_duration || req.estimated_duration || '10 Working Days'}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || '2026-10-02')}
+                                    </strong>
+                                  </div>
+                                </>
+                              )}
+
+                              {isPurchase && (
+                                <>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Reference Timber Value
+                                    </span>
+                                    <strong className="assessment-metric-value-emerald">
+                                      {formatINR(refVal || 0)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Coins size={13} className="text-amber-400 shrink-0" /> Contractor Purchase Offer
+                                    </span>
+                                    <strong className="text-amber-400 font-extrabold text-base">
+                                      {formatINR(purchaseOfferVal || 0)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(validUntilVal)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <FileText size={13} className="text-slate-400 shrink-0" /> Payment Terms
+                                    </span>
+                                    <strong className="assessment-metric-value text-xs truncate" title={paymentTermsVal || 'As agreed'}>
+                                      {paymentTermsVal || 'Full settlement'}
+                                    </strong>
+                                  </div>
+                                </>
+                              )}
+
+                              {isHybrid && (
+                                <>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Timber Purchase Price
+                                    </span>
+                                    <strong className="assessment-metric-value-emerald">
+                                      {formatINR(purchasePriceVal || 0)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Truck size={13} className="text-amber-400 shrink-0" /> Harvesting Arrangement
+                                    </span>
+                                    <strong className="assessment-metric-value-amber text-xs truncate">
+                                      {harvestArrangementCostVal ? formatINR(harvestArrangementCostVal) : 'Included / As Agreed'}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(validUntilVal)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Operation Start
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
+                                    </strong>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            {/* PAYMENT TERMS & REMARKS CALLOUT */}
+                            {(paymentTermsVal || assDoc.notes || req.assessment?.notes) && (
+                              <div className="assessment-remarks-callout">
+                                {paymentTermsVal && (
+                                  <div className="flex items-baseline gap-2">
+                                    <strong className="text-emerald-400 font-bold shrink-0">Commercial Payment Terms: </strong>
+                                    <span className="text-slate-200">{paymentTermsVal}</span>
+                                  </div>
                                 )}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => window.print()}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
-                                title="Print Formal Assessment Report"
-                              >
-                                <Printer size={13} />
-                                <span>Print Report</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* 5-METRIC RESPONSIVE SPECIFICATION GRID */}
-                          <div className="assessment-metrics-grid">
-                            <div className="assessment-metric-item">
-                              <span className="assessment-metric-label">
-                                <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
-                              </span>
-                              <strong className="assessment-metric-value-emerald">
-                                {(() => {
-                                  const raw = activeAssessmentMap[reqId]?.estimated_harvestable_volume || req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90;
-                                  const num = parseFloat(raw);
-                                  return !isNaN(num) ? `${num.toFixed(2)} m³` : `${raw} m³`;
-                                })()}
-                              </strong>
-                            </div>
-
-                            <div className="assessment-metric-item">
-                              <span className="assessment-metric-label">
-                                <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
-                              </span>
-                              <strong className="assessment-metric-value-amber">
-                                {formatINR(activeAssessmentMap[reqId]?.total_quote || req.assessment?.total_quote || req.total_quote || 110000)}
-                              </strong>
-                            </div>
-
-                            <div className="assessment-metric-item">
-                              <span className="assessment-metric-label">
-                                <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
-                              </span>
-                              <strong className="assessment-metric-value">
-                                {activeAssessmentMap[reqId]?.assigned_workers_count || activeAssessmentMap[reqId]?.workers_assigned || req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12} Workers
-                              </strong>
-                            </div>
-
-                            <div className="assessment-metric-item">
-                              <span className="assessment-metric-label">
-                                <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
-                              </span>
-                              <strong className="assessment-metric-value">
-                                {activeAssessmentMap[reqId]?.estimated_duration || req.assessment?.estimated_duration || req.estimated_duration || '10 Working Days'}
-                              </strong>
-                            </div>
-
-                            <div className="assessment-metric-item">
-                              <span className="assessment-metric-label">
-                                <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
-                              </span>
-                              <strong className="assessment-metric-value">
-                                {formatDateDMY(activeAssessmentMap[reqId]?.proposed_start_date || req.assessment?.proposed_start_date || req.proposed_start_date || '2026-10-02')}
-                              </strong>
-                            </div>
-                          </div>
-
-                          {/* OPTIONAL CONTRACTOR SITE NOTES / REMARKS IF PRESENT */}
-                          {(activeAssessmentMap[reqId]?.site_notes || req.assessment?.site_notes || activeAssessmentMap[reqId]?.notes || req.assessment?.notes) && (
-                            <div className="p-3.5 rounded-xl bg-[#07130c] border border-emerald-500/15 text-xs text-slate-300">
-                              <strong className="text-emerald-400 font-bold">Contractor Site Notes: </strong>
-                              <span>{activeAssessmentMap[reqId]?.site_notes || req.assessment?.site_notes || activeAssessmentMap[reqId]?.notes || req.assessment?.notes}</span>
-                            </div>
-                          )}
-
-                          {/* LANDOWNER DECISION ACTIONS (WHEN PENDING REVIEW) */}
-                          {isAssessmentSubmitted && (
-                            <div className="assessment-action-bar">
-                              <div className="flex items-center gap-2 text-xs text-slate-300">
-                                <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-                                <span>Authorizing the assessment confirms the quotation and schedules the contractor for harvesting operations.</span>
+                                {(assDoc.notes || req.assessment?.notes || assDoc.site_notes) && (
+                                  <div className="flex items-baseline gap-2">
+                                    <strong className="text-emerald-400 font-bold shrink-0">Contractor Site Remarks: </strong>
+                                    <span className="text-slate-200">{assDoc.notes || req.assessment?.notes || assDoc.site_notes}</span>
+                                  </div>
+                                )}
                               </div>
-                              <div className="flex items-center gap-3 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={() => handleAssessmentAction(reqId, 'REVISION_REQUESTED', 'Please adjust timeline and quotation.')}
-                                  className="assessment-btn-revision"
-                                >
-                                  <RefreshCw size={14} /> Request Revision
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
-                                  className="assessment-btn-accept"
-                                >
-                                  <CheckCircle2 size={16} /> Accept Assessment & Authorize Operation
-                                </button>
+                            )}
+
+                            {/* LANDOWNER DECISION ACTIONS (WHEN PENDING REVIEW) */}
+                            {isAssessmentSubmitted && (
+                              <div className="assessment-action-bar">
+                                <div className="assessment-action-hint">
+                                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                    <ShieldCheck size={15} />
+                                  </div>
+                                  <span>
+                                    {isPurchase
+                                      ? 'Accepting the purchase offer enters into a binding timber sale agreement with the contractor.'
+                                      : isHybrid
+                                        ? 'Accepting confirms the timber purchase valuation and authorizes harvesting operations.'
+                                        : 'Authorizing the assessment confirms the quotation and schedules the contractor for operations.'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssessmentAction(reqId, 'REJECTED', 'Landowner declined this commercial proposal.')}
+                                    className="assessment-btn-decline"
+                                  >
+                                    <XCircle size={15} />
+                                    <span>Decline Proposal</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssessmentAction(reqId, 'REVISION_REQUESTED', 'Please adjust timeline, rates, or terms.')}
+                                    className="assessment-btn-revision"
+                                  >
+                                    <RefreshCw size={14} />
+                                    <span>Request Revision</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
+                                    className="assessment-btn-accept"
+                                  >
+                                    <CheckCircle2 size={16} />
+                                    <span>
+                                      {isPurchase
+                                        ? 'Accept Purchase Offer'
+                                        : isHybrid
+                                          ? 'Accept Proposal & Authorize'
+                                          : 'Accept Assessment & Authorize'}
+                                    </span>
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* ASSIGNED CONTRACTOR / SELECTION FOOTER BAR */}
                       {isAssigned ? (
@@ -763,6 +1031,70 @@ const HarvestRequestsPage = () => {
                 onCancel={() => setSelectedRequestForContractor(null)}
                 isModal={true}
               />
+            )}
+
+            {/* LIGHTBOX MODAL FOR HARVEST SITE PHOTOS */}
+            {activePhotoModal && (
+              <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[#0a0f0d]/95 backdrop-blur-md animate-fade-in">
+                <div className="max-w-4xl w-full p-6 border border-emerald-500/30 rounded-2xl bg-[#121a16] space-y-4 shadow-2xl relative">
+                  <div className="flex items-center justify-between border-b border-emerald-500/15 pb-3">
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center gap-2">
+                        <Camera size={18} className="text-emerald-400" /> {activePhotoModal.title}
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        Photo {activePhotoModal.index + 1} of {activePhotoModal.photos.length}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActivePhotoModal(null)}
+                      className="p-1.5 rounded-lg bg-[#0e1612] border border-emerald-500/20 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="relative max-h-[65vh] flex items-center justify-center overflow-hidden rounded-xl bg-[#0a0f0d] border border-emerald-500/20 p-2">
+                    <img
+                      src={activePhotoModal.photos[activePhotoModal.index]}
+                      alt="Full View"
+                      className="max-h-[62vh] w-auto max-w-full object-contain rounded-lg shadow-lg"
+                    />
+
+                    {activePhotoModal.photos.length > 1 && (
+                      <>
+                        <button
+                          onClick={() => setActivePhotoModal(prev => ({
+                            ...prev,
+                            index: prev.index === 0 ? prev.photos.length - 1 : prev.index - 1
+                          }))}
+                          className="absolute left-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
+                        >
+                          <ChevronLeft size={22} />
+                        </button>
+                        <button
+                          onClick={() => setActivePhotoModal(prev => ({
+                            ...prev,
+                            index: prev.index === prev.photos.length - 1 ? 0 : prev.index + 1
+                          }))}
+                          className="absolute right-4 p-2.5 rounded-full bg-[#0a0f0d]/80 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 transition-all shadow-lg cursor-pointer"
+                        >
+                          <ChevronRight size={22} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      onClick={() => setActivePhotoModal(null)}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow transition-colors cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
           </main>

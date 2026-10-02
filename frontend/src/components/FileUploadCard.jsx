@@ -13,8 +13,10 @@ import {
 const FileUploadCard = ({
   id,
   label,
+  title,
   helperText,
   sublabel,
+  description,
   docTypes = [],
   selectedDocType,
   onDocTypeChange,
@@ -25,6 +27,7 @@ const FileUploadCard = ({
   examples = [],
   fileData,
   file,
+  selectedFile,
   onFileChange,
   onFileSelect,
   onFileRemove,
@@ -35,9 +38,37 @@ const FileUploadCard = ({
   const [localError, setLocalError] = useState('');
   const fileInputRef = useRef(null);
 
-  const activeHelperText = helperText || sublabel;
-  const activeFileData = fileData !== undefined ? fileData : file;
+  const activeLabel = label || title || '';
+  const activeHelperText = helperText || sublabel || description || '';
+  const activeFileData = fileData !== undefined ? fileData : (file !== undefined ? file : selectedFile);
   const activeChangeHandler = onFileChange || onFileSelect;
+
+  const normalizedFile = React.useMemo(() => {
+    if (!activeFileData) return null;
+    if (typeof activeFileData === 'string') {
+      const isImg = activeFileData.startsWith('data:image/') || /\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(activeFileData) || activeFileData.includes('unsplash');
+      return {
+        name: 'Uploaded Photo / Document',
+        size: null,
+        type: isImg ? 'image/*' : 'document',
+        isImage: isImg,
+        previewUrl: activeFileData,
+        dataUrl: activeFileData
+      };
+    }
+    if (typeof File !== 'undefined' && activeFileData instanceof File && !activeFileData.previewUrl) {
+      const isImg = activeFileData.type.startsWith('image/');
+      return {
+        name: activeFileData.name,
+        size: activeFileData.size,
+        type: activeFileData.type,
+        isImage: isImg,
+        previewUrl: isImg ? URL.createObjectURL(activeFileData) : null,
+        fileObj: activeFileData
+      };
+    }
+    return activeFileData;
+  }, [activeFileData]);
 
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
@@ -134,9 +165,13 @@ const FileUploadCard = ({
     }
   };
 
-  const handleRemoveFile = () => {
-    if (activeFileData?.previewUrl) {
-      URL.revokeObjectURL(activeFileData.previewUrl);
+  const handleRemoveFile = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    if (normalizedFile?.previewUrl && typeof normalizedFile.previewUrl === 'string' && normalizedFile.previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(normalizedFile.previewUrl);
     }
     if (onFileChange) onFileChange(null);
     if (onFileSelect) onFileSelect(null);
@@ -148,6 +183,7 @@ const FileUploadCard = ({
   };
 
   const formatFileSize = (bytes) => {
+    if (!bytes || isNaN(bytes)) return 'File ready';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -156,23 +192,27 @@ const FileUploadCard = ({
   return (
     <div className="w-full bg-[#0e1612] rounded-2xl border border-emerald-500/15 p-6 sm:p-7 shadow-lg transition-all duration-200 hover:border-emerald-500/35">
       {/* Header Section */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-          <label className="text-base sm:text-lg font-bold text-white flex items-center gap-2.5">
-            <span>{label}</span>
-            {isRequired ? (
-              <span className="text-emerald-400 font-extrabold text-base">*</span>
-            ) : (
-              <span className="text-emerald-300 text-xs font-bold uppercase tracking-wider bg-emerald-500/15 px-3 py-1 rounded-md border border-emerald-500/30">
-                Optional
-              </span>
-            )}
-          </label>
+      {(activeLabel || activeHelperText) && (
+        <div className="mb-6">
+          {activeLabel && (
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <label className="text-base sm:text-lg font-bold text-white flex items-center gap-2.5">
+                <span>{activeLabel}</span>
+                {isRequired ? (
+                  <span className="text-emerald-400 font-extrabold text-base">*</span>
+                ) : (
+                  <span className="text-emerald-300 text-xs font-bold uppercase tracking-wider bg-emerald-500/15 px-3 py-1 rounded-md border border-emerald-500/30">
+                    Optional
+                  </span>
+                )}
+              </label>
+            </div>
+          )}
+          {activeHelperText && (
+            <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed mt-2">{activeHelperText}</p>
+          )}
         </div>
-        {activeHelperText && (
-          <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed mt-2">{activeHelperText}</p>
-        )}
-      </div>
+      )}
 
       {/* Select Document Type Dropdown (If provided e.g. for Govt ID) */}
       {docTypes.length > 0 && (
@@ -215,7 +255,7 @@ const FileUploadCard = ({
       )}
 
       {/* Upload Zone / Preview Card */}
-      {!activeFileData && uploadProgress === null ? (
+      {!normalizedFile && uploadProgress === null ? (
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -284,27 +324,27 @@ const FileUploadCard = ({
         /* Uploaded File Preview State */
         <div className="border border-emerald-500/30 rounded-xl p-4 bg-[#0a0f0d] flex items-center justify-between gap-4 shadow-inner">
           <div className="flex items-center gap-3 overflow-hidden">
-            {activeFileData?.isImage && activeFileData?.previewUrl ? (
-              <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-[#0e1612] group">
+            {normalizedFile?.isImage && normalizedFile?.previewUrl ? (
+              <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-[#0e1612] group">
                 <img
-                  src={activeFileData.previewUrl}
-                  alt={activeFileData.name}
+                  src={normalizedFile.previewUrl}
+                  alt={normalizedFile.name || 'Uploaded File'}
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <Eye size={14} className="text-white" />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
+                  <Eye size={16} className="text-white" />
                 </div>
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center flex-shrink-0">
-                <FileText size={22} />
+              <div className="w-14 h-14 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center flex-shrink-0">
+                <FileText size={24} />
               </div>
             )}
 
             <div className="min-w-0 flex-grow">
               <div className="flex items-center gap-2">
                 <p className="text-xs sm:text-sm font-bold text-white truncate max-w-[200px] sm:max-w-[280px]">
-                  {activeFileData?.name || 'Uploaded File'}
+                  {normalizedFile?.name || 'Uploaded File'}
                 </p>
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                   <CheckCircle2 size={10} />
@@ -312,7 +352,7 @@ const FileUploadCard = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5 font-medium">
-                {activeFileData?.size ? formatFileSize(activeFileData.size) : 'File'} • {activeFileData?.type || 'Document'}
+                {normalizedFile?.size ? formatFileSize(normalizedFile.size) : 'File ready'} • {normalizedFile?.type || 'Document'}
               </p>
             </div>
           </div>
@@ -321,7 +361,7 @@ const FileUploadCard = ({
             <button
               type="button"
               onClick={handleRemoveFile}
-              className="p-2 rounded-lg bg-[#18241e] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all border border-emerald-500/20 hover:border-rose-500/40 cursor-pointer"
+              className="p-2.5 rounded-lg bg-[#18241e] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all border border-emerald-500/20 hover:border-rose-500/40 cursor-pointer"
               title="Remove file"
             >
               <X size={16} />

@@ -49,16 +49,27 @@ export const getTimberReferenceRate = (species = 'Teak') => {
 
 /**
  * Safely parse numeric estimated volume in m³ from string or number.
- * e.g. "1.50 m³" -> 1.5, "1.8 m³" -> 1.8, 1.5 -> 1.5
+ * e.g. "1.50 m³" -> 1.5, "1.8 m³" -> 1.8, 1.5 -> 1.5, "1.70 m³" -> 1.7
+ * Preserves exact cubic metre values without accidental scaling or ×100 unit mixing.
  */
 export const parseVolumeNumber = (volumeInput) => {
   if (volumeInput === undefined || volumeInput === null || volumeInput === '') return 0;
   if (typeof volumeInput === 'number') return isNaN(volumeInput) ? 0 : volumeInput;
-  const str = String(volumeInput).trim();
-  const match = str.match(/[\d.]+/);
+  const str = String(volumeInput).trim().replace(',', '.');
+  const match = str.match(/\d+(\.\d+)?/);
   if (!match) return 0;
   const num = parseFloat(match[0]);
   return isNaN(num) ? 0 : num;
+};
+
+/**
+ * Format volume in cubic metres (m³) consistently to two decimal places.
+ * e.g. 1.7 -> "1.70 m³", 1.70 -> "1.70 m³", 1.75 -> "1.75 m³", 10 -> "10.00 m³", 170 -> "170.00 m³"
+ */
+export const formatVolume = (volumeInput, includeUnit = true) => {
+  const num = parseVolumeNumber(volumeInput);
+  const formatted = num.toFixed(2);
+  return includeUnit ? `${formatted} m³` : formatted;
 };
 
 /**

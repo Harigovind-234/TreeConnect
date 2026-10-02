@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Header, status
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel
 from bson import ObjectId
 from jose import jwt, JWTError
+import re
 
 from app.database import db
 
@@ -41,6 +42,7 @@ class HarvestRequestCreate(BaseModel):
     selected_tree_groups: Optional[List[Dict[str, Any]]] = []
     total_estimated_price: Optional[float] = None
     approx_timber_value: Optional[float] = None
+    total_estimated_volume: Optional[float] = None
     reason: str
     preferred_start_date: Optional[str] = ""
     preferred_end_date: Optional[str] = ""
@@ -60,17 +62,30 @@ class AssignContractorRequest(BaseModel):
     contractor_email: Optional[str] = ""
 
 class ContractorAssessmentCreate(BaseModel):
+    commercial_proposal_type: Optional[str] = "Harvesting Service Quotation"
     estimated_harvestable_volume: float
-    estimated_timber_value: float
+    estimated_timber_value: Optional[float] = 0.0
+    # Service quotation fields
     harvesting_cost: Optional[float] = 0.0
+    felling_cost: Optional[float] = None
     extraction_cost: Optional[float] = 0.0
     transportation_cost: Optional[float] = 0.0
     other_cost: Optional[float] = 0.0
-    total_quote: float
+    total_quote: Optional[float] = 0.0
+    # Purchase offer fields
+    contractor_purchase_offer: Optional[float] = None
+    # Purchase + Harvesting fields
+    timber_purchase_price: Optional[float] = None
+    harvesting_arrangement_cost: Optional[Union[float, str]] = None
+    transportation_arrangement: Optional[str] = None
+    # Common commercial fields
+    payment_terms: Optional[str] = None
+    offer_valid_until: Optional[str] = None
+    # Operational fields
     assigned_workers_count: Optional[int] = None
     workers_assigned: Optional[int] = None
-    estimated_duration: str
-    proposed_start_date: str
+    estimated_duration: Optional[str] = ""
+    proposed_start_date: Optional[str] = ""
     notes: Optional[str] = ""
 
 class AssessmentStatusUpdate(BaseModel):
@@ -171,6 +186,22 @@ def create_harvest_request(
         latitude_val = payload.latitude if payload.latitude is not None else (property_doc.get("latitude") if property_doc and property_doc.get("latitude") is not None else 9.557546)
         longitude_val = payload.longitude if payload.longitude is not None else (property_doc.get("longitude") if property_doc and property_doc.get("longitude") is not None else 76.605175)
 
+        calc_vol = payload.total_estimated_volume
+        if calc_vol is None and payload.selected_tree_groups:
+            sum_vol = 0.0
+            for g in payload.selected_tree_groups:
+                if isinstance(g, dict):
+                    raw_v = g.get("estimatedVolume") or g.get("volume") or g.get("estimated_volume")
+                    if raw_v is not None:
+                        m = re.search(r"\d+(\.\d+)?", str(raw_v).replace(",", "."))
+                        if m:
+                            try:
+                                sum_vol += float(m.group(0))
+                            except ValueError:
+                                pass
+            if sum_vol > 0:
+                calc_vol = round(sum_vol, 2)
+
         doc = {
             "property_id": payload.property_id,
             "propertyName": prop_name,
@@ -186,6 +217,7 @@ def create_harvest_request(
             "longitude": longitude_val,
             "selected_inventory_ids": payload.selected_inventory_ids,
             "selected_tree_groups": payload.selected_tree_groups or [],
+            "total_estimated_volume": calc_vol,
             "total_estimated_price": payload.total_estimated_price,
             "approx_timber_value": payload.approx_timber_value or payload.total_estimated_price,
             "owner_email": owner_email,
@@ -348,6 +380,23 @@ def get_harvest_requests(
                             tg["attachedPhotos"] = fallback_photos
                             tg["image"] = fallback_photos[0]
 
+            # Ensure total_estimated_volume is present in m³
+            if req_data.get("total_estimated_volume") is None:
+                calc_v = 0.0
+                stands = req_data.get("selected_tree_groups") or req_data.get("tree_inventory") or []
+                if isinstance(stands, list):
+                    for g in stands:
+                        if isinstance(g, dict):
+                            raw_v = g.get("estimatedVolume") or g.get("volume") or g.get("estimated_volume")
+                            if raw_v is not None:
+                                m = re.search(r"\d+(\.\d+)?", str(raw_v).replace(",", "."))
+                                if m:
+                                    try:
+                                        calc_v += float(m.group(0))
+                                    except ValueError:
+                                        pass
+                req_data["total_estimated_volume"] = round(calc_v, 2) if calc_v > 0 else 1.70
+
             # Hydrate contractor assessment if available
             ass_doc = db.contractor_assessments.find_one({"harvest_request_id": req_data["id"]})
             if ass_doc:
@@ -449,6 +498,23 @@ def get_harvest_request_by_id(request_id: str):
                         tg["photos"] = fallback_photos
                         tg["attachedPhotos"] = fallback_photos
                         tg["image"] = fallback_photos[0]
+
+        # Ensure total_estimated_volume is present in m³
+        if req_data.get("total_estimated_volume") is None:
+            calc_v = 0.0
+            stands = req_data.get("selected_tree_groups") or req_data.get("tree_inventory") or []
+            if isinstance(stands, list):
+                for g in stands:
+                    if isinstance(g, dict):
+                        raw_v = g.get("estimatedVolume") or g.get("volume") or g.get("estimated_volume")
+                        if raw_v is not None:
+                            m = re.search(r"\d+(\.\d+)?", str(raw_v).replace(",", "."))
+                            if m:
+                                try:
+                                    calc_v += float(m.group(0))
+                                except ValueError:
+                                    pass
+            req_data["total_estimated_volume"] = round(calc_v, 2) if calc_v > 0 else 1.70
 
         # Hydrate contractor assessment if available
         ass_doc = db.contractor_assessments.find_one({"harvest_request_id": req_data["id"]})
@@ -564,52 +630,166 @@ def submit_contractor_assessment(
 
         token_email = get_current_user_email(authorization)
         created_at = datetime.now(timezone.utc).isoformat()
+        prop_type = payload.commercial_proposal_type or "Harvesting Service Quotation"
+
+        # Validate assessed harvestable volume
+        if payload.estimated_harvestable_volume is None or float(payload.estimated_harvestable_volume) <= 0:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"message": "Assessed Harvestable Volume (m³) is mandatory and must be greater than zero."}
+            )
 
         workers = payload.assigned_workers_count if payload.assigned_workers_count is not None else payload.workers_assigned
-        if workers is None or int(workers) <= 0:
-            return JSONResponse(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                content={"message": "Field 'Number of Workers Assigned to This Job' is mandatory and must be a positive whole number (e.g. 12)."}
-            )
-        workers_count = int(workers)
+        workers_count = int(workers) if workers and int(workers) > 0 else None
 
-        # Validate proposed_start_date
-        if not payload.proposed_start_date or not str(payload.proposed_start_date).strip():
-            return JSONResponse(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                content={"message": "Field 'Proposed Operation Start Date' is mandatory."}
-            )
-
-        try:
-            start_date_obj = datetime.strptime(str(payload.proposed_start_date).strip()[:10], "%Y-%m-%d").date()
-            now_utc_date = datetime.now(timezone.utc).date()
-            if start_date_obj < now_utc_date:
+        # Proposal type specific validations
+        if prop_type == "Harvesting Service Quotation":
+            if workers_count is None or workers_count <= 0:
                 return JSONResponse(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    content={"message": "Proposed Operation Start Date cannot be in the past. Please select today or a future date."}
+                    content={"message": "Field 'Number of Workers Assigned to This Job' is mandatory and must be a positive whole number (e.g. 12)."}
                 )
-        except ValueError:
-            return JSONResponse(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                content={"message": "Proposed Operation Start Date must be in a valid YYYY-MM-DD format."}
-            )
 
-        # Check existing assessment for this harvest request
+            if not payload.proposed_start_date or not str(payload.proposed_start_date).strip():
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Field 'Proposed Operation Start Date' is mandatory for Harvesting Service Quotation."}
+                )
+
+            try:
+                start_date_obj = datetime.strptime(str(payload.proposed_start_date).strip()[:10], "%Y-%m-%d").date()
+                now_utc_date = datetime.now(timezone.utc).date()
+                if start_date_obj < now_utc_date:
+                    return JSONResponse(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        content={"message": "Proposed Operation Start Date cannot be in the past. Please select today or a future date."}
+                    )
+            except ValueError:
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Proposed Operation Start Date must be in a valid YYYY-MM-DD format."}
+                )
+
+            effective_felling_cost = payload.felling_cost if payload.felling_cost is not None else payload.harvesting_cost
+            # Ensure service costs are non-negative
+            for cost_val, cost_name in [
+                (effective_felling_cost, "Felling & Logging Cost"),
+                (payload.extraction_cost, "Extraction Cost"),
+                (payload.transportation_cost, "Transportation Cost"),
+                (payload.other_cost, "Other Cost"),
+                (payload.total_quote, "Total Contractor Quotation")
+            ]:
+                if cost_val is not None and float(cost_val) < 0:
+                    return JSONResponse(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        content={"message": f"{cost_name} cannot be negative."}
+                    )
+
+        elif prop_type == "Timber Purchase Offer":
+            if payload.contractor_purchase_offer is None or float(payload.contractor_purchase_offer) <= 0:
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Field 'Contractor Purchase Offer (₹)' is mandatory and must be greater than zero."}
+                )
+            if not payload.payment_terms or not str(payload.payment_terms).strip():
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Field 'Payment Terms' is mandatory for Timber Purchase Offer."}
+                )
+            if not payload.offer_valid_until or not str(payload.offer_valid_until).strip():
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Field 'Offer Valid Until' is mandatory for Timber Purchase Offer."}
+                )
+            try:
+                valid_date_obj = datetime.strptime(str(payload.offer_valid_until).strip()[:10], "%Y-%m-%d").date()
+                now_utc_date = datetime.now(timezone.utc).date()
+                if valid_date_obj < now_utc_date:
+                    return JSONResponse(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        content={"message": "Offer Valid Until date cannot be in the past. Please select today or a future date."}
+                    )
+            except ValueError:
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Offer Valid Until must be in a valid YYYY-MM-DD format."}
+                )
+
+        elif prop_type == "Purchase + Harvesting":
+            if payload.timber_purchase_price is None or float(payload.timber_purchase_price) <= 0:
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Field 'Timber Purchase Price (₹)' is mandatory and must be greater than zero."}
+                )
+            if not payload.payment_terms or not str(payload.payment_terms).strip():
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Field 'Payment Terms' is mandatory for Purchase + Harvesting."}
+                )
+            if not payload.offer_valid_until or not str(payload.offer_valid_until).strip():
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Field 'Offer Valid Until' is mandatory for Purchase + Harvesting."}
+                )
+            try:
+                valid_date_obj = datetime.strptime(str(payload.offer_valid_until).strip()[:10], "%Y-%m-%d").date()
+                now_utc_date = datetime.now(timezone.utc).date()
+                if valid_date_obj < now_utc_date:
+                    return JSONResponse(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        content={"message": "Offer Valid Until date cannot be in the past. Please select today or a future date."}
+                    )
+            except ValueError:
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Offer Valid Until must be in a valid YYYY-MM-DD format."}
+                )
+            if payload.harvesting_arrangement_cost is not None:
+                try:
+                    numeric_cost = float(payload.harvesting_arrangement_cost)
+                    if numeric_cost < 0:
+                        return JSONResponse(
+                            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            content={"message": "Harvesting Arrangement / Cost cannot be negative."}
+                        )
+                except (ValueError, TypeError):
+                    pass
+
+        # Build assessment document
+        is_purchase = prop_type in ["Timber Purchase Offer", "Purchase + Harvesting"]
+        purchase_status = "PURCHASE_OFFER_SUBMITTED" if is_purchase else None
+        timber_ownership = "LANDOWNER"  # Ownership stays with landowner until offer accepted
+
         assessment_doc = {
             "harvest_request_id": request_id,
             "contractor_email": token_email or "",
+            "commercial_proposal_type": prop_type,
             "estimated_harvestable_volume": payload.estimated_harvestable_volume,
-            "estimated_timber_value": payload.estimated_timber_value,
-            "harvesting_cost": payload.harvesting_cost or 0.0,
-            "extraction_cost": payload.extraction_cost or 0.0,
-            "transportation_cost": payload.transportation_cost or 0.0,
-            "other_cost": payload.other_cost or 0.0,
-            "total_quote": payload.total_quote,
+            "estimated_timber_value": payload.estimated_timber_value or 0.0,
+            # Service costs (applicable to Harvesting Service Quotation)
+            "harvesting_cost": effective_felling_cost if prop_type == "Harvesting Service Quotation" else 0.0,
+            "felling_cost": effective_felling_cost if prop_type == "Harvesting Service Quotation" else 0.0,
+            "extraction_cost": (payload.extraction_cost or 0.0) if prop_type == "Harvesting Service Quotation" else 0.0,
+            "transportation_cost": (payload.transportation_cost or 0.0) if prop_type == "Harvesting Service Quotation" else 0.0,
+            "other_cost": (payload.other_cost or 0.0) if prop_type == "Harvesting Service Quotation" else 0.0,
+            "total_quote": payload.total_quote if prop_type == "Harvesting Service Quotation" else None,
+            # Timber purchase offer
+            "contractor_purchase_offer": payload.contractor_purchase_offer if prop_type == "Timber Purchase Offer" else None,
+            # Purchase + Harvesting
+            "timber_purchase_price": payload.timber_purchase_price if prop_type == "Purchase + Harvesting" else None,
+            "harvesting_arrangement_cost": payload.harvesting_arrangement_cost if prop_type == "Purchase + Harvesting" else None,
+            "transportation_arrangement": payload.transportation_arrangement if prop_type == "Purchase + Harvesting" else None,
+            # Commercial & terms
+            "payment_terms": payload.payment_terms if is_purchase else None,
+            "offer_valid_until": payload.offer_valid_until if is_purchase else None,
+            # Operational manpower & schedule
             "assigned_workers_count": workers_count,
             "workers_assigned": workers_count,
-            "estimated_duration": payload.estimated_duration,
-            "proposed_start_date": payload.proposed_start_date,
+            "estimated_duration": payload.estimated_duration or "",
+            "proposed_start_date": payload.proposed_start_date or "",
             "notes": payload.notes or "",
+            "purchase_status": purchase_status,
+            "timber_ownership": timber_ownership,
             "status": "SUBMITTED",
             "createdAt": created_at,
             "updatedAt": created_at
@@ -622,14 +802,67 @@ def submit_contractor_assessment(
             upsert=True
         )
 
-        # Update harvest request status
-        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
-        db.harvest_requests.update_one(req_query, {"$set": {
+        # Update harvest request status and commercial fields
+        hr_update = {
             "status": "ASSESSMENT_SUBMITTED",
-            "assigned_workers_count": workers_count,
-            "workers_assigned": workers_count,
+            "commercial_proposal_type": prop_type,
+            "estimated_harvestable_volume": payload.estimated_harvestable_volume,
+            "estimated_timber_value": payload.estimated_timber_value or 0.0,
+            "notes": payload.notes or "",
             "updatedAt": created_at
-        }})
+        }
+        if prop_type == "Harvesting Service Quotation":
+            hr_update["total_quote"] = payload.total_quote
+            hr_update["harvesting_cost"] = effective_felling_cost
+            hr_update["felling_cost"] = effective_felling_cost
+            hr_update["extraction_cost"] = payload.extraction_cost or 0.0
+            hr_update["transportation_cost"] = payload.transportation_cost or 0.0
+            hr_update["other_cost"] = payload.other_cost or 0.0
+            hr_update["contractor_purchase_offer"] = None
+            hr_update["timber_purchase_price"] = None
+            hr_update["harvesting_arrangement_cost"] = None
+            hr_update["transportation_arrangement"] = None
+            hr_update["purchase_status"] = None
+            hr_update["timber_ownership"] = "LANDOWNER"
+        elif prop_type == "Timber Purchase Offer":
+            hr_update["total_quote"] = None
+            hr_update["harvesting_cost"] = None
+            hr_update["extraction_cost"] = None
+            hr_update["transportation_cost"] = None
+            hr_update["other_cost"] = None
+            hr_update["timber_purchase_price"] = None
+            hr_update["harvesting_arrangement_cost"] = None
+            hr_update["transportation_arrangement"] = None
+            hr_update["contractor_purchase_offer"] = payload.contractor_purchase_offer
+            hr_update["payment_terms"] = payload.payment_terms
+            hr_update["offer_valid_until"] = payload.offer_valid_until
+            hr_update["purchase_status"] = "PURCHASE_OFFER_SUBMITTED"
+            hr_update["timber_ownership"] = "LANDOWNER"
+        elif prop_type == "Purchase + Harvesting":
+            hr_update["total_quote"] = None
+            hr_update["harvesting_cost"] = None
+            hr_update["extraction_cost"] = None
+            hr_update["transportation_cost"] = None
+            hr_update["other_cost"] = None
+            hr_update["contractor_purchase_offer"] = None
+            hr_update["timber_purchase_price"] = payload.timber_purchase_price
+            hr_update["harvesting_arrangement_cost"] = payload.harvesting_arrangement_cost
+            hr_update["transportation_arrangement"] = payload.transportation_arrangement
+            hr_update["payment_terms"] = payload.payment_terms
+            hr_update["offer_valid_until"] = payload.offer_valid_until
+            hr_update["purchase_status"] = "PURCHASE_OFFER_SUBMITTED"
+            hr_update["timber_ownership"] = "LANDOWNER"
+
+        if workers_count is not None:
+            hr_update["assigned_workers_count"] = workers_count
+            hr_update["workers_assigned"] = workers_count
+        if payload.estimated_duration:
+            hr_update["estimated_duration"] = payload.estimated_duration
+        if payload.proposed_start_date:
+            hr_update["proposed_start_date"] = payload.proposed_start_date
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        db.harvest_requests.update_one(req_query, {"$set": hr_update})
 
         assessment_result = db.contractor_assessments.find_one({"harvest_request_id": request_id})
 
@@ -705,11 +938,28 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
             "REVISION_REQUESTED" if new_status == "REVISION_REQUESTED" else "ASSESSMENT_REJECTED"
         )
 
-        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
-        db.harvest_requests.update_one(req_query, {"$set": {
+        req_update = {
             "status": req_status,
             "updatedAt": updated_at
-        }})
+        }
+
+        # Check commercial proposal type for purchase ownership transition
+        assessment_rec = db.contractor_assessments.find_one({"harvest_request_id": request_id})
+        prop_type = (assessment_rec.get("commercial_proposal_type") if assessment_rec else None) or "Harvesting Service Quotation"
+
+        if new_status == "ACCEPTED" and prop_type in ["Timber Purchase Offer", "Purchase + Harvesting"]:
+            req_update["purchase_status"] = "PURCHASE_OFFER_ACCEPTED"
+            req_update["timber_ownership"] = "CONTRACTOR"
+            db.contractor_assessments.update_one(
+                {"harvest_request_id": request_id},
+                {"$set": {
+                    "purchase_status": "PURCHASE_OFFER_ACCEPTED",
+                    "timber_ownership": "CONTRACTOR"
+                }}
+            )
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        db.harvest_requests.update_one(req_query, {"$set": req_update})
 
         updated_assessment = db.contractor_assessments.find_one({"harvest_request_id": request_id})
 
@@ -792,6 +1042,15 @@ def complete_harvest_execution(request_id: str, payload: HarvestCompletionCreate
         }
         if payload.actual_start_date:
             update_fields["actual_start_date"] = payload.actual_start_date
+
+        # If purchase proposal accepted, mark timber as available for sale
+        curr_purchase_status = req_doc.get("purchase_status")
+        if curr_purchase_status in ["PURCHASE_OFFER_ACCEPTED", "PURCHASE_OFFER_SUBMITTED"]:
+            update_fields["purchase_status"] = "TIMBER_AVAILABLE_FOR_SALE"
+            db.contractor_assessments.update_one(
+                {"harvest_request_id": request_id},
+                {"$set": {"purchase_status": "TIMBER_AVAILABLE_FOR_SALE"}}
+            )
 
         db.harvest_requests.update_one(req_query, {"$set": update_fields})
 

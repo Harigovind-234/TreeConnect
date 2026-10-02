@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from bson import ObjectId
 from jose import jwt, JWTError
+import re
 
 from app.database import db
 from app.schemas.property import PropertyCreate, PropertyUpdate
@@ -393,7 +394,11 @@ def calculate_timber_value(payload: dict):
             vol_raw = payload.get("estimatedVolume")
         if vol_raw is None:
             vol_raw = payload.get("volume")
-        vol = float(vol_raw) if vol_raw is not None else 0.0
+        if vol_raw is not None:
+            m = re.search(r"\d+(\.\d+)?", str(vol_raw).replace(",", "."))
+            vol = float(m.group(0)) if m else 0.0
+        else:
+            vol = 0.0
     except (ValueError, TypeError):
         vol = 0.0
 
@@ -597,7 +602,11 @@ def add_tree_inventory(payload: dict, authorization: Optional[str] = Header(None
                 sp_name = sp_item.get("treeSpecies") or sp_item.get("species") or "Teak"
                 vol_val = sp_item.get("estimatedVolume") if sp_item.get("estimatedVolume") is not None else sp_item.get("volume")
                 try:
-                    vol_float = float(vol_val) if vol_val is not None else 0.0
+                    if vol_val is not None:
+                        m = re.search(r"\d+(\.\d+)?", str(vol_val).replace(",", "."))
+                        vol_float = float(m.group(0)) if m else 0.0
+                    else:
+                        vol_float = 0.0
                 except (ValueError, TypeError):
                     vol_float = 0.0
 

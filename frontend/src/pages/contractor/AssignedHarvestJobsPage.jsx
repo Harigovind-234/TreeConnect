@@ -40,7 +40,7 @@ import {
   Printer,
   Users
 } from 'lucide-react';
-import { calculateApproxTimberValue, formatINR, parseVolumeNumber, TIMBER_VALUE_DISCLAIMER } from '../../utils/timberCalculations';
+import { calculateApproxTimberValue, formatINR, parseVolumeNumber, formatVolume, TIMBER_VALUE_DISCLAIMER } from '../../utils/timberCalculations';
 
 const formatDateDMY = (dateStr) => {
   if (!dateStr) return '02-10-2026';
@@ -743,7 +743,13 @@ const AssignedHarvestJobsPage = () => {
                               ) : isSubmitted ? (
                                 <>
                                   <Clock size={14} className="text-amber-400" />
-                                  <span>Quotation Under Review</span>
+                                  <span>
+                                    {req.commercial_proposal_type === 'Timber Purchase Offer'
+                                      ? 'Purchase Offer Under Review'
+                                      : req.commercial_proposal_type === 'Purchase + Harvesting'
+                                      ? 'Purchase Proposal Under Review'
+                                      : 'Quotation Under Review'}
+                                  </span>
                                 </>
                               ) : (
                                 <>
@@ -1102,13 +1108,13 @@ const AssignedHarvestJobsPage = () => {
                                     <div>
                                       <span className="text-slate-400 block text-[11px]">Est. Total Wood Volume:</span>
                                       <span className="font-bold text-emerald-400">
-                                        {targetTreeGroups.reduce((acc, curr) => {
+                                        {formatVolume(targetTreeGroups.reduce((acc, curr) => {
                                           let cnt = Number(curr.numberOfTrees ?? curr.treeCount ?? curr.count ?? curr.quantity ?? 1);
                                           if (cnt === 20 && propTreeCount === 1) cnt = 1;
-                                          let v = parseFloat(curr.estimatedVolume || curr.volume || (cnt * 0.85)) || Number((cnt * 0.85).toFixed(2));
+                                          let v = parseVolumeNumber(curr.estimatedVolume || curr.volume || (cnt * 0.85)) || Number((cnt * 0.85).toFixed(2));
                                           if (cnt === 1 && (v === 15.0 || v === 15 || !curr.estimatedVolume)) v = 1.7;
                                           return acc + v;
-                                        }, 0).toFixed(2)} m³
+                                        }, 0))}
                                       </span>
                                     </div>
                                     <div>
@@ -1179,101 +1185,237 @@ const AssignedHarvestJobsPage = () => {
                             </div>
 
                             {/* SUBMITTED CONTRACTOR ASSESSMENT SUMMARY (WHEN ALREADY ASSESSED) */}
-                            {(isSubmitted || isAccepted || req.assessment || req.assigned_workers_count) && (
-                              <div className="assessment-summary-card">
-                                <div className="review-section-header">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                                      <FileText size={16} />
+                            {(isSubmitted || isAccepted || req.assessment || req.assigned_workers_count || req.commercial_proposal_type) && (() => {
+                              const assDoc = req.assessment || {};
+                              const pType = req.commercial_proposal_type || assDoc.commercial_proposal_type || 'Harvesting Service Quotation';
+                              const rawVol = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume;
+                              const assessedVolNum = (rawVol !== undefined && rawVol !== null && rawVol !== '')
+                                ? parseVolumeNumber(rawVol)
+                                : parseVolumeNumber(req.total_estimated_volume || 1.70);
+                              const assessedVolStr = formatVolume(assessedVolNum);
+
+                              return (
+                                <div className="assessment-summary-card">
+                                  <div className="review-section-header">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                        <FileText size={16} />
+                                      </div>
+                                      <div>
+                                        <h4 className="review-section-title">
+                                          SUBMITTED CONTRACTOR ASSESSMENT SUMMARY
+                                        </h4>
+                                        <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
+                                          Commercial Proposal: <strong className="text-emerald-300 font-bold">{pType}</strong>
+                                        </span>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <h4 className="review-section-title">
-                                        SUBMITTED CONTRACTOR ASSESSMENT SUMMARY
-                                      </h4>
-                                      <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
-                                        Formally submitted quotation and operation schedule for landowner authorization.
+
+                                    <div className="flex items-center gap-3">
+                                      <span className={isAccepted ? "review-badge-green" : "review-badge-amber"}>
+                                        {isAccepted ? (
+                                          <>
+                                            <CheckCircle2 size={13} className="text-emerald-400" />
+                                            <span>Authorized by Landowner</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Clock size={13} className="text-amber-400" />
+                                            <span>Awaiting Landowner Approval</span>
+                                          </>
+                                        )}
                                       </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => window.print()}
+                                        className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
+                                        title="Print Formal Assessment Summary"
+                                      >
+                                        <Printer size={13} />
+                                        <span>Print Summary</span>
+                                      </button>
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-3">
-                                    <span className={isAccepted ? "review-badge-green" : "review-badge-amber"}>
-                                      {isAccepted ? (
-                                        <>
-                                          <CheckCircle2 size={13} className="text-emerald-400" />
-                                          <span>Authorized by Landowner</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Clock size={13} className="text-amber-400" />
-                                          <span>Awaiting Landowner Approval</span>
-                                        </>
+                                  {/* Dynamic Commercial Indicator Banner */}
+                                  <div className={`commercial-flow-banner ${
+                                    pType === 'Timber Purchase Offer'
+                                      ? 'commercial-flow-banner-purchase'
+                                      : pType === 'Purchase + Harvesting'
+                                        ? 'commercial-flow-banner-hybrid'
+                                        : 'commercial-flow-banner-service'
+                                  }`}>
+                                    <div className="flex items-center gap-3">
+                                      <div className={`commercial-flow-icon ${
+                                        pType === 'Timber Purchase Offer'
+                                          ? 'commercial-flow-icon-purchase'
+                                          : pType === 'Purchase + Harvesting'
+                                            ? 'commercial-flow-icon-hybrid'
+                                            : 'commercial-flow-icon-service'
+                                      }`}>
+                                        {pType === 'Timber Purchase Offer' ? (
+                                          <Coins size={18} />
+                                        ) : pType === 'Purchase + Harvesting' ? (
+                                          <Truck size={18} />
+                                        ) : (
+                                          <Calculator size={18} />
+                                        )}
+                                      </div>
+                                      <div>
+                                        <strong className="block text-xs sm:text-sm font-extrabold text-white">
+                                          {pType === 'Harvesting Service Quotation' && 'Harvesting Service Quotation (Landowner pays Contractor)'}
+                                          {pType === 'Timber Purchase Offer' && 'Timber Purchase Proposal (Contractor pays Landowner)'}
+                                          {pType === 'Purchase + Harvesting' && 'Timber Purchase + Operational Harvesting Agreement'}
+                                        </strong>
+                                        <span className="text-[11.5px] text-slate-300 font-medium block mt-0.5">
+                                          {pType === 'Harvesting Service Quotation' && 'Contractor charges for felling, extraction, and haulage operations.'}
+                                          {pType === 'Timber Purchase Offer' && 'Contractor is offering to purchase standing timber directly from landowner.'}
+                                          {pType === 'Purchase + Harvesting' && 'Contractor purchases standing timber and executes harvesting operations as agreed.'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                      <span className={`commercial-flow-badge ${
+                                        pType === 'Timber Purchase Offer'
+                                          ? 'commercial-flow-badge-purchase'
+                                          : pType === 'Purchase + Harvesting'
+                                            ? 'commercial-flow-badge-hybrid'
+                                            : 'commercial-flow-badge-service'
+                                      }`}>
+                                        {pType}
+                                      </span>
+                                      {isAccepted && (pType === 'Timber Purchase Offer' || pType === 'Purchase + Harvesting') && (
+                                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[11px] border border-emerald-500/40 shrink-0">
+                                          Timber Ownership: CONTRACTOR
+                                        </span>
                                       )}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => window.print()}
-                                      className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
-                                      title="Print Formal Assessment Summary"
-                                    >
-                                      <Printer size={13} />
-                                      <span>Print Summary</span>
-                                    </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="assessment-metrics-grid">
+                                    <div className="assessment-metric-item">
+                                      <span className="assessment-metric-label">
+                                        <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
+                                      </span>
+                                      <strong className="assessment-metric-value-emerald">
+                                        {assessedVolStr} m³
+                                      </strong>
+                                    </div>
+
+                                    {pType === 'Harvesting Service Quotation' && (
+                                      <>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Contractor Quotation
+                                          </span>
+                                          <strong className="assessment-metric-value-amber">
+                                            {formatINR(assDoc.total_quote ?? req.total_quote ?? 110000)}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
+                                          </span>
+                                          <strong className="assessment-metric-value">
+                                            {assDoc.assigned_workers_count || req.assigned_workers_count || 12} Workers
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
+                                          </span>
+                                          <strong className="assessment-metric-value">
+                                            {assDoc.estimated_duration || req.estimated_duration || '10 Working Days'}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
+                                          </span>
+                                          <strong className="assessment-metric-value">
+                                            {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || req.preferred_start_date || '2026-10-02')}
+                                          </strong>
+                                        </div>
+                                      </>
+                                    )}
+
+                                    {pType === 'Timber Purchase Offer' && (
+                                      <>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Coins size={13} className="text-emerald-400 shrink-0" /> Contractor Purchase Offer
+                                          </span>
+                                          <strong className="text-base font-extrabold text-emerald-400">
+                                            {formatINR(assDoc.contractor_purchase_offer ?? req.contractor_purchase_offer ?? 0)}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Coins size={13} className="text-amber-400 shrink-0" /> Ref. Timber Value
+                                          </span>
+                                          <strong className="assessment-metric-value-amber">
+                                            {formatINR(assDoc.reference_timber_value ?? req.reference_timber_value ?? totalJobTimberValue)}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Clock size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
+                                          </span>
+                                          <strong className="assessment-metric-value">
+                                            {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || '2026-11-01')}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <FileText size={13} className="text-slate-400 shrink-0" /> Payment Terms
+                                          </span>
+                                          <strong className="assessment-metric-value truncate" title={assDoc.payment_terms || req.payment_terms || '100% upon felling'}>
+                                            {assDoc.payment_terms || req.payment_terms || 'Full payment on tree marking'}
+                                          </strong>
+                                        </div>
+                                      </>
+                                    )}
+
+                                    {pType === 'Purchase + Harvesting' && (
+                                      <>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Coins size={13} className="text-emerald-400 shrink-0" /> Timber Purchase Price
+                                          </span>
+                                          <strong className="text-base font-extrabold text-emerald-400">
+                                            {formatINR(assDoc.timber_purchase_price ?? req.timber_purchase_price ?? 0)}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Truck size={13} className="text-teal-400 shrink-0" /> Harvesting Arrangement
+                                          </span>
+                                          <strong className="assessment-metric-value truncate" title={assDoc.harvesting_arrangement_cost || req.harvesting_arrangement_cost || 'Included'}>
+                                            {assDoc.harvesting_arrangement_cost || req.harvesting_arrangement_cost || 'Included'}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Clock size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
+                                          </span>
+                                          <strong className="assessment-metric-value">
+                                            {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || '2026-11-01')}
+                                          </strong>
+                                        </div>
+                                        <div className="assessment-metric-item">
+                                          <span className="assessment-metric-label">
+                                            <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
+                                          </span>
+                                          <strong className="assessment-metric-value">
+                                            {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || req.preferred_start_date || '2026-10-02')}
+                                          </strong>
+                                        </div>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
-
-                                <div className="assessment-metrics-grid">
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
-                                    </span>
-                                    <strong className="assessment-metric-value-emerald">
-                                      {(() => {
-                                        const raw = req.assessment?.estimated_harvestable_volume || req.estimated_harvestable_volume || 180.90;
-                                        const num = parseFloat(raw);
-                                        return !isNaN(num) ? `${num.toFixed(2)} m³` : `${raw} m³`;
-                                      })()}
-                                    </strong>
-                                  </div>
-
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
-                                    </span>
-                                    <strong className="assessment-metric-value-amber">
-                                      {formatINR(req.assessment?.total_quote || req.total_quote || 110000)}
-                                    </strong>
-                                  </div>
-
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {req.assessment?.assigned_workers_count || req.assigned_workers_count || req.workers_assigned || 12} Workers
-                                    </strong>
-                                  </div>
-
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {req.assessment?.estimated_duration || req.estimated_duration || '10 Working Days'}
-                                    </strong>
-                                  </div>
-
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(req.assessment?.proposed_start_date || req.proposed_start_date || req.preferred_start_date || '2026-10-02')}
-                                    </strong>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
+                              );
+                            })()}
 
                             {/* ACTION BAR (SUBMIT ASSESSMENT HERE AFTER CHECKING ALL DETAILS) */}
                             <div className="cd-action-bar flex-wrap gap-4 pt-3 border-t border-emerald-500/20">
