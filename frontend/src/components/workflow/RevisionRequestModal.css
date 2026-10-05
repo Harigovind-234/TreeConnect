@@ -1,0 +1,478 @@
+/* ==========================================================================
+   REVISION REQUEST MODAL STYLES (TreeConnect Design System)
+   ========================================================================== */
+
+/* Fullscreen Overlay with blur backdrop */
+.revision-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(3, 8, 5, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow-y: auto;
+  animation: revModalFadeIn 0.22s ease-out;
+}
+
+@keyframes revModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modal Dialog Box */
+.revision-modal-container {
+  width: 100%;
+  max-width: 720px;
+  max-height: 90vh;
+  margin: auto;
+  background: #0c1611;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 24px;
+  padding: 32px 36px;
+  color: #f1f5f9;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(245, 158, 11, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  overflow-y: auto;
+  position: relative;
+  animation: revModalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes revModalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Custom Scrollbar for Modal Container */
+.revision-modal-container::-webkit-scrollbar {
+  width: 6px;
+}
+.revision-modal-container::-webkit-scrollbar-track {
+  background: #09100c;
+  border-radius: 10px;
+}
+.revision-modal-container::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+}
+.revision-modal-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.6);
+}
+
+/* Modal Header Section */
+.revision-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.revision-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.revision-header-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1.5px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(254, 240, 138, 0.15), 0 4px 14px rgba(245, 158, 11, 0.12);
+}
+
+.revision-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.revision-tag-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #fbbf24;
+}
+
+.revision-modal-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.revision-modal-subtitle {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #94a3af;
+  margin: 0;
+}
+
+.revision-modal-subtitle strong {
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.revision-close-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.revision-close-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Contractor Current Submission Reference Banner */
+.revision-current-quote-strip {
+  background: #07100b;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 18px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.revision-strip-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.revision-strip-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .revision-strip-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.revision-stat-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.revision-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: capitalize;
+}
+
+.revision-stat-value {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+.revision-stat-value.highlight-amber {
+  color: #fbbf24;
+}
+
+/* Form Layout */
+.revision-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.revision-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.revision-field-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.revision-field-label .required-star {
+  color: #fbbf24;
+  margin-left: 2px;
+}
+
+.revision-field-hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+/* Revision Category Reason Cards Grid */
+.revision-reasons-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .revision-reasons-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.revision-reason-card {
+  background: #09130d;
+  border: 1.5px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  outline: none;
+}
+
+.revision-reason-card:hover {
+  background: #0f1d15;
+  border-color: rgba(245, 158, 11, 0.4);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.revision-reason-card.is-selected {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(217, 119, 6, 0.08) 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.22), inset 0 1px 0 rgba(254, 240, 138, 0.2);
+}
+
+.revision-reason-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all 0.2s ease;
+}
+
+.revision-reason-card.is-selected .revision-reason-icon {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #030805;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4);
+}
+
+.revision-reason-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.revision-reason-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.revision-reason-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.35;
+}
+
+.revision-reason-card.is-selected .revision-reason-title {
+  color: #fef08a;
+  font-weight: 800;
+}
+
+.revision-reason-check {
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.revision-reason-desc {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.revision-reason-card.is-selected .revision-reason-desc {
+  color: #cbd5e1;
+}
+
+/* Instructions Textarea */
+.revision-textarea {
+  width: 100%;
+  min-height: 110px;
+  padding: 14px 18px;
+  background: #07100b;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  color: #f8fafc;
+  font-size: 13.5px;
+  line-height: 1.6;
+  font-family: inherit;
+  box-sizing: border-box;
+  resize: vertical;
+  transition: all 0.2s ease;
+}
+
+.revision-textarea:focus {
+  outline: none;
+  background: #09140e;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+
+.revision-textarea::placeholder {
+  color: #526372;
+  font-size: 13px;
+}
+
+/* Error Callout */
+.revision-error-banner {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Footer Action Buttons Container */
+.revision-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  margin-top: 6px;
+}
+
+/* Cancel Button */
+.revision-btn-cancel {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #cbd5e1;
+  font-size: 13.5px;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.revision-btn-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.revision-btn-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Submit Action Button (Matches Dashboard Theme) */
+.revision-btn-submit {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #040906;
+  font-size: 13.5px;
+  font-weight: 800;
+  padding: 12px 28px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.35);
+  transition: all 0.2s ease;
+}
+
+.revision-btn-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #000000;
+  box-shadow: 0 6px 24px rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+
+.revision-btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

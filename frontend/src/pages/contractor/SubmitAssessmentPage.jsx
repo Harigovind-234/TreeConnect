@@ -39,7 +39,8 @@ import {
   Users,
   Briefcase,
   Handshake,
-  ShoppingBag
+  ShoppingBag,
+  RefreshCw
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -156,6 +157,7 @@ const SubmitAssessmentPage = () => {
   const { user } = useAuth();
 
   const [requestDetails, setRequestDetails] = useState(null);
+  const [existingAssessmentData, setExistingAssessmentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState({ type: '', text: '' });
@@ -307,6 +309,7 @@ const extractLandownerValue = (req, vol) => {
             if (existingAssessment && (existingAssessment.assessment || existingAssessment.id)) {
               const assData = existingAssessment.assessment || existingAssessment;
               hasExistingAssessment = true;
+              setExistingAssessmentData(assData);
               const cleanExistingDate = assData.proposed_start_date ? String(assData.proposed_start_date).substring(0, 10) : '';
               if (cleanExistingDate) {
                 const initialDateErr = validateProposedDate(cleanExistingDate);
@@ -740,6 +743,10 @@ const extractLandownerValue = (req, vol) => {
 
   const landownerEstimatedVolume = extractLandownerVolume(requestDetails);
   const landownerReferenceTimberValue = extractLandownerValue(requestDetails, landownerEstimatedVolume);
+
+  const isRevisionRequested = requestDetails?.status === 'REVISION_REQUESTED' || existingAssessmentData?.status === 'REVISION_REQUESTED';
+  const revisionReasons = requestDetails?.revision_reasons || existingAssessmentData?.revision_reasons || [];
+  const landownerFeedback = requestDetails?.landowner_feedback || existingAssessmentData?.landowner_feedback || '';
 
   return (
     <div className="contractor-dashboard-page">
@@ -1399,6 +1406,40 @@ const extractLandownerValue = (req, vol) => {
                         <AlertTriangle size={20} className="text-red-400 shrink-0" />
                       )}
                       <span>{feedbackMessage.text}</span>
+                    </div>
+                  )}
+
+                  {/* LANDOWNER REVISION REQUEST CALLOUT BANNER */}
+                  {isRevisionRequested && (
+                    <div className="cd-revision-notice-banner">
+                      <div className="cd-revision-notice-header">
+                        <RefreshCw size={18} className="text-amber-400 shrink-0" />
+                        <span>Landowner Requested Quotation Revision</span>
+                      </div>
+                      <p className="text-xs text-slate-200 leading-relaxed m-0">
+                        The landowner reviewed your initial assessment and requested the following adjustments before authorizing operations:
+                      </p>
+
+                      {Array.isArray(revisionReasons) && revisionReasons.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-slate-400 font-bold">Adjustment Areas:</span>
+                          {revisionReasons.map((reason, idx) => (
+                            <span key={idx} className="cd-revision-notice-pill">
+                              {reason}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {landownerFeedback && (
+                        <div className="cd-revision-notice-quote">
+                          "{landownerFeedback}"
+                        </div>
+                      )}
+
+                      <p className="text-[12px] text-slate-400 m-0">
+                        Please adjust the numbers, schedule, or terms in the form below and click <strong>Submit Revised Assessment & Quotation</strong> to return the updated proposal to the landowner.
+                      </p>
                     </div>
                   )}
 
@@ -2281,11 +2322,15 @@ const extractLandownerValue = (req, vol) => {
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="cd-btn-primary"
+                        className={`cd-btn-primary ${isRevisionRequested ? 'cd-btn-primary-revision' : ''}`}
                       >
                         {isSubmitting ? (
                           <>
                             <Loader2 size={16} className="animate-spin" /> Submitting Proposal...
+                          </>
+                        ) : isRevisionRequested ? (
+                          <>
+                            <RefreshCw size={16} /> Submit Revised Assessment & Quotation
                           </>
                         ) : assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? (
                           <>

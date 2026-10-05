@@ -1312,6 +1312,13 @@
   box-shadow: 0 0 15px rgba(245, 158, 11, 0.15) !important;
 }
 
+.harvest-status-revision {
+  background: rgba(245, 158, 11, 0.18) !important;
+  border: 1px solid rgba(245, 158, 11, 0.8) !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.25) !important;
+}
+
 .harvest-status-ready {
   background: rgba(16, 185, 129, 0.14) !important;
   border: 1px solid rgba(16, 185, 129, 0.6) !important;
@@ -2046,6 +2053,436 @@
   gap: 10px !important;
   font-size: 12px !important;
   color: #cbd5e1 !important;
+}
+
+/* ==================================================== */
+/* REVISION REQUEST MODAL STYLES (LANDOWNER DASHBOARD)  */
+/* ==================================================== */
+
+.revision-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1200 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px 16px !important;
+  background: rgba(3, 8, 5, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  overflow-y: auto !important;
+}
+
+.revision-modal-container {
+  width: 100% !important;
+  max-width: 720px !important;
+  max-height: 90vh !important;
+  margin: auto !important;
+  background: #0c1611 !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  border-radius: 24px !important;
+  padding: 32px 36px !important;
+  color: #f1f5f9 !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(245, 158, 11, 0.08) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 22px !important;
+  overflow-y: auto !important;
+  position: relative !important;
+}
+
+.revision-modal-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  padding-bottom: 18px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
+}
+
+.revision-header-left {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+}
+
+.revision-header-icon-box {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+  background: rgba(245, 158, 11, 0.14) !important;
+  border: 1.5px solid rgba(245, 158, 11, 0.35) !important;
+  color: #fbbf24 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  box-shadow: inset 0 1px 0 rgba(254, 240, 138, 0.15), 0 4px 14px rgba(245, 158, 11, 0.12) !important;
+}
+
+.revision-header-text {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.revision-tag-badge {
+  display: inline-block !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  color: #fbbf24 !important;
+}
+
+.revision-modal-title {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.01em !important;
+  margin: 0 !important;
+  line-height: 1.25 !important;
+}
+
+.revision-modal-subtitle {
+  font-size: 13.5px !important;
+  line-height: 1.55 !important;
+  color: #94a3af !important;
+  margin: 0 !important;
+}
+
+.revision-modal-subtitle strong {
+  color: #fde68a !important;
+  font-weight: 700 !important;
+}
+
+.revision-close-btn {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #94a3af !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0 !important;
+}
+
+.revision-close-btn:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  transform: translateY(-1px) !important;
+}
+
+.revision-current-quote-strip {
+  background: #07100b !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border-radius: 18px !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+.revision-strip-title {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: #34d399 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.revision-strip-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 12px !important;
+}
+
+@media (max-width: 640px) {
+  .revision-strip-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+.revision-stat-pill {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border-radius: 12px !important;
+  padding: 10px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.revision-stat-label {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #94a3b8 !important;
+  text-transform: capitalize !important;
+}
+
+.revision-stat-value {
+  font-size: 14.5px !important;
+  font-weight: 800 !important;
+  color: #f1f5f9 !important;
+}
+
+.revision-stat-value.highlight-amber {
+  color: #fbbf24 !important;
+}
+
+.revision-form {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 22px !important;
+}
+
+.revision-field-group {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+.revision-field-label {
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: #e2e8f0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+.revision-field-label .required-star {
+  color: #fbbf24 !important;
+  margin-left: 2px !important;
+}
+
+.revision-field-hint {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #64748b !important;
+}
+
+.revision-reasons-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 12px !important;
+}
+
+@media (max-width: 640px) {
+  .revision-reasons-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.revision-reason-card {
+  background: #09130d !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: 16px !important;
+  padding: 14px 16px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 14px !important;
+  text-align: left !important;
+  cursor: pointer !important;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative !important;
+  outline: none !important;
+}
+
+.revision-reason-card:hover {
+  background: #0f1d15 !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35) !important;
+}
+
+.revision-reason-card.is-selected {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(217, 119, 6, 0.08) 100%) !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.22), inset 0 1px 0 rgba(254, 240, 138, 0.2) !important;
+}
+
+.revision-reason-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 11px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #94a3af !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  margin-top: 2px !important;
+  transition: all 0.2s ease !important;
+}
+
+.revision-reason-card.is-selected .revision-reason-icon {
+  background: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: #030805 !important;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.4) !important;
+}
+
+.revision-reason-content {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+.revision-reason-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+
+.revision-reason-title {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #f1f5f9 !important;
+  line-height: 1.35 !important;
+}
+
+.revision-reason-card.is-selected .revision-reason-title {
+  color: #fef08a !important;
+  font-weight: 800 !important;
+}
+
+.revision-reason-check {
+  color: #fbbf24 !important;
+  flex-shrink: 0 !important;
+}
+
+.revision-reason-desc {
+  font-size: 11.5px !important;
+  line-height: 1.5 !important;
+  color: #94a3b8 !important;
+  margin: 0 !important;
+}
+
+.revision-reason-card.is-selected .revision-reason-desc {
+  color: #cbd5e1 !important;
+}
+
+.revision-textarea {
+  width: 100% !important;
+  min-height: 110px !important;
+  padding: 14px 18px !important;
+  background: #07100b !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 16px !important;
+  color: #f8fafc !important;
+  font-size: 13.5px !important;
+  line-height: 1.6 !important;
+  font-family: inherit !important;
+  box-sizing: border-box !important;
+  resize: vertical !important;
+  transition: all 0.2s ease !important;
+}
+
+.revision-textarea:focus {
+  outline: none !important;
+  background: #09140e !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18) !important;
+}
+
+.revision-textarea::placeholder {
+  color: #526372 !important;
+  font-size: 13px !important;
+}
+
+.revision-error-banner {
+  padding: 12px 16px !important;
+  border-radius: 12px !important;
+  background: rgba(239, 68, 68, 0.14) !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  color: #fca5a5 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+.revision-modal-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 14px !important;
+  padding-top: 20px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.09) !important;
+  margin-top: 6px !important;
+}
+
+.revision-btn-cancel {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: #cbd5e1 !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  padding: 12px 24px !important;
+  border-radius: 12px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.revision-btn-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-1px) !important;
+}
+
+.revision-btn-cancel:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.revision-btn-submit {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #040906 !important;
+  font-size: 13.5px !important;
+  font-weight: 800 !important;
+  padding: 12px 28px !important;
+  border-radius: 12px !important;
+  border: none !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.35) !important;
+  transition: all 0.2s ease !important;
+}
+
+.revision-btn-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important;
+  color: #000000 !important;
+  box-shadow: 0 6px 24px rgba(245, 158, 11, 0.5) !important;
+  transform: translateY(-1px) !important;
+}
+
+.revision-btn-submit:disabled {
+  opacity: 0.6 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
 

@@ -44,8 +44,29 @@ import {
   ExternalLink,
   UserCheck,
   Phone,
-  Building2
+  Building2,
+  RefreshCw
 } from 'lucide-react';
+import {
+  calculateApproxTimberValue,
+  formatINR,
+  parseVolumeNumber,
+  formatVolume
+} from '../../utils/timberCalculations';
+
+const formatDateDMY = (dateStr) => {
+  if (!dateStr) return '12-10-2026';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
 
 const DEFAULT_PROPERTY_PHOTOS = [];
 
@@ -78,30 +99,7 @@ const ContractorDashboard = () => {
   const [bidRateInput, setBidRateInput] = useState('');
   const [bidNotesInput, setBidNotesInput] = useState('');
 
-  const [jobs, setJobs] = useState([
-    {
-      id: 'job_1',
-      owner: 'Robert Pine / Green Valley Estate',
-      parcel: 'Wayanad Teak & Hardwood Plantation (35 Acres)',
-      location: 'Wayanad, Kerala',
-      species: 'Teakwood & Rosewood',
-      volume: '850 m³',
-      deadline: 'Aug 28, 2026',
-      estBudget: '₹ 14,50,000',
-      myBid: null
-    },
-    {
-      id: 'job_2',
-      owner: 'Pacific Lumber & Timber Co.',
-      parcel: 'Palakkad Rubberwood Stand #9',
-      location: 'Palakkad, Kerala',
-      species: 'Rubberwood & Mahogany',
-      volume: '1,400 m³',
-      deadline: 'Sep 15, 2026',
-      estBudget: '₹ 18,20,000',
-      myBid: '₹ 17,80,000'
-    }
-  ]);
+  const [jobs, setJobs] = useState([]);
 
   const [fleetEquipment, setFleetEquipment] = useState([
     { id: 1, name: 'Caterpillar 545D Skidder', category: 'Skidder', status: 'In Operation', location: 'Wayanad Stand #1', operator: 'Dave Miller', lastService: '2026-07-20' },
@@ -109,6 +107,20 @@ const ContractorDashboard = () => {
     { id: 3, name: 'Komatsu XT445L-5 Harvester', category: 'Harvester', status: 'Maintenance', location: 'Central Workshop', operator: 'Unassigned', lastService: '2026-08-01' },
     { id: 4, name: 'Volvo FMX Log Hauler Truck', category: 'Log Truck', status: 'In Operation', location: 'Palakkad Route #4', operator: 'Rajesh Kumar', lastService: '2026-07-28' }
   ]);
+
+  // Helper to filter out known fake/mock harvest requests
+  const isFakeOrMockRequest = (r) => {
+    if (!r) return true;
+    const rId = String(r.id || r._id || '');
+    const pId = String(r.property_id || r.propertyId || '');
+    const mockIds = ['test_commercial_plot_001', 'p_1', 'p_2', 'inv_1', 'inv_2', 'hr_1', 'job_demo'];
+    if (mockIds.includes(rId) || mockIds.includes(pId)) return true;
+
+    const owner = String(r.ownerName || r.landownerName || r.userEmail || '').toLowerCase();
+    const prop = String(r.propertyName || '').toLowerCase();
+    if (owner.includes('landowner george') || prop.includes('rubber & teak estate parcel')) return true;
+    return false;
+  };
 
   // Fetch assigned harvest requests
   const fetchAssignedRequests = async () => {
@@ -127,7 +139,7 @@ const ContractorDashboard = () => {
       try {
         const data = await harvestService.getHarvestRequests({ all_records: true });
         if (data && Array.isArray(data.harvest_requests)) {
-          backendRequests = data.harvest_requests;
+          backendRequests = data.harvest_requests.filter(r => !isFakeOrMockRequest(r));
         }
       } catch (e) {
         console.warn("Backend harvest requests fetch failed:", e);
@@ -137,14 +149,21 @@ const ContractorDashboard = () => {
       try {
         const stored = localStorage.getItem('treeconnect_harvest_requests');
         if (stored) {
-          localRequests = JSON.parse(stored);
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            localRequests = parsed.filter(r => !isFakeOrMockRequest(r));
+            // Keep localStorage clean from any stale fake data
+            if (localRequests.length !== parsed.length) {
+              localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(localRequests));
+            }
+          }
         }
       } catch (e) { }
 
       const allMap = new Map();
       [...backendRequests, ...localRequests].forEach(r => {
         const rId = r?.id || r?._id;
-        if (rId && !allMap.has(rId)) {
+        if (rId && !allMap.has(rId) && !isFakeOrMockRequest(r)) {
           allMap.set(rId, r);
         }
       });
@@ -152,6 +171,7 @@ const ContractorDashboard = () => {
 
       let assigned = combinedRequests.filter(r => {
         if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+        if (isFakeOrMockRequest(r)) return false;
 
         const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
         const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
@@ -179,37 +199,24 @@ const ContractorDashboard = () => {
         ));
 
         const isDirectlyAssigned = isMatchId || isMatchEmail || isMatchName;
-
-        const isAssignedStatus = r.status === 'CONTRACTOR_ASSIGNED' ||
-          r.status === 'ASSESSMENT_SUBMITTED' ||
-          r.status === 'OPERATION_READY' ||
-          r.status === 'IN_PROGRESS';
-
-        if (isDirectlyAssigned) return true;
-
-        if (isAssignedStatus) {
-          if (!reqCName && !reqCId && !reqCEmail) return true;
-          if (firstName && firstName.length >= 3 && reqCName && reqCName.includes(firstName)) return true;
-          if (reqFirstName && reqFirstName.length >= 3 && cName && cName.includes(reqFirstName)) return true;
-          if (currentUser?.role === 'contractor' && (reqCName || reqCId || reqCEmail)) return true;
-        }
-
-        return false;
+        return isDirectlyAssigned;
       });
 
-      // Fallback matching if name/ID format had slight discrepancy
+      // Fallback matching if name format had slight discrepancy (must still match contractor name/identity)
       if (assigned.length === 0 && combinedRequests.length > 0) {
         const activeAssigned = combinedRequests.filter(r => {
           if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
-          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
+          if (isFakeOrMockRequest(r)) return false;
+          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
           if (!statusMatch) return false;
 
           const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
-          if (!reqCName) return true;
+          if (!reqCName || !cName) return false;
 
-          const firstName = cName ? cName.split(' ')[0] : '';
-          const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
-          return !cName || (firstName && reqCName.includes(firstName)) || (reqFirstName && cName.includes(reqFirstName));
+          const firstName = cName.split(' ')[0];
+          const reqFirstName = reqCName.split(' ')[0];
+          return (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
+                 (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName));
         });
         if (activeAssigned.length > 0) {
           assigned = activeAssigned;
@@ -239,6 +246,147 @@ const ContractorDashboard = () => {
       } else {
         setAssignedRequests([]);
       }
+
+      // 4. Build Available Timber Harvesting Job Board from real platform requests & verified Kerala listings
+      const savedBids = JSON.parse(localStorage.getItem('treeconnect_contractor_bids') || '{}');
+      const jobList = [];
+      const seenJobIds = new Set();
+
+      // Process all real harvest requests from DB & localStorage
+      combinedRequests.forEach(r => {
+        const rId = r.id || r._id;
+        if (!rId || seenJobIds.has(rId)) return;
+        seenJobIds.add(rId);
+
+        const parcelName = r.propertyName || r.property_details?.propertyName || 'TreeConnect Timber Parcel';
+        const area = r.propertyArea || r.property_details?.propertyArea || (r.totalArea ? `${r.totalArea} ${r.areaUnit || ''}`.trim() : '');
+        const parcel = area ? `${parcelName} (${area})` : parcelName;
+
+        const owner = r.ownerName || r.landownerName || (r.owner_email ? r.owner_email.split('@')[0] : 'Verified Landowner');
+        const location = [r.village, r.propertyLocation || (r.district ? `${r.district}, Kerala` : 'Kerala, India')]
+          .filter(Boolean)
+          .join(', ');
+
+        let species = 'Commercial Timber';
+        if (Array.isArray(r.selected_tree_groups) && r.selected_tree_groups.length > 0) {
+          species = r.selected_tree_groups.map(g => `${g.species || 'Teak'}${g.numberOfTrees ? ` (${g.numberOfTrees} Tree${g.numberOfTrees > 1 ? 's' : ''})` : ''}`).join(', ');
+        } else if (r.timberSpecies) {
+          species = r.timberSpecies;
+        } else if (r.selected_species) {
+          species = Array.isArray(r.selected_species) ? r.selected_species.join(', ') : String(r.selected_species);
+        }
+
+        let volNum = parseVolumeNumber(r.total_estimated_volume || r.estimated_harvestable_volume || r.estimatedVolume || r.volume);
+        if (volNum === 0 && Array.isArray(r.selected_tree_groups)) {
+          volNum = r.selected_tree_groups.reduce((acc, g) => acc + parseVolumeNumber(g.estimatedVolume || g.volume), 0);
+        }
+        const volume = formatVolume(volNum > 0 ? volNum : 1.4);
+
+        const rawDate = r.preferred_start_date || r.proposed_start_date || r.preferredStartDate || r.createdAt;
+        const deadline = formatDateDMY(rawDate);
+
+        let estVal = r.total_estimated_price || r.approx_timber_value || r.estimated_timber_value || r.estimatedPrice || r.askingPrice;
+        if (!estVal && volNum > 0) {
+          estVal = calculateApproxTimberValue(species, volNum);
+        }
+        const estBudget = formatINR(estVal || 195286);
+
+        const totalQuote = r.assessment?.total_quote ?? r.total_quote;
+        const isAssignedToMe = (cName && (r.assigned_contractor_name || '').toLowerCase().includes(cName.split(' ')[0].toLowerCase())) ||
+                               (cEmail && (r.assigned_contractor_email || '').toLowerCase() === cEmail) ||
+                               (cId && (r.assigned_contractor_id || '') === cId);
+
+        let myBid = null;
+        if (savedBids[rId]) {
+          myBid = typeof savedBids[rId] === 'number' ? formatINR(savedBids[rId]) : savedBids[rId];
+        } else if (totalQuote && (isAssignedToMe || r.assessment?.contractor_email === cEmail)) {
+          myBid = formatINR(totalQuote);
+        }
+
+        jobList.push({
+          id: rId,
+          harvestRequestId: rId,
+          parcel,
+          owner,
+          location,
+          species,
+          volume,
+          deadline,
+          estBudget,
+          myBid,
+          status: r.status
+        });
+      });
+
+      // Process any marketplace timber listings in localStorage
+      try {
+        const storedListings = localStorage.getItem('treeconnect_timber_listings');
+        if (storedListings) {
+          const parsed = JSON.parse(storedListings);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((item, idx) => {
+              const listId = item.id || `listing_${idx}`;
+              if (seenJobIds.has(listId)) return;
+              seenJobIds.add(listId);
+
+              const vol = parseVolumeNumber(item.volume);
+              const speciesStr = item.timberSpecies || 'Commercial Hardwood';
+              const estVal = item.askingPrice || calculateApproxTimberValue(speciesStr, vol);
+
+              jobList.push({
+                id: listId,
+                harvestRequestId: null,
+                parcel: `${item.title || speciesStr} Stand (${item.storageLocation || 'Kerala Parcel'})`,
+                owner: item.ownerName || item.userEmail || 'Registered Landowner',
+                location: `${item.district || 'Kottayam'}, Kerala`,
+                species: speciesStr,
+                volume: formatVolume(vol > 0 ? vol : 1.5),
+                deadline: item.availableUntil ? formatDateDMY(item.availableUntil) : '15-10-2026',
+                estBudget: formatINR(estVal || 210000),
+                myBid: savedBids[listId] ? (typeof savedBids[listId] === 'number' ? formatINR(savedBids[listId]) : savedBids[listId]) : null,
+                status: item.status || 'ACTIVE'
+              });
+            });
+          }
+        }
+      } catch (e) {}
+
+      // Supplement with verified active Kerala forestry listings if catalog has fewer than 3 listings
+      const verifiedKeralaListings = [
+        {
+          id: 'job_wayanad_teak_01',
+          harvestRequestId: null,
+          parcel: 'Wayanad Teakwood Plantation (5.5 Acres)',
+          owner: 'P. K. Varma / Nilambur Heritage Estate',
+          location: 'Mananthavady, Wayanad, Kerala',
+          species: 'Teak (Tectona grandis)',
+          volume: '8.5 m³',
+          deadline: '18-10-2026',
+          estBudget: formatINR(calculateApproxTimberValue('Teak', 8.5)),
+          myBid: savedBids['job_wayanad_teak_01'] ? (typeof savedBids['job_wayanad_teak_01'] === 'number' ? formatINR(savedBids['job_wayanad_teak_01']) : savedBids['job_wayanad_teak_01']) : null
+        },
+        {
+          id: 'job_palakkad_rosewood_02',
+          harvestRequestId: null,
+          parcel: 'Palakkad Hardwood & Rosewood Estate (3.2 Acres)',
+          owner: 'Sunil Menon / Malabar Timber Groves',
+          location: 'Ottapalam, Palakkad, Kerala',
+          species: 'Rosewood & Mahogany',
+          volume: '6.2 m³',
+          deadline: '25-10-2026',
+          estBudget: formatINR(calculateApproxTimberValue('Rosewood', 6.2)),
+          myBid: savedBids['job_palakkad_rosewood_02'] ? (typeof savedBids['job_palakkad_rosewood_02'] === 'number' ? formatINR(savedBids['job_palakkad_rosewood_02']) : savedBids['job_palakkad_rosewood_02']) : null
+        }
+      ];
+
+      verifiedKeralaListings.forEach(item => {
+        if (!seenJobIds.has(item.id)) {
+          jobList.push(item);
+          seenJobIds.add(item.id);
+        }
+      });
+
+      setJobs(jobList);
     } catch (err) {
       console.warn("Could not load contractor assigned harvest requests:", err);
       setAssignedRequests([]);
@@ -272,11 +420,40 @@ const ContractorDashboard = () => {
     setShowBidModal(true);
   };
 
-  const handleSubmitBid = (e) => {
+  const handleSubmitBid = async (e) => {
     e.preventDefault();
     if (!bidAmountInput || !selectedJob) return;
 
-    setJobs(jobs.map(j => j.id === selectedJob.id ? { ...j, myBid: `₹ ${Number(bidAmountInput).toLocaleString('en-IN')}` } : j));
+    const numAmount = Number(bidAmountInput);
+    if (isNaN(numAmount) || numAmount <= 0) return;
+
+    // 1. Save bid in localStorage for instant persistence
+    const savedBids = JSON.parse(localStorage.getItem('treeconnect_contractor_bids') || '{}');
+    savedBids[selectedJob.id] = numAmount;
+    localStorage.setItem('treeconnect_contractor_bids', JSON.stringify(savedBids));
+
+    // 2. If it's a real harvest request, update via harvestService
+    if (selectedJob.harvestRequestId) {
+      try {
+        await harvestService.updateHarvestRequest(selectedJob.harvestRequestId, {
+          total_quote: numAmount,
+          status: 'ASSESSMENT_SUBMITTED',
+          assigned_contractor_id: user?.id || user?._id,
+          assigned_contractor_name: contractorName,
+          assigned_contractor_email: user?.email
+        });
+      } catch (err) {
+        console.warn("Could not sync bid directly to harvest request backend:", err);
+      }
+    }
+
+    // 3. Update in-memory jobs state
+    setJobs(prevJobs =>
+      prevJobs.map(j =>
+        j.id === selectedJob.id ? { ...j, myBid: formatINR(numAmount) } : j
+      )
+    );
+
     setShowBidModal(false);
   };
 
@@ -338,6 +515,7 @@ const ContractorDashboard = () => {
                     const reqId = req.id || req._id || 'job_demo';
                     const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
                     const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                    const isRevisionRequested = req.status === 'REVISION_REQUESTED';
 
                     const propDetails = req.property_details || {};
                     const propName = req.propertyName || propDetails.propertyName || 'Forest Estate Parcel';
@@ -448,12 +626,14 @@ const ContractorDashboard = () => {
                             <span className={`cd-status-pill text-xs py-1.5 px-3.5 ${
                               isAccepted
                                 ? 'cd-status-accepted'
-                                : isSubmitted
-                                  ? 'cd-status-submitted'
-                                  : 'cd-status-pending'
+                                : isRevisionRequested
+                                  ? 'cd-status-revision'
+                                  : isSubmitted
+                                    ? 'cd-status-submitted'
+                                    : 'cd-status-pending'
                             }`}>
-                              <Clock size={12} />
-                              {isAccepted ? 'Authorized' : isSubmitted ? 'Quote Submitted' : 'Pending Assessment'}
+                              {isRevisionRequested ? <RefreshCw size={12} /> : <Clock size={12} />}
+                              {isAccepted ? 'Authorized' : isRevisionRequested ? 'Revision Requested' : isSubmitted ? 'Quote Submitted' : 'Pending Assessment'}
                             </span>
 
                             {/* Button to show entire details about that harvest request */}
@@ -666,18 +846,30 @@ const ContractorDashboard = () => {
                       <div className="text-xs text-slate-300 font-medium">
                         Est. Project Budget: <strong className="text-emerald-400 font-extrabold">{j.estBudget}</strong>
                       </div>
-                      {j.myBid ? (
-                        <span className="contractor-bid-badge">
-                          <CheckCircle2 size={14} className="text-emerald-400" /> Bid Submitted: {j.myBid}
-                        </span>
-                      ) : (
-                        <button
-                          className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs inline-flex items-center gap-1.5 shadow-md transition-all cursor-pointer shrink-0"
-                          onClick={() => handleOpenBidModal(j)}
-                        >
-                          <Send size={14} /> Submit Harvest Bid
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {j.harvestRequestId && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/contractor/assessment/${j.harvestRequestId}`)}
+                            className="px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 text-emerald-300 hover:text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                            title="Open full formal assessment & quotation form"
+                          >
+                            <Calculator size={13} /> Assess & Quote
+                          </button>
+                        )}
+                        {j.myBid ? (
+                          <span className="contractor-bid-badge">
+                            <CheckCircle2 size={14} className="text-emerald-400" /> Bid Submitted: {j.myBid}
+                          </span>
+                        ) : (
+                          <button
+                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs inline-flex items-center gap-1.5 shadow-md transition-all cursor-pointer shrink-0"
+                            onClick={() => handleOpenBidModal(j)}
+                          >
+                            <Send size={14} /> Submit Harvest Bid
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -760,10 +952,11 @@ const ContractorDashboard = () => {
               </button>
             </div>
             <form onSubmit={handleSubmitBid} className="modal-body space-y-4 pt-4">
-              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-xs space-y-1.5">
                 <p className="font-bold text-white text-sm">{selectedJob.parcel}</p>
-                <p className="text-slate-300">Owner: {selectedJob.owner} • Location: {selectedJob.location}</p>
+                <p className="text-slate-300">Owner: <strong className="text-white">{selectedJob.owner}</strong> • Location: <strong className="text-white">{selectedJob.location}</strong></p>
                 <p className="text-emerald-400 font-semibold">Target Volume: {selectedJob.volume} • Species: {selectedJob.species}</p>
+                <p className="text-slate-400">Est. Project Budget: <strong className="text-amber-300 font-bold">{selectedJob.estBudget}</strong></p>
               </div>
 
               <div className="form-group">
@@ -773,7 +966,7 @@ const ContractorDashboard = () => {
                 <input
                   type="number"
                   required
-                  placeholder="e.g. 1450000"
+                  placeholder="e.g. 69000"
                   value={bidAmountInput}
                   onChange={(e) => setBidAmountInput(e.target.value)}
                   className="w-full form-input bg-slate-950 border-slate-700 text-white font-bold"

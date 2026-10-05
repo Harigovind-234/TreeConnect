@@ -6,12 +6,15 @@ import { useAuth } from './AuthContext';
 const LandownerContext = createContext();
 
 // Mock IDs to filter out so dummy data is completely removed
-const MOCK_IDS = ['p_1', 'p_2', 'inv_1', 'inv_2', 'h_op_1', 'h_op_2', 'hr_1', 'tl_1', 'sp_1', 'sp_2'];
+const MOCK_IDS = ['p_1', 'p_2', 'inv_1', 'inv_2', 'h_op_1', 'h_op_2', 'hr_1', 'tl_1', 'sp_1', 'sp_2', 'test_commercial_plot_001'];
 const filterOutMockData = (list) => {
     if (!Array.isArray(list)) return [];
     return list.filter(item => {
         if (!item) return false;
-        if (MOCK_IDS.includes(item.id) || MOCK_IDS.includes(item._id)) return false;
+        if (MOCK_IDS.includes(item.id) || MOCK_IDS.includes(item._id) || MOCK_IDS.includes(item.property_id)) return false;
+        const owner = String(item.ownerName || item.landownerName || item.userEmail || '').toLowerCase();
+        const prop = String(item.propertyName || '').toLowerCase();
+        if (owner.includes('landowner george') || prop.includes('rubber & teak estate parcel')) return false;
         return true;
     });
 };

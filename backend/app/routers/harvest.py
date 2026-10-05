@@ -91,6 +91,7 @@ class ContractorAssessmentCreate(BaseModel):
 class AssessmentStatusUpdate(BaseModel):
     status: str  # ACCEPTED, REJECTED, REVISION_REQUESTED
     feedback: Optional[str] = ""
+    revision_reasons: Optional[List[str]] = []
 
 class HarvestCompletionCreate(BaseModel):
     actual_harvested_volume: float
@@ -809,6 +810,8 @@ def submit_contractor_assessment(
             "estimated_harvestable_volume": payload.estimated_harvestable_volume,
             "estimated_timber_value": payload.estimated_timber_value or 0.0,
             "notes": payload.notes or "",
+            "landowner_feedback": "",
+            "revision_reasons": [],
             "updatedAt": created_at
         }
         if prop_type == "Harvesting Service Quotation":
@@ -929,6 +932,7 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
             {"$set": {
                 "status": new_status,
                 "landowner_feedback": payload.feedback or "",
+                "revision_reasons": payload.revision_reasons or [],
                 "updatedAt": updated_at
             }}
         )
@@ -940,6 +944,8 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
 
         req_update = {
             "status": req_status,
+            "landowner_feedback": payload.feedback or "",
+            "revision_reasons": payload.revision_reasons or [],
             "updatedAt": updated_at
         }
 

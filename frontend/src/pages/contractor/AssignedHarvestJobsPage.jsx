@@ -38,7 +38,8 @@ import {
   Coins,
   DollarSign,
   Printer,
-  Users
+  Users,
+  RefreshCw
 } from 'lucide-react';
 import { calculateApproxTimberValue, formatINR, parseVolumeNumber, formatVolume, TIMBER_VALUE_DISCLAIMER } from '../../utils/timberCalculations';
 
@@ -214,6 +215,20 @@ const AssignedHarvestJobsPage = () => {
     setActivePhotoModal({ photos: validPhotos, index, title });
   };
 
+  // Helper to filter out known fake/mock harvest requests
+  const isFakeOrMockRequest = (r) => {
+    if (!r) return true;
+    const rId = String(r.id || r._id || '');
+    const pId = String(r.property_id || r.propertyId || '');
+    const mockIds = ['test_commercial_plot_001', 'p_1', 'p_2', 'inv_1', 'inv_2', 'hr_1', 'job_demo'];
+    if (mockIds.includes(rId) || mockIds.includes(pId)) return true;
+
+    const owner = String(r.ownerName || r.landownerName || r.userEmail || '').toLowerCase();
+    const prop = String(r.propertyName || '').toLowerCase();
+    if (owner.includes('landowner george') || prop.includes('rubber & teak estate parcel')) return true;
+    return false;
+  };
+
   // Fetch assigned harvest requests
   const fetchAssignedRequests = async () => {
     setLoadingRequests(true);
@@ -231,7 +246,7 @@ const AssignedHarvestJobsPage = () => {
       try {
         const data = await harvestService.getHarvestRequests({ all_records: true });
         if (data && Array.isArray(data.harvest_requests)) {
-          backendRequests = data.harvest_requests;
+          backendRequests = data.harvest_requests.filter(r => !isFakeOrMockRequest(r));
         }
       } catch (e) {
         console.warn("Backend harvest requests fetch failed:", e);
@@ -241,14 +256,21 @@ const AssignedHarvestJobsPage = () => {
       try {
         const stored = localStorage.getItem('treeconnect_harvest_requests');
         if (stored) {
-          localRequests = JSON.parse(stored);
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            localRequests = parsed.filter(r => !isFakeOrMockRequest(r));
+            // Keep localStorage clean from any stale fake data
+            if (localRequests.length !== parsed.length) {
+              localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(localRequests));
+            }
+          }
         }
       } catch (e) { }
 
       const allMap = new Map();
       [...backendRequests, ...localRequests].forEach(r => {
         const rId = r?.id || r?._id;
-        if (rId && !allMap.has(rId)) {
+        if (rId && !allMap.has(rId) && !isFakeOrMockRequest(r)) {
           allMap.set(rId, r);
         }
       });
@@ -256,6 +278,7 @@ const AssignedHarvestJobsPage = () => {
 
       let assigned = combinedRequests.filter(r => {
         if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+        if (isFakeOrMockRequest(r)) return false;
 
         const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
         const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
@@ -283,37 +306,24 @@ const AssignedHarvestJobsPage = () => {
         ));
 
         const isDirectlyAssigned = isMatchId || isMatchEmail || isMatchName;
-
-        const isAssignedStatus = r.status === 'CONTRACTOR_ASSIGNED' ||
-          r.status === 'ASSESSMENT_SUBMITTED' ||
-          r.status === 'OPERATION_READY' ||
-          r.status === 'IN_PROGRESS';
-
-        if (isDirectlyAssigned) return true;
-
-        if (isAssignedStatus) {
-          if (!reqCName && !reqCId && !reqCEmail) return true;
-          if (firstName && firstName.length >= 3 && reqCName && reqCName.includes(firstName)) return true;
-          if (reqFirstName && reqFirstName.length >= 3 && cName && cName.includes(reqFirstName)) return true;
-          if (currentUser?.role === 'contractor' && (reqCName || reqCId || reqCEmail)) return true;
-        }
-
-        return false;
+        return isDirectlyAssigned;
       });
 
-      // Fallback matching if name/ID format had slight discrepancy
+      // Fallback matching if name format had slight discrepancy (must still match contractor name/identity)
       if (assigned.length === 0 && combinedRequests.length > 0) {
         const activeAssigned = combinedRequests.filter(r => {
           if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
-          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
+          if (isFakeOrMockRequest(r)) return false;
+          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
           if (!statusMatch) return false;
 
           const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
-          if (!reqCName) return true;
+          if (!reqCName || !cName) return false;
 
-          const firstName = cName ? cName.split(' ')[0] : '';
-          const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
-          return !cName || (firstName && reqCName.includes(firstName)) || (reqFirstName && cName.includes(reqFirstName));
+          const firstName = cName.split(' ')[0];
+          const reqFirstName = reqCName.split(' ')[0];
+          return (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
+                 (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName));
         });
         if (activeAssigned.length > 0) {
           assigned = activeAssigned;
@@ -357,17 +367,20 @@ const AssignedHarvestJobsPage = () => {
 
     const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
     const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
-    const isPending = !isSubmitted && !isAccepted;
+    const isRevisionRequested = req.status === 'REVISION_REQUESTED';
+    const isPending = !isSubmitted && !isAccepted && !isRevisionRequested;
 
     let matchesStatus = true;
     if (statusFilter === 'PENDING') matchesStatus = isPending;
     if (statusFilter === 'SUBMITTED') matchesStatus = isSubmitted;
+    if (statusFilter === 'REVISION') matchesStatus = isRevisionRequested;
     if (statusFilter === 'AUTHORIZED') matchesStatus = isAccepted;
 
     return matchesSearch && matchesStatus;
   });
 
-  const pendingCount = assignedRequests.filter(r => r.status !== 'ASSESSMENT_SUBMITTED' && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED').length;
+  const pendingCount = assignedRequests.filter(r => r.status !== 'ASSESSMENT_SUBMITTED' && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED' && r.status !== 'REVISION_REQUESTED').length;
+  const revisionCount = assignedRequests.filter(r => r.status === 'REVISION_REQUESTED').length;
   const submittedCount = assignedRequests.filter(r => r.status === 'ASSESSMENT_SUBMITTED').length;
   const authorizedCount = assignedRequests.filter(r => r.status === 'OPERATION_READY' || r.status === 'ACCEPTED').length;
 
@@ -475,6 +488,16 @@ const AssignedHarvestJobsPage = () => {
                   Pending Assessment ({pendingCount})
                 </button>
 
+                {revisionCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('REVISION')}
+                    className={`cd-filter-tab ${statusFilter === 'REVISION' ? 'active-submitted border-amber-500/50 text-amber-300' : ''}`}
+                  >
+                    Revisions Needed ({revisionCount})
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setStatusFilter('SUBMITTED')}
@@ -524,6 +547,7 @@ const AssignedHarvestJobsPage = () => {
                   const reqId = req.id || req._id || 'job_demo';
                   const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
                   const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                  const isRevisionRequested = req.status === 'REVISION_REQUESTED';
 
                   // Format schedule dates cleanly
                   const startDate = req.preferred_start_date || req.preferredStartDate;
@@ -731,14 +755,21 @@ const AssignedHarvestJobsPage = () => {
                             <span className={`cd-status-pill ${
                               isAccepted
                                 ? 'cd-status-accepted'
-                                : isSubmitted
-                                  ? 'cd-status-submitted'
-                                  : 'cd-status-pending'
+                                : isRevisionRequested
+                                  ? 'cd-status-revision'
+                                  : isSubmitted
+                                    ? 'cd-status-submitted'
+                                    : 'cd-status-pending'
                             }`}>
                               {isAccepted ? (
                                 <>
                                   <CheckCircle2 size={14} className="text-emerald-400" />
                                   <span>Operation Authorized</span>
+                                </>
+                              ) : isRevisionRequested ? (
+                                <>
+                                  <RefreshCw size={14} className="text-amber-400" />
+                                  <span>Revision Requested</span>
                                 </>
                               ) : isSubmitted ? (
                                 <>
@@ -782,13 +813,38 @@ const AssignedHarvestJobsPage = () => {
                             <button
                               type="button"
                               onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                              className="cd-btn-assess-cta"
+                              className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''}`}
                             >
-                              <Calculator size={14} />
-                              <span>{isSubmitted ? 'Edit Quote' : 'Assess & Quote'}</span>
+                              {isRevisionRequested ? <RefreshCw size={14} /> : <Calculator size={14} />}
+                              <span>{isRevisionRequested ? 'Revise & Resubmit Quote' : isSubmitted ? 'Edit Quote' : 'Assess & Quote'}</span>
                             </button>
                           </div>
                         </div>
+
+                        {/* LANDOWNER REVISION REQUEST NOTICE BANNER */}
+                        {isRevisionRequested && (
+                          <div className="cd-revision-notice-banner">
+                            <div className="cd-revision-notice-header">
+                              <AlertTriangle size={17} className="text-amber-400 shrink-0" />
+                              <span>Landowner requested adjustments to your quotation</span>
+                            </div>
+                            {Array.isArray(req.revision_reasons || req.assessment?.revision_reasons) && (req.revision_reasons || req.assessment?.revision_reasons).length > 0 && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-slate-400 font-bold">Specified adjustments:</span>
+                                {(req.revision_reasons || req.assessment?.revision_reasons).map((reason, idx) => (
+                                  <span key={idx} className="cd-revision-notice-pill">
+                                    {reason}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {(req.landowner_feedback || req.assessment?.landowner_feedback) && (
+                              <div className="cd-revision-notice-quote">
+                                "{req.landowner_feedback || req.assessment?.landowner_feedback}"
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* QUICK HIGHLIGHTS STRIP (VISIBLE WHEN COLLAPSED) */}
                         {!isExpanded && (

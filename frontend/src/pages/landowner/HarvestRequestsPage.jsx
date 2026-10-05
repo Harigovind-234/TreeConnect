@@ -4,6 +4,7 @@ import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useLandowner } from '../../context/LandownerContext';
 import ApprovedContractorSelector from '../../components/workflow/ApprovedContractorSelector';
+import RevisionRequestModal from '../../components/workflow/RevisionRequestModal';
 import harvestService from '../../services/harvestService';
 import './LandownerDashboard.css';
 import {
@@ -104,6 +105,7 @@ const HarvestRequestsPage = () => {
   const deleteHarvestRequest = landownerCtx.deleteHarvestRequest || (() => { });
 
   const [selectedRequestForContractor, setSelectedRequestForContractor] = useState(null);
+  const [revisionModalReq, setRevisionModalReq] = useState(null);
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [loadingAssessments, setLoadingAssessments] = useState({});
   const [actionMessage, setActionMessage] = useState('');
@@ -159,15 +161,31 @@ const HarvestRequestsPage = () => {
   }, [harvestRequests]);
 
   // Handle Landowner Action on Assessment (Accept, Reject, Request Revision)
-  const handleAssessmentAction = async (requestId, action, feedbackStr = '') => {
+  const handleAssessmentAction = async (requestId, action, feedbackStr = '', revisionReasons = []) => {
     try {
       await harvestService.actionAssessment(requestId, {
         status: action,
-        feedback: feedbackStr
+        feedback: feedbackStr,
+        revision_reasons: revisionReasons
       });
 
-      setActionMessage(`Assessment action '${action}' recorded successfully.`);
-      setTimeout(() => setActionMessage(''), 3000);
+      // Instantly update activeAssessmentMap in local state
+      setActiveAssessmentMap(prev => ({
+        ...prev,
+        [requestId]: {
+          ...(prev[requestId] || {}),
+          status: action,
+          landowner_feedback: feedbackStr,
+          revision_reasons: revisionReasons
+        }
+      }));
+
+      setActionMessage(
+        action === 'REVISION_REQUESTED'
+          ? "Revision request with your specifications sent to contractor successfully."
+          : `Assessment action '${action}' recorded successfully.`
+      );
+      setTimeout(() => setActionMessage(''), 4000);
 
       // Refresh requests list
       refreshHarvestRequests();
@@ -265,6 +283,7 @@ const HarvestRequestsPage = () => {
                   const isAssigned = Boolean(req.assigned_contractor_id || req.assigned_contractor_email);
                   const isAssessmentSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
                   const isOperationReady = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                  const isRevisionRequested = req.status === 'REVISION_REQUESTED' || assessment?.status === 'REVISION_REQUESTED';
                   const isAccepted = isOperationReady;
 
                   // Format schedule dates cleanly
@@ -295,19 +314,23 @@ const HarvestRequestsPage = () => {
 
                   const statusClass = isOperationReady
                     ? 'harvest-status-ready'
-                    : isAssessmentSubmitted
-                      ? 'harvest-status-submitted'
-                      : isAssigned
-                        ? 'harvest-status-assigned'
-                        : 'harvest-status-pending';
+                    : isRevisionRequested
+                      ? 'harvest-status-revision'
+                      : isAssessmentSubmitted
+                        ? 'harvest-status-submitted'
+                        : isAssigned
+                          ? 'harvest-status-assigned'
+                          : 'harvest-status-pending';
 
                   const statusLabel = isOperationReady
                     ? 'Harvest Operation Ready'
-                    : isAssessmentSubmitted
-                      ? 'Contractor Assessment Submitted'
-                      : isAssigned
-                        ? 'Contractor Assigned'
-                        : 'Pending Contractor Assignment';
+                    : isRevisionRequested
+                      ? 'Quotation Revision Requested'
+                      : isAssessmentSubmitted
+                        ? 'Contractor Assessment Submitted'
+                        : isAssigned
+                          ? 'Contractor Assigned'
+                          : 'Pending Contractor Assignment';
 
                   const stands = (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
                     ? req.selected_tree_groups
@@ -628,7 +651,7 @@ const HarvestRequestsPage = () => {
                       </div>
 
                       {/* CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL SUBMITTED (WHEN ASSESSED) */}
-                      {(isAssessmentSubmitted || isAccepted || activeAssessmentMap[reqId] || req.assessment) && (() => {
+                      {(isAssessmentSubmitted || isAccepted || isRevisionRequested || activeAssessmentMap[reqId] || req.assessment) && (() => {
                         const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
                         const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
                         const isPurchase = propType === 'Timber Purchase Offer';
@@ -670,11 +693,16 @@ const HarvestRequestsPage = () => {
                               </div>
 
                               <div className="flex items-center gap-3">
-                                <span className={isAccepted ? "review-badge-green" : "review-badge-amber"}>
+                                <span className={isAccepted ? "review-badge-green" : isRevisionRequested ? "review-badge-amber border-amber-500/50" : "review-badge-amber"}>
                                   {isAccepted ? (
                                     <>
                                       <CheckCircle2 size={13} className="text-emerald-400" />
                                       <span>Proposal Accepted & Authorized</span>
+                                    </>
+                                  ) : isRevisionRequested ? (
+                                    <>
+                                      <RefreshCw size={13} className="text-amber-400" />
+                                      <span>Revision Requested by You</span>
                                     </>
                                   ) : (
                                     <>
@@ -902,8 +930,53 @@ const HarvestRequestsPage = () => {
                               </div>
                             )}
 
-                            {/* LANDOWNER DECISION ACTIONS (WHEN PENDING REVIEW) */}
-                            {isAssessmentSubmitted && (
+                            {/* LANDOWNER REVISION STATUS (WHEN REVISION IS REQUESTED) */}
+                            {isRevisionRequested ? (
+                              <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/35 flex flex-col gap-3 shadow-lg">
+                                <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                                      <RefreshCw size={16} />
+                                    </div>
+                                    <div>
+                                      <span className="font-extrabold text-amber-300 text-sm block">
+                                        Revision Requested from {req.assigned_contractor_name || 'Contractor'}
+                                      </span>
+                                      <span className="text-[11px] text-slate-400">
+                                        Contractor has been notified to review and submit an updated assessment.
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
+                                    className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                  >
+                                    <RefreshCw size={12} />
+                                    <span>Update Revision Request</span>
+                                  </button>
+                                </div>
+
+                                {/* Display requested points */}
+                                {Array.isArray(assDoc.revision_reasons || req.revision_reasons) && (assDoc.revision_reasons || req.revision_reasons).length > 0 && (
+                                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                                    <span className="text-xs text-slate-400 font-semibold">Specified adjustments:</span>
+                                    {(assDoc.revision_reasons || req.revision_reasons).map((reason, idx) => (
+                                      <span key={idx} className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/90 border border-amber-500/40 text-amber-300 shadow-sm">
+                                        {reason}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Display landowner feedback notes */}
+                                {(assDoc.landowner_feedback || req.landowner_feedback) && (
+                                  <div className="p-3 rounded-xl bg-black/50 border border-amber-500/25 text-xs text-slate-200 italic leading-relaxed">
+                                    "{assDoc.landowner_feedback || req.landowner_feedback}"
+                                  </div>
+                                )}
+                              </div>
+                            ) : isAssessmentSubmitted ? (
                               <div className="assessment-action-bar">
                                 <div className="assessment-action-hint">
                                   <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
@@ -929,7 +1002,7 @@ const HarvestRequestsPage = () => {
 
                                   <button
                                     type="button"
-                                    onClick={() => handleAssessmentAction(reqId, 'REVISION_REQUESTED', 'Please adjust timeline, rates, or terms.')}
+                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
                                     className="assessment-btn-revision"
                                   >
                                     <RefreshCw size={14} />
@@ -952,7 +1025,7 @@ const HarvestRequestsPage = () => {
                                   </button>
                                 </div>
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         );
                       })()}
@@ -1030,6 +1103,25 @@ const HarvestRequestsPage = () => {
                 onSelectContractor={handleAssignContractor}
                 onCancel={() => setSelectedRequestForContractor(null)}
                 isModal={true}
+              />
+            )}
+
+            {/* MODAL FOR REVISION REQUEST */}
+            {revisionModalReq && (
+              <RevisionRequestModal
+                request={revisionModalReq.req}
+                assessment={revisionModalReq.assessment}
+                contractorName={revisionModalReq.req?.assigned_contractor_name || 'Assigned Contractor'}
+                onClose={() => setRevisionModalReq(null)}
+                onSubmit={async (reasons, notes) => {
+                  await handleAssessmentAction(
+                    revisionModalReq.reqId,
+                    'REVISION_REQUESTED',
+                    notes,
+                    reasons
+                  );
+                  setRevisionModalReq(null);
+                }}
               />
             )}
 
