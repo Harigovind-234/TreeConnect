@@ -23,8 +23,47 @@ import {
   ChevronRight,
   Sprout,
   Leaf,
-  TrendingUp
+  TrendingUp,
+  Calendar,
+  Clock,
+  UserCheck,
+  Phone,
+  FileText,
+  Sliders,
+  Navigation,
+  ChevronDown,
+  Target,
+  Activity,
+  ClipboardCheck,
+  ExternalLink,
+  FileCheck,
+  Ruler,
+  Truck,
+  AlertTriangle,
+  Printer
 } from 'lucide-react';
+
+const getGoogleMapsUrl = (p) => {
+  if (!p) return 'https://maps.google.com';
+  if (p.latitude && p.longitude) return `https://www.google.com/maps?q=${p.latitude},${p.longitude}`;
+  if (p.propertyLocation) return `https://www.google.com/maps?q=${encodeURIComponent(p.propertyLocation)}`;
+  if (p.location) return `https://www.google.com/maps?q=${encodeURIComponent(p.location)}`;
+  return 'https://maps.google.com';
+};
+
+const formatDateDMY = (dateStr) => {
+  if (!dateStr) return 'Upcoming';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
 
 const LandownerDashboard = () => {
   const { user } = useAuth();
@@ -48,6 +87,9 @@ const LandownerDashboard = () => {
       refreshHarvestRequests();
     }
   }, []);
+
+  // Modal state for viewing scheduled site visit details
+  const [selectedVisitModal, setSelectedVisitModal] = useState(null);
 
   // Stateful Demo Contractor Bids
   const [bids, setBids] = useState([
@@ -106,6 +148,17 @@ const LandownerDashboard = () => {
             contractor: 'Apex Timber Harvesting Ltd',
             estimatedVolume: '240 m³'
           });
+
+  // Scheduled Site Inspection Visits (Active / Upcoming)
+  const scheduledVisits = (harvestRequests || []).filter(
+    r => (r.inspection_status === 'SCHEDULED' || r.site_inspection?.status === 'SCHEDULED' || r.inspection_status === 'CONFIRMED' || r.site_inspection?.status === 'CONFIRMED' || r.inspection_status === 'IN_PROGRESS' || r.site_inspection?.status === 'IN_PROGRESS' || Boolean(r.site_inspection?.scheduled_date)) &&
+    r.inspection_status !== 'COMPLETED' && r.inspection_status !== 'REPORT_SUBMITTED' && r.site_inspection?.status !== 'COMPLETED' && r.site_inspection?.status !== 'REPORT_SUBMITTED' && !r.site_inspected
+  );
+
+  // Certified / Completed Site Inspections
+  const verifiedInspections = (harvestRequests || []).filter(
+    r => r.site_inspected || r.inspection_status === 'COMPLETED' || r.inspection_status === 'REPORT_SUBMITTED' || r.site_inspection?.status === 'COMPLETED' || r.site_inspection?.status === 'REPORT_SUBMITTED'
+  );
 
   // Quick Calculator state
   const [treesCount, setTreesCount] = useState(250);
@@ -206,6 +259,89 @@ const LandownerDashboard = () => {
             </div>
           </section>
 
+          {/* CERTIFIED SITE INSPECTION & AUDIT REPORT BANNER */}
+          {verifiedInspections.length > 0 && (
+            <section className="ld-scheduled-visit-alert" style={{ background: 'linear-gradient(135deg, rgba(6, 32, 20, 0.98) 0%, rgba(4, 20, 14, 0.98) 100%)', borderColor: 'rgba(16, 185, 129, 0.45)' }}>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+                <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-950/40">
+                    <FileCheck size={28} />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-500/50 shadow-sm shrink-0">
+                        <CheckCircle2 size={12} className="text-emerald-400" />
+                        Site Inspected &amp; Verified
+                      </span>
+                      <span className="text-xs sm:text-sm text-slate-300 font-semibold bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10 flex items-center gap-1 truncate max-w-full">
+                        <MapPin size={12} className="text-emerald-400 shrink-0" />
+                        <span className="truncate">{verifiedInspections[0].propertyName || 'Registered Estate'}</span>
+                      </span>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-white tracking-tight break-words">
+                      On-Site Assessment Complete — Field Certificate Ready
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed break-words">
+                      Field Assessor <strong className="text-emerald-400 font-bold">{verifiedInspections[0].site_inspection?.inspector_name || verifiedInspections[0].assigned_contractor_name || 'Licensed Assessor'}</strong> has verified parcel boundaries, standing timber condition, and haulage road clearance.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="shrink-0 self-stretch sm:self-auto sm:ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedVisitModal(verifiedInspections[0])}
+                    className="w-full sm:w-auto px-5 py-2.5 sm:py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <FileCheck size={16} />
+                    <span>View Certified Report</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* UPCOMING SCHEDULED SITE INSPECTION ALERT BANNER */}
+          {scheduledVisits.length > 0 && (
+            <section className="ld-scheduled-visit-alert">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+                <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-950/40">
+                    <Calendar size={28} />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-500/40 shadow-sm shrink-0">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Scheduled Site Visit
+                      </span>
+                      <span className="text-xs sm:text-sm text-slate-300 font-semibold bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10 flex items-center gap-1 truncate max-w-full">
+                        <MapPin size={12} className="text-emerald-400 shrink-0" />
+                        <span className="truncate">{scheduledVisits[0].propertyName || 'Registered Estate'}</span>
+                      </span>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-white tracking-tight break-words">
+                      Parcel Inspection Confirmed for {formatDateDMY(scheduledVisits[0].site_inspection?.scheduled_date)}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed break-words">
+                      Field Assessor <strong className="text-emerald-400 font-bold">{scheduledVisits[0].site_inspection?.inspector_name || scheduledVisits[0].assigned_contractor_name || 'Assigned Assessor'}</strong> will conduct on-site audit during <span className="text-white font-semibold">{scheduledVisits[0].site_inspection?.time_slot || 'Morning (09:00 AM - 12:00 PM)'}</span>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="shrink-0 self-stretch sm:self-auto sm:ml-auto">
+                  <button
+                    onClick={() => setSelectedVisitModal(scheduledVisits[0])}
+                    className="w-full sm:w-auto px-5 py-2.5 sm:py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    <span>View Visit Details</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* 2. 3-COLUMN WIDGETS ROW */}
           <div className="ld-widgets-grid">
             
@@ -235,9 +371,45 @@ const LandownerDashboard = () => {
                 <span className="ld-widget-title">
                   <CheckCircle2 size={18} className="text-emerald-400" /> Today's Tasks
                 </span>
-                <span className="ld-badge-amber">3 Action Items</span>
+                <span className="ld-badge-amber">
+                  {(scheduledVisits.length > 0 || verifiedInspections.length > 0) ? `${3 + (scheduledVisits.length > 0 ? 1 : 0) + (verifiedInspections.length > 0 ? 1 : 0)} Action Items` : '3 Action Items'}
+                </span>
               </div>
               <div className="ld-task-list">
+                {verifiedInspections.length > 0 && (
+                  <div
+                    onClick={() => setSelectedVisitModal(verifiedInspections[0])}
+                    className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 hover:bg-emerald-950/60 transition-colors flex items-center justify-between cursor-pointer"
+                    title="Click to view certified site inspection report"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileCheck size={14} className="text-emerald-400 shrink-0" />
+                      <span className="text-white font-bold text-xs">
+                        Audit Certified: {verifiedInspections[0].propertyName || 'Estate'} ({formatDateDMY(verifiedInspections[0].site_inspection?.inspected_at || verifiedInspections[0].site_inspection?.scheduled_date)})
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-black text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/50">
+                      Certified
+                    </span>
+                  </div>
+                )}
+                {scheduledVisits.length > 0 && (
+                  <div
+                    onClick={() => setSelectedVisitModal(scheduledVisits[0])}
+                    className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-500/35 hover:bg-sky-950/60 transition-colors flex items-center justify-between cursor-pointer"
+                    title="Click to view scheduled site visit details"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Calendar size={14} className="text-sky-400 shrink-0" />
+                      <span className="text-white font-bold text-xs">
+                        Site Visit: {scheduledVisits[0].propertyName || 'Estate'} ({formatDateDMY(scheduledVisits[0].site_inspection?.scheduled_date)})
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-black text-sky-400 bg-sky-950 px-2 py-0.5 rounded border border-sky-500/40">
+                      Confirmed
+                    </span>
+                  </div>
+                )}
                 <label className="ld-task-row">
                   <input type="checkbox" id="t-chk-1" />
                   <span>Approve Apex Harvesting Bid</span>
@@ -657,6 +829,660 @@ const LandownerDashboard = () => {
 
         </div>
       </div>
+
+      {/* SCHEDULED SITE VISIT DETAILS MODAL */}
+      {selectedVisitModal && (() => {
+        const ins = selectedVisitModal.site_inspection || {};
+        const assessorName = ins.inspector_name || selectedVisitModal.assigned_contractor_name || 'Rohith kumar';
+        const assessorPhone = ins.inspector_phone || selectedVisitModal.assigned_contractor_phone || '9746512243';
+        const propName = selectedVisitModal.propertyName || selectedVisitModal.property_name || 'TreeConnect Property';
+        const propLoc = selectedVisitModal.propertyLocation || selectedVisitModal.location || 'Kottayam, Kerala';
+        const ownerName = selectedVisitModal.ownerName || userName || 'Harigovind D Nair';
+        const visitDateStr = formatDateDMY(ins.scheduled_date) || '07-10-2026';
+        const reqId = selectedVisitModal.id || selectedVisitModal._id;
+        const currentStage = ins.status || selectedVisitModal.inspection_status || 'SCHEDULED';
+        const inspectionPurpose = ins.inspection_purpose || 'Tree and property assessment';
+
+        const checklistItems = [
+          'Verify property location',
+          'Verify tree quantity',
+          'Confirm tree species',
+          'Assess tree condition',
+          'Record tree measurements',
+          'Check site accessibility',
+          'Check surrounding obstacles',
+          'Capture tree/property photographs'
+        ];
+
+        const activeChecklist = Array.isArray(ins.checklist || ins.inspection_checklist) && (ins.checklist || ins.inspection_checklist).length > 0
+          ? (ins.checklist || ins.inspection_checklist)
+          : checklistItems;
+
+        const isVerified = Boolean(
+          selectedVisitModal.site_inspected ||
+          selectedVisitModal.inspection_status === 'COMPLETED' ||
+          selectedVisitModal.inspection_status === 'REPORT_SUBMITTED' ||
+          ins.status === 'COMPLETED' ||
+          ins.status === 'REPORT_SUBMITTED'
+        );
+
+        const inspectionStages = [
+          { id: 'SCHEDULED', label: 'Scheduled', step: 1 },
+          { id: 'CONFIRMED', label: 'Confirmed', step: 2 },
+          { id: 'IN_PROGRESS', label: 'In Progress', step: 3 },
+          { id: 'COMPLETED', label: 'Completed', step: 4 },
+          { id: 'REPORT_SUBMITTED', label: 'Report Submitted', step: 5 }
+        ];
+
+        if (isVerified) {
+          return (
+            <div
+              className="cd-inspection-modal-overlay"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setSelectedVisitModal(null);
+              }}
+            >
+              <div
+                className="cd-inspection-modal-box cd-schedule-modal max-w-3xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div className="cd-schedule-modal-header">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <FileCheck size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white tracking-tight leading-snug">
+                        Certified Field Inspection Certificate
+                      </h3>
+                      <p className="text-[13px] text-slate-300">
+                        {propName} • Verified by {assessorName}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVisitModal(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+                    title="Close Dialog"
+                    aria-label="Close Dialog"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Scrollable Body */}
+                <div className="cd-schedule-modal-body">
+                  {/* Official Verdict Card */}
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-[#06180e] via-[#092214] to-[#06180e] border border-emerald-500/35 shadow-lg shadow-black/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0">
+                        <CheckCircle2 size={22} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                            Official Feasibility Verdict
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[10px] uppercase">
+                            Report Submitted
+                          </span>
+                        </div>
+                        <h4 className="text-base sm:text-lg font-extrabold text-white tracking-wide">
+                          {ins.inspection_verdict === 'FEASIBLE' ? '✓ FEASIBLE FOR HARVESTING' : ins.inspection_verdict || '✓ FEASIBLE FOR HARVESTING'}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div className="sm:text-right flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-emerald-500/20 text-xs text-slate-300">
+                      <span className="text-[11px] text-slate-400 font-medium">Certified Inspection Date</span>
+                      <span className="font-semibold text-white flex items-center gap-1.5 mt-0.5">
+                        <Calendar size={13} className="text-emerald-400" />
+                        {formatDateDMY(ins.inspected_at || ins.completed_at || ins.scheduled_date) || 'Recent Audit'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Property & Site Location Info Card */}
+                  <div className="p-3.5 rounded-xl bg-[#08150e]/90 border border-emerald-500/25">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-emerald-500/15">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                          <MapPin size={15} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block leading-none mb-1">
+                            Audited Parcel Location
+                          </span>
+                          <span className="text-white font-semibold text-sm">
+                            {propLoc}
+                          </span>
+                        </div>
+                      </div>
+
+                      <a
+                        href={getGoogleMapsUrl(selectedVisitModal)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-semibold transition-colors shrink-0 hover:underline"
+                        title="Open in Google Maps"
+                      >
+                        <Navigation size={13} />
+                        <span>Open in Google Maps</span>
+                        <ExternalLink size={11} className="opacity-75" />
+                      </a>
+                    </div>
+
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-1.5 text-slate-300">
+                        <span className="text-slate-400">Landowner:</span>
+                        <span className="text-white font-semibold">{ownerName}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-slate-300">
+                        <span className="text-slate-400">Assessor Contact:</span>
+                        <a
+                          href={`tel:${assessorPhone}`}
+                          className="text-emerald-300 hover:text-emerald-200 font-semibold hover:underline flex items-center gap-1"
+                          title="Call inspector"
+                        >
+                          <Phone size={12} className="text-emerald-400" />
+                          <span>+91 {assessorPhone}</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Inspection Purpose & Scope Checklist */}
+                  <div className="p-3.5 rounded-xl bg-[#08150e]/90 border border-emerald-500/25 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                      <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                        <Target size={13} className="text-emerald-400" /> Inspection Purpose:
+                      </span>
+                      <strong className="text-emerald-300 font-semibold text-xs sm:text-sm">
+                        {ins.inspection_purpose || 'Tree and property assessment'}
+                      </strong>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-emerald-500/15">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                        Verified Scope Checklist ({checklistItems.length}/8 Certified)
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {checklistItems.map((chk) => (
+                          <div
+                            key={chk}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/25 text-slate-200 text-xs font-medium flex items-center gap-2"
+                          >
+                            <span className="w-3.5 h-3.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10px] shrink-0 font-bold">
+                              ✓
+                            </span>
+                            <span className="truncate">{chk}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Technical Audit Findings Grid (8 Metric Cards) */}
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                      Certified On-Site Assessment Findings
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {/* 1. Lead Assessor */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Lead Assessor</span>
+                          <span className="text-white font-semibold text-xs sm:text-sm">{ins.inspector_name || assessorName}</span>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <UserCheck size={14} />
+                        </div>
+                      </div>
+
+                      {/* 2. Contact Phone */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Assessor Phone</span>
+                          <a href={`tel:${assessorPhone}`} className="text-emerald-300 hover:underline font-semibold text-xs sm:text-sm flex items-center gap-1">
+                            +91 {assessorPhone}
+                          </a>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <Phone size={14} />
+                        </div>
+                      </div>
+
+                      {/* 3. Verified Standing Trees */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Verified Standing Trees</span>
+                          <span className="text-emerald-300 font-bold text-xs sm:text-sm">{ins.verified_tree_count || selectedVisitModal.approxTreesCount || 20} Trees Audited</span>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <Trees size={14} />
+                        </div>
+                      </div>
+
+                      {/* 4. Measured DBH / Height */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Avg. DBH / Canopy Height</span>
+                          <span className="text-white font-semibold text-xs sm:text-sm">{ins.measured_avg_dbh || '65-80 cm'} • {ins.canopy_height || '20m'}</span>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <Ruler size={14} />
+                        </div>
+                      </div>
+
+                      {/* 5. Timber Soundness */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Timber Soundness</span>
+                          <span className="text-emerald-300 font-semibold text-xs sm:text-sm">{ins.timber_condition || 'Sound & Top Quality'}</span>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <ShieldCheck size={14} />
+                        </div>
+                      </div>
+
+                      {/* 6. Haul Road Approach */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Haul Road Approach</span>
+                          <span className="text-white font-semibold text-xs sm:text-sm">{ins.road_access_verification || 'Heavy truck accessible'}</span>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <Truck size={14} />
+                        </div>
+                      </div>
+
+                      {/* 7. Distance to Paved Road */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Distance to Paved Road</span>
+                          <span className="text-white font-semibold text-xs sm:text-sm">{ins.distance_to_haul_road || '25 meters'}</span>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <Navigation size={14} />
+                        </div>
+                      </div>
+
+                      {/* 8. Surrounding Hazards */}
+                      <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Surrounding Obstacles / Hazards</span>
+                          <span className="text-white font-semibold text-xs sm:text-sm">{ins.overhead_hazards || 'Clear'}</span>
+                        </div>
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                          <AlertTriangle size={14} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Landowner Access Instructions */}
+                  {ins.notes && (
+                    <div className="p-3.5 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-1">
+                        <FileText size={12} className="text-emerald-400" /> Landowner Access Instructions
+                      </span>
+                      <p className="text-slate-200 leading-relaxed font-normal">{ins.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Inspector Field Remarks */}
+                  {ins.inspection_remarks && (
+                    <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/25 text-xs">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-1">
+                        <ClipboardCheck size={12} /> Assessor Field Notes & Remarks
+                      </span>
+                      <p className="text-emerald-100 italic leading-relaxed">{ins.inspection_remarks}</p>
+                    </div>
+                  )}
+
+                  {/* Attached Photos */}
+                  {Array.isArray(ins.inspection_photos) && ins.inspection_photos.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                        Attached Field Inspection Photos ({ins.inspection_photos.length})
+                      </span>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {ins.inspection_photos.map((ph, idx) => (
+                          <img
+                            key={idx}
+                            src={ph}
+                            alt={`Inspection ${idx + 1}`}
+                            className="h-20 w-full object-cover rounded-lg border border-emerald-500/30 hover:scale-105 transition-transform cursor-pointer"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notice for Landowner */}
+                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-200">
+                    <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">
+                      <strong className="text-white">Notice for Landowner:</strong> This parcel has been officially site-inspected and audited. Tree count, species soundness, and machinery extraction feasibility have been verified on-site.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="cd-schedule-modal-footer">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="mr-auto px-4 py-2 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-emerald-500/40 text-slate-300 hover:text-white font-semibold text-xs flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Printer size={14} />
+                    <span>Print Certificate</span>
+                  </button>
+
+                  {assessorPhone && (
+                    <a
+                      href={`tel:${assessorPhone}`}
+                      className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    >
+                      <Phone size={13} />
+                      <span>Call Assessor</span>
+                    </a>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVisitModal(null)}
+                    className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-xs font-semibold cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedVisitModal(null);
+                      navigate('/landowner/harvest-requests', { state: { highlightRequestId: reqId } });
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 transition-all cursor-pointer"
+                  >
+                    <FileCheck size={14} /> View in Harvest Requests
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div
+            className="cd-inspection-modal-overlay"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedVisitModal(null);
+            }}
+          >
+            <div
+              className="cd-inspection-modal-box cd-schedule-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="cd-schedule-modal-header">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                    <Calendar size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white tracking-tight leading-snug">
+                      Scheduled Site Inspection Details
+                    </h3>
+                    <p className="text-[13px] text-slate-300">
+                      {propName} • Owner: <strong className="text-slate-100 font-semibold">{ownerName}</strong>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVisitModal(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+                  title="Close Dialog"
+                  aria-label="Close Dialog"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Scrollable Body */}
+              <div className="cd-schedule-modal-body">
+                {/* Property & Location Info Card */}
+                <div className="p-3.5 rounded-xl bg-[#08150e]/90 border border-emerald-500/25">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-emerald-500/15">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                        <MapPin size={15} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block leading-none mb-1">
+                          Inspection Site Location
+                        </span>
+                        <span className="text-white font-semibold text-sm">
+                          {propLoc}
+                        </span>
+                      </div>
+                    </div>
+
+                    <a
+                      href={getGoogleMapsUrl(selectedVisitModal)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-semibold transition-colors shrink-0 hover:underline"
+                      title="Open in Google Maps"
+                    >
+                      <Navigation size={13} />
+                      <span>Open in Google Maps</span>
+                      <ExternalLink size={11} className="opacity-75" />
+                    </a>
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-300">
+                      <span className="text-slate-400">Landowner:</span>
+                      <span className="text-white font-semibold">{ownerName}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-slate-300">
+                      <span className="text-slate-400">Inspector Direct Phone:</span>
+                      <a
+                        href={`tel:${assessorPhone}`}
+                        className="text-emerald-300 hover:text-emerald-200 font-semibold hover:underline flex items-center gap-1"
+                        title="Call inspector"
+                      >
+                        <Phone size={12} className="text-emerald-400" />
+                        <span>{assessorPhone}</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inspection Status Pipeline */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="cd-inspection-label mb-0">
+                      <Activity size={13} className="text-emerald-400" /> Inspection Status
+                    </label>
+                    <span className="text-[11px] text-slate-400">
+                      Status: <strong className="text-emerald-400 uppercase font-semibold">{currentStage}</strong>
+                    </span>
+                  </div>
+
+                  <div className="cd-inspection-status-pipeline">
+                    {inspectionStages.map((st, idx) => {
+                      const isCurrent = currentStage === st.id;
+                      const currentIndex = inspectionStages.findIndex(s => s.id === currentStage);
+                      const isPast = currentIndex > idx;
+                      return (
+                        <React.Fragment key={st.id}>
+                          <div
+                            className={`cd-status-step ${isCurrent ? 'active' : isPast ? 'completed' : 'inactive'}`}
+                          >
+                            <span className={`w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold ${
+                              isCurrent ? 'bg-emerald-500 text-slate-950' : isPast ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-800 text-slate-500'
+                            }`}>
+                              {isPast ? '✓' : st.step}
+                            </span>
+                            <span>{st.label}</span>
+                          </div>
+                          {idx < inspectionStages.length - 1 && (
+                            <span className="cd-status-arrow">→</span>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Inspection Purpose */}
+                <div>
+                  <label className="cd-inspection-label mb-1.5">
+                    <Target size={13} className="text-emerald-400" /> Inspection Purpose
+                  </label>
+                  <div className="cd-inspection-input text-white font-medium flex items-center justify-between">
+                    <span>{inspectionPurpose}</span>
+                    <span className="text-[11px] text-slate-400">Pre-Quotation Assessment</span>
+                  </div>
+                </div>
+
+                {/* Proposed Inspection Date */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="cd-inspection-label mb-0">
+                      <Calendar size={13} className="text-emerald-400" /> Proposed Inspection Date
+                    </label>
+                    <span className="text-[12px] text-slate-400 font-normal">Working days: Mon–Sat</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="cd-inspection-input flex-1 flex items-center justify-between font-medium">
+                      <span className="text-white font-semibold">{visitDateStr}</span>
+                      <span className="text-xs text-slate-400">Scheduled Date</span>
+                    </div>
+                    <span className="px-3.5 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs font-bold text-emerald-300 flex items-center gap-1.5 shrink-0">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      Confirmed Appointment
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preferred Time Slot */}
+                <div>
+                  <label className="cd-inspection-label mb-1.5">
+                    <Clock size={13} className="text-emerald-400" /> Preferred Time Slot
+                  </label>
+                  <div className="cd-inspection-input flex items-center justify-between text-slate-200">
+                    <span className="font-medium">{ins.time_slot ? ins.time_slot : 'Morning (09:00 AM - 12:00 PM)'}</span>
+                    <Clock size={14} className="text-slate-400 shrink-0" />
+                  </div>
+                </div>
+
+                {/* Lead Inspector & Contact Number */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="cd-inspection-label mb-1.5">
+                      <UserCheck size={13} className="text-emerald-400" /> Lead Inspector / Field Assessor
+                    </label>
+                    <div className="cd-inspection-input text-white font-medium">
+                      {assessorName}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="cd-inspection-label mb-1.5">
+                      <Phone size={13} className="text-emerald-400" /> Inspector Contact Number
+                    </label>
+                    <div className="cd-inspection-input text-white font-medium">
+                      {assessorPhone ? (assessorPhone.startsWith('+') ? assessorPhone : `+91 ${assessorPhone}`) : '9746512243'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inspection Checklist */}
+                <div>
+                  <label className="cd-inspection-label mb-1">
+                    <ClipboardCheck size={13} className="text-emerald-400" /> Inspection Checklist
+                  </label>
+                  <p className="text-xs text-slate-400 mb-2">
+                    Scope of on-site assessment to be conducted prior to quotation:
+                  </p>
+                  <div className="cd-checklist-grid">
+                    {checklistItems.map((chk) => {
+                      const isActive = activeChecklist.includes(chk);
+                      return (
+                        <div
+                          key={chk}
+                          className={`cd-checklist-card ${isActive ? 'checked' : 'unchecked'}`}
+                        >
+                          <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 text-[10px] ${
+                            isActive ? 'bg-emerald-500 text-slate-950 font-bold' : 'border border-slate-600 text-transparent'
+                          }`}>
+                            {isActive ? '✓' : ''}
+                          </div>
+                          <span className="truncate">{chk}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Access / Instructions for Inspector */}
+                <div>
+                  <label className="cd-inspection-label mb-1.5">
+                    <FileText size={13} className="text-emerald-400" /> Access / Instructions for Inspector
+                  </label>
+                  <div className="cd-inspection-textarea text-slate-200 leading-relaxed text-xs sm:text-sm" style={{ minHeight: '85px' }}>
+                    {ins.notes || 'Please ensure estate access gate is open and property boundaries are accessible.'}
+                  </div>
+                </div>
+
+                {/* Preparation Tip for Landowner */}
+                <div className="p-3 rounded-xl bg-slate-950/80 border border-emerald-500/20 flex items-start gap-2.5 text-xs text-slate-300">
+                  <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <strong className="text-white">Notice for Landowner:</strong> The contractor is visiting the property only to inspect and assess trees, terrain, and boundaries before preparing a quotation. No tree cutting will take place during this visit.
+                  </span>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="cd-schedule-modal-footer">
+                {assessorPhone ? (
+                  <a
+                    href={`tel:${assessorPhone}`}
+                    className="mr-auto text-xs text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1.5 font-semibold"
+                  >
+                    <Phone size={13} /> Call Inspector (+91 {assessorPhone})
+                  </a>
+                ) : <div />}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedVisitModal(null)}
+                  className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-xs font-semibold cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedVisitModal(null);
+                    navigate('/landowner/harvest-requests', { state: { highlightRequestId: reqId } });
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 transition-all cursor-pointer"
+                >
+                  <Calendar size={14} /> View in Harvest Requests
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

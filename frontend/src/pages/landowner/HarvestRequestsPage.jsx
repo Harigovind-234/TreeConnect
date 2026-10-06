@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useLandowner } from '../../context/LandownerContext';
@@ -40,7 +40,14 @@ import {
   X,
   Coins,
   Handshake,
-  Briefcase
+  Briefcase,
+  Phone,
+  Navigation,
+  ClipboardCheck,
+  Check,
+  Target,
+  FileCheck,
+  Ruler
 } from 'lucide-react';
 
 import {
@@ -98,6 +105,7 @@ const getGoogleMapsUrl = (p) => {
 
 const HarvestRequestsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const landownerCtx = useLandowner() || {};
   const harvestRequests = landownerCtx.harvestRequests || [];
   const refreshHarvestRequests = landownerCtx.refreshHarvestRequests || (() => { });
@@ -195,6 +203,19 @@ const HarvestRequestsPage = () => {
     }
   };
 
+  // Scroll to targeted inspection visit or request if navigated from dashboard
+  useEffect(() => {
+    if (location.state?.highlightRequestId) {
+      const targetId = location.state.highlightRequestId;
+      setTimeout(() => {
+        const el = document.getElementById(`inspection-visit-${targetId}`) || document.getElementById(`harvest-request-${targetId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 250);
+    }
+  }, [location.state, harvestRequests]);
+
   // Handle Contractor Selection
   const handleAssignContractor = async (contractor) => {
     if (!selectedRequestForContractor) return;
@@ -286,6 +307,24 @@ const HarvestRequestsPage = () => {
                   const isRevisionRequested = req.status === 'REVISION_REQUESTED' || assessment?.status === 'REVISION_REQUESTED';
                   const isAccepted = isOperationReady;
 
+                  const inspection = req.site_inspection || {};
+                  const isInspectionCompleted = Boolean(
+                    req.site_inspected ||
+                    req.inspection_status === 'COMPLETED' ||
+                    req.inspection_status === 'REPORT_SUBMITTED' ||
+                    inspection.status === 'COMPLETED' ||
+                    inspection.status === 'REPORT_SUBMITTED'
+                  );
+                  const isInspectionScheduled = !isInspectionCompleted && Boolean(
+                    req.inspection_status === 'SCHEDULED' ||
+                    req.inspection_status === 'CONFIRMED' ||
+                    req.inspection_status === 'IN_PROGRESS' ||
+                    inspection.status === 'SCHEDULED' ||
+                    inspection.status === 'CONFIRMED' ||
+                    inspection.status === 'IN_PROGRESS' ||
+                    Boolean(inspection.scheduled_date)
+                  );
+
                   // Format schedule dates cleanly
                   const startDate = req.preferred_start_date || req.preferredStartDate;
                   const endDate = req.preferred_end_date || req.preferredCompletionDate;
@@ -312,25 +351,33 @@ const HarvestRequestsPage = () => {
                     ? req.required_services.join(', ')
                     : (req.servicesNeeded || 'Felling & Extraction');
 
-                  const statusClass = isOperationReady
-                    ? 'harvest-status-ready'
-                    : isRevisionRequested
-                      ? 'harvest-status-revision'
-                      : isAssessmentSubmitted
-                        ? 'harvest-status-submitted'
-                        : isAssigned
-                          ? 'harvest-status-assigned'
-                          : 'harvest-status-pending';
+                  const statusClass = isInspectionScheduled
+                    ? 'harvest-status-scheduled'
+                    : isOperationReady
+                      ? 'harvest-status-ready'
+                      : isRevisionRequested
+                        ? 'harvest-status-revision'
+                        : isAssessmentSubmitted
+                          ? 'harvest-status-submitted'
+                          : isInspectionCompleted
+                            ? 'harvest-status-inspected'
+                            : isAssigned
+                              ? 'harvest-status-assigned'
+                              : 'harvest-status-pending';
 
-                  const statusLabel = isOperationReady
-                    ? 'Harvest Operation Ready'
-                    : isRevisionRequested
-                      ? 'Quotation Revision Requested'
-                      : isAssessmentSubmitted
-                        ? 'Contractor Assessment Submitted'
-                        : isAssigned
-                          ? 'Contractor Assigned'
-                          : 'Pending Contractor Assignment';
+                  const statusLabel = isInspectionScheduled
+                    ? 'Site Visit Scheduled'
+                    : isOperationReady
+                      ? 'Harvest Operation Ready'
+                      : isRevisionRequested
+                        ? 'Quotation Revision Requested'
+                        : isAssessmentSubmitted
+                          ? 'Contractor Assessment Submitted'
+                          : isInspectionCompleted
+                            ? 'Site Inspected & Verified'
+                            : isAssigned
+                              ? 'Contractor Assigned'
+                              : 'Pending Contractor Assignment';
 
                   const stands = (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
                     ? req.selected_tree_groups
@@ -341,7 +388,7 @@ const HarvestRequestsPage = () => {
                         : [{ groupName: 'Teak Stand #1', numberOfTrees: 1, species: 'Teak', approxAge: '15', girth: '60 - 85cm', estimatedVolume: '1.7 m³' }]));
 
                   return (
-                    <div key={reqId} className="harvest-request-card">
+                    <div key={reqId} id={`harvest-request-${reqId}`} className="harvest-request-card">
 
                       {/* TOP SUMMARY ROW */}
                       <div className="harvest-card-top">
@@ -353,6 +400,16 @@ const HarvestRequestsPage = () => {
                             <span className="harvest-date-pill">
                               <Calendar size={13} className="text-slate-500" /> Created: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
                             </span>
+                            {isInspectionScheduled && (
+                              <span className="harvest-date-pill bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 px-3 py-0.5 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm animate-pulse">
+                                <Calendar size={13} className="text-emerald-400" /> Site Visit: {formatDateDMY(inspection.scheduled_date)}
+                              </span>
+                            )}
+                            {isInspectionCompleted && (
+                              <span className="harvest-date-pill bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 px-2.5 py-0.5 rounded-full font-bold text-xs flex items-center gap-1 shadow-sm">
+                                <CheckCircle2 size={13} className="text-emerald-400" /> Site Inspected &amp; Verified
+                              </span>
+                            )}
                             <span className="harvest-date-pill bg-emerald-950/70 text-emerald-300 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold text-xs flex items-center gap-1">
                               <Building2 size={13} className="text-emerald-400" /> Area: {req.propertyArea || req.property_area || '11 Cents'}
                             </span>
@@ -385,6 +442,394 @@ const HarvestRequestsPage = () => {
                           </button>
                         </div>
                       </div>
+
+                      {/* SCHEDULED SITE INSPECTION VISIT (ACTIVE APPOINTMENT) */}
+                      {isInspectionScheduled && (
+                        <div id={`inspection-visit-${reqId}`} className="scheduled-inspection-card">
+                          <div className="scheduled-inspection-header">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                                <Calendar size={24} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2.5 flex-wrap">
+                                  <h3 className="text-base sm:text-xl font-black text-white">
+                                    Site Inspection Visit Scheduled
+                                  </h3>
+                                  <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    Confirmed Visit
+                                  </span>
+                                </div>
+                                <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+                                  The assigned contractor has booked an on-site field assessment to inspect parcel boundaries, tree condition, and haul road accessibility before quoting.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="scheduled-date-highlight">
+                              <span className="text-xs uppercase font-extrabold text-emerald-400 tracking-wider block">Inspection Date</span>
+                              <span className="text-base sm:text-lg font-black text-white block mt-0.5">
+                                {formatDateDMY(inspection.scheduled_date)}
+                              </span>
+                              <span className="text-xs text-emerald-300 font-semibold block mt-0.5">
+                                {inspection.time_slot || 'Morning (09:00 AM - 12:00 PM)'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Details Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 sm:p-5 rounded-xl bg-[#030a05] border border-emerald-500/25 text-xs sm:text-sm">
+                            <div className="space-y-1">
+                              <span className="text-slate-400 font-bold block text-xs uppercase tracking-wider">Proposed Date &amp; Slot:</span>
+                              <div className="flex items-center gap-1.5 text-white font-black text-sm">
+                                <Clock size={15} className="text-emerald-400 shrink-0" />
+                                <span>{formatDateDMY(inspection.scheduled_date)}</span>
+                              </div>
+                              <span className="text-slate-300 text-xs block font-medium">{inspection.time_slot || 'Morning Slot'}</span>
+                            </div>
+
+                            <div className="space-y-1">
+                              <span className="text-slate-400 font-bold block text-xs uppercase tracking-wider">Lead Field Assessor:</span>
+                              <div className="flex items-center gap-1.5 text-white font-black text-sm">
+                                <UserCheck size={15} className="text-emerald-400 shrink-0" />
+                                <span>{inspection.inspector_name || req.assigned_contractor_name || 'Assigned Field Assessor'}</span>
+                              </div>
+                              {(inspection.inspector_phone || req.assigned_contractor_phone) && (
+                                <a
+                                  href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone}`}
+                                  className="text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 text-xs font-bold hover:underline"
+                                >
+                                  <Phone size={13} className="text-emerald-400" /> +91 {inspection.inspector_phone || req.assigned_contractor_phone}
+                                </a>
+                              )}
+                            </div>
+
+                            <div className="space-y-1 sm:col-span-2">
+                              <span className="text-slate-400 font-bold block text-xs uppercase tracking-wider mb-1.5">
+                                Inspection Purpose &amp; Scope:
+                              </span>
+                              <div className="text-white text-xs font-semibold mb-2 flex items-center gap-2">
+                                <Target size={14} className="text-emerald-400 shrink-0" />
+                                <span>{inspection.inspection_purpose || 'Pre-quotation tree and property assessment'}</span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                {[
+                                  'Verify property location',
+                                  'Verify tree quantity',
+                                  'Confirm tree species',
+                                  'Assess tree condition',
+                                  'Record tree measurements',
+                                  'Check site accessibility',
+                                  'Check surrounding obstacles',
+                                  'Capture tree/property photographs'
+                                ].map((chk, idx) => {
+                                  const isActive = Array.isArray(inspection.checklist || inspection.inspection_checklist) && (inspection.checklist || inspection.inspection_checklist).length > 0
+                                    ? (inspection.checklist || inspection.inspection_checklist).includes(chk)
+                                    : true;
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-2 ${
+                                        isActive
+                                          ? 'bg-emerald-950/60 border-emerald-500/35 text-slate-200'
+                                          : 'bg-black/30 border-slate-700/40 text-slate-500'
+                                      }`}
+                                    >
+                                      <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] shrink-0 font-bold ${
+                                        isActive ? 'bg-emerald-500 text-slate-950' : 'border border-slate-600 text-transparent'
+                                      }`}>
+                                        {isActive ? '✓' : ''}
+                                      </span>
+                                      <span className="truncate">{chk}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Landowner Instructions / Note */}
+                          {inspection.notes && (
+                            <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-start gap-3 text-xs sm:text-sm text-slate-100">
+                              <FileText size={17} className="text-emerald-400 shrink-0 mt-0.5" />
+                              <div>
+                                <strong className="text-emerald-300 block font-black mb-0.5 text-xs uppercase tracking-wider">
+                                  Contractor Access Note &amp; Instructions:
+                                </strong>
+                                <span className="leading-relaxed font-medium italic">"{inspection.notes}"</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Advisory & Action Bar */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-emerald-500/20 text-xs sm:text-sm">
+                            <div className="flex items-center gap-2.5 text-slate-300">
+                              <ShieldCheck size={17} className="text-emerald-400 shrink-0" />
+                              <span className="leading-relaxed">
+                                <strong className="text-white">Preparation Tip:</strong> Please ensure estate entrance gate is accessible and boundaries are marked for the survey crew.
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 shrink-0">
+                              {(inspection.inspector_phone || req.assigned_contractor_phone) && (
+                                <a
+                                  href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone}`}
+                                  className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 font-bold flex items-center gap-1.5 transition-all text-xs"
+                                >
+                                  <Phone size={13} />
+                                  <span>Call Inspector</span>
+                                </a>
+                              )}
+                              <a
+                                href={getGoogleMapsUrl(req)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold flex items-center gap-1.5 transition-all"
+                              >
+                                <Navigation size={13} className="text-emerald-400" />
+                                <span>Parcel Directions</span>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CERTIFIED ON-SITE FIELD AUDIT REPORT (WHEN COMPLETED) */}
+                      {isInspectionCompleted && (
+                        <div className="completed-inspection-card space-y-4">
+                          {/* Official Header */}
+                          <div className="completed-inspection-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-black/30">
+                                <FileCheck size={24} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3 className="text-base sm:text-xl font-extrabold text-white tracking-tight">
+                                    Site Inspected &amp; Verified — Field Assessment Certificate
+                                  </h3>
+                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                    {inspection.inspection_verdict === 'FEASIBLE' ? '✓ FEASIBLE FOR HARVESTING' : inspection.inspection_verdict || '✓ FEASIBLE FOR HARVESTING'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-300 mt-1">
+                                  Field audit certified by contractor assessor. Parcel boundaries, standing timber volume, and haul truck accessibility verified.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-emerald-500/40 text-slate-300 hover:text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                              >
+                                <Printer size={13} />
+                                <span>Print Certificate</span>
+                              </button>
+                              <div className="px-3 py-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-right">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Certified Date</span>
+                                <span className="text-xs font-bold text-emerald-300 block">
+                                  {formatDateDMY(inspection.inspected_at || inspection.completed_at || inspection.scheduled_date)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Inspection Purpose & Scope Checklist */}
+                          <div className="p-3.5 rounded-xl bg-[#030a05] border border-emerald-500/25 space-y-2.5">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                              <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                                <Target size={13} className="text-emerald-400" /> Inspection Purpose:
+                              </span>
+                              <strong className="text-emerald-300 font-semibold text-xs sm:text-sm">
+                                {inspection.inspection_purpose || 'Tree and property assessment'}
+                              </strong>
+                            </div>
+
+                            <div className="pt-2 border-t border-emerald-500/15">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+                                Verified Scope Checklist (Certified Ground Truth)
+                              </span>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                                {[
+                                  'Verify property location',
+                                  'Verify tree quantity',
+                                  'Confirm tree species',
+                                  'Assess tree condition',
+                                  'Record tree measurements',
+                                  'Check site accessibility',
+                                  'Check surrounding obstacles',
+                                  'Capture tree/property photographs'
+                                ].map((chk, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/25 text-slate-200 text-xs font-medium flex items-center gap-1.5"
+                                  >
+                                    <span className="w-3.5 h-3.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10px] shrink-0 font-bold">
+                                      ✓
+                                    </span>
+                                    <span className="truncate">{chk}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Certified Findings 8-Card Grid */}
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                              Certified Technical Audit Findings
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                              {/* 1. Lead Assessor */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Lead Assessor</span>
+                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.inspector_name || req.assigned_contractor_name || 'Rohith kumar'}</span>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <UserCheck size={14} />
+                                </div>
+                              </div>
+
+                              {/* 2. Assessor Phone */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Assessor Phone</span>
+                                  <a href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone || '9746512243'}`} className="text-emerald-300 hover:underline font-semibold text-xs sm:text-sm flex items-center gap-1">
+                                    +91 {inspection.inspector_phone || req.assigned_contractor_phone || '9746512243'}
+                                  </a>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <Phone size={14} />
+                                </div>
+                              </div>
+
+                              {/* 3. Verified Trees */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Verified Standing Trees</span>
+                                  <span className="text-emerald-300 font-bold text-xs sm:text-sm">{inspection.verified_tree_count || stands.reduce((sum, s) => sum + Number(s.numberOfTrees ?? 1), 0)} Trees Audited</span>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <Trees size={14} />
+                                </div>
+                              </div>
+
+                              {/* 4. Measured DBH & Height */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Avg. DBH / Canopy Height</span>
+                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.measured_avg_dbh || '65 - 80 cm'} • {inspection.canopy_height || '20m'}</span>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <Ruler size={14} />
+                                </div>
+                              </div>
+
+                              {/* 5. Timber Soundness */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Timber Soundness</span>
+                                  <span className="text-emerald-300 font-semibold text-xs sm:text-sm">{inspection.timber_condition || 'Sound & Top Quality'}</span>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <ShieldCheck size={14} />
+                                </div>
+                              </div>
+
+                              {/* 6. Haul Road Approach */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Haul Road Approach</span>
+                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.road_access_verification || 'Heavy truck accessible'}</span>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <Truck size={14} />
+                                </div>
+                              </div>
+
+                              {/* 7. Distance to Haul Road */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Distance to Paved Road</span>
+                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.distance_to_haul_road || '25 meters'}</span>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <Navigation size={14} />
+                                </div>
+                              </div>
+
+                              {/* 8. Terrain & Hazards */}
+                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
+                                <div>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Terrain / Overhead Hazards</span>
+                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.terrain_assessment || 'Gentle slope'} • {inspection.overhead_hazards || 'Clear'}</span>
+                                </div>
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                                  <AlertTriangle size={14} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Notes & Remarks */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {inspection.notes && (
+                              <div className="p-3 rounded-xl bg-[#06140b]/90 border border-emerald-500/20 text-xs text-slate-200 flex items-start gap-2.5">
+                                <FileText size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <strong className="text-slate-300 font-bold block mb-0.5 text-[11px] uppercase">Landowner Access Instructions:</strong>
+                                  <span className="leading-relaxed">{inspection.notes}</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {inspection.inspection_remarks && (
+                              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/25 text-xs text-emerald-100 flex items-start gap-2.5">
+                                <ClipboardCheck size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <strong className="text-emerald-300 font-bold block mb-0.5 text-[11px] uppercase">Assessor Audit Remarks:</strong>
+                                  <span className="italic leading-relaxed">{inspection.inspection_remarks}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Attached Photos */}
+                          {Array.isArray(inspection.inspection_photos) && inspection.inspection_photos.length > 0 && (
+                            <div className="space-y-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                                Attached Field Inspection Photos ({inspection.inspection_photos.length})
+                              </span>
+                              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                                {inspection.inspection_photos.map((ph, idx) => (
+                                  <div
+                                    key={idx}
+                                    onClick={() => openPhotoLightbox(inspection.inspection_photos, idx, `Field Inspection Photo #${idx + 1}`)}
+                                    className="relative group rounded-lg overflow-hidden border border-emerald-500/30 h-20 bg-black cursor-pointer hover:border-emerald-400 transition-all"
+                                  >
+                                    <img src={ph} alt={`Inspection ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <ZoomIn size={14} className="text-emerald-300" />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Landowner Notice Banner */}
+                          <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-200">
+                            <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                            <span className="leading-relaxed">
+                              <strong className="text-white">Notice for Landowner:</strong> This parcel has been officially site-inspected and audited. Tree count, species soundness, and machinery extraction feasibility have been verified on-site by the licensed contractor.
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* SELECTED PROPERTY DETAILS (READ-ONLY) CARD */}
                       <div className="review-summary-card">

@@ -101,6 +101,42 @@ class HarvestCompletionCreate(BaseModel):
     completion_notes: Optional[str] = ""
     completion_photos: Optional[List[str]] = []
 
+class ScheduleInspectionRequest(BaseModel):
+    scheduled_date: str
+    time_slot: Optional[str] = "Morning (09:00 AM - 12:00 PM)"
+    inspector_name: Optional[str] = ""
+    inspector_phone: Optional[str] = ""
+    inspection_purpose: Optional[str] = "Tree and property assessment"
+    checklist: Optional[List[str]] = []
+    inspection_checklist: Optional[List[str]] = []
+    status: Optional[str] = "SCHEDULED"
+    inspection_status: Optional[str] = "SCHEDULED"
+    equipment_needed: Optional[List[str]] = []
+    notes: Optional[str] = ""
+    access_instructions: Optional[str] = ""
+
+class CompleteInspectionRequest(BaseModel):
+    inspected_at: Optional[str] = None
+    inspector_name: Optional[str] = ""
+    inspector_phone: Optional[str] = ""
+    verified_tree_count: Optional[int] = None
+    measured_avg_dbh: Optional[str] = ""
+    canopy_height: Optional[str] = ""
+    estimated_volume: Optional[float] = None
+    timber_condition: Optional[str] = "Sound & Top Quality"
+    road_access_verification: Optional[str] = "Heavy 10-wheeler log truck accessible"
+    distance_to_haul_road: Optional[str] = "25 meters"
+    terrain_assessment: Optional[str] = "Gentle slope (good machinery footing)"
+    overhead_hazards: Optional[str] = "Clear of power lines"
+    felling_complexity: Optional[str] = "Medium"
+    inspection_verdict: Optional[str] = "FEASIBLE"
+    inspection_remarks: Optional[str] = ""
+    inspection_photos: Optional[List[str]] = []
+
+class DeclineJobRequest(BaseModel):
+    reason: Optional[str] = ""
+    feedback: Optional[str] = ""
+
 VALID_TRANSITIONS = {
     "PENDING": ["CONTRACTOR_ASSIGNED", "CANCELLED"],
     "CONTRACTOR_ASSIGNED": ["ASSESSMENT_SUBMITTED", "PENDING", "CANCELLED"],
@@ -613,6 +649,189 @@ def assign_contractor(request_id: str, payload: AssignContractorRequest):
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to assign contractor: {str(e)}"}
+        )
+
+# 5a. POST /api/harvest-requests/{id}/schedule-inspection - Schedule Site Inspection
+@router.post("/{request_id}/schedule-inspection")
+def schedule_site_inspection(request_id: str, payload: ScheduleInspectionRequest):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found"}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        current_status = payload.status or payload.inspection_status or "SCHEDULED"
+        checklist_items = payload.checklist or payload.inspection_checklist or []
+        notes_content = payload.notes or payload.access_instructions or ""
+
+        inspection_data = {
+            "status": current_status,
+            "scheduled_date": payload.scheduled_date,
+            "time_slot": payload.time_slot or "Morning (09:00 AM - 12:00 PM)",
+            "inspector_name": payload.inspector_name or req_doc.get("assigned_contractor_name", "Lead Inspector"),
+            "inspector_phone": payload.inspector_phone or "",
+            "inspection_purpose": payload.inspection_purpose or "Tree and property assessment",
+            "checklist": checklist_items,
+            "inspection_checklist": checklist_items,
+            "notes": notes_content,
+            "access_instructions": notes_content,
+            "equipment_needed": payload.equipment_needed or [],
+            "scheduled_at": now_iso
+        }
+
+        update_fields = {
+            "site_inspection": inspection_data,
+            "inspection_status": current_status,
+            "inspection_scheduled_date": payload.scheduled_date,
+            "updatedAt": now_iso
+        }
+
+        db.harvest_requests.update_one(req_query, {"$set": update_fields})
+        updated_req = db.harvest_requests.find_one(req_query)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": f"Site inspection scheduled for {payload.scheduled_date}",
+                "harvest_request": serialize_doc(updated_req),
+                "site_inspection": inspection_data
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to schedule site inspection: {str(e)}"}
+        )
+
+# 5b. POST /api/harvest-requests/{id}/complete-inspection - Log Completed Site Inspection Audit
+@router.post("/{request_id}/complete-inspection")
+def complete_site_inspection(request_id: str, payload: CompleteInspectionRequest):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found"}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        existing_inspection = req_doc.get("site_inspection") or {}
+
+        inspection_data = {
+            **existing_inspection,
+            "status": "COMPLETED",
+            "inspected_at": payload.inspected_at or now_iso,
+            "inspector_name": payload.inspector_name or existing_inspection.get("inspector_name") or req_doc.get("assigned_contractor_name", "Contractor Inspector"),
+            "inspector_phone": payload.inspector_phone or existing_inspection.get("inspector_phone") or "",
+            "verified_tree_count": payload.verified_tree_count,
+            "measured_avg_dbh": payload.measured_avg_dbh or "",
+            "canopy_height": payload.canopy_height or "",
+            "estimated_volume": payload.estimated_volume,
+            "timber_condition": payload.timber_condition or "Sound & Top Quality",
+            "road_access_verification": payload.road_access_verification or "Heavy 10-wheeler log truck accessible",
+            "distance_to_haul_road": payload.distance_to_haul_road or "25 meters",
+            "terrain_assessment": payload.terrain_assessment or "Gentle slope",
+            "overhead_hazards": payload.overhead_hazards or "Clear of power lines",
+            "felling_complexity": payload.felling_complexity or "Medium",
+            "inspection_verdict": payload.inspection_verdict or "FEASIBLE",
+            "inspection_remarks": payload.inspection_remarks or "",
+            "inspection_photos": payload.inspection_photos or existing_inspection.get("inspection_photos") or [],
+            "completed_at": now_iso
+        }
+
+        update_fields = {
+            "site_inspection": inspection_data,
+            "inspection_status": "COMPLETED",
+            "site_inspected": True,
+            "inspected_at": payload.inspected_at or now_iso,
+            "inspection_verdict": payload.inspection_verdict or "FEASIBLE",
+            "updatedAt": now_iso
+        }
+
+        if payload.verified_tree_count is not None and payload.verified_tree_count > 0:
+            update_fields["verified_tree_count"] = payload.verified_tree_count
+
+        db.harvest_requests.update_one(req_query, {"$set": update_fields})
+        updated_req = db.harvest_requests.find_one(req_query)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": "Site inspection audit recorded and certified successfully",
+                "harvest_request": serialize_doc(updated_req),
+                "site_inspection": inspection_data
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to record site inspection: {str(e)}"}
+        )
+
+# 5c. POST /api/harvest-requests/{id}/decline-job - Decline Assignment after Site Inspection
+@router.post("/{request_id}/decline-job")
+def decline_harvest_job(request_id: str, payload: DeclineJobRequest):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found"}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        reason_text = payload.reason or payload.feedback or "Contractor determined site is not feasible for current equipment."
+
+        update_fields = {
+            "status": "PENDING",  # Return to pending so landowner can reassign
+            "contractor_decline_reason": reason_text,
+            "declined_contractor_id": req_doc.get("assigned_contractor_id"),
+            "declined_contractor_name": req_doc.get("assigned_contractor_name"),
+            "assigned_contractor_id": None,
+            "assigned_contractor_name": None,
+            "assigned_contractor_email": None,
+            "inspection_status": "DECLINED",
+            "updatedAt": now_iso
+        }
+
+        db.harvest_requests.update_one(req_query, {"$set": update_fields})
+        updated_req = db.harvest_requests.find_one(req_query)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": "Harvest assignment declined. Request returned to landowner pool for reassignment.",
+                "harvest_request": serialize_doc(updated_req)
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to decline harvest job: {str(e)}"}
         )
 
 # 6. POST /api/harvest-requests/{id}/assessment - Submit Contractor Assessment

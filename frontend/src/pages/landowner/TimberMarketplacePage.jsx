@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Trees
 } from 'lucide-react';
 
 const TimberMarketplacePage = () => {

@@ -56,6 +56,67 @@ export const harvestService = {
     }
   },
 
+  // Schedule site inspection visit
+  scheduleInspection: async (requestId, inspectionData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/schedule-inspection`, inspectionData);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back to patch for scheduleInspection (${requestId}):`, error);
+      // Fallback to updateHarvestRequest
+      const response = await api.patch(`/harvest-requests/${requestId}`, {
+        site_inspection: {
+          status: 'SCHEDULED',
+          ...inspectionData,
+          scheduled_at: new Date().toISOString()
+        },
+        inspection_status: 'SCHEDULED'
+      });
+      return response.data;
+    }
+  },
+
+  // Complete & certify site inspection report
+  completeInspection: async (requestId, auditData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/complete-inspection`, auditData);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back to patch for completeInspection (${requestId}):`, error);
+      // Fallback to updateHarvestRequest
+      const response = await api.patch(`/harvest-requests/${requestId}`, {
+        site_inspection: {
+          status: 'COMPLETED',
+          ...auditData,
+          completed_at: new Date().toISOString()
+        },
+        inspection_status: 'COMPLETED',
+        site_inspected: true,
+        inspected_at: auditData.inspected_at || new Date().toISOString()
+      });
+      return response.data;
+    }
+  },
+
+  // Decline assigned harvest job (e.g. Inaccessible or high risk after site inspection)
+  declineJob: async (requestId, declineData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/decline-job`, declineData);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back to patch for declineJob (${requestId}):`, error);
+      const response = await api.patch(`/harvest-requests/${requestId}`, {
+        status: 'PENDING',
+        contractor_decline_reason: declineData.reason || declineData.feedback || 'Site inspection deemed unfeasible',
+        assigned_contractor_id: null,
+        assigned_contractor_name: null,
+        assigned_contractor_email: null,
+        inspection_status: 'DECLINED'
+      });
+      return response.data;
+    }
+  },
+
   // Submit contractor assessment / quotation
   submitAssessment: async (requestId, assessmentData) => {
     try {
