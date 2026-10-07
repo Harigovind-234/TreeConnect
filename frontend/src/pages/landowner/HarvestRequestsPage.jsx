@@ -5,6 +5,8 @@ import Sidebar from '../../components/Sidebar';
 import { useLandowner } from '../../context/LandownerContext';
 import ApprovedContractorSelector from '../../components/workflow/ApprovedContractorSelector';
 import RevisionRequestModal from '../../components/workflow/RevisionRequestModal';
+import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
+import RescheduleInspectionModal from '../../components/workflow/RescheduleInspectionModal';
 import harvestService from '../../services/harvestService';
 import './LandownerDashboard.css';
 import {
@@ -14,6 +16,7 @@ import {
   MapPin,
   CheckCircle2,
   Calendar,
+  CalendarClock,
   Layers,
   ChevronRight,
   ShieldCheck,
@@ -114,6 +117,8 @@ const HarvestRequestsPage = () => {
 
   const [selectedRequestForContractor, setSelectedRequestForContractor] = useState(null);
   const [revisionModalReq, setRevisionModalReq] = useState(null);
+  const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
+  const [rescheduleModalReq, setRescheduleModalReq] = useState(null);
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [loadingAssessments, setLoadingAssessments] = useState({});
   const [actionMessage, setActionMessage] = useState('');
@@ -142,20 +147,28 @@ const HarvestRequestsPage = () => {
     }
   };
 
-  // Fetch assessments for requests that are ASSESSMENT_SUBMITTED or ACCEPTED/OPERATION_READY
+  // Fetch assessments eagerly for any request with assigned contractor or assessment
   useEffect(() => {
     const fetchAssessments = async () => {
       for (const req of harvestRequests) {
         const reqId = req.id || req._id;
-        if (reqId && (req.status === 'ASSESSMENT_SUBMITTED' || req.status === 'OPERATION_READY' || req.status === 'ACCEPTED' || req.status === 'REVISION_REQUESTED')) {
+        if (!reqId) continue;
+
+        // Eagerly hydrate from local request object if present
+        if (req.assessment) {
+          setActiveAssessmentMap(prev => ({ ...prev, [reqId]: req.assessment }));
+        }
+
+        if (req.assigned_contractor_id || req.assessment || req.status === 'ASSESSMENT_SUBMITTED' || req.status === 'OPERATION_READY' || req.status === 'ACCEPTED' || req.status === 'REVISION_REQUESTED') {
           setLoadingAssessments(prev => ({ ...prev, [reqId]: true }));
           try {
             const data = await harvestService.getAssessment(reqId);
-            if (data && data.assessment) {
-              setActiveAssessmentMap(prev => ({ ...prev, [reqId]: data.assessment }));
+            if (data && (data.assessment || data.id || data.commercial_proposal_type)) {
+              const assObj = data.assessment || data;
+              setActiveAssessmentMap(prev => ({ ...prev, [reqId]: assObj }));
             }
           } catch (e) {
-            console.warn(`No backend assessment found for request ${reqId}`, e);
+            // Silently fall back to existing req.assessment or localStorage
           } finally {
             setLoadingAssessments(prev => ({ ...prev, [reqId]: false }));
           }
@@ -168,14 +181,60 @@ const HarvestRequestsPage = () => {
     }
   }, [harvestRequests]);
 
-  // Handle Landowner Action on Assessment (Accept, Reject, Request Revision)
-  const handleAssessmentAction = async (requestId, action, feedbackStr = '', revisionReasons = []) => {
+  // Handle Landowner Action on Assessment (Accept, Reject, Request Revision with Counter-Proposal)
+  const handleAssessmentAction = async (requestId, action, feedbackStr = '', revisionReasons = [], counterOfferAmount = null, counterOfferStartDate = null) => {
     try {
       await harvestService.actionAssessment(requestId, {
         status: action,
         feedback: feedbackStr,
-        revision_reasons: revisionReasons
+        revision_reasons: revisionReasons,
+        counter_offer_amount: counterOfferAmount,
+        counter_offer_start_date: counterOfferStartDate
       });
+
+      // Synchronize in local storage treeconnect_harvest_requests for instant zero-latency UI
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(r => {
+            if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+              const newStatus = action === 'ACCEPTED' ? 'OPERATION_READY' : (action === 'REVISION_REQUESTED' ? 'REVISION_REQUESTED' : action);
+              const digitalAgr = action === 'ACCEPTED' ? {
+                agreement_id: `TC-AGR-${new Date().getFullYear()}-${String(requestId).slice(-6).toUpperCase()}`,
+                signed_at: new Date().toISOString(),
+                status: 'EXECUTED_AND_BINDING',
+                parties: {
+                  landowner_name: r.userName || r.landowner_name || r.ownerName || 'Registered Landowner',
+                  contractor_name: r.assigned_contractor_name || 'Assigned Harvesting Contractor'
+                }
+              } : r.digital_agreement;
+
+              return {
+                ...r,
+                status: newStatus,
+                landowner_feedback: feedbackStr,
+                revision_reasons: revisionReasons,
+                counter_offer_amount: counterOfferAmount,
+                counter_offer_start_date: counterOfferStartDate,
+                digital_agreement: digitalAgr,
+                assessment: {
+                  ...(r.assessment || {}),
+                  status: action,
+                  landowner_feedback: feedbackStr,
+                  revision_reasons: revisionReasons,
+                  counter_offer_amount: counterOfferAmount,
+                  counter_offer_start_date: counterOfferStartDate
+                }
+              };
+            }
+            return r;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (errLocal) {
+        console.warn("Could not sync action to localStorage:", errLocal);
+      }
 
       // Instantly update activeAssessmentMap in local state
       setActiveAssessmentMap(prev => ({
@@ -184,22 +243,125 @@ const HarvestRequestsPage = () => {
           ...(prev[requestId] || {}),
           status: action,
           landowner_feedback: feedbackStr,
-          revision_reasons: revisionReasons
+          revision_reasons: revisionReasons,
+          counter_offer_amount: counterOfferAmount,
+          counter_offer_start_date: counterOfferStartDate
         }
       }));
 
       setActionMessage(
         action === 'REVISION_REQUESTED'
-          ? "Revision request with your specifications sent to contractor successfully."
-          : `Assessment action '${action}' recorded successfully.`
+          ? "Fair deal counter-proposal and revision specifications sent to contractor successfully!"
+          : action === 'ACCEPTED'
+            ? "Proposal accepted! Binding Digital Harvest Agreement generated and finalized."
+            : `Assessment action '${action}' recorded successfully.`
       );
-      setTimeout(() => setActionMessage(''), 4000);
+      setTimeout(() => setActionMessage(''), 4500);
 
       // Refresh requests list
       refreshHarvestRequests();
     } catch (err) {
       console.error("Error updating assessment status:", err);
-      setActionMessage("Failed to update assessment status.");
+      setActionMessage("Failed to update assessment status: " + (err.message || 'Error'));
+    }
+  };
+
+  // Handle Landowner Suggesting Alternate Site Inspection Date
+  const handleRescheduleInspection = async (requestId, rescheduleData) => {
+    try {
+      await harvestService.rescheduleInspection(requestId, rescheduleData);
+
+      // Instantly synchronize in local storage for instant zero-latency UI update
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(r => {
+            if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+              return {
+                ...r,
+                reschedule_requested: true,
+                inspection_status: 'RESCHEDULE_REQUESTED',
+                site_inspection: {
+                  ...(r.site_inspection || {}),
+                  original_scheduled_date: r.site_inspection?.original_scheduled_date || r.site_inspection?.scheduled_date || r.inspection_scheduled_date,
+                  reschedule_requested: true,
+                  reschedule_status: 'PENDING_CONTRACTOR',
+                  suggested_date: rescheduleData.suggested_date,
+                  suggested_time_slot: rescheduleData.suggested_time_slot,
+                  reschedule_reason: rescheduleData.reschedule_reason,
+                  reschedule_notes: rescheduleData.reschedule_notes,
+                  reschedule_requested_at: new Date().toISOString(),
+                  reschedule_history: [
+                    ...(Array.isArray(r.site_inspection?.reschedule_history) ? r.site_inspection.reschedule_history : []),
+                    {
+                      original_scheduled_date: r.site_inspection?.scheduled_date || r.inspection_scheduled_date,
+                      suggested_date: rescheduleData.suggested_date,
+                      suggested_time_slot: rescheduleData.suggested_time_slot,
+                      reschedule_reason: rescheduleData.reschedule_reason,
+                      reschedule_notes: rescheduleData.reschedule_notes,
+                      requested_at: new Date().toISOString(),
+                      requested_by: 'LANDOWNER'
+                    }
+                  ]
+                }
+              };
+            }
+            return r;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (errLocal) {
+        console.warn("Could not sync reschedule to localStorage:", errLocal);
+      }
+
+      setActionMessage(`Suggested alternate inspection date (${formatDateDMY(rescheduleData.suggested_date)}). Contractor has been notified.`);
+      setTimeout(() => setActionMessage(''), 5000);
+      refreshHarvestRequests();
+    } catch (err) {
+      console.error("Error submitting inspection reschedule:", err);
+      setActionMessage("Failed to submit reschedule request: " + (err?.message || 'Error'));
+      setTimeout(() => setActionMessage(''), 4000);
+    }
+  };
+
+  // Withdraw Reschedule Request (retains original schedule)
+  const handleWithdrawReschedule = async (requestId) => {
+    try {
+      await harvestService.respondReschedule(requestId, { action: 'CANCEL_REQUEST' });
+
+      // Synchronize localStorage
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(r => {
+            if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+              const prevIns = r.site_inspection || {};
+              return {
+                ...r,
+                reschedule_requested: false,
+                inspection_status: prevIns.status || 'SCHEDULED',
+                site_inspection: {
+                  ...prevIns,
+                  reschedule_requested: false,
+                  reschedule_status: 'CANCELLED_BY_LANDOWNER'
+                }
+              };
+            }
+            return r;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (errLocal) {
+        console.warn("Could not sync cancel to localStorage:", errLocal);
+      }
+
+      setActionMessage("Reschedule request withdrawn. Original appointment schedule retained.");
+      setTimeout(() => setActionMessage(''), 4000);
+      refreshHarvestRequests();
+    } catch (err) {
+      console.error("Error withdrawing reschedule request:", err);
     }
   };
 
@@ -443,23 +605,562 @@ const HarvestRequestsPage = () => {
                         </div>
                       </div>
 
+                      {/* FORMAL CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL (SHOWN BEFORE & AFTER SITE VISIT) */}
+                      {(isAssessmentSubmitted || isAccepted || isRevisionRequested || activeAssessmentMap[reqId] || req.assessment || req.total_quote || req.contractor_purchase_offer) && (() => {
+                        const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
+                        const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
+                        const isPurchase = propType === 'Timber Purchase Offer';
+                        const isHybrid = propType === 'Purchase + Harvesting';
+                        const isService = propType === 'Harvesting Service Quotation';
+
+                        const assessedVolume = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume || stands.reduce((sum, s) => sum + parseVolumeNumber(s.estimatedVolume || s.volume), 0);
+                        const totalQuoteVal = assDoc.total_quote ?? req.total_quote ?? 110000;
+                        const purchaseOfferVal = assDoc.contractor_purchase_offer ?? req.contractor_purchase_offer;
+                        const purchasePriceVal = assDoc.timber_purchase_price ?? req.timber_purchase_price;
+                        const harvestArrangementCostVal = assDoc.harvesting_arrangement_cost ?? req.harvesting_arrangement_cost;
+                        const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
+                        const isInspectedSite = Boolean(req.site_inspected || isInspectionCompleted || assDoc.is_reassessed_after_inspection || req.inspection_status === 'COMPLETED');
+                        const isAgreementReady = Boolean(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement || assDoc.status === 'ACCEPTED');
+
+                        return (
+                          <div className="assessment-summary-card border border-emerald-500/40 shadow-2xl">
+                            <div className="review-section-header">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                  {isPurchase ? <Coins size={20} /> : isHybrid ? <Handshake size={20} /> : <FileText size={20} />}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="review-section-title uppercase tracking-wide text-base sm:text-lg">
+                                      {isPurchase
+                                        ? 'Contractor Timber Purchase Offer'
+                                        : isHybrid
+                                          ? 'Purchase + Harvesting Commercial Proposal'
+                                          : 'Formal Contractor Assessment & Quotation'}
+                                    </h4>
+                                    {isInspectedSite ? (
+                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                                        <ClipboardCheck size={12} className="text-emerald-400" /> Post-Inspection Verified Assessment
+                                      </span>
+                                    ) : (
+                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                                        <Clock size={12} className="text-amber-400" /> Pre-Inspection Initial Estimate (Subject to Site Visit)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11.5px] text-slate-300 font-medium block mt-1">
+                                    {isPurchase
+                                      ? 'Formal contractor offer to purchase the timber from you before or after site assessment.'
+                                      : isHybrid
+                                        ? 'Combined agreement: contractor purchases timber and undertakes harvesting operations.'
+                                        : 'Official itemized operational quotation & volume evaluation provided by your assigned contractor.'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <span className={isAgreementReady ? "review-badge-green" : isRevisionRequested ? "review-badge-amber border-amber-500/50" : "review-badge-amber"}>
+                                  {isAgreementReady ? (
+                                    <>
+                                      <CheckCircle2 size={13} className="text-emerald-400" />
+                                      <span>Agreement Executed &amp; Finalized</span>
+                                    </>
+                                  ) : isRevisionRequested ? (
+                                    <>
+                                      <RefreshCw size={13} className="text-amber-400" />
+                                      <span>Counter-Offer Revision Active</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Clock size={13} className="text-amber-400" />
+                                      <span>Proposal Under Review</span>
+                                    </>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => window.print()}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
+                                  title="Print Formal Assessment Report"
+                                >
+                                  <Printer size={13} />
+                                  <span>Print Report</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* DIGITAL AGREEMENT FINALIZED CALLOUT (WHEN ACCEPTED / OPERATION_READY) */}
+                            {isAgreementReady && (
+                              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-[#0e2417] to-emerald-950/90 border border-emerald-500/50 flex items-center justify-between gap-4 flex-wrap shadow-xl">
+                                <div className="flex items-center gap-3.5">
+                                  <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                                    <FileCheck size={22} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="text-sm sm:text-base font-black text-white">
+                                        Digital Harvest Agreement Executed &amp; Work Finalized
+                                      </h4>
+                                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/40">
+                                        {req.digital_agreement?.agreement_id || `TC-AGR-${String(reqId).slice(-6).toUpperCase()}`}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                                      Both parties have finalized commercial terms. Work is authorized for commencement on <strong>{formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date)}</strong>.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
+                                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all shrink-0 hover:scale-[1.02]"
+                                >
+                                  <FileCheck size={16} />
+                                  <span>View Digital Agreement</span>
+                                </button>
+                              </div>
+                            )}
+
+                            {/* COMMERCIAL ARRANGEMENT EXPLANATORY BANNER */}
+                            <div className={`commercial-flow-banner ${
+                              isPurchase
+                                ? 'commercial-flow-banner-purchase'
+                                : isHybrid
+                                  ? 'commercial-flow-banner-hybrid'
+                                  : 'commercial-flow-banner-service'
+                            }`}>
+                              <div className="flex items-center gap-3.5">
+                                <div className={`commercial-flow-icon ${
+                                  isPurchase
+                                    ? 'commercial-flow-icon-purchase'
+                                    : isHybrid
+                                      ? 'commercial-flow-icon-hybrid'
+                                      : 'commercial-flow-icon-service'
+                                }`}>
+                                  {isPurchase ? (
+                                    <Coins size={20} />
+                                  ) : isHybrid ? (
+                                    <Handshake size={20} />
+                                  ) : (
+                                    <Truck size={20} />
+                                  )}
+                                </div>
+                                <div>
+                                  <strong className="block text-sm sm:text-base font-extrabold text-white tracking-tight">
+                                    {isService && (
+                                      <>
+                                        Contractor is offering harvesting services for{' '}
+                                        <span className="text-amber-300 font-black">{formatINR(totalQuoteVal)}</span>.
+                                      </>
+                                    )}
+                                    {isPurchase && (
+                                      <>
+                                        Contractor is offering to purchase the timber for{' '}
+                                        <span className="text-emerald-400 font-black">{formatINR(purchaseOfferVal || 0)}</span>.
+                                      </>
+                                    )}
+                                    {isHybrid && (
+                                      <>
+                                        Contractor is offering to purchase the timber for{' '}
+                                        <span className="text-emerald-400 font-black">{formatINR(purchasePriceVal || 0)}</span>{' '}
+                                        and undertake the harvesting operation under the stated terms.
+                                      </>
+                                    )}
+                                  </strong>
+                                  <span className="text-xs text-slate-300 font-medium block mt-1">
+                                    {isService && 'Money flow: Landowner → Contractor (You pay contractor for harvesting operations).'}
+                                    {isPurchase && 'Money flow: Contractor → Landowner (Contractor pays you to purchase the timber. No harvesting charges).'}
+                                    {isHybrid && 'Money flow: Commercial purchase with agreed operational harvesting arrangement.'}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className={`commercial-flow-badge ${
+                                isPurchase
+                                  ? 'commercial-flow-badge-purchase'
+                                  : isHybrid
+                                    ? 'commercial-flow-badge-hybrid'
+                                    : 'commercial-flow-badge-service'
+                              }`}>
+                                {propType}
+                              </span>
+                            </div>
+
+                            {/* RESPONSIVE SPECIFICATION GRID (TAILORED TO PROPOSAL TYPE) */}
+                            <div className="assessment-metrics-grid">
+                              {/* 1. Assessed Volume */}
+                              <div className="assessment-metric-item">
+                                <span className="assessment-metric-label">
+                                  <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
+                                </span>
+                                <strong className="assessment-metric-value-emerald">
+                                  {formatVolume(assessedVolume)}
+                                </strong>
+                              </div>
+
+                              {/* 2 & 3: Proposal Specific Financial Values */}
+                              {isService && (
+                                <>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
+                                    </span>
+                                    <strong className="assessment-metric-value-amber">
+                                      {formatINR(totalQuoteVal)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {assDoc.assigned_workers_count || req.assigned_workers_count || 12} Workers
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {assDoc.estimated_duration || req.estimated_duration || '10 Working Days'}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
+                                    </strong>
+                                  </div>
+                                </>
+                              )}
+
+                              {isPurchase && (
+                                <>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Contractor Purchase Offer
+                                    </span>
+                                    <strong className="text-base font-extrabold text-emerald-400">
+                                      {formatINR(purchaseOfferVal || 0)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Clock size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || 'Flexible')}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Operation Start
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
+                                    </strong>
+                                  </div>
+                                </>
+                              )}
+
+                              {isHybrid && (
+                                <>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Timber Purchase Price
+                                    </span>
+                                    <strong className="text-base font-extrabold text-emerald-400">
+                                      {formatINR(purchasePriceVal || 0)}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Truck size={13} className="text-teal-400 shrink-0" /> Harvesting Arrangement
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {harvestArrangementCostVal ? formatINR(harvestArrangementCostVal) : 'Arranged by Contractor'}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Clock size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || 'Flexible')}
+                                    </strong>
+                                  </div>
+                                  <div className="assessment-metric-item">
+                                    <span className="assessment-metric-label">
+                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Operation Start
+                                    </span>
+                                    <strong className="assessment-metric-value">
+                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
+                                    </strong>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            {/* ITEMIZED SERVICE COST BREAKDOWN (MATCHING CONTRACTOR FORM) */}
+                            {isService && (
+                              <div className="p-4 sm:p-5 rounded-2xl bg-[#041208] border border-emerald-500/25 space-y-3 shadow-inner">
+                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-emerald-500/20">
+                                  <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <DollarSign size={14} /> Itemized Service Cost Breakdown
+                                  </span>
+                                  <span className="text-xs text-slate-300 font-semibold">
+                                    Total Contractor Quotation: <strong className="text-amber-400 font-mono text-sm">{formatINR(totalQuoteVal)}</strong>
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Felling &amp; Logging</span>
+                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.harvesting_cost ?? 45000)}</strong>
+                                  </div>
+
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Extraction / Skid-Trail</span>
+                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.extraction_cost ?? 30000)}</strong>
+                                  </div>
+
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Transportation / Haulage</span>
+                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.transportation_cost ?? 25000)}</strong>
+                                  </div>
+
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Other / Site Clearing</span>
+                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.other_cost ?? 10000)}</strong>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {isPurchase && (
+                              <div className="p-4 sm:p-5 rounded-2xl bg-[#041208] border border-amber-500/25 space-y-3 shadow-inner">
+                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-amber-500/20">
+                                  <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Coins size={14} /> Timber Purchase Terms
+                                  </span>
+                                  <span className="text-xs text-slate-300 font-semibold">
+                                    Payable to Landowner: <strong className="text-emerald-400 font-mono text-sm">{formatINR(purchaseOfferVal || 0)}</strong>
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-amber-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contractor Purchase Offer</span>
+                                    <strong className="text-emerald-400 text-sm font-black mt-0.5 block">{formatINR(purchaseOfferVal || 0)}</strong>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-amber-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reference Timber Value</span>
+                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.estimated_timber_value || req.total_estimated_price || 237133)}</strong>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-amber-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Offer Valid Until</span>
+                                    <strong className="text-slate-200 text-xs font-bold mt-0.5 block">{formatDateDMY(assDoc.offer_valid_until)}</strong>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {isHybrid && (
+                              <div className="p-4 sm:p-5 rounded-2xl bg-[#041208] border border-emerald-500/25 space-y-3 shadow-inner">
+                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-emerald-500/20">
+                                  <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Handshake size={14} /> Commercial Purchase + Operational Arrangement
+                                  </span>
+                                  <span className="text-xs text-slate-300 font-semibold">
+                                    Purchase Price: <strong className="text-emerald-400 font-mono text-sm">{formatINR(purchasePriceVal || 0)}</strong>
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Timber Purchase Price</span>
+                                    <strong className="text-emerald-400 text-sm font-black mt-0.5 block">{formatINR(purchasePriceVal || 0)}</strong>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Harvesting Arrangement</span>
+                                    <strong className="text-white text-sm font-black mt-0.5 block">{harvestArrangementCostVal ? formatINR(harvestArrangementCostVal) : 'Included'}</strong>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Haulage Arrangement</span>
+                                    <strong className="text-slate-200 text-xs font-bold mt-0.5 block truncate">{assDoc.transportation_arrangement || 'Contractor arranged'}</strong>
+                                  </div>
+                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Offer Valid Until</span>
+                                    <strong className="text-slate-200 text-xs font-bold mt-0.5 block">{formatDateDMY(assDoc.offer_valid_until)}</strong>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* PAYMENT TERMS & REMARKS CALLOUT */}
+                            {(paymentTermsVal || assDoc.notes || req.assessment?.notes) && (
+                              <div className="assessment-remarks-callout">
+                                {paymentTermsVal && (
+                                  <div className="flex items-baseline gap-2">
+                                    <strong className="text-emerald-400 font-bold shrink-0">Commercial Payment Terms: </strong>
+                                    <span className="text-slate-200">{paymentTermsVal}</span>
+                                  </div>
+                                )}
+                                {(assDoc.notes || req.assessment?.notes || assDoc.site_notes) && (
+                                  <div className="flex items-baseline gap-2">
+                                    <strong className="text-emerald-400 font-bold shrink-0">Contractor Site Remarks: </strong>
+                                    <span className="text-slate-200">{assDoc.notes || req.assessment?.notes || assDoc.site_notes}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* LANDOWNER REVISION & NEGOTIATION STATUS */}
+                            {isRevisionRequested ? (
+                              <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/40 flex flex-col gap-3 shadow-lg">
+                                <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                                      <RefreshCw size={16} />
+                                    </div>
+                                    <div>
+                                      <span className="font-extrabold text-amber-300 text-sm block">
+                                        Fair Deal Counter-Offer Active with {req.assigned_contractor_name || 'Contractor'}
+                                      </span>
+                                      <span className="text-[11px] text-slate-400">
+                                        Contractor has been notified with your counter-offer parameters to review and adjust the quotation.
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
+                                    className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                  >
+                                    <RefreshCw size={12} />
+                                    <span>Adjust Counter-Offer</span>
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                  {(assDoc.counter_offer_amount || req.counter_offer_amount) && (
+                                    <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/30 flex items-center justify-between">
+                                      <span className="text-xs text-slate-400 font-semibold">Your Target Price / Budget:</span>
+                                      <strong className="text-sm font-extrabold text-amber-300">{formatINR(assDoc.counter_offer_amount || req.counter_offer_amount)}</strong>
+                                    </div>
+                                  )}
+                                  {(assDoc.counter_offer_start_date || req.counter_offer_start_date) && (
+                                    <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/30 flex items-center justify-between">
+                                      <span className="text-xs text-slate-400 font-semibold">Requested Start Date:</span>
+                                      <strong className="text-xs font-extrabold text-white">{formatDateDMY(assDoc.counter_offer_start_date || req.counter_offer_start_date)}</strong>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Display requested points */}
+                                {Array.isArray(assDoc.revision_reasons || req.revision_reasons) && (assDoc.revision_reasons || req.revision_reasons).length > 0 && (
+                                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                                    <span className="text-xs text-slate-400 font-semibold">Specified adjustments:</span>
+                                    {(assDoc.revision_reasons || req.revision_reasons).map((reason, idx) => (
+                                      <span key={idx} className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/90 border border-amber-500/40 text-amber-300 shadow-sm">
+                                        {reason}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Display landowner feedback notes */}
+                                {(assDoc.landowner_feedback || req.landowner_feedback) && (
+                                  <div className="p-3 rounded-xl bg-black/50 border border-amber-500/25 text-xs text-slate-200 italic leading-relaxed">
+                                    "{assDoc.landowner_feedback || req.landowner_feedback}"
+                                  </div>
+                                )}
+                              </div>
+                            ) : !isAgreementReady ? (
+                              <div className="assessment-action-bar">
+                                <div className="assessment-action-hint">
+                                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                                    <ShieldCheck size={15} />
+                                  </div>
+                                  <span>
+                                    {isPurchase
+                                      ? 'Accepting enters into a binding timber sale agreement with the contractor.'
+                                      : isHybrid
+                                        ? 'Accepting confirms the valuation and generates a binding digital contract.'
+                                        : 'Accepting authorizes the quotation, generates the Digital Harvest Agreement, and readies work for execution.'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssessmentAction(reqId, 'REJECTED', 'Landowner declined this commercial proposal.')}
+                                    className="assessment-btn-decline"
+                                  >
+                                    <XCircle size={15} />
+                                    <span>Decline Proposal</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
+                                    className="assessment-btn-revision"
+                                  >
+                                    <RefreshCw size={14} />
+                                    <span>Negotiate / Counter-Offer</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
+                                    className="assessment-btn-accept"
+                                  >
+                                    <CheckCircle2 size={16} />
+                                    <span>
+                                      {isPurchase
+                                        ? 'Accept Offer & Execute Contract'
+                                        : isHybrid
+                                          ? 'Accept Proposal & Execute Contract'
+                                          : 'Accept Quote & Execute Agreement'}
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+
                       {/* SCHEDULED SITE INSPECTION VISIT (ACTIVE APPOINTMENT) */}
                       {isInspectionScheduled && (
                         <div id={`inspection-visit-${reqId}`} className="scheduled-inspection-card">
                           <div className="scheduled-inspection-header">
-                            <div className="flex items-center gap-3.5">
+                            <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
                               <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
                                 <Calendar size={24} />
                               </div>
-                              <div>
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2.5 flex-wrap">
                                   <h3 className="text-base sm:text-xl font-black text-white">
                                     Site Inspection Visit Scheduled
                                   </h3>
-                                  <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                    Confirmed Visit
-                                  </span>
+                                  {inspection.reschedule_requested ? (
+                                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                                      Reschedule Requested
+                                    </span>
+                                  ) : (inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) ? (
+                                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                      ✓ Rescheduled Visit Confirmed
+                                    </span>
+                                  ) : (
+                                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                      Confirmed Visit
+                                    </span>
+                                  )}
                                 </div>
                                 <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
                                   The assigned contractor has booked an on-site field assessment to inspect parcel boundaries, tree condition, and haul road accessibility before quoting.
@@ -468,52 +1169,143 @@ const HarvestRequestsPage = () => {
                             </div>
 
                             <div className="scheduled-date-highlight">
-                              <span className="text-xs uppercase font-extrabold text-emerald-400 tracking-wider block">Inspection Date</span>
+                              <span className="text-[11px] uppercase font-extrabold text-emerald-400 tracking-wider block">
+                                {(inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) ? 'Rescheduled Date' : 'Inspection Date'}
+                              </span>
                               <span className="text-base sm:text-lg font-black text-white block mt-0.5">
                                 {formatDateDMY(inspection.scheduled_date)}
                               </span>
                               <span className="text-xs text-emerald-300 font-semibold block mt-0.5">
                                 {inspection.time_slot || 'Morning (09:00 AM - 12:00 PM)'}
                               </span>
+                              {(inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) && inspection.original_scheduled_date && (
+                                <span className="text-[10px] text-slate-400 block mt-1 font-medium">
+                                  Orig: <span className="line-through">{formatDateDMY(inspection.original_scheduled_date)}</span>
+                                </span>
+                              )}
                             </div>
                           </div>
 
-                          {/* Details Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 sm:p-5 rounded-xl bg-[#030a05] border border-emerald-500/25 text-xs sm:text-sm">
-                            <div className="space-y-1">
-                              <span className="text-slate-400 font-bold block text-xs uppercase tracking-wider">Proposed Date &amp; Slot:</span>
-                              <div className="flex items-center gap-1.5 text-white font-black text-sm">
-                                <Clock size={15} className="text-emerald-400 shrink-0" />
-                                <span>{formatDateDMY(inspection.scheduled_date)}</span>
+                          {/* PENDING RESCHEDULE NOTICE BANNER */}
+                          {inspection.reschedule_requested && (
+                            <div className="scheduled-reschedule-alert">
+                              <div className="flex items-start gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
+                                  <CalendarClock size={19} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-extrabold text-amber-300 text-sm">
+                                      Alternate Date Suggested: {formatDateDMY(inspection.suggested_date)}
+                                    </span>
+                                    <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
+                                      {inspection.suggested_time_slot || 'Morning Slot'}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-slate-300 mt-1 leading-relaxed">
+                                    <span className="text-slate-400">Current Confirmed Visit: <strong className="text-white">{formatDateDMY(inspection.scheduled_date)}</strong></span>
+                                    {inspection.reschedule_reason && (
+                                      <span className="block mt-0.5">Reason: <em className="text-amber-200 font-semibold">"{inspection.reschedule_reason}"</em></span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <span className="text-slate-300 text-xs block font-medium">{inspection.time_slot || 'Morning Slot'}</span>
-                            </div>
 
-                            <div className="space-y-1">
-                              <span className="text-slate-400 font-bold block text-xs uppercase tracking-wider">Lead Field Assessor:</span>
-                              <div className="flex items-center gap-1.5 text-white font-black text-sm">
-                                <UserCheck size={15} className="text-emerald-400 shrink-0" />
-                                <span>{inspection.inspector_name || req.assigned_contractor_name || 'Assigned Field Assessor'}</span>
-                              </div>
-                              {(inspection.inspector_phone || req.assigned_contractor_phone) && (
-                                <a
-                                  href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone}`}
-                                  className="text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5 text-xs font-bold hover:underline"
+                              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 mt-2 sm:mt-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setRescheduleModalReq(req)}
+                                  className="scheduled-btn-modify-reschedule"
+                                  title="Change your suggested date or note"
                                 >
-                                  <Phone size={13} className="text-emerald-400" /> +91 {inspection.inspector_phone || req.assigned_contractor_phone}
-                                </a>
-                              )}
+                                  Modify Suggestion
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleWithdrawReschedule(reqId)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+                                  title="Cancel reschedule request and retain the originally confirmed appointment"
+                                >
+                                  Keep Original
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Details Grid: Balanced 2-Panel Layout */}
+                          <div className="scheduled-details-grid">
+                            {/* Panel 1: Timing, Assessor & Site Details */}
+                            <div className="scheduled-panel-card justify-between">
+                              <div className="space-y-3.5">
+                                <div>
+                                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                                    Appointment Window
+                                  </span>
+                                  <div className="flex items-center gap-2 text-white font-black text-sm">
+                                    <Clock size={16} className="text-emerald-400 shrink-0" />
+                                    <span>{formatDateDMY(inspection.scheduled_date)}</span>
+                                  </div>
+                                  <span className="text-emerald-300 text-xs block font-semibold mt-0.5">
+                                    {inspection.time_slot || 'Morning Slot'}
+                                  </span>
+                                  {(inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) && inspection.original_scheduled_date && (
+                                    <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1 font-medium">
+                                      <span>Rescheduled from:</span>
+                                      <span className="text-slate-300 line-through font-semibold">{formatDateDMY(inspection.original_scheduled_date)}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="pt-3 border-t border-emerald-500/15">
+                                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                                    Lead Field Assessor
+                                  </span>
+                                  <div className="flex items-center gap-2 text-white font-black text-sm">
+                                    <UserCheck size={16} className="text-emerald-400 shrink-0" />
+                                    <span>{inspection.inspector_name || req.assigned_contractor_name || 'Assigned Field Assessor'}</span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 block font-medium mt-0.5">
+                                    Verified Forestry Assessor • TreeConnect Contractor Crew
+                                  </span>
+                                  {(inspection.inspector_phone || req.assigned_contractor_phone) && (
+                                    <a
+                                      href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone}`}
+                                      className="text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1.5 text-xs font-bold hover:underline mt-1.5"
+                                    >
+                                      <Phone size={13} className="text-emerald-400" />
+                                      +91 {inspection.inspector_phone || req.assigned_contractor_phone}
+                                    </a>
+                                  )}
+                                </div>
+
+                                <div className="pt-3 border-t border-emerald-500/15">
+                                  <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                                    Inspection Site Parcel
+                                  </span>
+                                  <div className="flex items-center gap-2 text-slate-200 text-xs font-semibold">
+                                    <MapPin size={15} className="text-emerald-400 shrink-0" />
+                                    <span className="truncate">{req.propertyName || 'Registered Timber Estate'}</span>
+                                  </div>
+                                  <span className="text-slate-400 text-xs block truncate mt-0.5">
+                                    {req.district || req.location || req.address || 'Kerala'}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
 
-                            <div className="space-y-1 sm:col-span-2">
-                              <span className="text-slate-400 font-bold block text-xs uppercase tracking-wider mb-1.5">
-                                Inspection Purpose &amp; Scope:
-                              </span>
-                              <div className="text-white text-xs font-semibold mb-2 flex items-center gap-2">
-                                <Target size={14} className="text-emerald-400 shrink-0" />
-                                <span>{inspection.inspection_purpose || 'Pre-quotation tree and property assessment'}</span>
+                            {/* Panel 2: Inspection Purpose & Scope Checklist */}
+                            <div className="scheduled-panel-card">
+                              <div>
+                                <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1.5">
+                                  Inspection Purpose &amp; Scope:
+                                </span>
+                                <div className="text-white text-xs sm:text-sm font-semibold mb-3 flex items-center gap-2">
+                                  <Target size={15} className="text-emerald-400 shrink-0" />
+                                  <span>{inspection.inspection_purpose || 'Pre-quotation tree and property assessment'}</span>
+                                </div>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+
+                              <div className="scheduled-checklist-grid">
                                 {[
                                   'Verify property location',
                                   'Verify tree quantity',
@@ -530,13 +1322,9 @@ const HarvestRequestsPage = () => {
                                   return (
                                     <div
                                       key={idx}
-                                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-2 ${
-                                        isActive
-                                          ? 'bg-emerald-950/60 border-emerald-500/35 text-slate-200'
-                                          : 'bg-black/30 border-slate-700/40 text-slate-500'
-                                      }`}
+                                      className={`scheduled-checklist-chip ${isActive ? 'active' : 'inactive'}`}
                                     >
-                                      <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] shrink-0 font-bold ${
+                                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 font-bold ${
                                         isActive ? 'bg-emerald-500 text-slate-950' : 'border border-slate-600 text-transparent'
                                       }`}>
                                         {isActive ? '✓' : ''}
@@ -551,33 +1339,44 @@ const HarvestRequestsPage = () => {
 
                           {/* Landowner Instructions / Note */}
                           {inspection.notes && (
-                            <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-start gap-3 text-xs sm:text-sm text-slate-100">
-                              <FileText size={17} className="text-emerald-400 shrink-0 mt-0.5" />
-                              <div>
-                                <strong className="text-emerald-300 block font-black mb-0.5 text-xs uppercase tracking-wider">
+                            <div className="scheduled-note-box text-xs sm:text-sm text-slate-100">
+                              <FileText size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                              <div className="min-w-0">
+                                <strong className="text-emerald-300 block font-black mb-1 text-xs uppercase tracking-wider">
                                   Contractor Access Note &amp; Instructions:
                                 </strong>
-                                <span className="leading-relaxed font-medium italic">"{inspection.notes}"</span>
+                                <p className="leading-relaxed font-medium italic text-slate-200">
+                                  "{inspection.notes}"
+                                </p>
                               </div>
                             </div>
                           )}
 
                           {/* Advisory & Action Bar */}
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-emerald-500/20 text-xs sm:text-sm">
-                            <div className="flex items-center gap-2.5 text-slate-300">
-                              <ShieldCheck size={17} className="text-emerald-400 shrink-0" />
+                          <div className="scheduled-action-bar text-xs sm:text-sm">
+                            <div className="flex items-start sm:items-center gap-2.5 text-slate-300 flex-1 min-w-0">
+                              <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
                               <span className="leading-relaxed">
-                                <strong className="text-white">Preparation Tip:</strong> Please ensure estate entrance gate is accessible and boundaries are marked for the survey crew.
+                                <strong className="text-white">Preparation Tip:</strong> Please ensure estate entrance gate is accessible and boundaries are marked for the survey crew. No tree cutting occurs during this visit.
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-2.5 shrink-0">
+                            <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => setRescheduleModalReq(req)}
+                                className="scheduled-btn-reschedule"
+                                title="Not available on this date? Suggest a convenient date for the contractor to visit"
+                              >
+                                <CalendarClock size={15} />
+                                <span>{inspection.reschedule_requested ? 'Modify Suggested Date' : 'Suggest Alternate Date / Reschedule'}</span>
+                              </button>
                               {(inspection.inspector_phone || req.assigned_contractor_phone) && (
                                 <a
                                   href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone}`}
-                                  className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-300 font-bold flex items-center gap-1.5 transition-all text-xs"
+                                  className="scheduled-btn-call"
                                 >
-                                  <Phone size={13} />
+                                  <Phone size={14} />
                                   <span>Call Inspector</span>
                                 </a>
                               )}
@@ -585,9 +1384,9 @@ const HarvestRequestsPage = () => {
                                 href={getGoogleMapsUrl(req)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-semibold flex items-center gap-1.5 transition-all"
+                                className="scheduled-btn-directions"
                               >
-                                <Navigation size={13} className="text-emerald-400" />
+                                <Navigation size={14} className="text-emerald-400" />
                                 <span>Parcel Directions</span>
                               </a>
                             </div>
@@ -597,223 +1396,264 @@ const HarvestRequestsPage = () => {
 
                       {/* CERTIFIED ON-SITE FIELD AUDIT REPORT (WHEN COMPLETED) */}
                       {isInspectionCompleted && (
-                        <div className="completed-inspection-card space-y-4">
-                          {/* Official Header */}
-                          <div className="completed-inspection-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-black/30">
-                                <FileCheck size={24} />
+                        <div className="completed-inspection-card">
+                          {/* 1. Official Certificate Header */}
+                          <div className="cert-header">
+                            <div className="cert-header-left">
+                              <div className="cert-badge-icon">
+                                <FileCheck size={26} />
                               </div>
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="text-base sm:text-xl font-extrabold text-white tracking-tight">
+                              <div className="cert-header-content">
+                                <div className="cert-title-row">
+                                  <h3 className="cert-main-title">
                                     Site Inspected &amp; Verified — Field Assessment Certificate
                                   </h3>
-                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                    {inspection.inspection_verdict === 'FEASIBLE' ? '✓ FEASIBLE FOR HARVESTING' : inspection.inspection_verdict || '✓ FEASIBLE FOR HARVESTING'}
+                                  <span className="cert-status-badge">
+                                    <CheckCircle2 size={13} className="text-emerald-400" />
+                                    <span>
+                                      {inspection.inspection_verdict === 'FEASIBLE' ? 'FEASIBLE FOR HARVESTING' : inspection.inspection_verdict || 'FEASIBLE FOR HARVESTING'}
+                                    </span>
                                   </span>
                                 </div>
-                                <p className="text-xs text-slate-300 mt-1">
+                                <p className="cert-header-desc">
                                   Field audit certified by contractor assessor. Parcel boundaries, standing timber volume, and haul truck accessibility verified.
                                 </p>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0">
+                            <div className="cert-header-right">
                               <button
                                 type="button"
                                 onClick={() => window.print()}
-                                className="px-3.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-emerald-500/40 text-slate-300 hover:text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                                className="cert-print-btn"
                               >
-                                <Printer size={13} />
+                                <Printer size={14} />
                                 <span>Print Certificate</span>
                               </button>
-                              <div className="px-3 py-1 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-right">
-                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Certified Date</span>
-                                <span className="text-xs font-bold text-emerald-300 block">
+                              <div className="cert-date-block">
+                                <span className="cert-date-label">Certified Date</span>
+                                <span className="cert-date-value">
                                   {formatDateDMY(inspection.inspected_at || inspection.completed_at || inspection.scheduled_date)}
                                 </span>
                               </div>
                             </div>
                           </div>
 
-                          {/* Inspection Purpose & Scope Checklist */}
-                          <div className="p-3.5 rounded-xl bg-[#030a05] border border-emerald-500/25 space-y-2.5">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-                              <span className="text-slate-400 font-medium flex items-center gap-1.5">
-                                <Target size={13} className="text-emerald-400" /> Inspection Purpose:
-                              </span>
-                              <strong className="text-emerald-300 font-semibold text-xs sm:text-sm">
-                                {inspection.inspection_purpose || 'Tree and property assessment'}
-                              </strong>
-                            </div>
-
-                            <div className="pt-2 border-t border-emerald-500/15">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
-                                Verified Scope Checklist (Certified Ground Truth)
-                              </span>
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                                {[
-                                  'Verify property location',
-                                  'Verify tree quantity',
-                                  'Confirm tree species',
-                                  'Assess tree condition',
-                                  'Record tree measurements',
-                                  'Check site accessibility',
-                                  'Check surrounding obstacles',
-                                  'Capture tree/property photographs'
-                                ].map((chk, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/25 text-slate-200 text-xs font-medium flex items-center gap-1.5"
-                                  >
-                                    <span className="w-3.5 h-3.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center text-[10px] shrink-0 font-bold">
-                                      ✓
-                                    </span>
-                                    <span className="truncate">{chk}</span>
-                                  </div>
-                                ))}
-                              </div>
+                          {/* 2. Inspection Purpose */}
+                          <div className="cert-purpose-section">
+                            <span className="cert-purpose-label">
+                              <Target size={14} className="text-emerald-400" />
+                              <span>Inspection Purpose</span>
+                            </span>
+                            <div className="cert-purpose-value">
+                              {inspection.inspection_purpose || 'Tree and property assessment'}
                             </div>
                           </div>
 
-                          {/* Certified Findings 8-Card Grid */}
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">
+                          {/* 3. Verified Scope Checklist */}
+                          <div className="cert-checklist-section">
+                            <span className="cert-section-heading">
+                              Verified Scope Checklist (Certified Ground Truth)
+                            </span>
+                            <div className="cert-checklist-grid">
+                              {[
+                                'Verify property location',
+                                'Verify tree quantity',
+                                'Confirm tree species',
+                                'Assess tree condition',
+                                'Record tree measurements',
+                                'Check site accessibility',
+                                'Check surrounding obstacles',
+                                'Capture tree/property photographs'
+                              ].map((chk, idx) => (
+                                <div key={idx} className="cert-checklist-row">
+                                  <span className="cert-checklist-badge">✓</span>
+                                  <span>{chk}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 4. Certified Technical Audit Findings */}
+                          <div className="cert-findings-section">
+                            <span className="cert-section-heading">
                               Certified Technical Audit Findings
                             </span>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                            <div className="cert-findings-grid">
                               {/* 1. Lead Assessor */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Lead Assessor</span>
-                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.inspector_name || req.assigned_contractor_name || 'Rohith kumar'}</span>
+                              <div className="cert-finding-card">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">Lead Assessor</span>
+                                  <span className="cert-finding-value">
+                                    {inspection.inspector_name || req.assigned_contractor_name || 'Rohith kumar'}
+                                  </span>
                                 </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <UserCheck size={14} />
+                                <div className="cert-finding-icon">
+                                  <UserCheck size={16} />
                                 </div>
                               </div>
 
                               {/* 2. Assessor Phone */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Assessor Phone</span>
-                                  <a href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone || '9746512243'}`} className="text-emerald-300 hover:underline font-semibold text-xs sm:text-sm flex items-center gap-1">
+                              <div className="cert-finding-card">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">Assessor Phone</span>
+                                  <a
+                                    href={`tel:${inspection.inspector_phone || req.assigned_contractor_phone || '9746512243'}`}
+                                    className="cert-finding-value text-emerald-300 hover:underline"
+                                  >
                                     +91 {inspection.inspector_phone || req.assigned_contractor_phone || '9746512243'}
                                   </a>
                                 </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <Phone size={14} />
+                                <div className="cert-finding-icon">
+                                  <Phone size={15} />
                                 </div>
                               </div>
 
-                              {/* 3. Verified Trees */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Verified Standing Trees</span>
-                                  <span className="text-emerald-300 font-bold text-xs sm:text-sm">{inspection.verified_tree_count || stands.reduce((sum, s) => sum + Number(s.numberOfTrees ?? 1), 0)} Trees Audited</span>
+                              {/* 3. Verified Standing Trees */}
+                              <div className="cert-finding-card">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">Verified Standing Trees</span>
+                                  <span className="cert-finding-value cert-finding-value-highlight">
+                                    {inspection.verified_tree_count || stands.reduce((sum, s) => sum + Number(s.numberOfTrees ?? 1), 0)} Trees Audited
+                                  </span>
                                 </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <Trees size={14} />
+                                <div className="cert-finding-icon">
+                                  <Trees size={16} />
                                 </div>
                               </div>
 
-                              {/* 4. Measured DBH & Height */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Avg. DBH / Canopy Height</span>
-                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.measured_avg_dbh || '65 - 80 cm'} • {inspection.canopy_height || '20m'}</span>
+                              {/* 4. Measured Avg. DBH */}
+                              <div className="cert-finding-card">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">
+                                    {inspection.canopy_height && inspection.canopy_height !== '18 - 24 m' && inspection.canopy_height !== '20m'
+                                      ? 'Avg. DBH / Canopy Height'
+                                      : 'Measured Avg. DBH'}
+                                  </span>
+                                  <span className="cert-finding-value">
+                                    {inspection.measured_avg_dbh || '70 - 80 cm'}
+                                    {inspection.canopy_height && inspection.canopy_height !== '18 - 24 m' && inspection.canopy_height !== '20m'
+                                      ? ` • ${inspection.canopy_height}`
+                                      : ''}
+                                  </span>
                                 </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <Ruler size={14} />
+                                <div className="cert-finding-icon">
+                                  <Ruler size={16} />
                                 </div>
                               </div>
 
                               {/* 5. Timber Soundness */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Timber Soundness</span>
-                                  <span className="text-emerald-300 font-semibold text-xs sm:text-sm">{inspection.timber_condition || 'Sound & Top Quality'}</span>
+                              <div className="cert-finding-card">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">Timber Soundness</span>
+                                  <span className="cert-finding-value cert-finding-value-highlight">
+                                    {inspection.timber_condition || 'Sound & Top Quality'}
+                                  </span>
                                 </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <ShieldCheck size={14} />
+                                <div className="cert-finding-icon">
+                                  <ShieldCheck size={16} />
                                 </div>
                               </div>
 
                               {/* 6. Haul Road Approach */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Haul Road Approach</span>
-                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.road_access_verification || 'Heavy truck accessible'}</span>
+                              <div className="cert-finding-card">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">Haul Road Approach</span>
+                                  <span className="cert-finding-value">
+                                    {inspection.road_access_verification || 'Heavy truck accessible'}
+                                  </span>
                                 </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <Truck size={14} />
-                                </div>
-                              </div>
-
-                              {/* 7. Distance to Haul Road */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Distance to Paved Road</span>
-                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.distance_to_haul_road || '25 meters'}</span>
-                                </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <Navigation size={14} />
+                                <div className="cert-finding-icon">
+                                  <Truck size={16} />
                                 </div>
                               </div>
 
-                              {/* 8. Terrain & Hazards */}
-                              <div className="p-3 rounded-xl bg-[#030a05] border border-emerald-500/20 flex items-center justify-between gap-2">
-                                <div>
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Terrain / Overhead Hazards</span>
-                                  <span className="text-white font-semibold text-xs sm:text-sm">{inspection.terrain_assessment || 'Gentle slope'} • {inspection.overhead_hazards || 'Clear'}</span>
+                              {/* 7. Distance to Paved Road */}
+                              <div className="cert-finding-card">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">Distance to Paved Road</span>
+                                  <span className="cert-finding-value">
+                                    {inspection.distance_to_haul_road || '25 meters'}
+                                  </span>
                                 </div>
-                                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                                  <AlertTriangle size={14} />
+                                <div className="cert-finding-icon">
+                                  <Navigation size={15} />
+                                </div>
+                              </div>
+
+                              {/* 8. Terrain & Overhead Hazards (spans 2 columns on 3-column desktop) */}
+                              <div className="cert-finding-card cert-finding-card-span-2">
+                                <div className="cert-finding-info">
+                                  <span className="cert-finding-label">Terrain / Overhead Hazards</span>
+                                  <span className="cert-finding-value">
+                                    {inspection.terrain_assessment || 'Gentle slope'} • {inspection.overhead_hazards || 'Clear of power lines'}
+                                  </span>
+                                </div>
+                                <div className="cert-finding-icon">
+                                  <AlertTriangle size={16} />
                                 </div>
                               </div>
                             </div>
                           </div>
 
-                          {/* Notes & Remarks */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {inspection.notes && (
-                              <div className="p-3 rounded-xl bg-[#06140b]/90 border border-emerald-500/20 text-xs text-slate-200 flex items-start gap-2.5">
-                                <FileText size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                                <div>
-                                  <strong className="text-slate-300 font-bold block mb-0.5 text-[11px] uppercase">Landowner Access Instructions:</strong>
-                                  <span className="leading-relaxed">{inspection.notes}</span>
+                          {/* 5. Landowner Access Instructions & Assessor Audit Remarks */}
+                          {(inspection.notes || inspection.inspection_remarks) && (
+                            <div className="cert-notes-grid">
+                              {inspection.notes && (
+                                <div className="cert-note-card cert-note-card-instructions">
+                                  <div className="cert-note-icon">
+                                    <FileText size={15} />
+                                  </div>
+                                  <div className="cert-note-content">
+                                    <span className="cert-note-title cert-note-title-instructions">
+                                      Landowner Access Instructions
+                                    </span>
+                                    <p className="cert-note-text">
+                                      {inspection.notes}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
 
-                            {inspection.inspection_remarks && (
-                              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/25 text-xs text-emerald-100 flex items-start gap-2.5">
-                                <ClipboardCheck size={14} className="text-emerald-400 shrink-0 mt-0.5" />
-                                <div>
-                                  <strong className="text-emerald-300 font-bold block mb-0.5 text-[11px] uppercase">Assessor Audit Remarks:</strong>
-                                  <span className="italic leading-relaxed">{inspection.inspection_remarks}</span>
+                              {inspection.inspection_remarks && (
+                                <div className="cert-note-card cert-note-card-remarks">
+                                  <div className="cert-note-icon">
+                                    <ClipboardCheck size={15} />
+                                  </div>
+                                  <div className="cert-note-content">
+                                    <span className="cert-note-title cert-note-title-remarks">
+                                      Assessor Audit Remarks
+                                    </span>
+                                    <p className="cert-note-text cert-note-text-remarks">
+                                      {inspection.inspection_remarks}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
-                          </div>
+                              )}
+                            </div>
+                          )}
 
-                          {/* Attached Photos */}
+                          {/* 6. Attached Field Inspection Photos */}
                           {Array.isArray(inspection.inspection_photos) && inspection.inspection_photos.length > 0 && (
-                            <div className="space-y-2">
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                            <div className="cert-photos-section">
+                              <span className="cert-section-heading">
                                 Attached Field Inspection Photos ({inspection.inspection_photos.length})
                               </span>
-                              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                              <div className="cert-photos-grid">
                                 {inspection.inspection_photos.map((ph, idx) => (
                                   <div
                                     key={idx}
                                     onClick={() => openPhotoLightbox(inspection.inspection_photos, idx, `Field Inspection Photo #${idx + 1}`)}
-                                    className="relative group rounded-lg overflow-hidden border border-emerald-500/30 h-20 bg-black cursor-pointer hover:border-emerald-400 transition-all"
+                                    className="cert-photo-item group"
+                                    title="Click to view full photo"
                                   >
-                                    <img src={ph} alt={`Inspection ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                      <ZoomIn size={14} className="text-emerald-300" />
+                                    <img
+                                      src={ph}
+                                      alt={`Inspection ${idx + 1}`}
+                                      className="cert-photo-img"
+                                    />
+                                    <div className="cert-photo-overlay">
+                                      <ZoomIn size={18} className="text-emerald-300" />
                                     </div>
                                   </div>
                                 ))}
@@ -821,13 +1661,35 @@ const HarvestRequestsPage = () => {
                             </div>
                           )}
 
-                          {/* Landowner Notice Banner */}
-                          <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-start gap-2.5 text-xs text-emerald-200">
-                            <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                            <span className="leading-relaxed">
+                          {/* 7. Landowner Notice Banner */}
+                          <div className="cert-notice-box">
+                            <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                            <span>
                               <strong className="text-white">Notice for Landowner:</strong> This parcel has been officially site-inspected and audited. Tree count, species soundness, and machinery extraction feasibility have been verified on-site by the licensed contractor.
                             </span>
                           </div>
+
+                          {/* Next Step / Pending Assessment Notice for Landowner */}
+                          {!isAssessmentSubmitted && !isAccepted && !isRevisionRequested && !activeAssessmentMap[reqId] && !req.assessment && (
+                            <div className="p-4 rounded-xl bg-[#030e06] border border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-md">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400 shrink-0">
+                                  <Clock size={18} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <strong className="text-white font-bold text-sm">Next Step: Formal Contractor Assessment &amp; Quotation</strong>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                      Pending Contractor Submission
+                                    </span>
+                                  </div>
+                                  <p className="text-slate-300 text-xs mt-0.5 leading-relaxed">
+                                    Lead Assessor <strong>{inspection.inspector_name || req.assigned_contractor_name || 'Rohith kumar'}</strong> has certified this inspection. The contractor is now completing the Formal Assessment Form with itemized costs (felling, extraction, haulage) and timber volume valuation. As soon as the contractor submits their proposal, the full quotation breakdown and contract authorization controls will appear right here.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1095,385 +1957,6 @@ const HarvestRequestsPage = () => {
                         )}
                       </div>
 
-                      {/* CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL SUBMITTED (WHEN ASSESSED) */}
-                      {(isAssessmentSubmitted || isAccepted || isRevisionRequested || activeAssessmentMap[reqId] || req.assessment) && (() => {
-                        const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
-                        const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
-                        const isPurchase = propType === 'Timber Purchase Offer';
-                        const isHybrid = propType === 'Purchase + Harvesting';
-                        const isService = propType === 'Harvesting Service Quotation';
-
-                        const assessedVolume = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume || stands.reduce((sum, s) => sum + parseVolumeNumber(s.estimatedVolume || s.volume), 0);
-                        const totalQuoteVal = assDoc.total_quote ?? req.total_quote ?? 110000;
-                        const purchaseOfferVal = assDoc.contractor_purchase_offer ?? req.contractor_purchase_offer;
-                        const purchasePriceVal = assDoc.timber_purchase_price ?? req.timber_purchase_price;
-                        const harvestArrangementCostVal = assDoc.harvesting_arrangement_cost ?? req.harvesting_arrangement_cost;
-                        const refVal = assDoc.estimated_timber_value ?? req.estimated_timber_value;
-                        const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
-                        const validUntilVal = assDoc.offer_valid_until || req.offer_valid_until;
-
-                        return (
-                          <div className="assessment-summary-card">
-                            <div className="review-section-header">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                                  {isPurchase ? <Coins size={16} /> : isHybrid ? <Handshake size={16} /> : <FileText size={16} />}
-                                </div>
-                                <div>
-                                  <h4 className="review-section-title uppercase tracking-wide">
-                                    {isPurchase
-                                      ? 'Contractor Timber Purchase Offer'
-                                      : isHybrid
-                                        ? 'Purchase + Harvesting Commercial Proposal'
-                                        : 'Contractor Quotation & Manpower Assessment'}
-                                  </h4>
-                                  <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
-                                    {isPurchase
-                                      ? 'Formal offer by contractor to purchase the timber from you.'
-                                      : isHybrid
-                                        ? 'Combined agreement: contractor purchases timber and undertakes harvesting operations.'
-                                        : 'Formal on-site evaluation, estimated harvest yield, and operational quotation.'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                <span className={isAccepted ? "review-badge-green" : isRevisionRequested ? "review-badge-amber border-amber-500/50" : "review-badge-amber"}>
-                                  {isAccepted ? (
-                                    <>
-                                      <CheckCircle2 size={13} className="text-emerald-400" />
-                                      <span>Proposal Accepted & Authorized</span>
-                                    </>
-                                  ) : isRevisionRequested ? (
-                                    <>
-                                      <RefreshCw size={13} className="text-amber-400" />
-                                      <span>Revision Requested by You</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Clock size={13} className="text-amber-400" />
-                                      <span>Proposal Under Review</span>
-                                    </>
-                                  )}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => window.print()}
-                                  className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
-                                  title="Print Formal Assessment Report"
-                                >
-                                  <Printer size={13} />
-                                  <span>Print Report</span>
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* COMMERCIAL ARRANGEMENT EXPLANATORY BANNER (REQUIREMENT 10) */}
-                            <div className={`commercial-flow-banner ${
-                              isPurchase
-                                ? 'commercial-flow-banner-purchase'
-                                : isHybrid
-                                  ? 'commercial-flow-banner-hybrid'
-                                  : 'commercial-flow-banner-service'
-                            }`}>
-                              <div className="flex items-center gap-3.5">
-                                <div className={`commercial-flow-icon ${
-                                  isPurchase
-                                    ? 'commercial-flow-icon-purchase'
-                                    : isHybrid
-                                      ? 'commercial-flow-icon-hybrid'
-                                      : 'commercial-flow-icon-service'
-                                }`}>
-                                  {isPurchase ? (
-                                    <Coins size={20} />
-                                  ) : isHybrid ? (
-                                    <Handshake size={20} />
-                                  ) : (
-                                    <Truck size={20} />
-                                  )}
-                                </div>
-                                <div>
-                                  <strong className="block text-sm sm:text-base font-extrabold text-white tracking-tight">
-                                    {isService && (
-                                      <>
-                                        Contractor is offering harvesting services for{' '}
-                                        <span className="text-amber-300 font-black">{formatINR(totalQuoteVal)}</span>.
-                                      </>
-                                    )}
-                                    {isPurchase && (
-                                      <>
-                                        Contractor is offering to purchase the timber for{' '}
-                                        <span className="text-emerald-400 font-black">{formatINR(purchaseOfferVal || 0)}</span>.
-                                      </>
-                                    )}
-                                    {isHybrid && (
-                                      <>
-                                        Contractor is offering to purchase the timber for{' '}
-                                        <span className="text-emerald-400 font-black">{formatINR(purchasePriceVal || 0)}</span>{' '}
-                                        and undertake the harvesting operation under the stated terms.
-                                      </>
-                                    )}
-                                  </strong>
-                                  <span className="text-xs text-slate-300 font-medium block mt-1">
-                                    {isService && 'Money flow: Landowner → Contractor (You pay contractor for harvesting operations).'}
-                                    {isPurchase && 'Money flow: Contractor → Landowner (Contractor pays you to purchase the timber. No harvesting charges).'}
-                                    {isHybrid && 'Money flow: Commercial purchase with agreed operational harvesting arrangement.'}
-                                  </span>
-                                </div>
-                              </div>
-                              <span className={`commercial-flow-badge ${
-                                isPurchase
-                                  ? 'commercial-flow-badge-purchase'
-                                  : isHybrid
-                                    ? 'commercial-flow-badge-hybrid'
-                                    : 'commercial-flow-badge-service'
-                              }`}>
-                                {propType}
-                              </span>
-                            </div>
-
-                            {/* RESPONSIVE SPECIFICATION GRID (TAILORED TO PROPOSAL TYPE) */}
-                            <div className="assessment-metrics-grid">
-                              {/* 1. Assessed Volume */}
-                              <div className="assessment-metric-item">
-                                <span className="assessment-metric-label">
-                                  <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
-                                </span>
-                                <strong className="assessment-metric-value-emerald">
-                                  {formatVolume(assessedVolume)}
-                                </strong>
-                              </div>
-
-                              {/* 2 & 3: Proposal Specific Financial Values */}
-                              {isService && (
-                                <>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
-                                    </span>
-                                    <strong className="assessment-metric-value-amber">
-                                      {formatINR(totalQuoteVal)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {assDoc.assigned_workers_count || assDoc.workers_assigned || req.assigned_workers_count || req.workers_assigned || 12} Workers
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {assDoc.estimated_duration || req.estimated_duration || '10 Working Days'}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || '2026-10-02')}
-                                    </strong>
-                                  </div>
-                                </>
-                              )}
-
-                              {isPurchase && (
-                                <>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Reference Timber Value
-                                    </span>
-                                    <strong className="assessment-metric-value-emerald">
-                                      {formatINR(refVal || 0)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Coins size={13} className="text-amber-400 shrink-0" /> Contractor Purchase Offer
-                                    </span>
-                                    <strong className="text-amber-400 font-extrabold text-base">
-                                      {formatINR(purchaseOfferVal || 0)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(validUntilVal)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <FileText size={13} className="text-slate-400 shrink-0" /> Payment Terms
-                                    </span>
-                                    <strong className="assessment-metric-value text-xs truncate" title={paymentTermsVal || 'As agreed'}>
-                                      {paymentTermsVal || 'Full settlement'}
-                                    </strong>
-                                  </div>
-                                </>
-                              )}
-
-                              {isHybrid && (
-                                <>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Timber Purchase Price
-                                    </span>
-                                    <strong className="assessment-metric-value-emerald">
-                                      {formatINR(purchasePriceVal || 0)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Truck size={13} className="text-amber-400 shrink-0" /> Harvesting Arrangement
-                                    </span>
-                                    <strong className="assessment-metric-value-amber text-xs truncate">
-                                      {harvestArrangementCostVal ? formatINR(harvestArrangementCostVal) : 'Included / As Agreed'}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(validUntilVal)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Operation Start
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
-                                    </strong>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-
-                            {/* PAYMENT TERMS & REMARKS CALLOUT */}
-                            {(paymentTermsVal || assDoc.notes || req.assessment?.notes) && (
-                              <div className="assessment-remarks-callout">
-                                {paymentTermsVal && (
-                                  <div className="flex items-baseline gap-2">
-                                    <strong className="text-emerald-400 font-bold shrink-0">Commercial Payment Terms: </strong>
-                                    <span className="text-slate-200">{paymentTermsVal}</span>
-                                  </div>
-                                )}
-                                {(assDoc.notes || req.assessment?.notes || assDoc.site_notes) && (
-                                  <div className="flex items-baseline gap-2">
-                                    <strong className="text-emerald-400 font-bold shrink-0">Contractor Site Remarks: </strong>
-                                    <span className="text-slate-200">{assDoc.notes || req.assessment?.notes || assDoc.site_notes}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* LANDOWNER REVISION STATUS (WHEN REVISION IS REQUESTED) */}
-                            {isRevisionRequested ? (
-                              <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/35 flex flex-col gap-3 shadow-lg">
-                                <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-                                      <RefreshCw size={16} />
-                                    </div>
-                                    <div>
-                                      <span className="font-extrabold text-amber-300 text-sm block">
-                                        Revision Requested from {req.assigned_contractor_name || 'Contractor'}
-                                      </span>
-                                      <span className="text-[11px] text-slate-400">
-                                        Contractor has been notified to review and submit an updated assessment.
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
-                                    className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
-                                  >
-                                    <RefreshCw size={12} />
-                                    <span>Update Revision Request</span>
-                                  </button>
-                                </div>
-
-                                {/* Display requested points */}
-                                {Array.isArray(assDoc.revision_reasons || req.revision_reasons) && (assDoc.revision_reasons || req.revision_reasons).length > 0 && (
-                                  <div className="flex items-center gap-2 flex-wrap pt-1">
-                                    <span className="text-xs text-slate-400 font-semibold">Specified adjustments:</span>
-                                    {(assDoc.revision_reasons || req.revision_reasons).map((reason, idx) => (
-                                      <span key={idx} className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/90 border border-amber-500/40 text-amber-300 shadow-sm">
-                                        {reason}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* Display landowner feedback notes */}
-                                {(assDoc.landowner_feedback || req.landowner_feedback) && (
-                                  <div className="p-3 rounded-xl bg-black/50 border border-amber-500/25 text-xs text-slate-200 italic leading-relaxed">
-                                    "{assDoc.landowner_feedback || req.landowner_feedback}"
-                                  </div>
-                                )}
-                              </div>
-                            ) : isAssessmentSubmitted ? (
-                              <div className="assessment-action-bar">
-                                <div className="assessment-action-hint">
-                                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                                    <ShieldCheck size={15} />
-                                  </div>
-                                  <span>
-                                    {isPurchase
-                                      ? 'Accepting the purchase offer enters into a binding timber sale agreement with the contractor.'
-                                      : isHybrid
-                                        ? 'Accepting confirms the timber purchase valuation and authorizes harvesting operations.'
-                                        : 'Authorizing the assessment confirms the quotation and schedules the contractor for operations.'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-3 flex-wrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAssessmentAction(reqId, 'REJECTED', 'Landowner declined this commercial proposal.')}
-                                    className="assessment-btn-decline"
-                                  >
-                                    <XCircle size={15} />
-                                    <span>Decline Proposal</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
-                                    className="assessment-btn-revision"
-                                  >
-                                    <RefreshCw size={14} />
-                                    <span>Request Revision</span>
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
-                                    className="assessment-btn-accept"
-                                  >
-                                    <CheckCircle2 size={16} />
-                                    <span>
-                                      {isPurchase
-                                        ? 'Accept Purchase Offer'
-                                        : isHybrid
-                                          ? 'Accept Proposal & Authorize'
-                                          : 'Accept Assessment & Authorize'}
-                                    </span>
-                                  </button>
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })()}
 
                       {/* ASSIGNED CONTRACTOR / SELECTION FOOTER BAR */}
                       {isAssigned ? (
@@ -1551,22 +2034,43 @@ const HarvestRequestsPage = () => {
               />
             )}
 
-            {/* MODAL FOR REVISION REQUEST */}
+            {/* MODAL FOR REVISION REQUEST & FAIR DEAL COUNTER-OFFER */}
             {revisionModalReq && (
               <RevisionRequestModal
                 request={revisionModalReq.req}
                 assessment={revisionModalReq.assessment}
                 contractorName={revisionModalReq.req?.assigned_contractor_name || 'Assigned Contractor'}
                 onClose={() => setRevisionModalReq(null)}
-                onSubmit={async (reasons, notes) => {
+                onSubmit={async (reasons, notes, counterAmount, counterDate) => {
                   await handleAssessmentAction(
                     revisionModalReq.reqId,
                     'REVISION_REQUESTED',
                     notes,
-                    reasons
+                    reasons,
+                    counterAmount,
+                    counterDate
                   );
                   setRevisionModalReq(null);
                 }}
+              />
+            )}
+
+            {/* MODAL FOR DIGITAL HARVEST AGREEMENT */}
+            {selectedAgreementModal && (
+              <DigitalAgreementModal
+                request={selectedAgreementModal.req}
+                assessment={selectedAgreementModal.assessment}
+                onClose={() => setSelectedAgreementModal(null)}
+              />
+            )}
+
+            {/* MODAL FOR SUGGESTING ALTERNATE SITE INSPECTION DATE */}
+            {rescheduleModalReq && (
+              <RescheduleInspectionModal
+                request={rescheduleModalReq}
+                onClose={() => setRescheduleModalReq(null)}
+                onSubmit={(data) => handleRescheduleInspection(rescheduleModalReq.id || rescheduleModalReq._id, data)}
+                onWithdraw={() => handleWithdrawReschedule(rescheduleModalReq.id || rescheduleModalReq._id)}
               />
             )}
 

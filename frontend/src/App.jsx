@@ -182,6 +182,30 @@ function App() {
               }
             />
             <Route
+              path="/contractor/jobs"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <ContractorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/equipment"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <ContractorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/fleet"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <ContractorDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/contractor/assigned-jobs"
               element={
                 <ProtectedRoute allowedRoles={['contractor']}>
@@ -191,6 +215,14 @@ function App() {
             />
             <Route
               path="/contractor/assigned-harvest-requests"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <AssignedHarvestJobsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/projects"
               element={
                 <ProtectedRoute allowedRoles={['contractor']}>
                   <AssignedHarvestJobsPage />

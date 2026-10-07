@@ -1,0 +1,349 @@
+/* ==========================================================================
+   DIGITAL COMMERCIAL HARVEST AGREEMENT MODAL CSS (TreeConnect)
+   ========================================================================== */
+
+.digital-agr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(2, 8, 4, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  overflow-y: auto;
+  animation: agrFadeIn 0.2s ease-out;
+}
+
+@keyframes agrFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.digital-agr-modal {
+  width: 100%;
+  max-width: 860px;
+  max-height: 92vh;
+  margin: auto;
+  background: #08150e;
+  border: 1.5px solid rgba(16, 185, 129, 0.4);
+  border-radius: 24px;
+  color: #f1f5f9;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 40px rgba(16, 185, 129, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: agrScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes agrScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.digital-agr-header {
+  padding: 20px 28px;
+  background: #040d07;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.digital-agr-body {
+  padding: 28px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.digital-agr-document {
+  background: #051009;
+  border: 1.5px solid rgba(16, 185, 129, 0.25);
+  border-radius: 18px;
+  padding: 32px 36px;
+  position: relative;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.digital-agr-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: 64px;
+  font-weight: 900;
+  color: rgba(16, 185, 129, 0.04);
+  letter-spacing: 0.15em;
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.digital-agr-doc-header {
+  text-align: center;
+  border-bottom: 2px dashed rgba(16, 185, 129, 0.3);
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+}
+
+.digital-agr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.digital-agr-doc-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px 0;
+}
+
+.digital-agr-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font-size: 12px;
+  color: #94a3b8;
+  flex-wrap: wrap;
+}
+
+.digital-agr-parties-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+  .digital-agr-parties-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.digital-agr-party-card {
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: rgba(8, 23, 15, 0.75);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.digital-agr-party-role {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #34d399;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.digital-agr-party-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.digital-agr-party-detail {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.digital-agr-section {
+  margin-bottom: 20px;
+}
+
+.digital-agr-section-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #a7f3d0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.digital-agr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(16, 185, 129, 0.18);
+}
+
+.digital-agr-table th {
+  background: rgba(16, 185, 129, 0.1);
+  color: #94a3b8;
+  font-weight: 700;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.18);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.digital-agr-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+}
+
+.digital-agr-table tr:last-child td {
+  border-bottom: none;
+}
+
+.digital-agr-highlight-val {
+  color: #34d399;
+  font-weight: 800;
+}
+
+.digital-agr-clauses {
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+
+.digital-agr-clauses ol {
+  margin: 6px 0 0 16px;
+  padding: 0;
+}
+
+.digital-agr-clauses li {
+  margin-bottom: 5px;
+}
+
+.digital-agr-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 2px dashed rgba(16, 185, 129, 0.3);
+}
+
+@media (max-width: 640px) {
+  .digital-agr-signatures {
+    grid-template-columns: 1fr;
+  }
+}
+
+.digital-agr-sig-box {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  text-align: center;
+}
+
+.digital-agr-seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.digital-agr-sig-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.digital-agr-sig-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.digital-agr-footer {
+  padding: 18px 28px;
+  background: #040d07;
+  border-top: 1px solid rgba(16, 185, 129, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.digital-agr-status-ready {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #34d399;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .digital-agr-modal, .digital-agr-modal * {
+    visibility: visible;
+  }
+  .digital-agr-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    box-shadow: none;
+    border: none;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .digital-agr-header, .digital-agr-footer {
+    display: none !important;
+  }
+  .digital-agr-document {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #000000 !important;
+  }
+  .digital-agr-table td, .digital-agr-table th, .digital-agr-party-name, .digital-agr-doc-title {
+    color: #000000 !important;
+  }
+}

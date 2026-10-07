@@ -55,6 +55,8 @@ const RevisionRequestModal = ({
 }) => {
   const [selectedReasons, setSelectedReasons] = useState([]);
   const [notes, setNotes] = useState('');
+  const [counterOfferAmount, setCounterOfferAmount] = useState('');
+  const [counterOfferStartDate, setCounterOfferStartDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -69,14 +71,14 @@ const RevisionRequestModal = ({
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (selectedReasons.length === 0 && !notes.trim()) {
-      setErrorMsg('Please select at least one area needing adjustment or provide specific instructions.');
+    if (selectedReasons.length === 0 && !notes.trim() && !counterOfferAmount) {
+      setErrorMsg('Please select at least one area needing adjustment, propose a counter-offer, or provide specific instructions.');
       return;
     }
 
     setSubmitting(true);
     try {
-      await onSubmit(selectedReasons, notes.trim());
+      await onSubmit(selectedReasons, notes.trim(), counterOfferAmount, counterOfferStartDate);
     } finally {
       setSubmitting(false);
     }
@@ -194,6 +196,53 @@ const RevisionRequestModal = ({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* FAIR DEAL NEGOTIATION / COUNTER-OFFER */}
+          <div className="revision-counter-offer-section">
+            <div className="revision-counter-header">
+              <span className="revision-counter-title">
+                <DollarSign size={16} /> Fair Deal Counter-Proposal (Optional)
+              </span>
+              <span className="text-xs text-slate-400">
+                Current Quote: <strong className="text-amber-300 font-bold">{totalQuote ? formatINR(totalQuote) : '₹ 0'}</strong>
+              </span>
+            </div>
+
+            <div className="revision-counter-grid">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Your Target Budget / Counter-Offer (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={counterOfferAmount}
+                  onChange={(e) => setCounterOfferAmount(e.target.value)}
+                  placeholder="e.g. 95000"
+                  className="revision-input"
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Suggest a fair price for the contractor to reconsider.
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Preferred Alternative Start Date
+                </label>
+                <input
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  value={counterOfferStartDate}
+                  onChange={(e) => setCounterOfferStartDate(e.target.value)}
+                  className="revision-input"
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  If the proposed timeline needs modification.
+                </span>
+              </div>
             </div>
           </div>
 

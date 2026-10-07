@@ -92,6 +92,8 @@ class AssessmentStatusUpdate(BaseModel):
     status: str  # ACCEPTED, REJECTED, REVISION_REQUESTED
     feedback: Optional[str] = ""
     revision_reasons: Optional[List[str]] = []
+    counter_offer_amount: Optional[float] = None
+    counter_offer_start_date: Optional[str] = None
 
 class HarvestCompletionCreate(BaseModel):
     actual_harvested_volume: float
@@ -136,6 +138,19 @@ class CompleteInspectionRequest(BaseModel):
 class DeclineJobRequest(BaseModel):
     reason: Optional[str] = ""
     feedback: Optional[str] = ""
+
+class RescheduleInspectionRequest(BaseModel):
+    suggested_date: str
+    suggested_time_slot: Optional[str] = "Morning (09:00 AM - 12:00 PM)"
+    reschedule_reason: Optional[str] = "Landowner not available on scheduled date"
+    reschedule_notes: Optional[str] = ""
+    requested_by: Optional[str] = "LANDOWNER"
+
+class RespondRescheduleRequest(BaseModel):
+    action: str = "ACCEPT"  # "ACCEPT", "DECLINE", "CANCEL_REQUEST"
+    confirmed_date: Optional[str] = None
+    confirmed_time_slot: Optional[str] = None
+    contractor_note: Optional[str] = ""
 
 VALID_TRANSITIONS = {
     "PENDING": ["CONTRACTOR_ASSIGNED", "CANCELLED"],
@@ -693,6 +708,7 @@ def schedule_site_inspection(request_id: str, payload: ScheduleInspectionRequest
             "site_inspection": inspection_data,
             "inspection_status": current_status,
             "inspection_scheduled_date": payload.scheduled_date,
+            "reschedule_requested": False,
             "updatedAt": now_iso
         }
 
@@ -832,6 +848,175 @@ def decline_harvest_job(request_id: str, payload: DeclineJobRequest):
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to decline harvest job: {str(e)}"}
+        )
+
+# 5d. POST /api/harvest-requests/{id}/reschedule-inspection - Landowner suggests new site inspection date
+@router.post("/{request_id}/reschedule-inspection")
+def reschedule_site_inspection(request_id: str, payload: RescheduleInspectionRequest):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found"}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        existing_inspection = req_doc.get("site_inspection") or {}
+
+        orig_date = existing_inspection.get("original_scheduled_date") or existing_inspection.get("scheduled_date") or req_doc.get("inspection_scheduled_date")
+
+        # Build reschedule history entry
+        reschedule_entry = {
+            "suggested_date": payload.suggested_date,
+            "suggested_time_slot": payload.suggested_time_slot or "Morning (09:00 AM - 12:00 PM)",
+            "reschedule_reason": payload.reschedule_reason or "",
+            "reschedule_notes": payload.reschedule_notes or "",
+            "requested_at": now_iso,
+            "requested_by": payload.requested_by or "LANDOWNER",
+            "original_scheduled_date": orig_date
+        }
+        history = existing_inspection.get("reschedule_history", [])
+        if not isinstance(history, list):
+            history = []
+        history.append(reschedule_entry)
+
+        updated_inspection = {
+            **existing_inspection,
+            "original_scheduled_date": orig_date,
+            "reschedule_requested": True,
+            "reschedule_status": "PENDING_CONTRACTOR",
+            "suggested_date": payload.suggested_date,
+            "suggested_time_slot": payload.suggested_time_slot or "Morning (09:00 AM - 12:00 PM)",
+            "reschedule_reason": payload.reschedule_reason or "",
+            "reschedule_notes": payload.reschedule_notes or "",
+            "reschedule_requested_at": now_iso,
+            "reschedule_requested_by": payload.requested_by or "LANDOWNER",
+            "reschedule_history": history
+        }
+
+        update_fields = {
+            "site_inspection": updated_inspection,
+            "reschedule_requested": True,
+            "inspection_status": "RESCHEDULE_REQUESTED",
+            "updatedAt": now_iso
+        }
+
+        db.harvest_requests.update_one(req_query, {"$set": update_fields})
+        updated_req = db.harvest_requests.find_one(req_query)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": f"Reschedule request submitted for {payload.suggested_date}. The contractor has been notified.",
+                "harvest_request": serialize_doc(updated_req),
+                "site_inspection": updated_inspection
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to request inspection reschedule: {str(e)}"}
+        )
+
+# 5e. POST /api/harvest-requests/{id}/respond-reschedule - Contractor responds to landowner's date suggestion
+@router.post("/{request_id}/respond-reschedule")
+def respond_reschedule_inspection(request_id: str, payload: RespondRescheduleRequest):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found"}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        existing_inspection = req_doc.get("site_inspection") or {}
+
+        if payload.action == "ACCEPT":
+            orig_date = existing_inspection.get("original_scheduled_date") or existing_inspection.get("scheduled_date") or req_doc.get("inspection_scheduled_date")
+            new_date = payload.confirmed_date or existing_inspection.get("suggested_date") or existing_inspection.get("scheduled_date")
+            new_time_slot = payload.confirmed_time_slot or existing_inspection.get("suggested_time_slot") or existing_inspection.get("time_slot") or "Morning (09:00 AM - 12:00 PM)"
+
+            updated_inspection = {
+                **existing_inspection,
+                "original_scheduled_date": orig_date,
+                "scheduled_date": new_date,
+                "time_slot": new_time_slot,
+                "status": "CONFIRMED",
+                "reschedule_requested": False,
+                "reschedule_status": "ACCEPTED",
+                "contractor_reschedule_note": payload.contractor_note or "Contractor confirmed landowner's suggested date",
+                "rescheduled_at": now_iso
+            }
+
+            update_fields = {
+                "site_inspection": updated_inspection,
+                "inspection_status": "CONFIRMED",
+                "inspection_scheduled_date": new_date,
+                "reschedule_requested": False,
+                "updatedAt": now_iso
+            }
+
+            msg = f"Inspection rescheduled and confirmed for {new_date} ({new_time_slot})"
+        elif payload.action == "CANCEL_REQUEST":
+            # Landowner withdrew the reschedule request
+            updated_inspection = {
+                **existing_inspection,
+                "reschedule_requested": False,
+                "reschedule_status": "CANCELLED_BY_LANDOWNER"
+            }
+            update_fields = {
+                "site_inspection": updated_inspection,
+                "reschedule_requested": False,
+                "inspection_status": existing_inspection.get("status", "SCHEDULED"),
+                "updatedAt": now_iso
+            }
+            msg = "Reschedule request withdrawn. Original inspection schedule retained."
+        else:
+            # Decline
+            updated_inspection = {
+                **existing_inspection,
+                "reschedule_requested": False,
+                "reschedule_status": "DECLINED",
+                "contractor_reschedule_note": payload.contractor_note or ""
+            }
+            update_fields = {
+                "site_inspection": updated_inspection,
+                "reschedule_requested": False,
+                "updatedAt": now_iso
+            }
+            msg = "Reschedule request declined by contractor."
+
+        db.harvest_requests.update_one(req_query, {"$set": update_fields})
+        updated_req = db.harvest_requests.find_one(req_query)
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": msg,
+                "harvest_request": serialize_doc(updated_req),
+                "site_inspection": updated_inspection
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to respond to reschedule request: {str(e)}"}
         )
 
 # 6. POST /api/harvest-requests/{id}/assessment - Submit Contractor Assessment
@@ -1083,10 +1268,10 @@ def submit_contractor_assessment(
         if payload.proposed_start_date:
             hr_update["proposed_start_date"] = payload.proposed_start_date
 
-        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_query = {"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]} if ObjectId.is_valid(request_id) else {"$or": [{"id": request_id}, {"_id": request_id}]}
         db.harvest_requests.update_one(req_query, {"$set": hr_update})
 
-        assessment_result = db.contractor_assessments.find_one({"harvest_request_id": request_id})
+        assessment_result = db.contractor_assessments.find_one({"$or": [{"harvest_request_id": request_id}, {"_id": request_id}]})
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
@@ -1146,15 +1331,14 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
         updated_at = datetime.now(timezone.utc).isoformat()
 
         # Update assessment
-        db.contractor_assessments.update_one(
-            {"harvest_request_id": request_id},
-            {"$set": {
-                "status": new_status,
-                "landowner_feedback": payload.feedback or "",
-                "revision_reasons": payload.revision_reasons or [],
-                "updatedAt": updated_at
-            }}
-        )
+        ass_update = {
+            "status": new_status,
+            "landowner_feedback": payload.feedback or "",
+            "revision_reasons": payload.revision_reasons or [],
+            "counter_offer_amount": payload.counter_offer_amount,
+            "counter_offer_start_date": payload.counter_offer_start_date,
+            "updatedAt": updated_at
+        }
 
         # Update harvest request status accordingly
         req_status = "OPERATION_READY" if new_status == "ACCEPTED" else (
@@ -1165,34 +1349,57 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
             "status": req_status,
             "landowner_feedback": payload.feedback or "",
             "revision_reasons": payload.revision_reasons or [],
+            "counter_offer_amount": payload.counter_offer_amount,
+            "counter_offer_start_date": payload.counter_offer_start_date,
             "updatedAt": updated_at
         }
 
         # Check commercial proposal type for purchase ownership transition
-        assessment_rec = db.contractor_assessments.find_one({"harvest_request_id": request_id})
+        assessment_rec = db.contractor_assessments.find_one({"$or": [{"harvest_request_id": request_id}, {"_id": request_id}]})
         prop_type = (assessment_rec.get("commercial_proposal_type") if assessment_rec else None) or "Harvesting Service Quotation"
 
-        if new_status == "ACCEPTED" and prop_type in ["Timber Purchase Offer", "Purchase + Harvesting"]:
-            req_update["purchase_status"] = "PURCHASE_OFFER_ACCEPTED"
-            req_update["timber_ownership"] = "CONTRACTOR"
-            db.contractor_assessments.update_one(
-                {"harvest_request_id": request_id},
-                {"$set": {
-                    "purchase_status": "PURCHASE_OFFER_ACCEPTED",
-                    "timber_ownership": "CONTRACTOR"
-                }}
-            )
+        # Generate Digital Agreement when Accepted
+        if new_status == "ACCEPTED":
+            agreement_id = f"TC-AGR-{datetime.now().strftime('%Y%m%d')}-{str(request_id)[-6:].upper()}"
+            total_agreed = (assessment_rec.get("total_quote") or assessment_rec.get("contractor_purchase_offer") or assessment_rec.get("timber_purchase_price")) if assessment_rec else 110000
+            digital_agreement = {
+                "agreement_id": agreement_id,
+                "harvest_request_id": request_id,
+                "status": "FINALIZED",
+                "signed_at": updated_at,
+                "commercial_proposal_type": prop_type,
+                "total_agreed_amount": total_agreed,
+                "assessed_volume": assessment_rec.get("estimated_harvestable_volume") if assessment_rec else 1.70,
+                "proposed_start_date": assessment_rec.get("proposed_start_date") if assessment_rec else "",
+                "estimated_duration": assessment_rec.get("estimated_duration") if assessment_rec else "",
+                "terms_accepted": True,
+                "ready_to_start": True
+            }
+            ass_update["digital_agreement"] = digital_agreement
+            req_update["digital_agreement"] = digital_agreement
 
-        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+            if prop_type in ["Timber Purchase Offer", "Purchase + Harvesting"]:
+                req_update["purchase_status"] = "PURCHASE_OFFER_ACCEPTED"
+                req_update["timber_ownership"] = "CONTRACTOR"
+                ass_update["purchase_status"] = "PURCHASE_OFFER_ACCEPTED"
+                ass_update["timber_ownership"] = "CONTRACTOR"
+
+        db.contractor_assessments.update_one(
+            {"harvest_request_id": request_id},
+            {"$set": ass_update}
+        )
+
+        req_query = {"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]} if ObjectId.is_valid(request_id) else {"$or": [{"id": request_id}, {"_id": request_id}]}
         db.harvest_requests.update_one(req_query, {"$set": req_update})
 
-        updated_assessment = db.contractor_assessments.find_one({"harvest_request_id": request_id})
+        updated_assessment = db.contractor_assessments.find_one({"$or": [{"harvest_request_id": request_id}, {"_id": request_id}]})
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
                 "message": f"Assessment status updated to '{new_status}'",
-                "assessment": serialize_doc(updated_assessment)
+                "assessment": serialize_doc(updated_assessment),
+                "digital_agreement": digital_agreement if new_status == "ACCEPTED" else None
             }
         )
     except Exception as e:

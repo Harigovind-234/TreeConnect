@@ -25,6 +25,7 @@ import {
   Leaf,
   TrendingUp,
   Calendar,
+  CalendarClock,
   Clock,
   UserCheck,
   Phone,
@@ -259,88 +260,347 @@ const LandownerDashboard = () => {
             </div>
           </section>
 
-          {/* CERTIFIED SITE INSPECTION & AUDIT REPORT BANNER */}
-          {verifiedInspections.length > 0 && (
-            <section className="ld-scheduled-visit-alert" style={{ background: 'linear-gradient(135deg, rgba(6, 32, 20, 0.98) 0%, rgba(4, 20, 14, 0.98) 100%)', borderColor: 'rgba(16, 185, 129, 0.45)' }}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
-                <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-950/40">
-                    <FileCheck size={28} />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-500/50 shadow-sm shrink-0">
-                        <CheckCircle2 size={12} className="text-emerald-400" />
-                        Site Inspected &amp; Verified
-                      </span>
-                      <span className="text-xs sm:text-sm text-slate-300 font-semibold bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10 flex items-center gap-1 truncate max-w-full">
-                        <MapPin size={12} className="text-emerald-400 shrink-0" />
-                        <span className="truncate">{verifiedInspections[0].propertyName || 'Registered Estate'}</span>
-                      </span>
+          {/* CERTIFIED SITE INSPECTION & AUDIT REPORT BANNER (WHEN FIELD VERIFIED) */}
+          {verifiedInspections.length > 0 && (() => {
+            const certVisit = verifiedInspections[0];
+            const ins = certVisit.site_inspection || {};
+            const certId = certVisit.id || certVisit._id;
+            const certInspector = ins.inspector_name || certVisit.assigned_contractor_name || 'Licensed Forestry Assessor';
+            const certDate = ins.inspected_at || ins.completed_at || ins.scheduled_date;
+
+            return (
+              <section className="completed-inspection-card space-y-4">
+                <div className="completed-inspection-header flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-black/30">
+                      <FileCheck size={26} />
                     </div>
-                    <h3 className="text-lg sm:text-xl font-black text-white tracking-tight break-words">
-                      On-Site Assessment Complete — Field Certificate Ready
-                    </h3>
-                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed break-words">
-                      Field Assessor <strong className="text-emerald-400 font-bold">{verifiedInspections[0].site_inspection?.inspector_name || verifiedInspections[0].assigned_contractor_name || 'Licensed Assessor'}</strong> has verified parcel boundaries, standing timber condition, and haulage road clearance.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="shrink-0 self-stretch sm:self-auto sm:ml-auto flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedVisitModal(verifiedInspections[0])}
-                    className="w-full sm:w-auto px-5 py-2.5 sm:py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <FileCheck size={16} />
-                    <span>View Certified Report</span>
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* UPCOMING SCHEDULED SITE INSPECTION ALERT BANNER */}
-          {scheduledVisits.length > 0 && (
-            <section className="ld-scheduled-visit-alert">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
-                <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-950/40">
-                    <Calendar size={28} />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-500/40 shadow-sm shrink-0">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Scheduled Site Visit
-                      </span>
-                      <span className="text-xs sm:text-sm text-slate-300 font-semibold bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10 flex items-center gap-1 truncate max-w-full">
-                        <MapPin size={12} className="text-emerald-400 shrink-0" />
-                        <span className="truncate">{scheduledVisits[0].propertyName || 'Registered Estate'}</span>
-                      </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-base sm:text-xl font-extrabold text-white tracking-tight">
+                          Site Inspected &amp; Verified — Field Assessment Certificate
+                        </h2>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          {ins.inspection_verdict === 'FEASIBLE' ? '✓ FEASIBLE FOR HARVESTING' : ins.inspection_verdict || '✓ FEASIBLE FOR HARVESTING'}
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                        Field Assessor <strong className="text-emerald-400 font-bold">{certInspector}</strong> has verified parcel boundaries, standing timber condition, and haul road clearance for <strong className="text-white">{certVisit.propertyName || 'Registered Timber Estate'}</strong>.
+                      </p>
                     </div>
-                    <h3 className="text-lg sm:text-xl font-black text-white tracking-tight break-words">
-                      Parcel Inspection Confirmed for {formatDateDMY(scheduledVisits[0].site_inspection?.scheduled_date)}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed break-words">
-                      Field Assessor <strong className="text-emerald-400 font-bold">{scheduledVisits[0].site_inspection?.inspector_name || scheduledVisits[0].assigned_contractor_name || 'Assigned Assessor'}</strong> will conduct on-site audit during <span className="text-white font-semibold">{scheduledVisits[0].site_inspection?.time_slot || 'Morning (09:00 AM - 12:00 PM)'}</span>.
-                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                    <div className="px-3.5 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Certified Date</span>
+                      <span className="text-xs font-bold text-emerald-300 block">{formatDateDMY(certDate)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVisitModal(certVisit)}
+                      className="scheduled-btn-manage"
+                    >
+                      <FileCheck size={14} />
+                      <span>View Full Certificate</span>
+                      <ChevronRight size={14} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="shrink-0 self-stretch sm:self-auto sm:ml-auto">
-                  <button
-                    onClick={() => setSelectedVisitModal(scheduledVisits[0])}
-                    className="w-full sm:w-auto px-5 py-2.5 sm:py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <span>View Visit Details</span>
-                    <ChevronRight size={16} />
-                  </button>
+                {ins.inspection_remarks && (
+                  <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/25 text-xs text-slate-200">
+                    <strong className="text-emerald-300 block mb-0.5 font-bold uppercase tracking-wider text-[11px]">
+                      Assessor Official Remarks:
+                    </strong>
+                    <p className="italic text-emerald-100">"{ins.inspection_remarks}"</p>
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
+          {/* UPCOMING SCHEDULED SITE INSPECTION — FULL FIELD ASSESSMENT DETAILS */}
+          {scheduledVisits.length > 0 && (() => {
+            const visit = scheduledVisits[0];
+            const inspection = visit.site_inspection || {};
+            const visitId = visit.id || visit._id;
+            const inspectorName = inspection.inspector_name || visit.assigned_contractor_name || 'Assigned Field Assessor';
+            const inspectorPhone = inspection.inspector_phone || visit.assigned_contractor_phone || '';
+            const propName = visit.propertyName || 'Registered Timber Estate';
+            const propLocation = visit.district || visit.location || visit.address || 'Kerala';
+            const treeCount = visit.standing_trees_count || visit.total_trees || visit.treesCount || 1;
+            const treeSpecies = visit.tree_species || visit.species || visit.mainSpecies || 'Standing Timber';
+
+            const activeChecklist = Array.isArray(inspection.checklist || inspection.inspection_checklist) && (inspection.checklist || inspection.inspection_checklist).length > 0
+              ? (inspection.checklist || inspection.inspection_checklist)
+              : [
+                  'Verify property location',
+                  'Verify tree quantity',
+                  'Confirm tree species',
+                  'Assess tree condition',
+                  'Record tree measurements',
+                  'Check site accessibility',
+                  'Check surrounding obstacles',
+                  'Capture tree/property photographs'
+                ];
+
+            return (
+              <section className="scheduled-inspection-card">
+                <div className="scheduled-inspection-header">
+                  <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                      <Calendar size={24} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h2 className="text-base sm:text-xl font-black text-white">
+                          Site Inspection Visit Scheduled
+                        </h2>
+                        {inspection.reschedule_requested ? (
+                          <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            Reschedule Requested
+                          </span>
+                        ) : (inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) ? (
+                          <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                            ✓ Rescheduled Visit Confirmed
+                          </span>
+                        ) : (
+                          <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Confirmed On-Site Visit
+                          </span>
+                        )}
+                        {scheduledVisits.length > 1 && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-slate-300">
+                            +{scheduledVisits.length - 1} more visit
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+                        The assigned forestry contractor has booked an on-site field assessment to inspect parcel boundaries, tree condition, and haul road accessibility before quoting.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="scheduled-date-highlight">
+                    <span className="text-[11px] uppercase font-extrabold text-emerald-400 tracking-wider block">
+                      {(inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) ? 'Rescheduled Date' : 'Inspection Date'}
+                    </span>
+                    <span className="text-base sm:text-lg font-black text-white block mt-0.5">
+                      {formatDateDMY(inspection.scheduled_date)}
+                    </span>
+                    <span className="text-xs text-emerald-300 font-semibold block mt-0.5">
+                      {inspection.time_slot || 'Morning (09:00 AM - 12:00 PM)'}
+                    </span>
+                    {(inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) && inspection.original_scheduled_date && (
+                      <span className="text-[10px] text-slate-400 block mt-1 font-medium">
+                        Orig: <span className="line-through">{formatDateDMY(inspection.original_scheduled_date)}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </section>
-          )}
+
+                {/* PENDING RESCHEDULE NOTICE BANNER */}
+                {inspection.reschedule_requested && (
+                  <div className="scheduled-reschedule-alert">
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
+                        <CalendarClock size={19} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-amber-300 text-sm">
+                            Alternate Date Suggested: {formatDateDMY(inspection.suggested_date)}
+                          </span>
+                          <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
+                            {inspection.suggested_time_slot || 'Morning Slot'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                          {inspection.reschedule_reason ? (
+                            <span>Reason: <em className="text-amber-200 font-semibold">"{inspection.reschedule_reason}"</em></span>
+                          ) : (
+                            'Awaiting contractor confirmation. Preferred slot submitted.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => navigate('/landowner/harvest-requests', { state: { highlightRequestId: visitId } })}
+                      className="scheduled-btn-modify-reschedule"
+                      title="Manage suggested date in harvest requests"
+                    >
+                      Manage Reschedule
+                    </button>
+                  </div>
+                )}
+
+                {/* Details Grid: Balanced 2-Panel Layout */}
+                <div className="scheduled-details-grid">
+                  {/* Panel 1: Timing, Assessor & Site Details */}
+                  <div className="scheduled-panel-card justify-between">
+                    <div className="space-y-3.5">
+                      <div>
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                          Appointment Window
+                        </span>
+                        <div className="flex items-center gap-2 text-white font-black text-sm">
+                          <Clock size={16} className="text-emerald-400 shrink-0" />
+                          <span>{formatDateDMY(inspection.scheduled_date)}</span>
+                        </div>
+                        <span className="text-emerald-300 text-xs block font-semibold mt-0.5">
+                          {inspection.time_slot || 'Morning Slot'}
+                        </span>
+                      </div>
+
+                      <div className="pt-3 border-t border-emerald-500/15">
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                          Lead Field Assessor
+                        </span>
+                        <div className="flex items-center gap-2 text-white font-black text-sm">
+                          <UserCheck size={16} className="text-emerald-400 shrink-0" />
+                          <span>{inspectorName}</span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 block font-medium mt-0.5">
+                          Verified Forestry Assessor • TreeConnect Contractor Crew
+                        </span>
+                        {inspectorPhone && (
+                          <a
+                            href={`tel:${inspectorPhone}`}
+                            className="text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1.5 text-xs font-bold hover:underline mt-1.5"
+                          >
+                            <Phone size={13} className="text-emerald-400" />
+                            +91 {inspectorPhone}
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-emerald-500/15">
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                          Inspection Site Parcel
+                        </span>
+                        <div className="flex items-center gap-2 text-slate-200 text-xs font-semibold">
+                          <MapPin size={15} className="text-emerald-400 shrink-0" />
+                          <span className="truncate">{propName}</span>
+                        </div>
+                        <span className="text-slate-400 text-xs block truncate mt-0.5">
+                          {propLocation} • {treeCount} Standing Trees ({treeSpecies})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Panel 2: Inspection Purpose & Scope Checklist */}
+                  <div className="scheduled-panel-card">
+                    <div>
+                      <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block mb-1.5">
+                        Inspection Purpose &amp; Scope:
+                      </span>
+                      <div className="text-white text-xs sm:text-sm font-semibold mb-3 flex items-center gap-2">
+                        <Target size={15} className="text-emerald-400 shrink-0" />
+                        <span>{inspection.inspection_purpose || 'Pre-quotation tree and property assessment'}</span>
+                      </div>
+                    </div>
+
+                    <div className="scheduled-checklist-grid">
+                      {[
+                        'Verify property location',
+                        'Verify tree quantity',
+                        'Confirm tree species',
+                        'Assess tree condition',
+                        'Record tree measurements',
+                        'Check site accessibility',
+                        'Check surrounding obstacles',
+                        'Capture tree/property photographs'
+                      ].map((chk, idx) => {
+                        const isActive = activeChecklist.includes(chk);
+                        return (
+                          <div
+                            key={idx}
+                            className={`scheduled-checklist-chip ${isActive ? 'active' : 'inactive'}`}
+                          >
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 font-bold ${
+                              isActive ? 'bg-emerald-500 text-slate-950' : 'border border-slate-600 text-transparent'
+                            }`}>
+                              {isActive ? '✓' : ''}
+                            </span>
+                            <span className="truncate">{chk}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Landowner Instructions / Note */}
+                {inspection.notes && (
+                  <div className="scheduled-note-box text-xs sm:text-sm text-slate-100">
+                    <FileText size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <strong className="text-emerald-300 block font-black mb-1 text-xs uppercase tracking-wider">
+                        Contractor Access Note &amp; Instructions:
+                      </strong>
+                      <p className="leading-relaxed font-medium italic text-slate-200">
+                        "{inspection.notes}"
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Advisory & Action Bar */}
+                <div className="scheduled-action-bar text-xs sm:text-sm">
+                  <div className="flex items-start sm:items-center gap-2.5 text-slate-300 flex-1 min-w-0">
+                    <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
+                    <span className="leading-relaxed">
+                      <strong className="text-white">Preparation Tip:</strong> Please ensure estate entrance gate is accessible and boundaries are marked for the survey crew. No tree cutting occurs during this visit.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                    {inspectorPhone && (
+                      <a
+                        href={`tel:${inspectorPhone}`}
+                        className="scheduled-btn-call"
+                      >
+                        <Phone size={14} />
+                        <span>Call Inspector</span>
+                      </a>
+                    )}
+                    <a
+                      href={getGoogleMapsUrl(visit)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="scheduled-btn-directions"
+                    >
+                      <Navigation size={14} className="text-emerald-400" />
+                      <span>Parcel Directions</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/landowner/harvest-requests', { state: { highlightRequestId: visitId } })}
+                      className="scheduled-btn-reschedule"
+                      title="Not available on this date? Propose an alternate date in Harvest Requests"
+                    >
+                      <CalendarClock size={14} />
+                      <span>{inspection.reschedule_requested ? 'Modify Suggested Date' : 'Suggest Alternate Date'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/landowner/harvest-requests', { state: { highlightRequestId: visitId } })}
+                      className="scheduled-btn-manage"
+                    >
+                      <span>Manage in Harvest Requests</span>
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
 
           {/* 2. 3-COLUMN WIDGETS ROW */}
           <div className="ld-widgets-grid">
@@ -396,16 +656,16 @@ const LandownerDashboard = () => {
                 {scheduledVisits.length > 0 && (
                   <div
                     onClick={() => setSelectedVisitModal(scheduledVisits[0])}
-                    className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-500/35 hover:bg-sky-950/60 transition-colors flex items-center justify-between cursor-pointer"
+                    className="p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-500/40 hover:bg-emerald-950/70 transition-colors flex items-center justify-between cursor-pointer"
                     title="Click to view scheduled site visit details"
                   >
-                    <div className="flex items-center gap-2">
-                      <Calendar size={14} className="text-sky-400 shrink-0" />
-                      <span className="text-white font-bold text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Calendar size={14} className="text-emerald-400 shrink-0" />
+                      <span className="text-white font-bold text-xs truncate">
                         Site Visit: {scheduledVisits[0].propertyName || 'Estate'} ({formatDateDMY(scheduledVisits[0].site_inspection?.scheduled_date)})
                       </span>
                     </div>
-                    <span className="text-[10px] font-black text-sky-400 bg-sky-950 px-2 py-0.5 rounded border border-sky-500/40">
+                    <span className="text-[10px] font-black text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/50 shrink-0 ml-2">
                       Confirmed
                     </span>
                   </div>
@@ -1066,11 +1326,20 @@ const LandownerDashboard = () => {
                         </div>
                       </div>
 
-                      {/* 4. Measured DBH / Height */}
+                      {/* 4. Measured Avg. DBH */}
                       <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
                         <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Avg. DBH / Canopy Height</span>
-                          <span className="text-white font-semibold text-xs sm:text-sm">{ins.measured_avg_dbh || '65-80 cm'} • {ins.canopy_height || '20m'}</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                            {ins.canopy_height && ins.canopy_height !== '18 - 24 m' && ins.canopy_height !== '20m'
+                              ? 'Avg. DBH / Canopy Height'
+                              : 'Measured Avg. DBH'}
+                          </span>
+                          <span className="text-white font-semibold text-xs sm:text-sm">
+                            {ins.measured_avg_dbh || '70 - 80 cm'}
+                            {ins.canopy_height && ins.canopy_height !== '18 - 24 m' && ins.canopy_height !== '20m'
+                              ? ` • ${ins.canopy_height}`
+                              : ''}
+                          </span>
                         </div>
                         <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                           <Ruler size={14} />
@@ -1195,7 +1464,7 @@ const LandownerDashboard = () => {
                   <button
                     type="button"
                     onClick={() => setSelectedVisitModal(null)}
-                    className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-xs font-semibold cursor-pointer"
+                    className="cd-btn-modal-cancel"
                   >
                     Close
                   </button>
@@ -1205,7 +1474,7 @@ const LandownerDashboard = () => {
                       setSelectedVisitModal(null);
                       navigate('/landowner/harvest-requests', { state: { highlightRequestId: reqId } });
                     }}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 transition-all cursor-pointer"
+                    className="cd-btn-confirm-schedule"
                   >
                     <FileCheck size={14} /> View in Harvest Requests
                   </button>
@@ -1363,13 +1632,21 @@ const LandownerDashboard = () => {
                   <div className="flex gap-2">
                     <div className="cd-inspection-input flex-1 flex items-center justify-between font-medium">
                       <span className="text-white font-semibold">{visitDateStr}</span>
-                      <span className="text-xs text-slate-400">Scheduled Date</span>
+                      <span className="text-xs text-slate-400">
+                        {ins.original_scheduled_date ? 'Rescheduled Date' : 'Scheduled Date'}
+                      </span>
                     </div>
                     <span className="px-3.5 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-xs font-bold text-emerald-300 flex items-center gap-1.5 shrink-0">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      Confirmed Appointment
+                      {ins.original_scheduled_date ? 'Rescheduled Visit' : 'Confirmed Appointment'}
                     </span>
                   </div>
+                  {ins.original_scheduled_date && ins.original_scheduled_date !== ins.scheduled_date && (
+                    <div className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5 px-1 font-medium">
+                      <span>Originally booked for:</span>
+                      <span className="line-through text-slate-300">{formatDateDMY(ins.original_scheduled_date)}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Preferred Time Slot */}
@@ -1464,7 +1741,7 @@ const LandownerDashboard = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedVisitModal(null)}
-                  className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-xs font-semibold cursor-pointer"
+                  className="cd-btn-modal-cancel"
                 >
                   Close
                 </button>
@@ -1474,7 +1751,7 @@ const LandownerDashboard = () => {
                     setSelectedVisitModal(null);
                     navigate('/landowner/harvest-requests', { state: { highlightRequestId: reqId } });
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 transition-all cursor-pointer"
+                  className="cd-btn-confirm-schedule"
                 >
                   <Calendar size={14} /> View in Harvest Requests
                 </button>

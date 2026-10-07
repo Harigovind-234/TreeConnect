@@ -98,6 +98,69 @@ export const harvestService = {
     }
   },
 
+  // Landowner suggests alternate inspection date
+  rescheduleInspection: async (requestId, rescheduleData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/reschedule-inspection`, rescheduleData);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back to patch for rescheduleInspection (${requestId}):`, error);
+      const response = await api.patch(`/harvest-requests/${requestId}`, {
+        site_inspection: {
+          reschedule_requested: true,
+          reschedule_status: 'PENDING_CONTRACTOR',
+          suggested_date: rescheduleData.suggested_date,
+          suggested_time_slot: rescheduleData.suggested_time_slot,
+          reschedule_reason: rescheduleData.reschedule_reason,
+          reschedule_notes: rescheduleData.reschedule_notes,
+          reschedule_requested_at: new Date().toISOString()
+        },
+        reschedule_requested: true,
+        inspection_status: 'RESCHEDULE_REQUESTED'
+      });
+      return response.data;
+    }
+  },
+
+  // Contractor responds to reschedule (accept, decline, or counter)
+  respondReschedule: async (requestId, responseData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/respond-reschedule`, responseData);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back to patch for respondReschedule (${requestId}):`, error);
+      const isAccept = responseData.action === 'ACCEPT';
+      const isCancel = responseData.action === 'CANCEL_REQUEST';
+      const updatePayload = isAccept ? {
+        site_inspection: {
+          scheduled_date: responseData.confirmed_date,
+          time_slot: responseData.confirmed_time_slot,
+          reschedule_requested: false,
+          reschedule_status: 'ACCEPTED',
+          status: 'CONFIRMED'
+        },
+        reschedule_requested: false,
+        inspection_scheduled_date: responseData.confirmed_date,
+        inspection_status: 'CONFIRMED'
+      } : isCancel ? {
+        site_inspection: {
+          reschedule_requested: false,
+          reschedule_status: 'CANCELLED_BY_LANDOWNER'
+        },
+        reschedule_requested: false,
+        inspection_status: 'SCHEDULED'
+      } : {
+        site_inspection: {
+          reschedule_requested: false,
+          reschedule_status: 'DECLINED'
+        },
+        reschedule_requested: false
+      };
+      const response = await api.patch(`/harvest-requests/${requestId}`, updatePayload);
+      return response.data;
+    }
+  },
+
   // Decline assigned harvest job (e.g. Inaccessible or high risk after site inspection)
   declineJob: async (requestId, declineData) => {
     try {

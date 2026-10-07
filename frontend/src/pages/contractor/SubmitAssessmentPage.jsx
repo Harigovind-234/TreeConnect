@@ -40,7 +40,9 @@ import {
   Briefcase,
   Handshake,
   ShoppingBag,
-  RefreshCw
+  RefreshCw,
+  ClipboardCheck,
+  CalendarCheck
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -91,7 +93,29 @@ const addDaysToToday = (days) => {
   return `${year}-${month}-${day}`;
 };
 
-const validateProposedDate = (dateVal) => {
+// Extract approved/scheduled site inspection date
+const getApprovedInspectionDate = (req) => {
+  if (!req) return '';
+  const ins = req.site_inspection || {};
+  const candidates = [
+    ins.scheduled_date,
+    req.inspection_scheduled_date,
+    ins.suggested_date,
+    ins.approved_date,
+    ins.inspection_date,
+    ins.completed_at,
+    ins.inspected_at,
+    req.inspection_date
+  ];
+  for (const c of candidates) {
+    if (c && typeof c === 'string' && c.trim().length >= 10) {
+      return c.trim().substring(0, 10);
+    }
+  }
+  return '';
+};
+
+const validateProposedDate = (dateVal, minInspectionDate) => {
   if (!dateVal || !String(dateVal).trim()) {
     return 'Proposed Operation Start Date is mandatory.';
   }
@@ -99,6 +123,9 @@ const validateProposedDate = (dateVal) => {
   const today = getTodayDateString();
   if (cleanVal < today) {
     return 'Proposed Operation Start Date cannot be in the past. Please select today or a future date.';
+  }
+  if (minInspectionDate && cleanVal < minInspectionDate) {
+    return `Proposed Operation Start Date cannot be earlier than the approved site inspection date (${formatDateDMY(minInspectionDate)}). Field inspection must be completed before commencing harvesting operations.`;
   }
   const maxDate = getMaxDateString();
   if (cleanVal > maxDate) {
@@ -165,6 +192,11 @@ const SubmitAssessmentPage = () => {
   const [activePhotoModal, setActivePhotoModal] = useState(null);
   const [dateError, setDateError] = useState('');
   const dateInputRef = useRef(null);
+
+  const approvedInspectionDate = getApprovedInspectionDate(requestDetails);
+  const minOperationalDate = (approvedInspectionDate && approvedInspectionDate > getTodayDateString())
+    ? approvedInspectionDate
+    : getTodayDateString();
 
   const openLightbox = (photosList, index = 0, title = 'Site Photo') => {
     const validPhotos = (photosList || []).map(p => {
@@ -304,6 +336,7 @@ const extractLandownerValue = (req, vol) => {
 
           // Try fetching existing assessment
           let hasExistingAssessment = false;
+          const inspDate = getApprovedInspectionDate(combinedData);
           try {
             const existingAssessment = await harvestService.getAssessment(requestId);
             if (existingAssessment && (existingAssessment.assessment || existingAssessment.id)) {
@@ -312,7 +345,7 @@ const extractLandownerValue = (req, vol) => {
               setExistingAssessmentData(assData);
               const cleanExistingDate = assData.proposed_start_date ? String(assData.proposed_start_date).substring(0, 10) : '';
               if (cleanExistingDate) {
-                const initialDateErr = validateProposedDate(cleanExistingDate);
+                const initialDateErr = validateProposedDate(cleanExistingDate, inspDate);
                 if (initialDateErr) setDateError(initialDateErr);
               }
               // If contractor has already submitted an assessment, retain their assessed values
@@ -343,7 +376,7 @@ const extractLandownerValue = (req, vol) => {
                 offer_valid_until: cleanValidUntil || prev.offer_valid_until,
                 assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 12,
                 estimated_duration: assData.estimated_duration || prev.estimated_duration,
-                proposed_start_date: cleanExistingDate || prev.proposed_start_date,
+                proposed_start_date: cleanExistingDate || (inspDate && inspDate > prev.proposed_start_date ? inspDate : prev.proposed_start_date),
                 notes: assData.notes || prev.notes
               }));
             }
@@ -351,12 +384,13 @@ const extractLandownerValue = (req, vol) => {
             console.log('No prior assessment recorded yet for this job.');
           }
 
-          // If no prior assessment exists, default to landowner estimate
+          // If no prior assessment exists, default to landowner estimate and ensure start date is after inspection
           if (!hasExistingAssessment) {
             setAssessmentForm(prev => ({
               ...prev,
               estimated_harvestable_volume: Number(loVol.toFixed(2)),
-              estimated_timber_value: loVal > 0 ? loVal : calculateApproxTimberValue('Teak', loVol)
+              estimated_timber_value: loVal > 0 ? loVal : calculateApproxTimberValue('Teak', loVol),
+              proposed_start_date: (inspDate && inspDate > prev.proposed_start_date) ? inspDate : prev.proposed_start_date
             }));
           }
         } else {
@@ -388,6 +422,16 @@ const extractLandownerValue = (req, vol) => {
       preferred_end_date: '2026-09-25',
       required_services: ['Tree felling', 'Cutting', 'Timber extraction', 'Transportation', 'Site clearing'],
       propertyPhotos: [],
+      site_inspected: true,
+      site_inspection: {
+        status: 'COMPLETED',
+        scheduled_date: '2026-10-12',
+        estimated_volume: 1.8,
+        verified_tree_count: 1,
+        timber_condition: 'Sound & Top Quality',
+        road_access_verification: 'Medium 6-wheeler truck only'
+      },
+      inspection_scheduled_date: '2026-10-12',
       tree_inventory: [
         {
           id: 'inv_1',
@@ -482,7 +526,7 @@ const extractLandownerValue = (req, vol) => {
     }
 
     if (name === 'proposed_start_date') {
-      const dateErr = validateProposedDate(value);
+      const dateErr = validateProposedDate(value, approvedInspectionDate);
       setDateError(dateErr);
     }
 
@@ -509,6 +553,58 @@ const extractLandownerValue = (req, vol) => {
       estimated_harvestable_volume: Number(landownerEstimatedVolume.toFixed(2)),
       estimated_timber_value: landownerReferenceTimberValue > 0 ? landownerReferenceTimberValue : computedVal
     }));
+  };
+
+  const handleMatchLandownerTarget = () => {
+    const target = Number(requestDetails?.counter_offer_amount || existingAssessmentData?.counter_offer_amount);
+    if (!target || isNaN(target) || target <= 0) return;
+
+    if (assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation') {
+      const felling = Math.round(target * 0.40);
+      const extraction = Math.round(target * 0.28);
+      const transport = Math.round(target * 0.22);
+      const other = target - (felling + extraction + transport);
+      setAssessmentForm(prev => ({
+        ...prev,
+        harvesting_cost: felling,
+        extraction_cost: extraction,
+        transportation_cost: transport,
+        other_cost: other,
+        total_quote: target
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Timber Purchase Offer') {
+      setAssessmentForm(prev => ({
+        ...prev,
+        contractor_purchase_offer: target
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Purchase + Harvesting') {
+      setAssessmentForm(prev => ({
+        ...prev,
+        timber_purchase_price: target
+      }));
+    }
+
+    const targetDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date;
+    if (targetDate) {
+      setAssessmentForm(prev => ({
+        ...prev,
+        proposed_start_date: String(targetDate).substring(0, 10)
+      }));
+    }
+  };
+
+  const handleApplyInspectedVolume = () => {
+    const insVol = requestDetails?.site_inspection?.estimated_volume;
+    if (insVol !== undefined && insVol !== null && !isNaN(Number(insVol))) {
+      const volNum = Number(Number(insVol).toFixed(2));
+      const refRate = getTimberReferenceRate(primarySpecies);
+      const newVal = Math.round(volNum * refRate);
+      setAssessmentForm(prev => ({
+        ...prev,
+        estimated_harvestable_volume: volNum,
+        estimated_timber_value: newVal > 0 ? newVal : prev.estimated_timber_value
+      }));
+    }
   };
 
   // Submit Handler with Conditional Validation
@@ -540,7 +636,7 @@ const extractLandownerValue = (req, vol) => {
         return;
       }
 
-      const proposedDateError = validateProposedDate(assessmentForm.proposed_start_date);
+      const proposedDateError = validateProposedDate(assessmentForm.proposed_start_date, approvedInspectionDate);
       if (proposedDateError) {
         setDateError(proposedDateError);
         setFeedbackMessage({
@@ -663,7 +759,9 @@ const extractLandownerValue = (req, vol) => {
         workers_assigned: workersNum,
         estimated_duration: assessmentForm.estimated_duration || '',
         proposed_start_date: assessmentForm.proposed_start_date || '',
-        notes: assessmentForm.notes || ''
+        notes: assessmentForm.notes || '',
+        is_reassessed_after_inspection: Boolean(requestDetails?.site_inspected || requestDetails?.site_inspection?.status === 'COMPLETED'),
+        reassessed_at: new Date().toISOString()
       };
 
       await harvestService.submitAssessment(targetId, payload);
@@ -688,6 +786,8 @@ const extractLandownerValue = (req, vol) => {
                   timber_purchase_price: payload.timber_purchase_price,
                   assigned_workers_count: workersNum,
                   workers_assigned: workersNum,
+                  is_reassessed_after_inspection: payload.is_reassessed_after_inspection,
+                  reassessed_at: payload.reassessed_at,
                   updatedAt: new Date().toISOString()
                 };
               }
@@ -747,6 +847,11 @@ const extractLandownerValue = (req, vol) => {
   const isRevisionRequested = requestDetails?.status === 'REVISION_REQUESTED' || existingAssessmentData?.status === 'REVISION_REQUESTED';
   const revisionReasons = requestDetails?.revision_reasons || existingAssessmentData?.revision_reasons || [];
   const landownerFeedback = requestDetails?.landowner_feedback || existingAssessmentData?.landowner_feedback || '';
+  const counterOfferAmount = requestDetails?.counter_offer_amount || existingAssessmentData?.counter_offer_amount;
+  const counterOfferStartDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date;
+  const isSiteInspected = Boolean(requestDetails?.site_inspected || requestDetails?.site_inspection?.status === 'COMPLETED');
+  const inspectedVolume = requestDetails?.site_inspection?.estimated_volume;
+  const inspectedTrees = requestDetails?.site_inspection?.verified_tree_count;
 
   return (
     <div className="contractor-dashboard-page">
@@ -1382,13 +1487,14 @@ const extractLandownerValue = (req, vol) => {
 
               {/* BOTTOM SECTION: ASSESSMENT & QUOTATION FORM (STACKED UNDER PROPERTY) */}
               <div className="w-full">
-                <div className="cd-card border-emerald-500/40">
-                  <div className="border-b border-emerald-500/20 pb-4 mb-6 flex items-center justify-between">
+                <div className="assessment-workspace-card">
+                  {/* Formal Assessment Header */}
+                  <div className="assessment-header-block">
                     <div>
-                      <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
-                        <FileText size={20} className="text-emerald-400" /> Formal Contractor Assessment Form
+                      <h2 className="assessment-header-title">
+                        <FileText size={22} className="text-emerald-400 shrink-0" /> Formal Contractor Assessment Form
                       </h2>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="assessment-header-subtitle">
                         Fill in evaluated volumes and itemized quotation costs for the landowner.
                       </p>
                     </div>
@@ -1396,7 +1502,7 @@ const extractLandownerValue = (req, vol) => {
 
                   {/* Feedback Banner */}
                   {feedbackMessage.text && (
-                    <div className={`p-4 rounded-xl mb-6 text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-md ${feedbackMessage.type === 'success'
+                    <div className={`p-4 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-md ${feedbackMessage.type === 'success'
                         ? 'bg-emerald-950 border border-emerald-500 text-emerald-200'
                         : 'bg-red-950 border border-red-500 text-red-200'
                       }`}>
@@ -1409,22 +1515,56 @@ const extractLandownerValue = (req, vol) => {
                     </div>
                   )}
 
-                  {/* LANDOWNER REVISION REQUEST CALLOUT BANNER */}
+                  {/* ACTIVE LANDOWNER COUNTER-OFFER & NEGOTIATION BANNER */}
                   {isRevisionRequested && (
-                    <div className="cd-revision-notice-banner">
-                      <div className="cd-revision-notice-header">
-                        <RefreshCw size={18} className="text-amber-400 shrink-0" />
-                        <span>Landowner Requested Quotation Revision</span>
+                    <div className="p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 flex flex-col gap-3 shadow-xl">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                            <RefreshCw size={16} />
+                          </div>
+                          <div>
+                            <span className="font-extrabold text-amber-300 text-sm block">
+                              Active Landowner Negotiation &amp; Fair Deal Target
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              The landowner requested revisions to reach an agreeable deal before contract signing.
+                            </span>
+                          </div>
+                        </div>
+
+                        {counterOfferAmount > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleMatchLandownerTarget}
+                            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer transition-all flex items-center gap-1.5 shrink-0 hover:scale-[1.02]"
+                            title="Auto-fill your quotation to match the landowner's target budget"
+                          >
+                            <span>Match Landowner Target ({formatINR(counterOfferAmount)})</span>
+                          </button>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-200 leading-relaxed m-0">
-                        The landowner reviewed your initial assessment and requested the following adjustments before authorizing operations:
-                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs">
+                        {counterOfferAmount > 0 && (
+                          <div className="p-3 rounded-xl bg-black/50 border border-amber-500/30 flex items-center justify-between">
+                            <span className="text-slate-400 font-semibold">Landowner Target Budget:</span>
+                            <strong className="text-amber-400 font-extrabold text-sm">{formatINR(counterOfferAmount)}</strong>
+                          </div>
+                        )}
+                        {counterOfferStartDate && (
+                          <div className="p-3 rounded-xl bg-black/50 border border-amber-500/30 flex items-center justify-between">
+                            <span className="text-slate-400 font-semibold">Requested Start Date:</span>
+                            <strong className="text-white font-semibold text-xs">{formatDateDMY(counterOfferStartDate)}</strong>
+                          </div>
+                        )}
+                      </div>
 
                       {Array.isArray(revisionReasons) && revisionReasons.length > 0 && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs text-slate-400 font-bold">Adjustment Areas:</span>
+                        <div className="flex items-center gap-2 flex-wrap pt-1 text-xs">
+                          <span className="text-slate-400 font-semibold">Requested focus areas:</span>
                           {revisionReasons.map((reason, idx) => (
-                            <span key={idx} className="cd-revision-notice-pill">
+                            <span key={idx} className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/80 border border-amber-500/30 text-amber-300">
                               {reason}
                             </span>
                           ))}
@@ -1432,38 +1572,99 @@ const extractLandownerValue = (req, vol) => {
                       )}
 
                       {landownerFeedback && (
-                        <div className="cd-revision-notice-quote">
+                        <div className="p-3 rounded-xl bg-black/40 border border-amber-500/20 text-xs text-amber-100/90 italic leading-relaxed">
                           "{landownerFeedback}"
                         </div>
                       )}
-
-                      <p className="text-[12px] text-slate-400 m-0">
-                        Please adjust the numbers, schedule, or terms in the form below and click <strong>Submit Revised Assessment & Quotation</strong> to return the updated proposal to the landowner.
-                      </p>
                     </div>
                   )}
 
-                  <form onSubmit={handleSubmit} className="cd-form">
+                  {/* POST-SITE INSPECTION AUDIT FINDINGS SECTION */}
+                  {isSiteInspected && (
+                    <div className="assessment-verified-section">
+                      <div className="assessment-verified-header">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                            <ClipboardCheck size={16} />
+                          </div>
+                          <div>
+                            <span className="assessment-verified-title">
+                              On-Site Field Inspection Verified Findings
+                            </span>
+                            <span className="assessment-verified-desc">
+                              Ground truth data captured during certified parcel visit. Use verified metrics for accurate final quotation.
+                            </span>
+                          </div>
+                        </div>
+
+                        {inspectedVolume !== undefined && inspectedVolume !== null && (
+                          <button
+                            type="button"
+                            onClick={handleApplyInspectedVolume}
+                            className="assessment-apply-vol-btn"
+                            title="Auto-fill assessed volume using inspected volume"
+                          >
+                            <Layers size={13} />
+                            <span>Apply Inspected Volume ({inspectedVolume} m³)</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="assessment-verified-grid">
+                        <div className="assessment-verified-card">
+                          <span className="assessment-verified-card-label">Verified Trees</span>
+                          <strong className="assessment-verified-card-val">{inspectedTrees || 1} Standing Tree{inspectedTrees === 1 ? '' : 's'}</strong>
+                        </div>
+                        <div className="assessment-verified-card">
+                          <span className="assessment-verified-card-label">Verified Volume</span>
+                          <strong className="assessment-verified-card-val assessment-verified-card-val-green">{inspectedVolume || '1.8'} m³</strong>
+                        </div>
+                        {approvedInspectionDate && (
+                          <div className="assessment-verified-card">
+                            <span className="assessment-verified-card-label">Approved Inspection Date</span>
+                            <strong className="assessment-verified-card-val text-emerald-300 flex items-center gap-1.5 truncate">
+                              <CalendarCheck size={14} className="text-emerald-400 shrink-0" />
+                              {formatDateDMY(approvedInspectionDate)}
+                            </strong>
+                          </div>
+                        )}
+                        <div className="assessment-verified-card">
+                          <span className="assessment-verified-card-label">Timber Quality</span>
+                          <strong className="assessment-verified-card-val truncate" title={requestDetails?.site_inspection?.timber_condition || 'Sound & Top Quality'}>
+                            {requestDetails?.site_inspection?.timber_condition || 'Sound & Top Quality'}
+                          </strong>
+                        </div>
+                        <div className="assessment-verified-card">
+                          <span className="assessment-verified-card-label">Road Access</span>
+                          <strong className="assessment-verified-card-val truncate" title={requestDetails?.site_inspection?.road_access_verification || 'Medium 6-wheeler truck only'}>
+                            {requestDetails?.site_inspection?.road_access_verification || 'Medium 6-wheeler truck only'}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSubmit} className="cd-form flex flex-col gap-6">
 
                     {/* 1. COMMERCIAL PROPOSAL TYPE SELECTOR */}
-                    <div className="cd-form-group mb-6 p-4 sm:p-5 rounded-2xl bg-[#05130b] border border-emerald-500/30">
-                      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                        <label className="cd-form-label mb-0 text-white font-extrabold text-sm sm:text-base flex items-center gap-2">
-                          <Briefcase size={18} className="text-emerald-400" />
+                    <div className="assessment-proposal-section">
+                      <div className="assessment-section-title-row">
+                        <label className="assessment-section-title">
+                          <Briefcase size={16} className="text-emerald-400" />
                           Commercial Proposal Type *
                         </label>
-                        <span className="text-[11px] text-slate-400 font-medium">
+                        <span className="assessment-section-subtitle">
                           Select the commercial model for this landowner job
                         </span>
                       </div>
 
                       {/* Dropdown Selector */}
-                      <div className="relative mb-3">
+                      <div>
                         <select
                           name="commercial_proposal_type"
                           value={assessmentForm.commercial_proposal_type}
                           onChange={(e) => handleProposalTypeChange(e.target.value)}
-                          className="cd-input font-bold text-sm bg-[#08180e] text-emerald-300 border-emerald-500/40 cursor-pointer"
+                          className="assessment-input font-bold text-sm bg-[#08180e] text-emerald-300 border-emerald-500/40 cursor-pointer"
                         >
                           <option value="Harvesting Service Quotation">Harvesting Service Quotation (Landowner pays Contractor)</option>
                           <option value="Timber Purchase Offer">Timber Purchase Offer (Contractor pays Landowner)</option>
@@ -1471,7 +1672,7 @@ const extractLandownerValue = (req, vol) => {
                         </select>
                       </div>
 
-                      {/* 3 Interactive Cards for Quick Selection */}
+                      {/* 3 Interactive Cards for Visual Feedback */}
                       <div className="commercial-type-grid">
                         {/* Option 1: Harvesting Service Quotation */}
                         <div
@@ -1480,7 +1681,7 @@ const extractLandownerValue = (req, vol) => {
                         >
                           <div className="commercial-type-header">
                             <span className="commercial-type-title">
-                              <Truck size={16} className="text-blue-400" /> Harvesting Service Quotation
+                              <Truck size={15} className="text-blue-400" /> Harvesting Service Quotation
                             </span>
                             <span className="commercial-type-badge commercial-type-badge-service">Service Fee</span>
                           </div>
@@ -1499,7 +1700,7 @@ const extractLandownerValue = (req, vol) => {
                         >
                           <div className="commercial-type-header">
                             <span className="commercial-type-title">
-                              <Coins size={16} className="text-amber-400" /> Timber Purchase Offer
+                              <Coins size={15} className="text-amber-400" /> Timber Purchase Offer
                             </span>
                             <span className="commercial-type-badge commercial-type-badge-purchase">Timber Purchase</span>
                           </div>
@@ -1518,7 +1719,7 @@ const extractLandownerValue = (req, vol) => {
                         >
                           <div className="commercial-type-header">
                             <span className="commercial-type-title">
-                              <Handshake size={16} className="text-emerald-400" /> Purchase + Harvesting
+                              <Handshake size={15} className="text-emerald-400" /> Purchase + Harvesting
                             </span>
                             <span className="commercial-type-badge commercial-type-badge-hybrid">Combined</span>
                           </div>
@@ -1532,21 +1733,21 @@ const extractLandownerValue = (req, vol) => {
                       </div>
                     </div>
 
-                    {/* Volume & Indicative Reference Value Section */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
-                      <div className="cd-form-group">
-                        <div className="flex items-center justify-between flex-wrap gap-1 mb-1">
-                          <label className="cd-form-label mb-0">
+                    {/* 2. COMMERCIAL ASSESSMENT (Volume & Indicative Reference Value) */}
+                    <div className="assessment-commercial-grid">
+                      <div className="assessment-field-group">
+                        <div className="assessment-field-header">
+                          <label className="assessment-field-label">
                             Assessed Harvestable Volume (m³) *
                           </label>
                           {landownerEstimatedVolume > 0 && (
                             <button
                               type="button"
                               onClick={handleUseLandownerVolume}
-                              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer underline flex items-center gap-1"
+                              className="assessment-action-text-btn"
                               title="Reset assessed volume to landowner estimate"
                             >
-                              <Layers size={11} /> Use Landowner Volume ({formatVolume(landownerEstimatedVolume)})
+                              <Layers size={12} /> Use Landowner Volume ({formatVolume(landownerEstimatedVolume)})
                             </button>
                           )}
                         </div>
@@ -1557,11 +1758,11 @@ const extractLandownerValue = (req, vol) => {
                           name="estimated_harvestable_volume"
                           value={assessmentForm.estimated_harvestable_volume}
                           onChange={handleInputChange}
-                          className="cd-input font-bold text-emerald-300"
-                          placeholder="e.g. 1.70"
+                          className="assessment-input text-emerald-300"
+                          placeholder="e.g. 1.80"
                         />
-                        <div className="flex items-center justify-between flex-wrap gap-2 mt-1.5 text-[11px]">
-                          <span className="text-slate-400">
+                        <div className="assessment-field-footer">
+                          <span>
                             Landowner Estimate: <strong className="text-white font-semibold">{formatVolume(landownerEstimatedVolume)}</strong>
                           </span>
                           {(() => {
@@ -1570,7 +1771,7 @@ const extractLandownerValue = (req, vol) => {
                             if (assessedNum <= 0) return null;
                             if (variance === 0) {
                               return (
-                                <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10px] font-bold">
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[10.5px] font-bold">
                                   ✓ Matches Landowner Estimate (±0.00 m³)
                                 </span>
                               );
@@ -1578,7 +1779,7 @@ const extractLandownerValue = (req, vol) => {
                             const pct = ((variance / (landownerEstimatedVolume || 1)) * 100).toFixed(1);
                             const isHigher = variance > 0;
                             return (
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${
                                 isHigher 
                                   ? 'bg-blue-950/80 border-blue-500/40 text-blue-300' 
                                   : 'bg-amber-950/80 border-amber-500/40 text-amber-300'
@@ -1590,18 +1791,19 @@ const extractLandownerValue = (req, vol) => {
                         </div>
                       </div>
 
-                      <div className="cd-form-group">
-                        <div className="flex items-center justify-between flex-wrap gap-1 mb-1">
-                          <label className="cd-form-label mb-0">
-                            Reference Timber Value (₹) <span className="text-slate-400 font-normal text-xs">(Indicative)</span>
+                      <div className="assessment-field-group">
+                        <div className="assessment-field-header">
+                          <label className="assessment-field-label">
+                            Reference Timber Value (₹) <span className="text-slate-500 font-normal normal-case tracking-normal">(Indicative)</span>
                           </label>
                           {landownerReferenceTimberValue > 0 && (
                             <button
                               type="button"
                               onClick={() => setAssessmentForm(prev => ({ ...prev, estimated_timber_value: landownerReferenceTimberValue }))}
-                              className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer underline flex items-center gap-1"
+                              className="assessment-action-text-btn"
+                              title="Use reference timber value"
                             >
-                              <Coins size={11} /> Use Reference Value ({formatINR(landownerReferenceTimberValue)})
+                              <Coins size={12} /> Use Reference Value ({formatINR(landownerReferenceTimberValue)})
                             </button>
                           )}
                         </div>
@@ -1610,8 +1812,8 @@ const extractLandownerValue = (req, vol) => {
                           name="estimated_timber_value"
                           value={assessmentForm.estimated_timber_value}
                           onChange={handleInputChange}
-                          className="cd-input text-emerald-400 font-bold"
-                          placeholder="e.g. 237133"
+                          className="assessment-input text-emerald-400"
+                          placeholder="e.g. 251082"
                         />
                         {(() => {
                           const assessedNum = parseVolumeNumber(assessmentForm.estimated_harvestable_volume);
@@ -1619,17 +1821,17 @@ const extractLandownerValue = (req, vol) => {
                           const computedValue = Math.round(assessedNum * refRate);
                           const currentFormVal = Number(assessmentForm.estimated_timber_value) || 0;
                           return (
-                            <div className="flex items-center justify-between flex-wrap gap-2 mt-1.5 text-[11px]">
-                              <span className="text-slate-400">
+                            <div className="assessment-field-footer">
+                              <span>
                                 Indicative Rate: <strong className="text-amber-400 font-mono">{formatINR(refRate)}/m³</strong> ({primarySpecies})
                               </span>
                               {computedValue > 0 && Math.abs(currentFormVal - computedValue) > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => setAssessmentForm(prev => ({ ...prev, estimated_timber_value: computedValue }))}
-                                  className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer underline flex items-center gap-1"
+                                  className="assessment-action-text-btn text-[11px]"
                                 >
-                                  <Coins size={10} /> Auto-Rate: {formatINR(computedValue)} ({formatVolume(assessedNum)} × {formatINR(refRate)})
+                                  <Coins size={11} /> Auto-Rate: {formatINR(computedValue)}
                                 </button>
                               )}
                             </div>
@@ -1643,78 +1845,92 @@ const extractLandownerValue = (req, vol) => {
                         ========================================================== */}
                     {assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation' && (
                       <>
-                        {/* Cost Breakdown Section */}
-                        <div className="cd-cost-breakdown-box">
-                          <h4 className="text-xs font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <DollarSign size={15} /> Itemized Service Cost Breakdown (₹)
-                          </h4>
+                        {/* 3. ITEMIZED COST BREAKDOWN SECTION */}
+                        <div className="assessment-cost-section">
+                          <div className="assessment-section-title-row">
+                            <h4 className="assessment-section-title">
+                              <DollarSign size={16} className="text-emerald-400" /> ITEMIZED SERVICE COST BREAKDOWN (₹)
+                            </h4>
+                            <span className="assessment-section-subtitle">
+                              Cost components charged to landowner
+                            </span>
+                          </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="cd-form-group">
-                              <label className="text-[11px] font-semibold text-slate-300">Felling & Logging Cost (₹)</label>
+                          <div className="assessment-cost-grid">
+                            <div className="assessment-cost-item">
+                              <label className="assessment-cost-label">Felling & Logging Cost (₹)</label>
                               <input
                                 type="number"
                                 name="harvesting_cost"
                                 value={assessmentForm.harvesting_cost}
                                 onChange={handleInputChange}
-                                className="cd-input font-mono text-xs"
+                                className="assessment-input font-mono"
                                 placeholder="e.g. 45000"
                               />
                             </div>
 
-                            <div className="cd-form-group">
-                              <label className="text-[11px] font-semibold text-slate-300">Extraction / Skid-Trail Cost (₹)</label>
+                            <div className="assessment-cost-item">
+                              <label className="assessment-cost-label">Extraction / Skid-Trail Cost (₹)</label>
                               <input
                                 type="number"
                                 name="extraction_cost"
                                 value={assessmentForm.extraction_cost}
                                 onChange={handleInputChange}
-                                className="cd-input font-mono text-xs"
+                                className="assessment-input font-mono"
                                 placeholder="e.g. 30000"
                               />
                             </div>
 
-                            <div className="cd-form-group">
-                              <label className="text-[11px] font-semibold text-slate-300">Transportation / Haulage Cost (₹)</label>
+                            <div className="assessment-cost-item">
+                              <label className="assessment-cost-label">Transportation / Haulage Cost (₹)</label>
                               <input
                                 type="number"
                                 name="transportation_cost"
                                 value={assessmentForm.transportation_cost}
                                 onChange={handleInputChange}
-                                className="cd-input font-mono text-xs"
+                                className="assessment-input font-mono"
                                 placeholder="e.g. 25000"
                               />
                             </div>
 
-                            <div className="cd-form-group">
-                              <label className="text-[11px] font-semibold text-slate-300">Other / Site Clearing Cost (₹)</label>
+                            <div className="assessment-cost-item">
+                              <label className="assessment-cost-label">Other / Site Clearing Cost (₹)</label>
                               <input
                                 type="number"
                                 name="other_cost"
                                 value={assessmentForm.other_cost}
                                 onChange={handleInputChange}
-                                className="cd-input font-mono text-xs"
+                                className="assessment-input font-mono"
                                 placeholder="e.g. 10000"
                               />
                             </div>
                           </div>
 
                           {/* Total Quotation Summary */}
-                          <div className="cd-total-quote-box">
-                            <span className="text-slate-200 font-bold text-xs sm:text-sm">Total Contractor Quotation:</span>
-                            <span className="cd-total-quote-amount">
+                          <div className="assessment-total-quote-box">
+                            <span className="assessment-total-quote-label">Total Contractor Quotation:</span>
+                            <span className="assessment-total-quote-val">
                               ₹ {Number(assessmentForm.total_quote || 0).toLocaleString('en-IN')}
                             </span>
                           </div>
                         </div>
 
-                        {/* Operational Manpower, Schedule & Duration */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                          <div className="cd-form-group">
-                            <label className="cd-form-label">
-                              Number of Workers Assigned *
-                            </label>
-                            <div className="relative">
+                        {/* 4. OPERATIONAL PLAN SECTION */}
+                        <div className="assessment-operational-section">
+                          <div className="assessment-section-title-row">
+                            <h4 className="assessment-section-title">
+                              <Users size={16} className="text-emerald-400" /> OPERATIONAL PLAN
+                            </h4>
+                            <span className="assessment-section-subtitle">
+                              Workforce, job duration, and mobilization schedule
+                            </span>
+                          </div>
+
+                          <div className="assessment-operational-grid">
+                            <div className="assessment-field-group">
+                              <label className="assessment-field-label">
+                                Number of Workers Assigned *
+                              </label>
                               <input
                                 type="number"
                                 min="1"
@@ -1723,108 +1939,126 @@ const extractLandownerValue = (req, vol) => {
                                 name="assigned_workers_count"
                                 value={assessmentForm.assigned_workers_count}
                                 onChange={handleInputChange}
-                                className="cd-input font-bold text-emerald-400"
+                                className="assessment-input text-emerald-400"
                                 placeholder="e.g. 12"
                               />
+                              <span className="text-[11px] text-slate-400">
+                                Total workforce deployed for this job
+                              </span>
                             </div>
-                            <span className="text-[10.5px] text-slate-400 block mt-1.5">
-                              Total workforce deployed for this job (e.g. 12)
-                            </span>
-                          </div>
 
-                          <div className="cd-form-group">
-                            <label className="cd-form-label">
-                              Estimated Job Duration *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              name="estimated_duration"
-                              value={assessmentForm.estimated_duration}
-                              onChange={handleInputChange}
-                              className="cd-input font-bold"
-                              placeholder="e.g. 10 Working Days"
-                            />
-                            <span className="text-[10.5px] text-slate-400 block mt-1.5">
-                              Operational time required (e.g. 10 Working Days)
-                            </span>
-                          </div>
-
-                          <div className="cd-form-group">
-                            <label className="cd-form-label">
-                              Proposed Operation Start Date *
-                            </label>
-                            <div className="relative flex items-center">
+                            <div className="assessment-field-group">
+                              <label className="assessment-field-label">
+                                Estimated Job Duration *
+                              </label>
                               <input
-                                ref={dateInputRef}
-                                type="date"
+                                type="text"
                                 required
-                                min={getTodayDateString()}
-                                max={getMaxDateString()}
-                                name="proposed_start_date"
-                                value={assessmentForm.proposed_start_date}
+                                name="estimated_duration"
+                                value={assessmentForm.estimated_duration}
                                 onChange={handleInputChange}
-                                onClick={(e) => {
-                                  try {
-                                    if (typeof e.target.showPicker === 'function') {
-                                      e.target.showPicker();
-                                    }
-                                  } catch (err) {}
-                                }}
-                                style={{ colorScheme: 'dark' }}
-                                className={`cd-input cursor-pointer font-bold text-base text-white tracking-wide pr-14 ${dateError ? '!border-red-500 !ring-1 !ring-red-500 !bg-red-950/20 text-red-200' : ''}`}
+                                className="assessment-input"
+                                placeholder="e.g. 10 Working Days"
                               />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  try {
-                                    if (dateInputRef.current && typeof dateInputRef.current.showPicker === 'function') {
-                                      dateInputRef.current.showPicker();
-                                    } else {
+                              <span className="text-[11px] text-slate-400">
+                                Operational time required on site
+                              </span>
+                            </div>
+
+                            <div className="assessment-field-group">
+                              <div className="flex items-center justify-between flex-wrap gap-1 mb-1">
+                                <label className="assessment-field-label">
+                                  Proposed Operation Start Date *
+                                </label>
+                                {approvedInspectionDate && (
+                                  <span className="assessment-inspection-notice-badge" title={`Site inspection approved for ${formatDateDMY(approvedInspectionDate)}. Harvesting operations cannot commence prior to this date.`}>
+                                    <CalendarCheck size={12} className="text-emerald-400" />
+                                    Approved Inspection: {formatDateDMY(approvedInspectionDate)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="relative flex items-center">
+                                <input
+                                  ref={dateInputRef}
+                                  type="date"
+                                  required
+                                  min={minOperationalDate}
+                                  max={getMaxDateString()}
+                                  name="proposed_start_date"
+                                  value={assessmentForm.proposed_start_date}
+                                  onChange={handleInputChange}
+                                  onClick={(e) => {
+                                    try {
+                                      if (typeof e.target.showPicker === 'function') {
+                                        e.target.showPicker();
+                                      }
+                                    } catch (err) {}
+                                  }}
+                                  style={{ colorScheme: 'dark' }}
+                                  className={`assessment-input cursor-pointer font-bold tracking-wide pr-12 ${dateError ? '!border-red-500 !ring-1 !ring-red-500 !bg-red-950/20 text-red-200' : ''}`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    try {
+                                      if (dateInputRef.current && typeof dateInputRef.current.showPicker === 'function') {
+                                        dateInputRef.current.showPicker();
+                                      } else {
+                                        dateInputRef.current?.focus();
+                                      }
+                                    } catch (err) {
                                       dateInputRef.current?.focus();
                                     }
-                                  } catch (err) {
-                                    dateInputRef.current?.focus();
-                                  }
-                                }}
-                                className="absolute right-2.5 z-10 w-9 h-9 rounded-xl bg-emerald-500/25 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/40 flex items-center justify-center transition-all cursor-pointer shadow-md group"
-                                title="Open Calendar Picker"
-                              >
-                                <Calendar size={18} className="text-emerald-400 group-hover:text-slate-950 transition-colors" />
-                              </button>
-                            </div>
-
-                            {/* Quick Scheduling Presets */}
-                            <div className="mt-2.5 space-y-2">
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <span className="text-xs text-slate-300 font-bold flex items-center gap-1.5">
-                                  <span>Quick Mobilization Shortcuts (from today):</span>
-                                </span>
-                                <span className="text-[11px] text-slate-400 italic">
-                                  Click to auto-fill target date
-                                </span>
+                                  }}
+                                  className="absolute right-2.5 z-10 w-8 h-8 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 border border-emerald-500/40 flex items-center justify-center transition-all cursor-pointer shadow-sm group"
+                                  title="Open Calendar Picker"
+                                >
+                                  <Calendar size={16} className="text-emerald-400 group-hover:text-slate-950 transition-colors" />
+                                </button>
                               </div>
 
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {requestDetails?.preferred_start_date && requestDetails.preferred_start_date.substring(0, 10) >= getTodayDateString() && (
+                              {/* Compact Single Row Quick Scheduling Presets */}
+                              <div className="assessment-date-shortcuts-row">
+                                {approvedInspectionDate && approvedInspectionDate >= getTodayDateString() && (
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const prefDate = requestDetails.preferred_start_date.substring(0, 10);
-                                      setAssessmentForm(prev => ({ ...prev, proposed_start_date: prefDate }));
-                                      setDateError(validateProposedDate(prefDate));
+                                      setAssessmentForm(prev => ({ ...prev, proposed_start_date: approvedInspectionDate }));
+                                      setDateError(validateProposedDate(approvedInspectionDate, approvedInspectionDate));
                                     }}
-                                    className={`text-xs px-3.5 py-1.5 rounded-xl font-bold border transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${
-                                      assessmentForm.proposed_start_date === requestDetails.preferred_start_date.substring(0, 10)
-                                        ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-extrabold shadow-md scale-[1.02]'
-                                        : 'bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border-emerald-500/40 hover:border-emerald-400'
+                                    className={`assessment-date-pill ${
+                                      assessmentForm.proposed_start_date === approvedInspectionDate ? 'active' : ''
                                     }`}
-                                    title={`Set to Landowner's preferred date: ${formatDateDMY(requestDetails.preferred_start_date)}`}
+                                    title={`Mobilize on the approved inspection date: ${formatDateDMY(approvedInspectionDate)}`}
                                   >
-                                    <Calendar size={13} className="shrink-0 text-emerald-400" />
-                                    <span>Landowner Preferred ({formatDateDMY(requestDetails.preferred_start_date)})</span>
+                                    <CalendarCheck size={11} className="inline mr-1 text-emerald-400" />
+                                    Inspection Date ({formatDateDMY(approvedInspectionDate)})
                                   </button>
                                 )}
+
+                                {requestDetails?.preferred_start_date && requestDetails.preferred_start_date.substring(0, 10) >= getTodayDateString() && (() => {
+                                  const prefDate = requestDetails.preferred_start_date.substring(0, 10);
+                                  const isPriorToInspection = Boolean(approvedInspectionDate && prefDate < approvedInspectionDate);
+                                  return (
+                                    <button
+                                      type="button"
+                                      disabled={isPriorToInspection}
+                                      onClick={() => {
+                                        if (isPriorToInspection) return;
+                                        setAssessmentForm(prev => ({ ...prev, proposed_start_date: prefDate }));
+                                        setDateError(validateProposedDate(prefDate, approvedInspectionDate));
+                                      }}
+                                      className={`assessment-date-pill ${
+                                        assessmentForm.proposed_start_date === prefDate ? 'active' : ''
+                                      } ${isPriorToInspection ? 'disabled' : ''}`}
+                                      title={isPriorToInspection
+                                        ? `Cannot select landowner date (${formatDateDMY(prefDate)}): Prior to approved site inspection (${formatDateDMY(approvedInspectionDate)})`
+                                        : `Set to Landowner's preferred date: ${formatDateDMY(prefDate)}`}
+                                    >
+                                      Landowner Preferred ({formatDateDMY(prefDate)}){isPriorToInspection ? ' ⚠️' : ''}
+                                    </button>
+                                  );
+                                })()}
 
                                 {[
                                   { label: 'Today', days: 0, title: 'Mobilize immediately today' },
@@ -1835,44 +2069,49 @@ const extractLandownerValue = (req, vol) => {
                                 ].map((preset) => {
                                   const pDate = addDaysToToday(preset.days);
                                   const isSelected = assessmentForm.proposed_start_date === pDate;
+                                  const isPriorToInspection = Boolean(approvedInspectionDate && pDate < approvedInspectionDate);
                                   return (
                                     <button
                                       key={preset.label}
                                       type="button"
+                                      disabled={isPriorToInspection}
                                       onClick={() => {
+                                        if (isPriorToInspection) return;
                                         setAssessmentForm(prev => ({ ...prev, proposed_start_date: pDate }));
-                                        setDateError(validateProposedDate(pDate));
+                                        setDateError(validateProposedDate(pDate, approvedInspectionDate));
                                       }}
-                                      title={`${preset.title}: ${formatDateDMY(pDate)}`}
-                                      className={`text-xs px-3.5 py-1.5 rounded-xl font-bold border transition-all cursor-pointer shadow-sm ${
-                                        isSelected
-                                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-extrabold shadow-md scale-[1.02]'
-                                          : 'bg-[#08180e] hover:bg-emerald-950/80 text-slate-200 hover:text-emerald-300 border-emerald-500/30 hover:border-emerald-400'
-                                      }`}
+                                      title={isPriorToInspection
+                                        ? `Cannot start on ${formatDateDMY(pDate)}: Prior to approved inspection date (${formatDateDMY(approvedInspectionDate)})`
+                                        : `${preset.title}: ${formatDateDMY(pDate)}`}
+                                      className={`assessment-date-pill ${isSelected ? 'active' : ''} ${isPriorToInspection ? 'disabled' : ''}`}
                                     >
                                       {preset.label}
                                     </button>
                                   );
                                 })}
                               </div>
-                            </div>
 
-                            {dateError ? (
-                              <span className="text-xs text-red-400 font-semibold flex items-center gap-1.5 mt-2 animate-fade-in">
-                                <AlertTriangle size={14} className="shrink-0 text-red-400" />
-                                {dateError}
-                              </span>
-                            ) : (
-                              <div className="flex items-center justify-between flex-wrap gap-1 text-xs text-slate-400 mt-2">
-                                <span>Target date for team mobilization</span>
-                                {assessmentForm.proposed_start_date && (
-                                  <span className="text-emerald-400 font-bold flex items-center gap-1">
-                                    <CheckCircle2 size={13} className="text-emerald-400" />
-                                    {getRelativeDaysDescription(assessmentForm.proposed_start_date)} ({formatDateDMY(assessmentForm.proposed_start_date)})
+                              {dateError ? (
+                                <span className="text-xs text-red-400 font-semibold flex items-center gap-1.5 mt-1 animate-fade-in">
+                                  <AlertTriangle size={14} className="shrink-0 text-red-400" />
+                                  {dateError}
+                                </span>
+                              ) : (
+                                <div className="flex items-center justify-between flex-wrap gap-1 text-[11.5px] text-slate-400 mt-1">
+                                  <span>
+                                    {approvedInspectionDate
+                                      ? `Earliest mobilization: ${formatDateDMY(minOperationalDate)} (Post-Inspection)`
+                                      : 'Target mobilization'}
                                   </span>
-                                )}
-                              </div>
-                            )}
+                                  {assessmentForm.proposed_start_date && (
+                                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                                      <CheckCircle2 size={13} className="text-emerald-400" />
+                                      {getRelativeDaysDescription(assessmentForm.proposed_start_date)} ({formatDateDMY(assessmentForm.proposed_start_date)})
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </>

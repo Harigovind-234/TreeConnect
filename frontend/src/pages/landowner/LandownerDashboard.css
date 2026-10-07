@@ -2513,15 +2513,18 @@
 /* ==========================================================
    SCHEDULED SITE INSPECTION VISIT CARD (LANDOWNER)
    ========================================================== */
+/* ==========================================================
+   SCHEDULED SITE INSPECTION VISIT CARD (LANDOWNER)
+   ========================================================== */
 .scheduled-inspection-card {
-  background: linear-gradient(135deg, rgba(6, 32, 22, 0.95) 0%, rgba(9, 24, 18, 0.98) 100%) !important;
-  border: 1px solid rgba(16, 185, 129, 0.35) !important;
-  border-radius: 20px !important;
+  background: linear-gradient(145deg, rgba(7, 26, 17, 0.96) 0%, rgba(4, 15, 10, 0.99) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.38) !important;
+  border-radius: 22px !important;
   padding: 24px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 25px rgba(16, 185, 129, 0.12) !important;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6), 0 0 30px rgba(16, 185, 129, 0.12) !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 16px !important;
+  gap: 18px !important;
   position: relative !important;
   overflow: hidden !important;
 }
@@ -2532,17 +2535,18 @@
   top: 0 !important;
   left: 0 !important;
   right: 0 !important;
-  height: 3px !important;
-  background: linear-gradient(90deg, #10b981, #059669, #34d399) !important;
+  height: 4px !important;
+  background: linear-gradient(90deg, #10b981 0%, #059669 45%, #34d399 100%) !important;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.75) !important;
 }
 
 .scheduled-inspection-header {
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
+  gap: 16px !important;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .scheduled-inspection-header {
     flex-direction: row !important;
     align-items: center !important;
@@ -2551,26 +2555,282 @@
 }
 
 .scheduled-date-highlight {
-  background: rgba(16, 185, 129, 0.14) !important;
-  border: 1px solid rgba(16, 185, 129, 0.4) !important;
-  border-radius: 14px !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(6, 78, 59, 0.28) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.45) !important;
+  border-radius: 16px !important;
   padding: 12px 20px !important;
   text-align: right !important;
   flex-shrink: 0 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Completed On-Site Inspection Card */
-.completed-inspection-card {
-  background: linear-gradient(135deg, rgba(6, 26, 16, 0.9) 0%, rgba(4, 18, 12, 0.98) 100%) !important;
-  border: 1px solid rgba(16, 185, 129, 0.45) !important;
-  border-radius: 20px !important;
-  padding: 24px !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 25px rgba(16, 185, 129, 0.12) !important;
+@media (max-width: 640px) {
+  .scheduled-date-highlight {
+    text-align: left !important;
+  }
+}
+
+/* Balanced details grid (2-panel layout on desktop) */
+.scheduled-details-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 16px !important;
+}
+
+@media (min-width: 1024px) {
+  .scheduled-details-grid {
+    grid-template-columns: 1fr 1.35fr !important;
+  }
+}
+
+.scheduled-panel-card {
+  background: rgba(3, 13, 8, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 16px !important;
+  padding: 18px 20px !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 16px !important;
+  gap: 14px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+}
+
+.scheduled-panel-card:hover {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+.scheduled-checklist-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+}
+
+@media (min-width: 640px) {
+  .scheduled-checklist-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+.scheduled-checklist-chip {
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.scheduled-checklist-chip.active {
+  background: rgba(6, 38, 22, 0.65) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #e2e8f0 !important;
+}
+
+.scheduled-checklist-chip.inactive {
+  background: rgba(10, 15, 12, 0.5) !important;
+  border: 1px solid rgba(100, 116, 139, 0.2) !important;
+  color: #64748b !important;
+}
+
+.scheduled-checklist-chip:hover {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+}
+
+.scheduled-note-box {
+  background: linear-gradient(135deg, rgba(6, 32, 20, 0.75) 0%, rgba(3, 16, 10, 0.85) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  border-radius: 14px !important;
+  padding: 16px 18px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+}
+
+.scheduled-action-bar {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  padding-top: 16px !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.22) !important;
+}
+
+@media (min-width: 768px) {
+  .scheduled-action-bar {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.scheduled-btn-call {
+  height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.35) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.6) !important;
+  color: #6ee7b7 !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+.scheduled-btn-call:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.4) 0%, rgba(5, 150, 105, 0.5) 100%) !important;
+  border-color: #34d399 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
+}
+
+.scheduled-btn-directions {
+  height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  color: #cbd5e1 !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+.scheduled-btn-directions:hover {
+  background: rgba(30, 41, 59, 0.95) !important;
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.scheduled-btn-manage {
+  height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  border: 1px solid #34d399 !important;
+  color: #031008 !important;
+  font-weight: 800 !important;
+  font-size: 13px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35) !important;
+}
+
+.scheduled-btn-manage:hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45) !important;
+}
+
+.scheduled-btn-reschedule {
+  height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.28) 100%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.65) !important;
+  color: #fbbf24 !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  transition: all 0.2s ease !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.18) !important;
+}
+
+.scheduled-btn-reschedule:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.32) 0%, rgba(217, 119, 6, 0.45) 100%) !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.32) !important;
+}
+
+/* RESCHEDULE PENDING BANNER ON INSPECTION CARD */
+.scheduled-reschedule-alert {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(120, 53, 15, 0.22) 100%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.45) !important;
+  border-radius: 14px !important;
+  padding: 14px 18px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+@media (min-width: 640px) {
+  .scheduled-reschedule-alert {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.scheduled-btn-modify-reschedule {
+  height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 10px !important;
+  background: rgba(245, 158, 11, 0.25) !important;
+  border: 1px solid rgba(245, 158, 11, 0.6) !important;
+  color: #fef3c7 !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+}
+
+.scheduled-btn-modify-reschedule:hover {
+  background: rgba(245, 158, 11, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* ==========================================================
+   CERTIFIED ON-SITE FIELD ASSESSMENT CERTIFICATE
+   ========================================================== */
+.completed-inspection-card {
+  background: linear-gradient(160deg, rgba(8, 26, 17, 0.95) 0%, rgba(4, 15, 10, 0.98) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 20px !important;
+  padding: 32px 36px !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(16, 185, 129, 0.08) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 28px !important;
   position: relative !important;
   overflow: hidden !important;
+  max-width: 1220px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  box-sizing: border-box !important;
 }
 
 .completed-inspection-card::before {
@@ -2580,20 +2840,543 @@
   left: 0 !important;
   right: 0 !important;
   height: 3px !important;
-  background: linear-gradient(90deg, #10b981, #059669, #047857) !important;
+  background: linear-gradient(90deg, #10b981 0%, #059669 50%, #047857 100%) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.6) !important;
+}
+
+@media (max-width: 768px) {
+  .completed-inspection-card {
+    padding: 22px 18px !important;
+    gap: 22px !important;
+    border-radius: 18px !important;
+  }
 }
 
 .completed-inspection-header {
   display: flex !important;
   flex-direction: column !important;
-  gap: 12px !important;
+  gap: 16px !important;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .completed-inspection-header {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
+  }
+}
+
+/* Certificate Header */
+.cert-header {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 18px !important;
+}
+
+@media (min-width: 860px) {
+  .cert-header {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 24px !important;
+  }
+}
+
+.cert-header-left {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.cert-badge-icon {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 14px !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #34d399 !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+.cert-header-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+}
+
+.cert-title-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+.cert-main-title {
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.015em !important;
+  line-height: 1.25 !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .cert-main-title {
+    font-size: 20px !important;
+  }
+}
+
+.cert-status-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 4px 10px !important;
+  border-radius: 9999px !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.32) !important;
+  color: #34d399 !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  white-space: nowrap !important;
+}
+
+.cert-header-desc {
+  font-size: 13.5px !important;
+  color: #94a3b8 !important;
+  line-height: 1.55 !important;
+  margin: 0 !important;
+  max-width: 720px !important;
+}
+
+.cert-header-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex-shrink: 0 !important;
+  flex-wrap: wrap !important;
+}
+
+@media (max-width: 640px) {
+  .cert-header-right {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+}
+
+.cert-print-btn {
+  background: rgba(15, 23, 42, 0.65) !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  border-radius: 12px !important;
+  padding: 8px 16px !important;
+  color: #cbd5e1 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+  white-space: nowrap !important;
+}
+
+.cert-print-btn:hover {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.cert-date-block {
+  background: rgba(6, 24, 16, 0.7) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 12px !important;
+  padding: 6px 14px !important;
+  text-align: right !important;
+}
+
+.cert-date-label {
+  font-size: 10px !important;
+  text-transform: uppercase !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  color: #64748b !important;
+  display: block !important;
+}
+
+.cert-date-value {
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: #34d399 !important;
+  display: block !important;
+  margin-top: 1px !important;
+}
+
+/* Inspection Purpose Section */
+.cert-purpose-section {
+  background: rgba(4, 18, 12, 0.5) !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+  border-radius: 14px !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.cert-purpose-label {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: #94a3b8 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.cert-purpose-value {
+  font-size: 15.5px !important;
+  font-weight: 600 !important;
+  color: #f8fafc !important;
+  line-height: 1.4 !important;
+}
+
+/* Section Header Style */
+.cert-section-heading {
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  color: #94a3b8 !important;
+  display: block !important;
+  margin-bottom: 12px !important;
+}
+
+/* Verified Scope Checklist Grid */
+.cert-checklist-section {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.cert-checklist-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px 14px !important;
+}
+
+@media (min-width: 640px) {
+  .cert-checklist-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+.cert-checklist-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 11px 16px !important;
+  background: rgba(6, 24, 16, 0.45) !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+  border-radius: 10px !important;
+  color: #e2e8f0 !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  transition: border-color 0.15s ease !important;
+}
+
+.cert-checklist-row:hover {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.cert-checklist-badge {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 4px !important;
+  background: rgba(16, 185, 129, 0.16) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Technical Audit Findings Grid */
+.cert-findings-section {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.cert-findings-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 14px !important;
+}
+
+@media (min-width: 641px) and (max-width: 1023px) {
+  .cert-findings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .cert-findings-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .cert-finding-card-span-2 {
+    grid-column: span 2 !important;
+  }
+}
+
+.cert-finding-card {
+  background: rgba(4, 18, 12, 0.52) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  border-radius: 14px !important;
+  padding: 16px 18px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  transition: border-color 0.15s ease, background 0.15s ease !important;
+}
+
+.cert-finding-card:hover {
+  border-color: rgba(16, 185, 129, 0.32) !important;
+  background: rgba(6, 24, 16, 0.6) !important;
+}
+
+.cert-finding-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+.cert-finding-label {
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #94a3b8 !important;
+  display: block !important;
+}
+
+.cert-finding-value {
+  font-size: 15.5px !important;
+  font-weight: 600 !important;
+  color: #f8fafc !important;
+  line-height: 1.45 !important;
+  word-break: break-word !important;
+}
+
+.cert-finding-value-highlight {
+  color: #34d399 !important;
+  font-weight: 700 !important;
+}
+
+.cert-finding-icon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 9px !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #34d399 !important;
+  flex-shrink: 0 !important;
+}
+
+/* Instructions & Remarks 2-Column Grid */
+.cert-notes-grid {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 16px !important;
+}
+
+@media (min-width: 768px) {
+  .cert-notes-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+.cert-note-card {
+  border-radius: 14px !important;
+  padding: 20px 22px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 14px !important;
+}
+
+.cert-note-card-instructions {
+  background: rgba(4, 18, 12, 0.52) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+}
+
+.cert-note-card-remarks {
+  background: rgba(6, 26, 17, 0.45) !important;
+  border: 1px solid rgba(16, 185, 129, 0.24) !important;
+}
+
+.cert-note-icon {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #34d399 !important;
+  flex-shrink: 0 !important;
+  margin-top: 1px !important;
+}
+
+.cert-note-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+.cert-note-title {
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  display: block !important;
+}
+
+.cert-note-title-instructions {
+  color: #94a3b8 !important;
+}
+
+.cert-note-title-remarks {
+  color: #34d399 !important;
+}
+
+.cert-note-text {
+  font-size: 13.5px !important;
+  line-height: 1.6 !important;
+  color: #e2e8f0 !important;
+  margin: 0 !important;
+}
+
+.cert-note-text-remarks {
+  color: #d1fae5 !important;
+  font-style: italic !important;
+}
+
+/* Attached Inspection Photos Section */
+.cert-photos-section {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.cert-photos-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 240px)) !important;
+  gap: 14px !important;
+}
+
+@media (max-width: 520px) {
+  .cert-photos-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+.cert-photo-item {
+  position: relative !important;
+  aspect-ratio: 16 / 10 !important;
+  height: auto !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  background: #000000 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.cert-photo-item:hover {
+  border-color: rgba(16, 185, 129, 0.55) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45) !important;
+}
+
+.cert-photo-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  transition: transform 0.25s ease !important;
+  display: block !important;
+}
+
+.cert-photo-item:hover .cert-photo-img {
+  transform: scale(1.05) !important;
+}
+
+.cert-photo-overlay {
+  position: absolute !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.4) !important;
+  opacity: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: opacity 0.2s ease !important;
+}
+
+.cert-photo-item:hover .cert-photo-overlay {
+  opacity: 1 !important;
+}
+
+/* Landowner Notice Box */
+.cert-notice-box {
+  background: rgba(6, 25, 17, 0.5) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 14px 18px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  font-size: 13px !important;
+  color: #cbd5e1 !important;
+  line-height: 1.55 !important;
+}
+
+/* Print Media Styles */
+@media print {
+  .landowner-sidebar,
+  .landowner-dashboard-workspace > header,
+  .navbar,
+  .cert-print-btn,
+  button {
+    display: none !important;
+  }
+
+  .completed-inspection-card {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #000000 !important;
+    box-shadow: none !important;
+    padding: 20px !important;
+  }
+
+  .completed-inspection-card * {
+    color: #111827 !important;
   }
 }
 
@@ -2795,6 +3578,97 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   flex-shrink: 0;
 }
 
+/* Confirm and Schedule Visit Modal Button */
+.cd-btn-confirm-schedule,
+.cd-btn-schedule-confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 22px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
+  color: #ffffff;
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 16px rgba(37, 99, 235, 0.4), 0 2px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+}
+
+.cd-btn-confirm-schedule:hover:not(:disabled),
+.cd-btn-schedule-confirm:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 60%, #1d4ed8 100%);
+  border-color: rgba(191, 219, 254, 0.7);
+  transform: translateY(-1.5px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 24px rgba(37, 99, 235, 0.55), 0 4px 8px rgba(0, 0, 0, 0.3);
+  color: #ffffff;
+}
+
+.cd-btn-confirm-schedule:active:not(:disabled),
+.cd-btn-schedule-confirm:active:not(:disabled) {
+  transform: translateY(0.5px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.cd-btn-confirm-schedule:focus-visible,
+.cd-btn-schedule-confirm:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5), 0 4px 16px rgba(37, 99, 235, 0.4);
+}
+
+.cd-btn-confirm-schedule:disabled,
+.cd-btn-schedule-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: grayscale(15%);
+}
+
+/* Modal Cancel / Secondary Button */
+.cd-btn-modal-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+}
+
+.cd-btn-modal-cancel:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.cd-btn-modal-cancel:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.cd-btn-modal-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 640px) {
   .cd-inspection-modal-box.cd-schedule-modal {
     max-height: 92vh;
@@ -2811,8 +3685,11 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   .cd-schedule-modal-footer {
     padding: 14px 16px;
     flex-direction: column-reverse;
+    gap: 10px;
   }
-  .cd-schedule-modal-footer > button {
+  .cd-schedule-modal-footer > button,
+  .cd-schedule-modal-footer > .cd-btn-confirm-schedule,
+  .cd-schedule-modal-footer > .cd-btn-modal-cancel {
     width: 100%;
     justify-content: center;
   }

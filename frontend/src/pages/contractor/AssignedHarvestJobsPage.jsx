@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
+import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
 import harvestService from '../../services/harvestService';
 import './ContractorDashboard.css';
 import {
@@ -42,6 +43,7 @@ import {
   RefreshCw,
   ClipboardCheck,
   Check,
+  CalendarClock,
   Eye,
   Upload,
   AlertCircle,
@@ -296,6 +298,7 @@ const AssignedHarvestJobsPage = () => {
   const [viewInspectionModalJob, setViewInspectionModalJob] = useState(null);
   const [declineModalJob, setDeclineModalJob] = useState(null);
   const [preQuoteAdvisoryJob, setPreQuoteAdvisoryJob] = useState(null);
+  const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -329,7 +332,7 @@ const AssignedHarvestJobsPage = () => {
   const [auditForm, setAuditForm] = useState({
     verified_tree_count: '',
     measured_avg_dbh: '65 - 80 cm',
-    canopy_height: '18 - 24 m',
+    canopy_height: '',
     estimated_volume: '',
     timber_condition: 'Sound & Top Quality',
     road_access_verification: 'Heavy 10-wheeler log truck accessible',
@@ -369,8 +372,8 @@ const AssignedHarvestJobsPage = () => {
     setScheduleForm({
       status: currentStage,
       inspection_purpose: existing.inspection_purpose || existing.purpose || 'Tree and property assessment',
-      scheduled_date: existing.scheduled_date || defaultDate,
-      time_slot: existing.time_slot || 'Morning (09:00 AM - 12:00 PM)',
+      scheduled_date: existing.suggested_date || existing.scheduled_date || defaultDate,
+      time_slot: existing.suggested_time_slot || existing.time_slot || 'Morning (09:00 AM - 12:00 PM)',
       inspector_name: existing.inspector_name || contractorName || 'Rohith kumar',
       inspector_phone: existing.inspector_phone || user?.phone || user?.contactNumber || '9746512243',
       checklist: existingChecklist,
@@ -399,7 +402,9 @@ const AssignedHarvestJobsPage = () => {
         inspection_checklist: scheduleForm.checklist,
         notes: scheduleForm.notes,
         access_instructions: scheduleForm.notes,
-        scheduled_at: new Date().toISOString()
+        scheduled_at: new Date().toISOString(),
+        reschedule_requested: false,
+        reschedule_status: 'CONFIRMED'
       };
 
       try {
@@ -415,8 +420,11 @@ const AssignedHarvestJobsPage = () => {
             ...item,
             site_inspection: {
               ...(item.site_inspection || {}),
-              ...payload
+              ...payload,
+              reschedule_requested: false,
+              reschedule_status: 'CONFIRMED'
             },
+            reschedule_requested: false,
             inspection_status: currentStatus,
             inspection_scheduled_date: scheduleForm.scheduled_date
           };
@@ -435,8 +443,11 @@ const AssignedHarvestJobsPage = () => {
                 ...item,
                 site_inspection: {
                   ...(item.site_inspection || {}),
-                  ...payload
+                  ...payload,
+                  reschedule_requested: false,
+                  reschedule_status: 'CONFIRMED'
                 },
+                reschedule_requested: false,
                 inspection_status: currentStatus,
                 inspection_scheduled_date: scheduleForm.scheduled_date
               };
@@ -458,6 +469,92 @@ const AssignedHarvestJobsPage = () => {
     }
   };
 
+  // Direct 1-click acceptance of landowner's suggested date
+  const handleAcceptLandownerReschedule = async (req) => {
+    if (!req) return;
+    const reqId = req.id || req._id;
+    const existing = req.site_inspection || {};
+    const newDate = existing.suggested_date;
+    const newSlot = existing.suggested_time_slot || existing.time_slot || 'Morning (09:00 AM - 12:00 PM)';
+
+    if (!newDate) {
+      handleOpenSchedule(req);
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      try {
+        await harvestService.respondReschedule(reqId, {
+          action: 'ACCEPT',
+          confirmed_date: newDate,
+          confirmed_time_slot: newSlot,
+          contractor_note: 'Contractor confirmed landowner suggested date'
+        });
+      } catch (err) {
+        console.warn('API respondReschedule fallback:', err);
+      }
+
+      // Update state
+      setAssignedRequests(prev => prev.map(item => {
+        if ((item.id || item._id) === reqId) {
+          const origDate = item.site_inspection?.original_scheduled_date || item.site_inspection?.scheduled_date || item.inspection_scheduled_date;
+          return {
+            ...item,
+            site_inspection: {
+              ...(item.site_inspection || {}),
+              original_scheduled_date: origDate,
+              scheduled_date: newDate,
+              time_slot: newSlot,
+              reschedule_requested: false,
+              reschedule_status: 'ACCEPTED',
+              status: 'CONFIRMED'
+            },
+            reschedule_requested: false,
+            inspection_status: 'CONFIRMED',
+            inspection_scheduled_date: newDate
+          };
+        }
+        return item;
+      }));
+
+      // Update localStorage
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(item => {
+            if ((item.id || item._id) === reqId) {
+              return {
+                ...item,
+                site_inspection: {
+                  ...(item.site_inspection || {}),
+                  scheduled_date: newDate,
+                  time_slot: newSlot,
+                  reschedule_requested: false,
+                  reschedule_status: 'ACCEPTED',
+                  status: 'CONFIRMED'
+                },
+                reschedule_requested: false,
+                inspection_status: 'CONFIRMED',
+                inspection_scheduled_date: newDate
+              };
+            }
+            return item;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (e) { }
+
+      showToast(`Confirmed visit on ${formatDateDMY(newDate)} (${newSlot}) as requested by landowner.`);
+    } catch (err) {
+      console.error('Failed to accept landowner reschedule:', err);
+      alert('Failed to accept reschedule: ' + (err.message || 'Unknown error'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleOpenAudit = (req) => {
     const existing = req.site_inspection || {};
     const propDetails = req.property_details || req;
@@ -467,7 +564,7 @@ const AssignedHarvestJobsPage = () => {
     setAuditForm({
       verified_tree_count: existing.verified_tree_count !== undefined && existing.verified_tree_count !== null ? existing.verified_tree_count : calcTrees,
       measured_avg_dbh: existing.measured_avg_dbh || '65 - 80 cm',
-      canopy_height: existing.canopy_height || '18 - 24 m',
+      canopy_height: existing.canopy_height || '',
       estimated_volume: existing.estimated_volume !== undefined && existing.estimated_volume !== null ? existing.estimated_volume : totalVol,
       timber_condition: existing.timber_condition || 'Sound & Top Quality',
       road_access_verification: existing.road_access_verification || 'Heavy 10-wheeler log truck accessible',
@@ -1344,26 +1441,33 @@ const AssignedHarvestJobsPage = () => {
                           const inspected = isJobInspected(req);
                           const scheduled = isJobScheduled(req);
                           const inspectionData = req.site_inspection || {};
+                          const isRescheduleRequested = Boolean(inspectionData.reschedule_requested);
 
                           return (
                             <div className={`cd-inspection-strip ${
                               inspected
                                 ? 'cd-inspection-strip-completed'
-                                : scheduled
-                                  ? 'cd-inspection-strip-scheduled'
-                                  : 'cd-inspection-strip-pending'
+                                : isRescheduleRequested
+                                  ? 'cd-inspection-strip-reschedule'
+                                  : scheduled
+                                    ? 'cd-inspection-strip-scheduled'
+                                    : 'cd-inspection-strip-pending'
                             }`}>
                               <div className="cd-inspection-header">
                                 <div className="cd-inspection-title-group">
                                   <div className={`cd-inspection-icon-box ${
                                     inspected
                                       ? 'cd-inspection-icon-completed'
-                                      : scheduled
-                                        ? 'cd-inspection-icon-scheduled'
-                                        : 'cd-inspection-icon-pending'
+                                      : isRescheduleRequested
+                                        ? 'cd-inspection-icon-pending'
+                                        : scheduled
+                                          ? 'cd-inspection-icon-scheduled'
+                                          : 'cd-inspection-icon-pending'
                                   }`}>
                                     {inspected ? (
                                       <ClipboardCheck size={20} />
+                                    ) : isRescheduleRequested ? (
+                                      <CalendarClock size={20} className="text-amber-400" />
                                     ) : scheduled ? (
                                       <Calendar size={20} />
                                     ) : (
@@ -1376,11 +1480,13 @@ const AssignedHarvestJobsPage = () => {
                                       <span>
                                         {inspected
                                           ? `Site Inspected & Verified on ${formatDateDMY(inspectionData.inspected_at || inspectionData.completed_at)}`
-                                          : scheduled
-                                            ? `Site Visit Scheduled for ${formatDateDMY(inspectionData.scheduled_date)} • ${inspectionData.time_slot || 'Morning'}`
-                                            : 'Site Inspection Required Prior to Work Agreement'}
+                                          : isRescheduleRequested
+                                            ? `⚠️ Landowner Requested Reschedule: Suggested ${formatDateDMY(inspectionData.suggested_date)} • ${inspectionData.suggested_time_slot || 'Morning'}`
+                                            : scheduled
+                                              ? `Site Visit Scheduled for ${formatDateDMY(inspectionData.scheduled_date)} • ${inspectionData.time_slot || 'Morning'}`
+                                              : 'Site Inspection Required Prior to Work Agreement'}
                                       </span>
-                                      {inspected && (
+                                      {inspected ? (
                                         <span className={`cd-inspection-verdict-pill ${
                                           inspectionData.inspection_verdict === 'FEASIBLE'
                                             ? 'cd-verdict-feasible'
@@ -1394,14 +1500,20 @@ const AssignedHarvestJobsPage = () => {
                                               ? '✗ NOT FEASIBLE'
                                               : '⚠ FEASIBLE W/ RIGGING'}
                                         </span>
-                                      )}
+                                      ) : isRescheduleRequested ? (
+                                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                          LANDOWNER RESCHEDULE PENDING
+                                        </span>
+                                      ) : null}
                                     </div>
                                     <p className="cd-inspection-desc">
                                       {inspected
                                         ? `Lead Assessor: ${inspectionData.inspector_name || contractorName} • Ground truth verified with ${inspectionData.verified_tree_count || calcTotalTrees} standing trees logged.`
-                                        : scheduled
-                                          ? `Assessor: ${inspectionData.inspector_name || contractorName} • Contact: ${inspectionData.inspector_phone || contactPhoneVal} • Meeting landowner on-site.`
-                                          : 'Before entering a binding commercial agreement or submitting final rates, inspect parcel boundaries, tree condition, and log haul truck accessibility.'}
+                                        : isRescheduleRequested
+                                          ? `Landowner unavailable on original date (${formatDateDMY(inspectionData.scheduled_date)}). Reason: "${inspectionData.reschedule_reason || 'Schedule conflict'}". ${inspectionData.reschedule_notes ? `Notes: "${inspectionData.reschedule_notes}"` : ''}`
+                                          : scheduled
+                                            ? `Assessor: ${inspectionData.inspector_name || contractorName} • Contact: ${inspectionData.inspector_phone || contactPhoneVal} • Meeting landowner on-site.`
+                                            : 'Before entering a binding commercial agreement or submitting final rates, inspect parcel boundaries, tree condition, and log haul truck accessibility.'}
                                     </p>
                                   </div>
                                 </div>
@@ -1410,6 +1522,15 @@ const AssignedHarvestJobsPage = () => {
                                 <div className="cd-inspection-actions">
                                   {inspected ? (
                                     <>
+                                      <button
+                                        type="button"
+                                        onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                        className="cd-btn-inspect-schedule bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-md cursor-pointer"
+                                        title="Re-assess quotation with audited tree counts and ground-truth timber volume"
+                                      >
+                                        <Calculator size={13} />
+                                        <span>Re-Assess After Site Visit</span>
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => setViewInspectionModalJob(req)}
@@ -1428,6 +1549,35 @@ const AssignedHarvestJobsPage = () => {
                                         <RefreshCw size={12} />
                                         <span>Update Findings</span>
                                       </button>
+                                    </>
+                                  ) : isRescheduleRequested ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleAcceptLandownerReschedule(req)}
+                                        className="cd-btn-inspect-schedule bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-md cursor-pointer flex items-center gap-1.5"
+                                        title={`Accept landowner's suggested date of ${formatDateDMY(inspectionData.suggested_date)}`}
+                                      >
+                                        <Check size={14} />
+                                        <span>Accept Suggested Date ({formatDateDMY(inspectionData.suggested_date)})</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenSchedule(req)}
+                                        className="cd-btn-inspect-secondary"
+                                        title="Propose another date or time slot"
+                                      >
+                                        <Calendar size={12} />
+                                        <span>Pick Another Date</span>
+                                      </button>
+                                      <a
+                                        href={`tel:${contactPhoneVal}`}
+                                        className="cd-btn-inspect-secondary"
+                                        title="Call landowner to coordinate schedule"
+                                      >
+                                        <Phone size={12} />
+                                        <span>Call Landowner</span>
+                                      </a>
                                     </>
                                   ) : scheduled ? (
                                     <>
@@ -1555,28 +1705,89 @@ const AssignedHarvestJobsPage = () => {
                           );
                         })()}
 
-                        {/* LANDOWNER REVISION REQUEST NOTICE BANNER */}
+                        {/* LANDOWNER REVISION REQUEST & FAIR DEAL COUNTER-OFFER BANNER */}
                         {isRevisionRequested && (
-                          <div className="cd-revision-notice-banner">
-                            <div className="cd-revision-notice-header">
-                              <AlertTriangle size={17} className="text-amber-400 shrink-0" />
-                              <span>Landowner requested adjustments to your quotation</span>
-                            </div>
-                            {Array.isArray(req.revision_reasons || req.assessment?.revision_reasons) && (req.revision_reasons || req.assessment?.revision_reasons).length > 0 && (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs text-slate-400 font-bold">Specified adjustments:</span>
-                                {(req.revision_reasons || req.assessment?.revision_reasons).map((reason, idx) => (
-                                  <span key={idx} className="cd-revision-notice-pill">
-                                    {reason}
+                          <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                                <h4 className="text-sm font-extrabold text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
+                                  <AlertTriangle size={15} /> Active Landowner Counter-Proposal &amp; Negotiation
+                                </h4>
+                              </div>
+                              <p className="text-xs text-slate-300 leading-relaxed">
+                                The landowner proposed adjustments to reach a fair deal. Review their target budget and adjust the quotation to finalize the agreement.
+                              </p>
+                              <div className="flex items-center gap-3 flex-wrap pt-1 text-xs">
+                                {(req.counter_offer_amount || req.assessment?.counter_offer_amount) && (
+                                  <span className="px-3 py-1 rounded-lg bg-black/60 border border-amber-500/40 text-amber-200 font-bold">
+                                    Landowner Target Price: <strong className="text-amber-400 font-extrabold text-sm">{formatINR(req.counter_offer_amount || req.assessment?.counter_offer_amount)}</strong>
                                   </span>
-                                ))}
+                                )}
+                                {(req.counter_offer_start_date || req.assessment?.counter_offer_start_date) && (
+                                  <span className="px-3 py-1 rounded-lg bg-black/60 border border-amber-500/40 text-slate-200">
+                                    Requested Start: <strong className="text-white font-semibold">{formatDateDMY(req.counter_offer_start_date || req.assessment?.counter_offer_start_date)}</strong>
+                                  </span>
+                                )}
                               </div>
-                            )}
-                            {(req.landowner_feedback || req.assessment?.landowner_feedback) && (
-                              <div className="cd-revision-notice-quote">
-                                "{req.landowner_feedback || req.assessment?.landowner_feedback}"
+                              {Array.isArray(req.revision_reasons || req.assessment?.revision_reasons) && (req.revision_reasons || req.assessment?.revision_reasons).length > 0 && (
+                                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                                  <span className="text-[11px] text-slate-400 font-semibold">Adjustments:</span>
+                                  {(req.revision_reasons || req.assessment?.revision_reasons).map((reason, idx) => (
+                                    <span key={idx} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-950/80 border border-amber-500/30 text-amber-300">
+                                      {reason}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              {(req.landowner_feedback || req.assessment?.landowner_feedback) && (
+                                <p className="text-xs text-amber-100/90 italic bg-black/40 border border-amber-500/20 p-2.5 rounded-xl">
+                                  "{req.landowner_feedback || req.assessment?.landowner_feedback}"
+                                </p>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all shrink-0 hover:scale-[1.02]"
+                            >
+                              <RefreshCw size={14} />
+                              <span>Review &amp; Adjust Deal</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* DIGITAL HARVEST AGREEMENT FINALIZED BANNER (WHEN OPERATION_READY) */}
+                        {(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement) && (
+                          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-[#0e2417] to-emerald-950/90 border-2 border-emerald-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+                            <div className="flex items-center gap-3.5">
+                              <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                                <FileCheck size={22} />
                               </div>
-                            )}
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="text-sm sm:text-base font-black text-white">
+                                    Digital Harvest Agreement Finalized &amp; Binding
+                                  </h4>
+                                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/40">
+                                    {req.digital_agreement?.agreement_id || `TC-AGR-${String(reqId).slice(-6).toUpperCase()}`}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-300 mt-0.5">
+                                  Agreement signed and finalized with {ownerNameVal}. Operational work authorized to begin on <strong>{formatDateDMY(req.assessment?.proposed_start_date || req.proposed_start_date || req.preferred_start_date)}</strong>.
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAgreementModal({ req, assessment: req.assessment })}
+                              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all shrink-0 hover:scale-[1.02]"
+                            >
+                              <FileCheck size={16} />
+                              <span>View Digital Agreement</span>
+                            </button>
                           </div>
                         )}
 
@@ -2676,14 +2887,14 @@ const AssignedHarvestJobsPage = () => {
                   <button
                     type="button"
                     onClick={() => setScheduleModalJob(null)}
-                    className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-xs font-semibold cursor-pointer"
+                    className="cd-btn-modal-cancel"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 transition-all cursor-pointer disabled:opacity-50"
+                    className="cd-btn-confirm-schedule"
                   >
                     {actionLoading ? <Loader2 size={15} className="animate-spin" /> : <Calendar size={15} />}
                     <span>Confirm & Schedule Visit</span>
@@ -2955,7 +3166,7 @@ const AssignedHarvestJobsPage = () => {
                   <button
                     type="button"
                     onClick={() => setAuditModalJob(null)}
-                    className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 font-semibold text-xs hover:bg-slate-800 cursor-pointer"
+                    className="cd-btn-modal-cancel"
                   >
                     Cancel
                   </button>
@@ -3114,11 +3325,20 @@ const AssignedHarvestJobsPage = () => {
                             </div>
                           </div>
 
-                          {/* 4. Measured DBH / Height */}
+                          {/* 4. Measured Avg. DBH */}
                           <div className="p-3 rounded-xl bg-[#08150e]/90 border border-emerald-500/20 flex items-center justify-between gap-2">
                             <div>
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Avg. DBH / Canopy Height</span>
-                              <span className="text-white font-semibold text-xs sm:text-sm">{ins.measured_avg_dbh || '65-80 cm'} • {ins.canopy_height || '20m'}</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                                {ins.canopy_height && ins.canopy_height !== '18 - 24 m' && ins.canopy_height !== '20m'
+                                  ? 'Avg. DBH / Canopy Height'
+                                  : 'Measured Avg. DBH'}
+                              </span>
+                              <span className="text-white font-semibold text-xs sm:text-sm">
+                                {ins.measured_avg_dbh || '70 - 80 cm'}
+                                {ins.canopy_height && ins.canopy_height !== '18 - 24 m' && ins.canopy_height !== '20m'
+                                  ? ` • ${ins.canopy_height}`
+                                  : ''}
+                              </span>
                             </div>
                             <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                               <Ruler size={14} />
@@ -3226,7 +3446,7 @@ const AssignedHarvestJobsPage = () => {
                       <button
                         type="button"
                         onClick={() => setViewInspectionModalJob(null)}
-                        className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors text-xs font-semibold cursor-pointer"
+                        className="cd-btn-modal-cancel"
                       >
                         Close
                       </button>
@@ -3236,7 +3456,7 @@ const AssignedHarvestJobsPage = () => {
                           setViewInspectionModalJob(null);
                           handleAssessClick(viewInspectionModalJob);
                         }}
-                        className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 cursor-pointer transition-all"
+                        className="cd-btn-confirm-schedule"
                       >
                         <Calculator size={15} />
                         <span>Submit Binding Quotation</span>
@@ -3386,6 +3606,15 @@ const AssignedHarvestJobsPage = () => {
               </form>
             </div>
           </div>
+        )}
+
+        {/* MODAL 6: DIGITAL HARVEST AGREEMENT VIEWER */}
+        {selectedAgreementModal && (
+          <DigitalAgreementModal
+            request={selectedAgreementModal.req}
+            assessment={selectedAgreementModal.assessment}
+            onClose={() => setSelectedAgreementModal(null)}
+          />
         )}
 
       </div>
