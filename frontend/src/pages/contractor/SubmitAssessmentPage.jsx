@@ -42,7 +42,11 @@ import {
   ShoppingBag,
   RefreshCw,
   ClipboardCheck,
-  CalendarCheck
+  CalendarCheck,
+  Edit3,
+  Save,
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -65,6 +69,11 @@ const formatDateDMY = (dateStr) => {
   } catch (e) {
     return dateStr;
   }
+};
+
+const formatRupees = (amount) => {
+  const num = Number(amount) || 0;
+  return `₹${num.toLocaleString('en-IN')}`;
 };
 
 const getTodayDateString = () => {
@@ -185,6 +194,8 @@ const SubmitAssessmentPage = () => {
 
   const [requestDetails, setRequestDetails] = useState(null);
   const [existingAssessmentData, setExistingAssessmentData] = useState(null);
+  const [revisionDraft, setRevisionDraft] = useState(null);
+  const autoAppliedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState({ type: '', text: '' });
@@ -334,58 +345,114 @@ const extractLandownerValue = (req, vol) => {
             setFallbackDetails();
           }
 
-          // Try fetching existing assessment
+          // Try fetching existing assessment from API, combinedData, or localStorage
           let hasExistingAssessment = false;
           const inspDate = getApprovedInspectionDate(combinedData);
+          let assData = null;
           try {
             const existingAssessment = await harvestService.getAssessment(requestId);
-            if (existingAssessment && (existingAssessment.assessment || existingAssessment.id)) {
-              const assData = existingAssessment.assessment || existingAssessment;
-              hasExistingAssessment = true;
-              setExistingAssessmentData(assData);
-              const cleanExistingDate = assData.proposed_start_date ? String(assData.proposed_start_date).substring(0, 10) : '';
-              if (cleanExistingDate) {
-                const initialDateErr = validateProposedDate(cleanExistingDate, inspDate);
-                if (initialDateErr) setDateError(initialDateErr);
-              }
-              // If contractor has already submitted an assessment, retain their assessed values
-              const assessedVol = (assData.estimated_harvestable_volume !== undefined && assData.estimated_harvestable_volume !== null && assData.estimated_harvestable_volume !== '')
-                ? parseVolumeNumber(assData.estimated_harvestable_volume)
-                : loVol;
-              const assessedVal = (assData.estimated_timber_value !== undefined && assData.estimated_timber_value !== null && assData.estimated_timber_value !== '')
-                ? Number(assData.estimated_timber_value)
-                : loVal;
-
-              const cleanValidUntil = assData.offer_valid_until ? String(assData.offer_valid_until).substring(0, 10) : '';
-
-              setAssessmentForm(prev => ({
-                ...prev,
-                commercial_proposal_type: assData.commercial_proposal_type || prev.commercial_proposal_type,
-                estimated_harvestable_volume: assessedVol,
-                estimated_timber_value: assessedVal,
-                harvesting_cost: assData.harvesting_cost ?? prev.harvesting_cost,
-                extraction_cost: assData.extraction_cost ?? prev.extraction_cost,
-                transportation_cost: assData.transportation_cost ?? prev.transportation_cost,
-                other_cost: assData.other_cost ?? prev.other_cost,
-                total_quote: assData.total_quote ?? prev.total_quote,
-                contractor_purchase_offer: assData.contractor_purchase_offer ?? prev.contractor_purchase_offer,
-                timber_purchase_price: assData.timber_purchase_price ?? prev.timber_purchase_price,
-                harvesting_arrangement_cost: assData.harvesting_arrangement_cost ?? prev.harvesting_arrangement_cost,
-                transportation_arrangement: assData.transportation_arrangement || prev.transportation_arrangement,
-                payment_terms: assData.payment_terms || prev.payment_terms,
-                offer_valid_until: cleanValidUntil || prev.offer_valid_until,
-                assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 12,
-                estimated_duration: assData.estimated_duration || prev.estimated_duration,
-                proposed_start_date: cleanExistingDate || (inspDate && inspDate > prev.proposed_start_date ? inspDate : prev.proposed_start_date),
-                notes: assData.notes || prev.notes
-              }));
+            if (existingAssessment && (existingAssessment.assessment || existingAssessment.id || existingAssessment.commercial_proposal_type)) {
+              assData = existingAssessment.assessment || existingAssessment;
             }
           } catch (e) {
-            console.log('No prior assessment recorded yet for this job.');
+            console.log('No prior assessment recorded from API endpoint, checking combined harvest request data.');
           }
 
-          // If no prior assessment exists, default to landowner estimate and ensure start date is after inspection
-          if (!hasExistingAssessment) {
+          if (!assData && combinedData) {
+            if (combinedData.assessment && typeof combinedData.assessment === 'object') {
+              assData = combinedData.assessment;
+            } else if (combinedData.total_quote !== undefined || combinedData.contractor_purchase_offer !== undefined || combinedData.timber_purchase_price !== undefined || combinedData.status === 'ASSESSMENT_SUBMITTED') {
+              assData = {
+                commercial_proposal_type: combinedData.commercial_proposal_type || 'Harvesting Service Quotation',
+                estimated_harvestable_volume: combinedData.estimated_harvestable_volume || loVol,
+                estimated_timber_value: combinedData.estimated_timber_value || loVal,
+                harvesting_cost: combinedData.harvesting_cost ?? combinedData.felling_cost ?? 40700,
+                felling_cost: combinedData.felling_cost ?? combinedData.harvesting_cost ?? 40700,
+                extraction_cost: combinedData.extraction_cost ?? 28490,
+                transportation_cost: combinedData.transportation_cost ?? 22385,
+                other_cost: combinedData.other_cost ?? 10175,
+                total_quote: combinedData.total_quote ?? 101750,
+                original_quote: combinedData.original_quote ?? combinedData.total_quote ?? 101750,
+                previous_quote: combinedData.previous_quote,
+                revised_quote: combinedData.revised_quote,
+                original_costs: combinedData.original_costs || {
+                  harvesting_cost: combinedData.harvesting_cost ?? combinedData.felling_cost ?? 40700,
+                  extraction_cost: combinedData.extraction_cost ?? 28490,
+                  transportation_cost: combinedData.transportation_cost ?? 22385,
+                  other_cost: combinedData.other_cost ?? 10175
+                },
+                reduction: combinedData.reduction,
+                revision_history: combinedData.revision_history || [],
+                is_revision: combinedData.is_revision || false,
+                contractor_purchase_offer: combinedData.contractor_purchase_offer,
+                timber_purchase_price: combinedData.timber_purchase_price,
+                harvesting_arrangement_cost: combinedData.harvesting_arrangement_cost,
+                transportation_arrangement: combinedData.transportation_arrangement,
+                payment_terms: combinedData.payment_terms,
+                offer_valid_until: combinedData.offer_valid_until,
+                assigned_workers_count: combinedData.assigned_workers_count ?? combinedData.workers_assigned ?? 10,
+                workers_assigned: combinedData.workers_assigned ?? combinedData.assigned_workers_count ?? 10,
+                estimated_duration: combinedData.estimated_duration || '1 Working Day',
+                proposed_start_date: combinedData.proposed_start_date || '2026-10-10',
+                notes: combinedData.notes || 'Site inspection completed. Access road clear for heavy haulers.'
+              };
+            }
+          }
+
+          if (assData) {
+            hasExistingAssessment = true;
+            // Preserve original_quote and original_costs if missing
+            if (!assData.original_quote && assData.total_quote) {
+              assData.original_quote = assData.total_quote;
+            }
+            if (!assData.original_costs) {
+              assData.original_costs = {
+                harvesting_cost: assData.harvesting_cost ?? assData.felling_cost ?? 40700,
+                extraction_cost: assData.extraction_cost ?? 28490,
+                transportation_cost: assData.transportation_cost ?? 22385,
+                other_cost: assData.other_cost ?? 10175
+              };
+            }
+            setExistingAssessmentData(assData);
+            const cleanExistingDate = assData.proposed_start_date ? String(assData.proposed_start_date).substring(0, 10) : '';
+            if (cleanExistingDate) {
+              const initialDateErr = validateProposedDate(cleanExistingDate, inspDate);
+              if (initialDateErr) setDateError(initialDateErr);
+            }
+
+            // If contractor has already submitted an assessment, retain their assessed values
+            const assessedVol = (assData.estimated_harvestable_volume !== undefined && assData.estimated_harvestable_volume !== null && assData.estimated_harvestable_volume !== '')
+              ? parseVolumeNumber(assData.estimated_harvestable_volume)
+              : loVol;
+            const assessedVal = (assData.estimated_timber_value !== undefined && assData.estimated_timber_value !== null && assData.estimated_timber_value !== '')
+              ? Number(assData.estimated_timber_value)
+              : loVal;
+
+            const cleanValidUntil = assData.offer_valid_until ? String(assData.offer_valid_until).substring(0, 10) : '';
+
+            setAssessmentForm(prev => ({
+              ...prev,
+              commercial_proposal_type: assData.commercial_proposal_type || prev.commercial_proposal_type,
+              estimated_harvestable_volume: assessedVol,
+              estimated_timber_value: assessedVal,
+              harvesting_cost: assData.harvesting_cost ?? assData.felling_cost ?? prev.harvesting_cost,
+              extraction_cost: assData.extraction_cost ?? prev.extraction_cost,
+              transportation_cost: assData.transportation_cost ?? prev.transportation_cost,
+              other_cost: assData.other_cost ?? prev.other_cost,
+              total_quote: assData.total_quote ?? prev.total_quote,
+              contractor_purchase_offer: assData.contractor_purchase_offer ?? prev.contractor_purchase_offer,
+              timber_purchase_price: assData.timber_purchase_price ?? prev.timber_purchase_price,
+              harvesting_arrangement_cost: assData.harvesting_arrangement_cost ?? prev.harvesting_arrangement_cost,
+              transportation_arrangement: assData.transportation_arrangement || prev.transportation_arrangement,
+              payment_terms: assData.payment_terms || prev.payment_terms,
+              offer_valid_until: cleanValidUntil || prev.offer_valid_until,
+              assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 10,
+              estimated_duration: assData.estimated_duration || prev.estimated_duration || '1 Working Day',
+              proposed_start_date: cleanExistingDate || (inspDate && inspDate > prev.proposed_start_date ? inspDate : prev.proposed_start_date),
+              notes: assData.notes || prev.notes
+            }));
+          } else {
+            // If no prior assessment exists, default to landowner estimate and ensure start date is after inspection
             setAssessmentForm(prev => ({
               ...prev,
               estimated_harvestable_volume: Number(loVol.toFixed(2)),
@@ -408,6 +475,47 @@ const extractLandownerValue = (req, vol) => {
   }, [requestId]);
 
   const setFallbackDetails = () => {
+    const fallbackAssessment = {
+      commercial_proposal_type: 'Harvesting Service Quotation',
+      estimated_harvestable_volume: 1.80,
+      estimated_timber_value: 237133,
+      harvesting_cost: 40700,
+      felling_cost: 40700,
+      extraction_cost: 28490,
+      transportation_cost: 22385,
+      other_cost: 10175,
+      total_quote: 101750,
+      original_quote: 101750,
+      counter_offer_amount: 93500,
+      counter_offer_start_date: '2026-10-10',
+      assigned_workers_count: 10,
+      estimated_duration: '1 Working Day',
+      proposed_start_date: '2026-10-10',
+      original_costs: {
+        harvesting_cost: 40700,
+        extraction_cost: 28490,
+        transportation_cost: 22385,
+        other_cost: 10175
+      },
+      revision_history: [
+        {
+          revision_number: 0,
+          type: 'INITIAL_QUOTATION',
+          contractor_quote: 101750,
+          costs: {
+            harvesting_cost: 40700,
+            extraction_cost: 28490,
+            transportation_cost: 22385,
+            other_cost: 10175
+          },
+          timestamp: '2026-10-08T10:00:00Z'
+        }
+      ],
+      status: 'ASSESSMENT_SUBMITTED'
+    };
+
+    setExistingAssessmentData(fallbackAssessment);
+
     setRequestDetails({
       id: requestId || 'hr_demo_99',
       _id: requestId || 'hr_demo_99',
@@ -447,6 +555,16 @@ const extractLandownerValue = (req, vol) => {
       total_estimated_volume: 1.70,
       total_estimated_price: 237133,
       approx_timber_value: 237133,
+      total_quote: 101750,
+      original_quote: 101750,
+      harvesting_cost: 40700,
+      extraction_cost: 28490,
+      transportation_cost: 22385,
+      other_cost: 10175,
+      counter_offer_amount: 93500,
+      counter_offer_start_date: '2026-10-10',
+      status: 'REVISION_REQUESTED',
+      assessment: fallbackAssessment,
       site_conditions: {
         access_availability: 'Heavy vehicle access',
         road_condition: 'Paved panchayat road (50 meters)',
@@ -455,7 +573,6 @@ const extractLandownerValue = (req, vol) => {
         additional_notes: 'Easy access from main road. Clear haul path for timber trailers.'
       },
       hazards: ['Nearby buildings / structures', 'Public road adjacent'],
-      status: 'CONTRACTOR_ASSIGNED',
       createdAt: '2026-09-10'
     });
   };
@@ -539,6 +656,16 @@ const extractLandownerValue = (req, vol) => {
           (Number(updated.transportation_cost) || 0) +
           (Number(updated.other_cost) || 0);
         updated.total_quote = sum;
+
+        setRevisionDraft(prevDraft => {
+          if (!prevDraft) return prevDraft;
+          return {
+            ...prevDraft,
+            [name]: Number(value) || 0,
+            revised_contractor_quote: sum,
+            difference: sum - originalContractorQuote
+          };
+        });
       }
       return updated;
     });
@@ -555,15 +682,79 @@ const extractLandownerValue = (req, vol) => {
     }));
   };
 
+  const originalContractorQuote = Number(
+    existingAssessmentData?.original_quote ||
+    requestDetails?.original_quote ||
+    existingAssessmentData?.total_quote ||
+    requestDetails?.total_quote ||
+    101750
+  );
+
+  const landownerTargetBudget = Number(
+    requestDetails?.counter_offer_amount ||
+    existingAssessmentData?.counter_offer_amount ||
+    93500
+  );
+
+  const isAlreadyRevised = Boolean(
+    existingAssessmentData?.is_revision ||
+    requestDetails?.is_revision ||
+    existingAssessmentData?.previous_quote ||
+    requestDetails?.previous_quote ||
+    (existingAssessmentData?.revision_history && existingAssessmentData.revision_history.length > 1) ||
+    (requestDetails?.revision_history && requestDetails.revision_history.length > 1)
+  );
+
+  const previousOfficialQuote = Number(
+    existingAssessmentData?.previous_quote ||
+    requestDetails?.previous_quote ||
+    (isAlreadyRevised ? originalContractorQuote : null)
+  );
+
+  const latestOfficialQuote = Number(
+    existingAssessmentData?.total_quote ||
+    requestDetails?.total_quote ||
+    originalContractorQuote
+  );
+
+  const officialReduction = Number(
+    existingAssessmentData?.reduction ||
+    requestDetails?.reduction ||
+    (isAlreadyRevised ? (originalContractorQuote - latestOfficialQuote) : 0)
+  );
+
+  const originalCosts = existingAssessmentData?.original_costs || requestDetails?.original_costs || {
+    harvesting_cost: existingAssessmentData?.harvesting_cost ?? existingAssessmentData?.felling_cost ?? 40700,
+    extraction_cost: existingAssessmentData?.extraction_cost ?? 28490,
+    transportation_cost: existingAssessmentData?.transportation_cost ?? 22385,
+    other_cost: existingAssessmentData?.other_cost ?? 10175
+  };
+
   const handleMatchLandownerTarget = () => {
-    const target = Number(requestDetails?.counter_offer_amount || existingAssessmentData?.counter_offer_amount);
+    const target = Number(landownerTargetBudget);
     if (!target || isNaN(target) || target <= 0) return;
+    if (target >= originalContractorQuote) return; // Edge case: target already matches or exceeds original quote
+
+    const reductionAmt = originalContractorQuote - target;
 
     if (assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation') {
       const felling = Math.round(target * 0.40);
       const extraction = Math.round(target * 0.28);
       const transport = Math.round(target * 0.22);
       const other = target - (felling + extraction + transport);
+
+      setRevisionDraft({
+        type: 'MATCH_TARGET',
+        label: 'Match Target Budget',
+        revised_contractor_quote: target,
+        harvesting_cost: felling,
+        extraction_cost: extraction,
+        transportation_cost: transport,
+        other_cost: other,
+        difference: target - originalContractorQuote,
+        reduction: reductionAmt
+      });
+
       setAssessmentForm(prev => ({
         ...prev,
         harvesting_cost: felling,
@@ -573,17 +764,135 @@ const extractLandownerValue = (req, vol) => {
         total_quote: target
       }));
     } else if (assessmentForm.commercial_proposal_type === 'Timber Purchase Offer') {
+      setRevisionDraft({
+        type: 'MATCH_TARGET',
+        label: 'Match Target Budget',
+        revised_contractor_quote: target,
+        difference: target - originalContractorQuote,
+        reduction: reductionAmt
+      });
       setAssessmentForm(prev => ({
         ...prev,
         contractor_purchase_offer: target
       }));
     } else if (assessmentForm.commercial_proposal_type === 'Purchase + Harvesting') {
+      setRevisionDraft({
+        type: 'MATCH_TARGET',
+        label: 'Match Target Budget',
+        revised_contractor_quote: target,
+        difference: target - originalContractorQuote,
+        reduction: reductionAmt
+      });
       setAssessmentForm(prev => ({
         ...prev,
         timber_purchase_price: target
       }));
     }
 
+    const targetDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date;
+    if (targetDate) {
+      setAssessmentForm(prev => ({
+        ...prev,
+        proposed_start_date: String(targetDate).substring(0, 10)
+      }));
+    }
+  };
+
+  const handleMeetHalfwayTarget = () => {
+    const target = Number(landownerTargetBudget);
+    const baseline = originalContractorQuote;
+    if (!target || isNaN(target) || target <= 0) return;
+    if (target >= baseline) return; // Edge case: target already matches or exceeds baseline
+
+    const halfway = Math.round((baseline + target) / 2);
+    const reductionAmt = baseline - halfway;
+
+    if (assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation') {
+      const felling = Math.round(halfway * 0.40);
+      const extraction = Math.round(halfway * 0.28);
+      const transport = Math.round(halfway * 0.22);
+      const other = halfway - (felling + extraction + transport);
+
+      setRevisionDraft({
+        type: 'MEET_HALFWAY',
+        label: 'Meet Halfway',
+        revised_contractor_quote: halfway,
+        harvesting_cost: felling,
+        extraction_cost: extraction,
+        transportation_cost: transport,
+        other_cost: other,
+        difference: halfway - baseline,
+        reduction: reductionAmt
+      });
+
+      setAssessmentForm(prev => ({
+        ...prev,
+        harvesting_cost: felling,
+        extraction_cost: extraction,
+        transportation_cost: transport,
+        other_cost: other,
+        total_quote: halfway
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Timber Purchase Offer') {
+      setRevisionDraft({
+        type: 'MEET_HALFWAY',
+        label: 'Meet Halfway',
+        revised_contractor_quote: halfway,
+        difference: halfway - baseline,
+        reduction: reductionAmt
+      });
+      setAssessmentForm(prev => ({
+        ...prev,
+        contractor_purchase_offer: halfway
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Purchase + Harvesting') {
+      setRevisionDraft({
+        type: 'MEET_HALFWAY',
+        label: 'Meet Halfway',
+        revised_contractor_quote: halfway,
+        difference: halfway - baseline,
+        reduction: reductionAmt
+      });
+      setAssessmentForm(prev => ({
+        ...prev,
+        timber_purchase_price: halfway
+      }));
+    }
+
+    const targetDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date;
+    if (targetDate) {
+      setAssessmentForm(prev => ({
+        ...prev,
+        proposed_start_date: String(targetDate).substring(0, 10)
+      }));
+    }
+  };
+
+  const handleResetToOriginalQuote = () => {
+    setRevisionDraft(null);
+    if (assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation') {
+      setAssessmentForm(prev => ({
+        ...prev,
+        harvesting_cost: originalCosts.harvesting_cost ?? 40700,
+        extraction_cost: originalCosts.extraction_cost ?? 28490,
+        transportation_cost: originalCosts.transportation_cost ?? 22385,
+        other_cost: originalCosts.other_cost ?? 10175,
+        total_quote: originalContractorQuote
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Timber Purchase Offer') {
+      setAssessmentForm(prev => ({
+        ...prev,
+        contractor_purchase_offer: originalContractorQuote
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Purchase + Harvesting') {
+      setAssessmentForm(prev => ({
+        ...prev,
+        timber_purchase_price: originalContractorQuote
+      }));
+    }
+  };
+
+  const handleApplyRequestedStartDate = () => {
     const targetDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date;
     if (targetDate) {
       setAssessmentForm(prev => ({
@@ -604,6 +913,24 @@ const extractLandownerValue = (req, vol) => {
         estimated_harvestable_volume: volNum,
         estimated_timber_value: newVal > 0 ? newVal : prev.estimated_timber_value
       }));
+    }
+  };
+
+  const scrollToCostInputs = () => {
+    const el = document.getElementById('contractor-cost-breakdown-inputs');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const firstInput = el.querySelector('input[name="harvesting_cost"]');
+      if (firstInput) {
+        setTimeout(() => firstInput.focus(), 300);
+      }
+    }
+  };
+
+  const scrollToSubmitActions = () => {
+    const el = document.getElementById('contractor-submit-actions');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -735,6 +1062,11 @@ const extractLandownerValue = (req, vol) => {
       const targetId = requestId || requestDetails?.id || requestDetails?._id || 'hr_demo_99';
       const workersNum = assessmentForm.assigned_workers_count ? parseInt(assessmentForm.assigned_workers_count, 10) : null;
 
+      const isRevisionSubmission = Boolean(isRevisionRequested || revisionDraft || isAlreadyRevised);
+      const submittedTotalQuote = pType === 'Harvesting Service Quotation'
+        ? (Number(assessmentForm.total_quote) || 0)
+        : (pType === 'Timber Purchase Offer' ? (Number(assessmentForm.contractor_purchase_offer) || 0) : (Number(assessmentForm.timber_purchase_price) || 0));
+
       const payload = {
         commercial_proposal_type: pType,
         estimated_harvestable_volume: assessedVolNum,
@@ -761,10 +1093,19 @@ const extractLandownerValue = (req, vol) => {
         proposed_start_date: assessmentForm.proposed_start_date || '',
         notes: assessmentForm.notes || '',
         is_reassessed_after_inspection: Boolean(requestDetails?.site_inspected || requestDetails?.site_inspection?.status === 'COMPLETED'),
-        reassessed_at: new Date().toISOString()
+        reassessed_at: new Date().toISOString(),
+        // Commercial negotiation & revision audit tracking
+        original_quote: originalContractorQuote,
+        previous_quote: latestOfficialQuote,
+        is_revision: isRevisionSubmission,
+        revision_notes: revisionDraft ? revisionDraft.label : (isRevisionRequested ? 'Contractor revised quotation submitted' : '')
       };
 
-      await harvestService.submitAssessment(targetId, payload);
+      const res = await harvestService.submitAssessment(targetId, payload);
+      if (res && (res.assessment || res.id)) {
+        setExistingAssessmentData(res.assessment || res);
+      }
+      setRevisionDraft(null);
 
       // Keep local storage in sync
       try {
@@ -772,18 +1113,32 @@ const extractLandownerValue = (req, vol) => {
         if (stored) {
           const reqs = JSON.parse(stored);
           if (Array.isArray(reqs)) {
+            const currentTotal = payload.total_quote ?? payload.contractor_purchase_offer ?? payload.timber_purchase_price;
+            const reductionAmt = Math.round(originalContractorQuote - (currentTotal || originalContractorQuote));
             const updated = reqs.map(r => {
               if (r && (String(r.id) === String(targetId) || String(r._id) === String(targetId))) {
                 return {
                   ...r,
                   status: 'ASSESSMENT_SUBMITTED',
-                  assessment: payload,
+                  assessment: {
+                    ...payload,
+                    original_quote: originalContractorQuote,
+                    previous_quote: latestOfficialQuote,
+                    revised_quote: currentTotal,
+                    reduction: reductionAmt,
+                    is_revision: isRevisionSubmission
+                  },
                   commercial_proposal_type: pType,
                   estimated_harvestable_volume: assessedVolNum,
                   estimated_timber_value: payload.estimated_timber_value,
                   total_quote: payload.total_quote,
                   contractor_purchase_offer: payload.contractor_purchase_offer,
                   timber_purchase_price: payload.timber_purchase_price,
+                  original_quote: originalContractorQuote,
+                  previous_quote: latestOfficialQuote,
+                  revised_quote: currentTotal,
+                  reduction: reductionAmt,
+                  is_revision: isRevisionSubmission,
                   assigned_workers_count: workersNum,
                   workers_assigned: workersNum,
                   is_reassessed_after_inspection: payload.is_reassessed_after_inspection,
@@ -845,13 +1200,62 @@ const extractLandownerValue = (req, vol) => {
   const landownerReferenceTimberValue = extractLandownerValue(requestDetails, landownerEstimatedVolume);
 
   const isRevisionRequested = requestDetails?.status === 'REVISION_REQUESTED' || existingAssessmentData?.status === 'REVISION_REQUESTED';
-  const revisionReasons = requestDetails?.revision_reasons || existingAssessmentData?.revision_reasons || [];
-  const landownerFeedback = requestDetails?.landowner_feedback || existingAssessmentData?.landowner_feedback || '';
-  const counterOfferAmount = requestDetails?.counter_offer_amount || existingAssessmentData?.counter_offer_amount;
-  const counterOfferStartDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date;
+  const revisionReasons = (Array.isArray(requestDetails?.revision_reasons) && requestDetails.revision_reasons.length > 0)
+    ? requestDetails.revision_reasons
+    : (Array.isArray(existingAssessmentData?.revision_reasons) && existingAssessmentData.revision_reasons.length > 0)
+      ? existingAssessmentData.revision_reasons
+      : [];
+  const landownerFeedback = (requestDetails?.landowner_feedback || existingAssessmentData?.landowner_feedback || '').trim();
+  const counterOfferAmount = Number(requestDetails?.counter_offer_amount || existingAssessmentData?.counter_offer_amount || 0) || null;
+  const counterOfferStartDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date || null;
+  const hasFairDeal = Boolean(
+    isRevisionRequested ||
+    counterOfferAmount ||
+    counterOfferStartDate ||
+    revisionReasons.length > 0 ||
+    landownerFeedback
+  );
   const isSiteInspected = Boolean(requestDetails?.site_inspected || requestDetails?.site_inspection?.status === 'COMPLETED');
   const inspectedVolume = requestDetails?.site_inspection?.estimated_volume;
   const inspectedTrees = requestDetails?.site_inspection?.verified_tree_count;
+
+  // Auto-apply match target or halfway if navigated with action query param (creates revision draft only)
+  useEffect(() => {
+    if ((!requestDetails && !existingAssessmentData) || autoAppliedRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const applyMode = params.get('apply');
+    if (applyMode === 'match') {
+      autoAppliedRef.current = true;
+      const timer = setTimeout(() => {
+        handleMatchLandownerTarget();
+      }, 350);
+      return () => clearTimeout(timer);
+    } else if (applyMode === 'halfway') {
+      autoAppliedRef.current = true;
+      const timer = setTimeout(() => {
+        handleMeetHalfwayTarget();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [requestDetails, existingAssessmentData]);
+
+  const handleSaveDraft = () => {
+    try {
+      localStorage.setItem(`treeconnect_draft_assessment_${requestId}`, JSON.stringify(assessmentForm));
+      setFeedbackMessage({
+        type: 'success',
+        text: 'Assessment draft saved successfully to local browser storage.'
+      });
+      setTimeout(() => {
+        setFeedbackMessage({ type: '', text: '' });
+      }, 3500);
+    } catch (err) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Failed to save draft locally.'
+      });
+    }
+  };
 
   return (
     <div className="contractor-dashboard-page">
@@ -860,36 +1264,47 @@ const extractLandownerValue = (req, vol) => {
         <Sidebar />
 
         <div className="contractor-dashboard-workspace">
+          <div className="assessment-page-container">
 
-          {/* HEADER BACK LINK & TITLE */}
-          <div className="flex flex-col gap-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="inline-flex items-center gap-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 w-fit transition-colors cursor-pointer"
-            >
-              <ArrowLeft size={16} /> Back to Assigned Jobs
-            </button>
+            {/* HEADER BACK LINK & TITLE */}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => navigate(-1)}
+                className="inline-flex items-center gap-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 w-fit transition-colors cursor-pointer"
+              >
+                <ArrowLeft size={16} /> Back to Assigned Jobs
+              </button>
 
-            <div className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-[#07170e] via-[#0c2417] to-[#07170e] border border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl">
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold mb-3">
-                  <Calculator size={14} /> DEDICATED CONTRACTOR ASSESSMENT PAGE
+              <div className="assessment-page-header">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2.5">
+                      <FileText size={24} className="text-emerald-400 shrink-0" /> Formal Contractor Assessment
+                    </h1>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                      Review site findings, evaluate harvestable volume, and submit your commercial proposal.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                    <div className="cd-header-status-badge">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <div className="flex flex-col text-left leading-tight">
+                        <span className="text-[11px] font-bold text-emerald-300">
+                          {requestDetails?.status === 'OPERATION_READY' ? 'Quotation Accepted' : 'Quotation Submitted'}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {requestDetails?.status === 'OPERATION_READY' ? 'Operation Ready' : 'Under Review'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1.5 rounded-lg bg-[#04120a] border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
+                      Job #{reqIdDisplay}
+                    </span>
+                  </div>
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-                  Submit Contractor Assessment & Quotation
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                  Evaluate standing timber inventory, inspect site logistics, itemize harvesting costs, and provide an official quotation for client authorization.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="px-3.5 py-1.5 rounded-xl bg-[#04120a] border border-emerald-500/40 text-emerald-400 text-xs font-mono font-bold">
-                  Job #{reqIdDisplay}
-                </span>
               </div>
             </div>
-          </div>
 
           {/* MAIN FORM & DETAILS CONTAINER - STACKED UNDER PROPERTY */}
           {loading ? (
@@ -1490,13 +1905,18 @@ const extractLandownerValue = (req, vol) => {
                 <div className="assessment-workspace-card">
                   {/* Formal Assessment Header */}
                   <div className="assessment-header-block">
-                    <div>
-                      <h2 className="assessment-header-title">
-                        <FileText size={22} className="text-emerald-400 shrink-0" /> Formal Contractor Assessment Form
-                      </h2>
-                      <p className="assessment-header-subtitle">
-                        Fill in evaluated volumes and itemized quotation costs for the landowner.
-                      </p>
+                    <div className="flex items-center justify-between gap-4 flex-wrap w-full">
+                      <div>
+                        <h2 className="assessment-header-title">
+                          <FileText size={22} className="text-emerald-400 shrink-0" /> Formal Contractor Assessment Form
+                        </h2>
+                        <p className="assessment-header-subtitle">
+                          Fill in evaluated volumes and itemized quotation costs for the landowner.
+                        </p>
+                      </div>
+                      <span className="cd-status-badge-compact">
+                        ● Quotation Submitted · Under Review
+                      </span>
                     </div>
                   </div>
 
@@ -1515,69 +1935,822 @@ const extractLandownerValue = (req, vol) => {
                     </div>
                   )}
 
-                  {/* ACTIVE LANDOWNER COUNTER-OFFER & NEGOTIATION BANNER */}
-                  {isRevisionRequested && (
-                    <div className="p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 flex flex-col gap-3 shadow-xl">
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-                            <RefreshCw size={16} />
+                  {/* ACTIVE SUBMITTED QUOTATION OVERVIEW BANNER (CURRENT ASSESSMENT) */}
+                  {/* ACTIVE SUBMITTED QUOTATION OVERVIEW BANNER (CURRENT ASSESSMENT) */}
+                  {(existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED' || requestDetails?.total_quote || assessmentForm.total_quote) && (
+                    <div className="cd-assessment-summary-panel">
+                      <div className="cd-summary-top-row">
+                        <div className="flex items-center gap-3">
+                          <div className="cd-summary-icon-box">
+                            <ClipboardCheck size={20} className="text-emerald-400" />
                           </div>
                           <div>
-                            <span className="font-extrabold text-amber-300 text-sm block">
-                              Active Landowner Negotiation &amp; Fair Deal Target
-                            </span>
-                            <span className="text-[11px] text-slate-400">
-                              The landowner requested revisions to reach an agreeable deal before contract signing.
-                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="cd-summary-title">
+                                {isAlreadyRevised ? 'Current Assessment (Revised)' : 'Current Assessment'}
+                              </h3>
+                              <span className="cd-status-badge-compact">
+                                {requestDetails?.status === 'OPERATION_READY'
+                                  ? '✓ Accepted by Landowner'
+                                  : isAlreadyRevised
+                                    ? '● Revised Quotation on Record · Under Review'
+                                    : '● Quotation Submitted · Under Review'}
+                              </span>
+                            </div>
+                            <p className="cd-summary-subtitle">
+                              {isAlreadyRevised
+                                ? `Active negotiated quotation of ${formatRupees(latestOfficialQuote)} on record (Original contractor quote: ${formatRupees(originalContractorQuote)}).`
+                                : `Active commercial quotation of ${formatRupees(originalContractorQuote)} on record for this parcel. You can adjust and resubmit below.`}
+                            </p>
                           </div>
                         </div>
 
-                        {counterOfferAmount > 0 && (
+                        {/* Top-Right Prominent Total Quotation */}
+                        <div className="cd-summary-total-callout">
+                          <span className="cd-summary-total-label">
+                            {isAlreadyRevised ? 'LATEST REVISED QUOTATION' : 'TOTAL CONTRACTOR QUOTATION'}
+                          </span>
+                          <strong className="cd-summary-total-amount">
+                            {formatRupees(isAlreadyRevised ? latestOfficialQuote : originalContractorQuote)}
+                          </strong>
+                          {isAlreadyRevised ? (
+                            <span className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5 font-medium flex-wrap justify-end">
+                              <span>Previous Quote: <strong className="text-slate-200">{formatRupees(previousOfficialQuote || originalContractorQuote)}</strong></span>
+                              <span>•</span>
+                              <span className="text-emerald-400 font-bold">Reduction: {formatRupees(officialReduction)}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 mt-0.5">
+                              Original contractor rate on record
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Revision Draft banner if active */}
+                      {revisionDraft && (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs flex-wrap">
+                          <div className="flex items-center gap-2 text-amber-300">
+                            <Sparkles size={16} className="text-amber-400 shrink-0" />
+                            <span>
+                              <strong>Revision Draft in Progress:</strong> Proposed quote is <strong>{formatRupees(revisionDraft.revised_contractor_quote)}</strong> ({revisionDraft.difference < 0 ? '-' : '+'}{formatRupees(Math.abs(revisionDraft.difference))}). Official quotation on record remains <strong>{formatRupees(originalContractorQuote)}</strong> until you review below and click <strong>"Submit Revised Quote"</strong>.
+                            </span>
+                          </div>
                           <button
                             type="button"
-                            onClick={handleMatchLandownerTarget}
-                            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer transition-all flex items-center gap-1.5 shrink-0 hover:scale-[1.02]"
-                            title="Auto-fill your quotation to match the landowner's target budget"
+                            onClick={handleResetToOriginalQuote}
+                            className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-[11px] shrink-0 transition-colors cursor-pointer"
                           >
-                            <span>Match Landowner Target ({formatINR(counterOfferAmount)})</span>
+                            Discard Draft
                           </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 text-xs">
-                        {counterOfferAmount > 0 && (
-                          <div className="p-3 rounded-xl bg-black/50 border border-amber-500/30 flex items-center justify-between">
-                            <span className="text-slate-400 font-semibold">Landowner Target Budget:</span>
-                            <strong className="text-amber-400 font-extrabold text-sm">{formatINR(counterOfferAmount)}</strong>
-                          </div>
-                        )}
-                        {counterOfferStartDate && (
-                          <div className="p-3 rounded-xl bg-black/50 border border-amber-500/30 flex items-center justify-between">
-                            <span className="text-slate-400 font-semibold">Requested Start Date:</span>
-                            <strong className="text-white font-semibold text-xs">{formatDateDMY(counterOfferStartDate)}</strong>
-                          </div>
-                        )}
-                      </div>
-
-                      {Array.isArray(revisionReasons) && revisionReasons.length > 0 && (
-                        <div className="flex items-center gap-2 flex-wrap pt-1 text-xs">
-                          <span className="text-slate-400 font-semibold">Requested focus areas:</span>
-                          {revisionReasons.map((reason, idx) => (
-                            <span key={idx} className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/80 border border-amber-500/30 text-amber-300">
-                              {reason}
-                            </span>
-                          ))}
                         </div>
                       )}
 
-                      {landownerFeedback && (
-                        <div className="p-3 rounded-xl bg-black/40 border border-amber-500/20 text-xs text-amber-100/90 italic leading-relaxed">
-                          "{landownerFeedback}"
+                      {/* 4-column itemized cost grid showing official costs on record */}
+                      <div className="cd-summary-cost-grid">
+                        <div className="cd-summary-cost-card">
+                          <span className="cd-summary-cost-label">Felling &amp; Logging</span>
+                          <span className="cd-summary-cost-value">
+                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.harvesting_cost ?? 37400) : originalCosts.harvesting_cost)}
+                          </span>
                         </div>
-                      )}
+                        <div className="cd-summary-cost-card">
+                          <span className="cd-summary-cost-label">Extraction</span>
+                          <span className="cd-summary-cost-value">
+                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.extraction_cost ?? 26180) : originalCosts.extraction_cost)}
+                          </span>
+                        </div>
+                        <div className="cd-summary-cost-card">
+                          <span className="cd-summary-cost-label">Transportation</span>
+                          <span className="cd-summary-cost-value">
+                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.transportation_cost ?? 20570) : originalCosts.transportation_cost)}
+                          </span>
+                        </div>
+                        <div className="cd-summary-cost-card">
+                          <span className="cd-summary-cost-label">Other / Clearing</span>
+                          <span className="cd-summary-cost-value">
+                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.other_cost ?? 9350) : originalCosts.other_cost)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Separate metadata row */}
+                      <div className="cd-summary-meta-grid">
+                        <div className="cd-summary-meta-item">
+                          <Users size={16} className="text-emerald-400 shrink-0" />
+                          <div>
+                            <span className="cd-summary-meta-label">Crew</span>
+                            <span className="cd-summary-meta-val">{assessmentForm.assigned_workers_count || 10} Workers</span>
+                          </div>
+                        </div>
+                        <div className="cd-summary-meta-item">
+                          <Clock size={16} className="text-emerald-400 shrink-0" />
+                          <div>
+                            <span className="cd-summary-meta-label">Duration</span>
+                            <span className="cd-summary-meta-val">{assessmentForm.estimated_duration || '1 Working Day'}</span>
+                          </div>
+                        </div>
+                        <div className="cd-summary-meta-item">
+                          <Calendar size={16} className="text-emerald-400 shrink-0" />
+                          <div>
+                            <span className="cd-summary-meta-label">Start Date</span>
+                            <span className="cd-summary-meta-val">{formatDateDMY(assessmentForm.proposed_start_date || '2026-10-10')}</span>
+                          </div>
+                        </div>
+                        <div className="cd-summary-meta-item">
+                          <Layers size={16} className="text-emerald-400 shrink-0" />
+                          <div>
+                            <span className="cd-summary-meta-label">Assessed Volume</span>
+                            <span className="cd-summary-meta-val text-emerald-300">{formatVolume(assessmentForm.estimated_harvestable_volume || 1.80)}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
+
+                  {/* ACTIVE LANDOWNER COUNTER-PROPOSAL & REVISION SPECIFICATIONS */}
+                  {hasFairDeal && (() => {
+                    const targetBudget = landownerTargetBudget;
+                    const varianceToClose = originalContractorQuote - targetBudget;
+                    const halfwayDiff = varianceToClose > 0 ? Math.round(varianceToClose / 2) : 0;
+                    const halfwayBudget = varianceToClose > 0 ? (originalContractorQuote - halfwayDiff) : targetBudget;
+                    const landownerName = requestDetails?.userName || requestDetails?.landowner_name || requestDetails?.ownerName || 'Registered Landowner';
+                    const landownerPhone = requestDetails?.userPhone || requestDetails?.owner_phone || requestDetails?.contact_phone || '';
+                    const landownerEmail = requestDetails?.userEmail || requestDetails?.owner_email || '';
+
+                    // Active proposed quote: revisionDraft if populated, latestOfficialQuote if already revised, else null
+                    const proposedQuote = revisionDraft ? revisionDraft.revised_contractor_quote : (isAlreadyRevised ? latestOfficialQuote : null);
+                    const proposedReduction = proposedQuote !== null ? (originalContractorQuote - proposedQuote) : null;
+
+                    // Active revision draft amount or target budget for distribution calculation
+                    const activeProposedAmount = revisionDraft ? revisionDraft.revised_contractor_quote : targetBudget;
+                    const suggestedFelling = Math.round(activeProposedAmount * 0.40);
+                    const suggestedExtraction = Math.round(activeProposedAmount * 0.28);
+                    const suggestedTransport = Math.round(activeProposedAmount * 0.22);
+                    const suggestedOther = activeProposedAmount - (suggestedFelling + suggestedExtraction + suggestedTransport);
+
+                    return (
+                      <div className="qtn-counter-section">
+                        {/* 1. Header with Badge & Contractor Action Buttons */}
+                        <div className="qtn-counter-header">
+                          <div className="qtn-counter-title-group">
+                            <div className="qtn-counter-icon">
+                              <RefreshCw size={20} className="text-amber-400" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <h3 className="qtn-counter-title">
+                                  Landowner Counter-Proposal &amp; Revision Request
+                                </h3>
+                                <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                  Active Negotiation • Revision Needed
+                                </span>
+                              </div>
+                              <p className="qtn-counter-subtitle">
+                                The landowner reviewed your quotation of {formatRupees(originalContractorQuote)} and submitted revised terms for commercial authorization.
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons: Creates a revision draft only */}
+                          <div className="flex flex-col gap-2 items-start sm:items-end">
+                            {varianceToClose === 0 ? (
+                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                                <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                                <span>Your quotation already matches the landowner's target budget.</span>
+                              </div>
+                            ) : varianceToClose < 0 ? (
+                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-semibold">
+                                <Info size={15} className="text-blue-400 shrink-0" />
+                                <span>Your quotation is already below the landowner's target budget.</span>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={handleMatchLandownerTarget}
+                                    className={`cd-btn-match-target ${revisionDraft?.type === 'MATCH_TARGET' ? 'active-draft' : ''}`}
+                                    title="Reduce your quote to the landowner's target."
+                                  >
+                                    <CheckCircle2 size={14} />
+                                    <span>Match Target Budget ({formatRupees(targetBudget)})</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleMeetHalfwayTarget}
+                                    className={`cd-btn-meet-halfway ${revisionDraft?.type === 'MEET_HALFWAY' ? 'active-draft' : ''}`}
+                                    title="Propose a price halfway between your quote and the landowner's target."
+                                  >
+                                    <span>Meet Halfway ({formatRupees(halfwayBudget)})</span>
+                                  </button>
+
+                                  {revisionDraft && (
+                                    <button
+                                      type="button"
+                                      onClick={handleResetToOriginalQuote}
+                                      className="cd-btn-reset-draft"
+                                      title="Discard revision draft and restore original contractor rate"
+                                    >
+                                      <X size={13} />
+                                      <span>Reset to Original ({formatRupees(originalContractorQuote)})</span>
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-400 flex items-center gap-3 flex-wrap">
+                                  <span>• <strong>Match Target Budget:</strong> Reduce your quote to the landowner's target.</span>
+                                  <span>• <strong>Meet Halfway:</strong> Propose a price halfway between your quote and the landowner's target.</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 2. Key Negotiation Metrics (4-Column Grid: Section 8) */}
+                        <div className="qtn-counter-grid">
+                          <div className="qtn-counter-cell">
+                            <span className="qtn-counter-cell-label">YOUR CURRENT QUOTE</span>
+                            <span className="qtn-counter-cell-val text-white font-mono font-black">
+                              {formatRupees(originalContractorQuote)}
+                            </span>
+                            <span className="qtn-counter-cell-hint">Original contractor quotation</span>
+                          </div>
+
+                          <div className="qtn-counter-cell qtn-counter-cell-target">
+                            <span className="qtn-counter-cell-label text-amber-300">LANDOWNER TARGET</span>
+                            <span className="qtn-counter-cell-val text-amber-400 font-mono font-black">
+                              {formatRupees(targetBudget)}
+                            </span>
+                            <span className="qtn-counter-cell-hint text-amber-200/70">Client proposed ceiling</span>
+                          </div>
+
+                          <div className="qtn-counter-cell">
+                            <span className="qtn-counter-cell-label">VARIANCE TO CLOSE</span>
+                            <span className={`qtn-counter-cell-val font-mono font-black ${varianceToClose > 0 ? 'text-amber-400' : varianceToClose === 0 ? 'text-emerald-400' : 'text-blue-400'}`}>
+                              {varianceToClose > 0 ? formatRupees(varianceToClose) : varianceToClose === 0 ? '₹0' : `+${formatRupees(Math.abs(varianceToClose))}`}
+                            </span>
+                            <span className="qtn-counter-cell-hint">
+                              {varianceToClose > 0 ? 'Gap vs submitted quotation' : varianceToClose === 0 ? 'Target matched exactly' : 'Quote is lower than target'}
+                            </span>
+                          </div>
+
+                          <div className="qtn-counter-cell">
+                            <span className="qtn-counter-cell-label">PROPOSED REVISED QUOTE</span>
+                            <span className={`qtn-counter-cell-val font-mono font-black ${revisionDraft ? 'text-amber-300 font-bold' : isAlreadyRevised ? 'text-emerald-300 font-bold' : 'text-slate-400'}`}>
+                              {proposedQuote !== null ? formatRupees(proposedQuote) : '—'}
+                            </span>
+                            <span className="qtn-counter-cell-hint">
+                              {revisionDraft
+                                ? `Pending contractor revision (Reduction: ${proposedReduction !== null && proposedReduction > 0 ? formatRupees(proposedReduction) : '₹0'})`
+                                : isAlreadyRevised
+                                  ? `Official revised rate on record (Reduction: ${proposedReduction !== null && proposedReduction > 0 ? formatRupees(proposedReduction) : '₹0'})`
+                                  : 'Click Match Target or Meet Halfway to draft'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 2a. PROPOSED REVISION SECTION (Requirements 5 & 6) */}
+                        {revisionDraft && (() => {
+                          const currentDraftTotal = Number(assessmentForm.total_quote || revisionDraft.revised_contractor_quote);
+                          const currentDraftReduction = Math.max(0, originalContractorQuote - currentDraftTotal);
+
+                          return (
+                            <div className="cd-proposed-revision-panel" id="proposed-revision-section">
+                              <div className="cd-proposed-revision-header">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                                    <Edit3 size={16} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="text-sm font-black uppercase tracking-wider text-white m-0">
+                                        PROPOSED REVISION
+                                      </h4>
+                                      <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                        Draft • Pending Submission
+                                      </span>
+                                    </div>
+                                    <span className="text-[11px] text-slate-300 font-medium block mt-0.5">
+                                      {revisionDraft.type === 'MATCH_TARGET'
+                                        ? 'Contractor agrees to reduce quotation to landowner target budget.'
+                                        : revisionDraft.type === 'MEET_HALFWAY'
+                                          ? 'Contractor proposes compromise halfway between original quotation and target budget.'
+                                          : 'Quotation revision proposal draft.'} Original quotation ({formatRupees(originalContractorQuote)}) remains unchanged until submitted.
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleResetToOriginalQuote}
+                                  className="cd-btn-reset-draft"
+                                  title="Discard revision draft and keep original quotation"
+                                >
+                                  <X size={13} />
+                                  <span>Discard Draft</span>
+                                </button>
+                              </div>
+
+                              {/* 4 Summary Cards */}
+                              <div className="cd-proposed-summary-grid">
+                                <div className="cd-proposed-summary-card">
+                                  <span className="cd-proposed-summary-label">Original Contractor Quote</span>
+                                  <span className="cd-proposed-summary-val font-mono text-white">
+                                    {formatRupees(originalContractorQuote)}
+                                  </span>
+                                  <span className="cd-proposed-summary-hint">Preserved baseline quote</span>
+                                </div>
+
+                                <div className="cd-proposed-summary-card">
+                                  <span className="cd-proposed-summary-label text-amber-300">Landowner Target</span>
+                                  <span className="cd-proposed-summary-val font-mono text-amber-400">
+                                    {formatRupees(targetBudget)}
+                                  </span>
+                                  <span className="cd-proposed-summary-hint text-amber-200/70">Client proposed ceiling</span>
+                                </div>
+
+                                <div className="cd-proposed-summary-card highlight-emerald">
+                                  <span className="cd-proposed-summary-label text-emerald-300">Proposed Revised Quote</span>
+                                  <span className="cd-proposed-summary-val font-mono text-emerald-400 font-black">
+                                    {formatRupees(currentDraftTotal)}
+                                  </span>
+                                  <span className="cd-proposed-summary-hint text-emerald-200/70">
+                                    {revisionDraft.type === 'MATCH_TARGET' ? 'Matches landowner target' : 'Halfway compromise'}
+                                  </span>
+                                </div>
+
+                                <div className="cd-proposed-summary-card">
+                                  <span className="cd-proposed-summary-label text-emerald-400">Reduction</span>
+                                  <span className="cd-proposed-summary-val font-mono text-emerald-300 font-bold">
+                                    {formatRupees(currentDraftReduction)}
+                                  </span>
+                                  <span className="cd-proposed-summary-hint">Discount offered to landowner</span>
+                                </div>
+                              </div>
+
+                              {/* Editable Cost Breakdown */}
+                              {assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation' && (
+                                <div className="cd-proposed-breakdown-box">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-emerald-500/20">
+                                    <div>
+                                      <span className="text-xs font-black uppercase tracking-wider text-slate-200 block">
+                                        Editable Cost Breakdown
+                                      </span>
+                                      <span className="text-[11px] text-slate-400">
+                                        Edit any individual cost below. The total automatically recalculates.
+                                      </span>
+                                    </div>
+                                    <span className="text-[11px] text-emerald-400 font-mono font-semibold">
+                                      Total = Felling + Extraction + Transportation + Other
+                                    </span>
+                                  </div>
+
+                                  <div className="cd-proposed-inputs-grid">
+                                    <div className="cd-proposed-input-group">
+                                      <label className="cd-proposed-input-label">Felling &amp; Logging</label>
+                                      <div className="cd-proposed-input-wrap">
+                                        <span className="cd-proposed-currency-prefix">₹</span>
+                                        <input
+                                          type="number"
+                                          name="harvesting_cost"
+                                          value={assessmentForm.harvesting_cost}
+                                          onChange={handleInputChange}
+                                          className="cd-proposed-input font-mono"
+                                          placeholder="0"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="cd-proposed-input-group">
+                                      <label className="cd-proposed-input-label">Extraction</label>
+                                      <div className="cd-proposed-input-wrap">
+                                        <span className="cd-proposed-currency-prefix">₹</span>
+                                        <input
+                                          type="number"
+                                          name="extraction_cost"
+                                          value={assessmentForm.extraction_cost}
+                                          onChange={handleInputChange}
+                                          className="cd-proposed-input font-mono"
+                                          placeholder="0"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="cd-proposed-input-group">
+                                      <label className="cd-proposed-input-label">Transportation</label>
+                                      <div className="cd-proposed-input-wrap">
+                                        <span className="cd-proposed-currency-prefix">₹</span>
+                                        <input
+                                          type="number"
+                                          name="transportation_cost"
+                                          value={assessmentForm.transportation_cost}
+                                          onChange={handleInputChange}
+                                          className="cd-proposed-input font-mono"
+                                          placeholder="0"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="cd-proposed-input-group">
+                                      <label className="cd-proposed-input-label">Other / Clearing</label>
+                                      <div className="cd-proposed-input-wrap">
+                                        <span className="cd-proposed-currency-prefix">₹</span>
+                                        <input
+                                          type="number"
+                                          name="other_cost"
+                                          value={assessmentForm.other_cost}
+                                          onChange={handleInputChange}
+                                          className="cd-proposed-input font-mono"
+                                          placeholder="0"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Total Proposed Quote Bar */}
+                                  <div className="cd-proposed-total-banner">
+                                    <div>
+                                      <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                                        Total Proposed Quote
+                                      </span>
+                                      <span className="text-[11px] text-slate-400">
+                                        Felling &amp; Logging + Extraction + Transportation + Other / Clearing
+                                      </span>
+                                    </div>
+                                    <span className="text-xl font-mono font-black text-emerald-400">
+                                      {formatRupees(currentDraftTotal)}
+                                    </span>
+                                  </div>
+
+                                  {/* Action Buttons */}
+                                  <div className="cd-proposed-actions-row">
+                                    <button
+                                      type="button"
+                                      onClick={handleSubmit}
+                                      disabled={isSubmitting}
+                                      className="cd-btn-submit-rev-direct"
+                                      title="Submit this proposed revision as the new official quotation"
+                                    >
+                                      {isSubmitting ? (
+                                        <>
+                                          <Loader2 size={15} className="animate-spin" /> Submitting Revision...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <RefreshCw size={15} /> Submit Revised Quote ({formatRupees(currentDraftTotal)})
+                                        </>
+                                      )}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={handleResetToOriginalQuote}
+                                      className="cd-btn-reset-draft"
+                                      title="Discard revision draft and keep original quotation"
+                                    >
+                                      <X size={14} />
+                                      <span>Discard Draft</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+                        {/* 2b. SUGGESTED COST DISTRIBUTION (SECTION 7 & 10 & 11) */}
+                        <div className="cd-suggested-distribution-panel">
+                          <div className="cd-suggested-distribution-header">
+                            <div className="flex items-center gap-2">
+                              <Calculator size={16} className="text-amber-400 shrink-0" />
+                              <div>
+                                <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-amber-300 m-0">
+                                  Suggested Cost Distribution
+                                </h4>
+                                <span className="text-[10.5px] text-slate-400 font-medium block mt-0.5">
+                                  Predefined Calculation • User-Entered Target Budget
+                                </span>
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              Deterministic Helper (No AI)
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-300 leading-relaxed m-0">
+                            Suggested breakdown of the target budget across the estimated harvesting cost categories. The contractor can review and modify these values before submitting a revised quotation.
+                          </p>
+
+                          {/* Target Budget Reference Bar */}
+                          <div className="cd-suggested-budget-bar">
+                            <div>
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                Landowner Target Budget:
+                              </span>
+                              <span className="text-base font-mono font-black text-amber-400 ml-2">
+                                {formatRupees(targetBudget)}
+                              </span>
+                            </div>
+                            {revisionDraft && (
+                              <div className="text-right">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                  Active Proposed Revision:
+                                </span>
+                                <span className="text-base font-mono font-black text-emerald-400 ml-2">
+                                  {formatRupees(revisionDraft.revised_contractor_quote)}
+                                </span>
+                                <span className="text-[11px] text-amber-300 block">
+                                  {revisionDraft.type === 'MEET_HALFWAY' ? 'Meet Halfway (₹97,625 draft)' : revisionDraft.type === 'MATCH_TARGET' ? 'Match Target (₹93,500 draft)' : 'Custom Revision'} • Reduction: {formatRupees(originalContractorQuote - revisionDraft.revised_contractor_quote)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 4 Itemized Category Breakdown Cards */}
+                          <div className="cd-suggested-cards-grid">
+                            <div className="cd-suggested-card">
+                              <div className="cd-suggested-card-header">
+                                <span className="cd-suggested-card-title">Felling &amp; Logging</span>
+                                <span className="cd-suggested-card-pct">40%</span>
+                              </div>
+                              <div className="cd-suggested-card-val text-white font-mono">
+                                {formatRupees(suggestedFelling)}
+                              </div>
+                              <span className="cd-suggested-card-hint">
+                                {revisionDraft ? `Form value: ${formatRupees(assessmentForm.harvesting_cost)}` : 'Suggested 40%'}
+                              </span>
+                            </div>
+
+                            <div className="cd-suggested-card">
+                              <div className="cd-suggested-card-header">
+                                <span className="cd-suggested-card-title">Extraction</span>
+                                <span className="cd-suggested-card-pct">28%</span>
+                              </div>
+                              <div className="cd-suggested-card-val text-white font-mono">
+                                {formatRupees(suggestedExtraction)}
+                              </div>
+                              <span className="cd-suggested-card-hint">
+                                {revisionDraft ? `Form value: ${formatRupees(assessmentForm.extraction_cost)}` : 'Suggested 28%'}
+                              </span>
+                            </div>
+
+                            <div className="cd-suggested-card">
+                              <div className="cd-suggested-card-header">
+                                <span className="cd-suggested-card-title">Transportation</span>
+                                <span className="cd-suggested-card-pct">22%</span>
+                              </div>
+                              <div className="cd-suggested-card-val text-white font-mono">
+                                {formatRupees(suggestedTransport)}
+                              </div>
+                              <span className="cd-suggested-card-hint">
+                                {revisionDraft ? `Form value: ${formatRupees(assessmentForm.transportation_cost)}` : 'Suggested 22%'}
+                              </span>
+                            </div>
+
+                            <div className="cd-suggested-card">
+                              <div className="cd-suggested-card-header">
+                                <span className="cd-suggested-card-title">Other / Clearing</span>
+                                <span className="cd-suggested-card-pct">10%</span>
+                              </div>
+                              <div className="cd-suggested-card-val text-white font-mono">
+                                {formatRupees(suggestedOther)}
+                              </div>
+                              <span className="cd-suggested-card-hint">
+                                {revisionDraft ? `Form value: ${formatRupees(assessmentForm.other_cost)}` : 'Suggested 10%'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Total Row */}
+                          <div className="cd-suggested-total-row">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 size={15} className="text-emerald-400" />
+                              <span className="text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wide">
+                                Total Proposed Revised Quote:
+                              </span>
+                            </div>
+                            <span className="text-base sm:text-lg font-mono font-black text-emerald-400">
+                              {formatRupees(activeProposedAmount)}
+                            </span>
+                          </div>
+
+                          {/* Statutory & AI Disclaimer Notices */}
+                          <div className="cd-suggested-notice-box">
+                            <Info size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                            <div className="text-[11px] text-slate-300 leading-relaxed flex flex-col gap-1">
+                              <div>
+                                <strong className="text-amber-300">Suggested default rates:</strong> These percentages (40% / 28% / 22% / 10%) are only a suggested/default distribution and are <span className="underline decoration-amber-500/50">NOT</span> market-standard or legally prescribed rates. The contractor has full freedom to review and modify every category below.
+                              </div>
+                              <div className="text-slate-400">
+                                <strong className="text-slate-300">Predefined Calculation Notice:</strong> The current system uses predefined deterministic calculations and user-entered information for cost estimation and quotation management. It does <span className="text-slate-200 font-semibold">NOT</span> use Artificial Intelligence for these calculations. AI-driven capabilities are future scope planned for the main project.
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="cd-suggested-actions">
+                            {varianceToClose > 0 && !revisionDraft && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={handleMatchLandownerTarget}
+                                  className="cd-btn-match-target font-bold"
+                                  title="Reduce your quote to the landowner's target."
+                                >
+                                  <CheckCircle2 size={14} />
+                                  <span>Match Target Budget ({formatRupees(targetBudget)})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleMeetHalfwayTarget}
+                                  className="cd-btn-meet-halfway font-bold"
+                                  title="Propose a price halfway between your quote and the landowner's target."
+                                >
+                                  <span>Meet Halfway ({formatRupees(halfwayBudget)})</span>
+                                </button>
+                              </>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={scrollToCostInputs}
+                              className="cd-btn-review-dist"
+                              title="Scroll down to inspect and edit the category cost input fields"
+                            >
+                              <Edit3 size={14} />
+                              <span>Review Suggested Distribution</span>
+                            </button>
+
+                            {(revisionDraft || isAlreadyRevised) && (
+                              <button
+                                type="button"
+                                onClick={scrollToSubmitActions}
+                                className="cd-btn-submit-rev-jump"
+                                title="Proceed to submit revised quote"
+                              >
+                                <RefreshCw size={14} />
+                                <span>Submit Revised Quote</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 3. DETAILS ADDED BY LANDOWNER DURING REQUEST QUOTATION REVISION */}
+                        <div className="cd-revision-details-panel">
+                          <div className="cd-revision-details-header">
+                            <div className="flex items-center gap-2">
+                              <FileText size={15} className="text-amber-400 shrink-0" />
+                              <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                                Specifications Added by Landowner During Revision Request
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                              Client: <strong className="text-slate-200">{landownerName}</strong>
+                              {landownerPhone ? ` • ${landownerPhone}` : landownerEmail ? ` • ${landownerEmail}` : ''}
+                            </span>
+                          </div>
+
+                          {/* Selected Revision Reasons / Categories */}
+                          <div className="flex flex-col gap-2 pt-1">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                              Specific Areas Flagged for Revision:
+                            </span>
+                            {Array.isArray(revisionReasons) && revisionReasons.length > 0 ? (
+                              <div className="cd-revision-reasons-grid">
+                                {revisionReasons.map((reason, idx) => {
+                                  let ReasonIcon = FileText;
+                                  const rLower = String(reason).toLowerCase();
+                                  if (rLower.includes('price') || rLower.includes('rate') || rLower.includes('cost')) ReasonIcon = DollarSign;
+                                  else if (rLower.includes('date') || rLower.includes('start') || rLower.includes('schedule')) ReasonIcon = Calendar;
+                                  else if (rLower.includes('crew') || rLower.includes('worker')) ReasonIcon = Users;
+                                  else if (rLower.includes('timeline') || rLower.includes('duration') || rLower.includes('day')) ReasonIcon = Clock;
+
+                                  return (
+                                    <div key={idx} className="cd-revision-reason-card">
+                                      <div className="cd-revision-reason-icon">
+                                        <ReasonIcon size={14} />
+                                      </div>
+                                      <span className="cd-revision-reason-text">{reason}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">
+                                General quotation &amp; schedule review requested without specific category checkboxes.
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Specific Instructions / Notes */}
+                          <div className="qtn-counter-feedback-box mt-1">
+                            <div className="flex items-center gap-1.5">
+                              <MessageSquare size={13} className="text-amber-400 shrink-0" />
+                              <span className="qtn-counter-feedback-label">Landowner Specific Instructions &amp; Remarks</span>
+                            </div>
+                            <p className="qtn-counter-feedback-text">
+                              {landownerFeedback && landownerFeedback.length > 0
+                                ? `"${landownerFeedback}"`
+                                : 'No additional written remarks provided. Landowner requested adjustment via target budget and mobilization date.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 4. REVISION AUDIT HISTORY (Requirements 12 & 13) */}
+                        <div className="cd-revision-history-section mt-1">
+                          <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-amber-500/20">
+                            <div className="flex items-center gap-2">
+                              <Clock size={15} className="text-amber-400 shrink-0" />
+                              <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                                Quotation Revision History (Audit Trail)
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                              {isAlreadyRevised ? 'Revision on Record' : revisionDraft ? 'Revision 1 in Draft Mode' : 'Initial Baseline Recorded'}
+                            </span>
+                          </div>
+
+                          <div className="cd-revision-timeline">
+                            {/* Revision 0: Initial Contractor Quotation */}
+                            <div className="cd-revision-item">
+                              <div className="cd-revision-item-header">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="cd-revision-badge rev0">Revision 0</span>
+                                  <span className="text-xs font-bold text-slate-200">Contractor Original Quote</span>
+                                  <span className="text-[10.5px] text-slate-400">• Certified Baseline Rate</span>
+                                </div>
+                                <strong className="text-sm font-mono text-white font-black">
+                                  {formatRupees(originalContractorQuote)}
+                                </strong>
+                              </div>
+                              <div className="cd-revision-breakdown-row">
+                                <span className="cd-revision-breakdown-item">
+                                  Felling: <strong className="text-slate-200">{formatRupees(originalCosts.harvesting_cost)}</strong>
+                                </span>
+                                <span>•</span>
+                                <span className="cd-revision-breakdown-item">
+                                  Extraction: <strong className="text-slate-200">{formatRupees(originalCosts.extraction_cost)}</strong>
+                                </span>
+                                <span>•</span>
+                                <span className="cd-revision-breakdown-item">
+                                  Transportation: <strong className="text-slate-200">{formatRupees(originalCosts.transportation_cost)}</strong>
+                                </span>
+                                <span>•</span>
+                                <span className="cd-revision-breakdown-item">
+                                  Other: <strong className="text-slate-200">{formatRupees(originalCosts.other_cost)}</strong>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Revision 1: Landowner Target & Revised Quotation */}
+                            {(isAlreadyRevised || revisionDraft || isRevisionRequested) && (
+                              <div className={`cd-revision-item ${isAlreadyRevised ? 'current' : ''}`}>
+                                <div className="cd-revision-item-header">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="cd-revision-badge rev1">Revision 1</span>
+                                    <span className="text-xs font-bold text-emerald-300">
+                                      {isAlreadyRevised ? 'Contractor Revised Quote' : revisionDraft ? 'Proposed Revision Draft (Pending Submit)' : 'Landowner Counter-Proposal'}
+                                    </span>
+                                    <span className="text-[10.5px] text-amber-300 font-semibold">
+                                      • Reason: {revisionDraft ? (revisionDraft.type === 'MEET_HALFWAY' ? 'Meet Halfway' : revisionDraft.type === 'MATCH_TARGET' ? 'Match Target Budget' : revisionDraft.label || 'Quotation Revision') : (existingAssessmentData?.revision_notes || 'Negotiated Revision')}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {proposedReduction !== null && proposedReduction > 0 && (
+                                      <span className="text-xs font-bold font-mono text-amber-400">
+                                        Reduction: -{formatRupees(proposedReduction)}
+                                      </span>
+                                    )}
+                                    <strong className="text-sm font-mono text-emerald-400 font-black">
+                                      {formatRupees(isAlreadyRevised ? latestOfficialQuote : (revisionDraft ? revisionDraft.revised_contractor_quote : targetBudget))}
+                                    </strong>
+                                  </div>
+                                </div>
+                                <div className="cd-revision-breakdown-row">
+                                  <span className="cd-revision-breakdown-item">
+                                    Felling: <strong className="text-slate-200">{formatRupees(isAlreadyRevised ? (existingAssessmentData?.harvesting_cost ?? 37400) : (revisionDraft ? revisionDraft.harvesting_cost : 37400))}</strong>
+                                  </span>
+                                  <span>•</span>
+                                  <span className="cd-revision-breakdown-item">
+                                    Extraction: <strong className="text-slate-200">{formatRupees(isAlreadyRevised ? (existingAssessmentData?.extraction_cost ?? 26180) : (revisionDraft ? revisionDraft.extraction_cost : 26180))}</strong>
+                                  </span>
+                                  <span>•</span>
+                                  <span className="cd-revision-breakdown-item">
+                                    Transportation: <strong className="text-slate-200">{formatRupees(isAlreadyRevised ? (existingAssessmentData?.transportation_cost ?? 20570) : (revisionDraft ? revisionDraft.transportation_cost : 20570))}</strong>
+                                  </span>
+                                  <span>•</span>
+                                  <span className="cd-revision-breakdown-item">
+                                    Other: <strong className="text-slate-200">{formatRupees(isAlreadyRevised ? (existingAssessmentData?.other_cost ?? 9350) : (revisionDraft ? revisionDraft.other_cost : 9350))}</strong>
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })()}
 
                   {/* POST-SITE INSPECTION AUDIT FINDINGS SECTION */}
                   {isSiteInspected && (
@@ -1846,7 +3019,7 @@ const extractLandownerValue = (req, vol) => {
                     {assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation' && (
                       <>
                         {/* 3. ITEMIZED COST BREAKDOWN SECTION */}
-                        <div className="assessment-cost-section">
+                        <div className="assessment-cost-section" id="contractor-cost-breakdown-inputs">
                           <div className="assessment-section-title-row">
                             <h4 className="assessment-section-title">
                               <DollarSign size={16} className="text-emerald-400" /> ITEMIZED SERVICE COST BREAKDOWN (₹)
@@ -1854,6 +3027,17 @@ const extractLandownerValue = (req, vol) => {
                             <span className="assessment-section-subtitle">
                               Cost components charged to landowner
                             </span>
+                          </div>
+
+                          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                            <span className="text-xs text-slate-300">
+                              Contractor Control: You can review and modify the suggested category amounts below. The total recalculates automatically.
+                            </span>
+                            {revisionDraft && (
+                              <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded border border-amber-500/30">
+                                Editing Revision Draft for Target: {formatRupees(landownerTargetBudget)}
+                              </span>
+                            )}
                           </div>
 
                           <div className="assessment-cost-grid">
@@ -2548,8 +3732,67 @@ const extractLandownerValue = (req, vol) => {
                       />
                     </div>
 
+                    {/* Section 22: Final Review Section */}
+                    <div className="cd-final-review-panel">
+                      <div className="flex items-center justify-between border-b border-emerald-500/15 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <ClipboardCheck size={16} className="text-emerald-400" />
+                          <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                            Assessment Summary &amp; Commercial Proposal Review
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-emerald-400 font-semibold">
+                          Ready for Submission
+                        </span>
+                      </div>
+
+                      <div className="cd-final-review-grid">
+                        <div className="cd-final-review-item">
+                          <span className="cd-final-review-label">Assessed Harvestable Volume</span>
+                          <span className="cd-final-review-val text-emerald-300">
+                            {formatVolume(assessmentForm.estimated_harvestable_volume || 1.80)}
+                          </span>
+                        </div>
+
+                        <div className="cd-final-review-item">
+                          <span className="cd-final-review-label">Commercial Proposal</span>
+                          <span className="cd-final-review-val text-white truncate">
+                            {assessmentForm.commercial_proposal_type || 'Harvesting Service Quotation'}
+                          </span>
+                        </div>
+
+                        <div className="cd-final-review-item">
+                          <span className="cd-final-review-label">Total Quotation</span>
+                          <span className="cd-final-review-val text-emerald-400 font-mono">
+                            {formatRupees(assessmentForm.total_quote || 93500)}
+                          </span>
+                        </div>
+
+                        <div className="cd-final-review-item">
+                          <span className="cd-final-review-label">Crew</span>
+                          <span className="cd-final-review-val text-white">
+                            {assessmentForm.assigned_workers_count || 10} Workers
+                          </span>
+                        </div>
+
+                        <div className="cd-final-review-item">
+                          <span className="cd-final-review-label">Duration</span>
+                          <span className="cd-final-review-val text-white">
+                            {assessmentForm.estimated_duration || '1 Working Day'}
+                          </span>
+                        </div>
+
+                        <div className="cd-final-review-item">
+                          <span className="cd-final-review-label">Start Date</span>
+                          <span className="cd-final-review-val text-white">
+                            {formatDateDMY(assessmentForm.proposed_start_date || '2026-10-10')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Actions Bar */}
-                    <div className="cd-modal-actions">
+                    <div id="contractor-submit-actions" className="cd-modal-actions flex items-center justify-between gap-3 flex-wrap">
                       <button
                         type="button"
                         onClick={() => navigate('/contractor/assigned-jobs')}
@@ -2558,33 +3801,45 @@ const extractLandownerValue = (req, vol) => {
                         Cancel
                       </button>
 
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className={`cd-btn-primary ${isRevisionRequested ? 'cd-btn-primary-revision' : ''}`}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" /> Submitting Proposal...
-                          </>
-                        ) : isRevisionRequested ? (
-                          <>
-                            <RefreshCw size={16} /> Submit Revised Assessment & Quotation
-                          </>
-                        ) : assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? (
-                          <>
-                            <Coins size={16} /> Submit Timber Purchase Offer
-                          </>
-                        ) : assessmentForm.commercial_proposal_type === 'Purchase + Harvesting' ? (
-                          <>
-                            <Handshake size={16} /> Submit Purchase + Harvesting Proposal
-                          </>
-                        ) : (
-                          <>
-                            <Calculator size={16} /> Submit Assessment & Quotation
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleSaveDraft}
+                          className="cd-btn-draft"
+                          title="Save current form values to local browser draft"
+                        >
+                          <Save size={15} />
+                          <span>Save Draft</span>
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className={`cd-btn-primary ${(isRevisionRequested || revisionDraft || isAlreadyRevised) ? 'cd-btn-primary-revision' : ''}`}
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" /> Submitting Official Quotation...
+                            </>
+                          ) : (isRevisionRequested || revisionDraft || isAlreadyRevised) ? (
+                            <>
+                              <RefreshCw size={16} /> Submit Revised Quote ({formatRupees(assessmentForm.total_quote || assessmentForm.contractor_purchase_offer || assessmentForm.timber_purchase_price || 93500)})
+                            </>
+                          ) : assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? (
+                            <>
+                              <Coins size={16} /> Submit Timber Purchase Offer
+                            </>
+                          ) : assessmentForm.commercial_proposal_type === 'Purchase + Harvesting' ? (
+                            <>
+                              <Handshake size={16} /> Submit Purchase + Harvesting Proposal
+                            </>
+                          ) : (
+                            <>
+                              <Calculator size={16} /> Submit Assessment
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                   </form>
@@ -2593,6 +3848,8 @@ const extractLandownerValue = (req, vol) => {
 
             </div>
           )}
+
+          </div>
 
           {/* FULL-SCREEN LIGHTBOX MODAL FOR PROPERTY & TREE PHOTOS */}
           {activePhotoModal && (

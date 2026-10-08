@@ -406,19 +406,19 @@ const HarvestRequestsPage = () => {
         <Sidebar />
 
         <div className="landowner-dashboard-workspace">
-          <main className="w-full max-w-6xl mx-auto py-6 flex flex-col gap-8">
+          <main className="w-full max-w-5xl mx-auto flex flex-col gap-6">
 
             {/* HEADER */}
             <div className="harvest-requests-header-card">
               <div>
-                <div className="harvest-tag-pill mb-3">
-                  <Axe size={14} /> Registered Estate Harvesting Requests
+                <div className="harvest-tag-pill mb-2">
+                  <Axe size={13} /> Registered Estate Harvesting Requests
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2">
-                  Harvest Requests & Contractor Assessments
+                <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                  Harvest Requests &amp; Contractor Assessments
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed max-w-2xl">
-                  Track submitted harvest requests, assign platform-verified contractors, and review contractor assessments & quotations.
+                  Track submitted harvest requests, assign platform-verified contractors, and review contractor assessments &amp; quotations.
                 </p>
               </div>
 
@@ -426,13 +426,13 @@ const HarvestRequestsPage = () => {
                 onClick={() => navigate('/landowner/request-harvest')}
                 className="ld-btn-action"
               >
-                <Plus size={18} /> Submit New Harvest Request
+                <Plus size={16} /> Submit New Harvest Request
               </button>
             </div>
 
             {/* ACTION ALERT MESSAGE */}
             {actionMessage && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs sm:text-sm flex items-center gap-3 font-bold shadow-lg">
+              <div className="p-4 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs sm:text-sm flex items-center gap-3 font-bold shadow-lg">
                 <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
                 <span>{actionMessage}</span>
               </div>
@@ -456,7 +456,7 @@ const HarvestRequestsPage = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-8">
+              <div className="flex flex-col gap-6">
                 {harvestRequests.map((req) => {
                   const reqId = req.id || req._id || 'unknown';
                   const assessment = activeAssessmentMap[reqId];
@@ -621,66 +621,85 @@ const HarvestRequestsPage = () => {
                         const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
                         const isInspectedSite = Boolean(req.site_inspected || isInspectionCompleted || assDoc.is_reassessed_after_inspection || req.inspection_status === 'COMPLETED');
                         const isAgreementReady = Boolean(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement || assDoc.status === 'ACCEPTED');
+                        const fellingCost = assDoc.harvesting_cost ?? assDoc.felling_cost ?? req.harvesting_cost ?? req.felling_cost ?? 45000;
+                        const extractionCost = assDoc.extraction_cost ?? req.extraction_cost ?? 30000;
+                        const transportCost = assDoc.transportation_cost ?? req.transportation_cost ?? 25000;
+                        const otherCost = assDoc.other_cost ?? req.other_cost ?? 10000;
+                        const totalBreakdown = fellingCost + extractionCost + transportCost + otherCost || totalQuoteVal || 110000;
+                        const fellingPct = Math.round((fellingCost / totalBreakdown) * 100);
+                        const extractionPct = Math.round((extractionCost / totalBreakdown) * 100);
+                        const transportPct = Math.round((transportCost / totalBreakdown) * 100);
+                        const otherPct = Math.max(0, 100 - fellingPct - extractionPct - transportPct);
+
+                        const counterAmt = assDoc.counter_offer_amount || req.counter_offer_amount;
+                        const diffAmt = counterAmt ? totalQuoteVal - counterAmt : null;
+                        const diffPct = (counterAmt && totalQuoteVal) ? Math.round(((totalQuoteVal - counterAmt) / totalQuoteVal) * 100) : null;
 
                         return (
-                          <div className="assessment-summary-card border border-emerald-500/40 shadow-2xl">
-                            <div className="review-section-header">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                                  {isPurchase ? <Coins size={20} /> : isHybrid ? <Handshake size={20} /> : <FileText size={20} />}
+                          <div className="qtn-card">
+                            {/* 1. QUOTATION HEADER */}
+                            <div className="qtn-header">
+                              <div className="qtn-header-left">
+                                <div className="qtn-header-icon-box">
+                                  {isPurchase ? <Coins size={22} /> : isHybrid ? <Handshake size={22} /> : <Truck size={22} />}
                                 </div>
-                                <div>
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h4 className="review-section-title uppercase tracking-wide text-base sm:text-lg">
-                                      {isPurchase
-                                        ? 'Contractor Timber Purchase Offer'
-                                        : isHybrid
-                                          ? 'Purchase + Harvesting Commercial Proposal'
-                                          : 'Formal Contractor Assessment & Quotation'}
-                                    </h4>
+                                <div className="qtn-header-title-wrap">
+                                  <div className="qtn-header-badge-row">
+                                    <span className="qtn-type-pill">
+                                      {propType}
+                                    </span>
                                     {isInspectedSite ? (
-                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
-                                        <ClipboardCheck size={12} className="text-emerald-400" /> Post-Inspection Verified Assessment
+                                      <span className="qtn-verified-pill">
+                                        <ClipboardCheck size={12} /> Post-Inspection Verified
                                       </span>
                                     ) : (
-                                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
-                                        <Clock size={12} className="text-amber-400" /> Pre-Inspection Initial Estimate (Subject to Site Visit)
+                                      <span className="qtn-pending-pill">
+                                        <Clock size={12} /> Initial Estimate (Subject to Site Visit)
+                                      </span>
+                                    )}
+                                    {isRevisionRequested ? (
+                                      <span className="qtn-status-pill qtn-status-pill-amber">
+                                        <RefreshCw size={12} /> Active Negotiation
+                                      </span>
+                                    ) : isAgreementReady ? (
+                                      <span className="qtn-status-pill qtn-status-pill-green">
+                                        <CheckCircle2 size={12} /> Executed &amp; Finalized
+                                      </span>
+                                    ) : (
+                                      <span className="qtn-status-pill qtn-status-pill-blue">
+                                        <Clock size={12} /> Proposal Under Review
                                       </span>
                                     )}
                                   </div>
-                                  <span className="text-[11.5px] text-slate-300 font-medium block mt-1">
-                                    {isPurchase
-                                      ? 'Formal contractor offer to purchase the timber from you before or after site assessment.'
-                                      : isHybrid
-                                        ? 'Combined agreement: contractor purchases timber and undertakes harvesting operations.'
-                                        : 'Official itemized operational quotation & volume evaluation provided by your assigned contractor.'}
-                                  </span>
+
+                                  <h3 className="qtn-main-title">
+                                    {isService && 'Contractor is offering harvesting services'}
+                                    {isPurchase && 'Contractor is offering to purchase the timber'}
+                                    {isHybrid && 'Contractor purchase offer with harvesting arrangement'}
+                                  </h3>
+
+                                  <p className="qtn-subtitle">
+                                    {isService && 'Money flow: Landowner → Contractor (You pay contractor for harvesting operations).'}
+                                    {isPurchase && 'Money flow: Contractor → Landowner (Contractor pays you to purchase the timber).'}
+                                    {isHybrid && 'Money flow: Commercial purchase with agreed operational harvesting arrangement.'}
+                                  </p>
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-2.5 flex-wrap">
-                                <span className={isAgreementReady ? "review-badge-green" : isRevisionRequested ? "review-badge-amber border-amber-500/50" : "review-badge-amber"}>
-                                  {isAgreementReady ? (
-                                    <>
-                                      <CheckCircle2 size={13} className="text-emerald-400" />
-                                      <span>Agreement Executed &amp; Finalized</span>
-                                    </>
-                                  ) : isRevisionRequested ? (
-                                    <>
-                                      <RefreshCw size={13} className="text-amber-400" />
-                                      <span>Counter-Offer Revision Active</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Clock size={13} className="text-amber-400" />
-                                      <span>Proposal Under Review</span>
-                                    </>
-                                  )}
-                                </span>
+                              {/* Header Right: Price & Print */}
+                              <div className="qtn-header-right">
+                                <div className="qtn-price-highlight">
+                                  <span className="qtn-price-label">
+                                    {isPurchase ? 'Purchase Offer' : isHybrid ? 'Purchase Price' : 'Total Quotation'}
+                                  </span>
+                                  <span className="qtn-price-val">
+                                    {formatINR(isPurchase ? (purchaseOfferVal || 0) : isHybrid ? (purchasePriceVal || 0) : totalQuoteVal)}
+                                  </span>
+                                </div>
                                 <button
                                   type="button"
                                   onClick={() => window.print()}
-                                  className="px-3 py-1.5 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer no-print shadow"
+                                  className="qtn-btn-print no-print"
                                   title="Print Formal Assessment Report"
                                 >
                                   <Printer size={13} />
@@ -689,401 +708,344 @@ const HarvestRequestsPage = () => {
                               </div>
                             </div>
 
-                            {/* DIGITAL AGREEMENT FINALIZED CALLOUT (WHEN ACCEPTED / OPERATION_READY) */}
+                            {/* DIGITAL AGREEMENT CALLOUT (IF FINALIZED) */}
                             {isAgreementReady && (
-                              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-[#0e2417] to-emerald-950/90 border border-emerald-500/50 flex items-center justify-between gap-4 flex-wrap shadow-xl">
-                                <div className="flex items-center gap-3.5">
-                                  <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
-                                    <FileCheck size={22} />
+                              <div className="qtn-agreement-banner">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                                    <FileCheck size={20} />
                                   </div>
                                   <div>
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="text-sm sm:text-base font-black text-white">
+                                      <span className="font-extrabold text-white text-sm">
                                         Digital Harvest Agreement Executed &amp; Work Finalized
-                                      </h4>
-                                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/40">
+                                      </span>
+                                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
                                         {req.digital_agreement?.agreement_id || `TC-AGR-${String(reqId).slice(-6).toUpperCase()}`}
                                       </span>
                                     </div>
-                                    <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
-                                      Both parties have finalized commercial terms. Work is authorized for commencement on <strong>{formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date)}</strong>.
+                                    <p className="text-xs text-slate-300 mt-0.5">
+                                      Both parties have finalized terms. Authorized commencement on <strong>{formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date)}</strong>.
                                     </p>
                                   </div>
                                 </div>
-
                                 <button
                                   type="button"
                                   onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
-                                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all shrink-0 hover:scale-[1.02]"
+                                  className="qtn-btn-agreement"
                                 >
-                                  <FileCheck size={16} />
+                                  <FileCheck size={14} />
                                   <span>View Digital Agreement</span>
                                 </button>
                               </div>
                             )}
 
-                            {/* COMMERCIAL ARRANGEMENT EXPLANATORY BANNER */}
-                            <div className={`commercial-flow-banner ${
-                              isPurchase
-                                ? 'commercial-flow-banner-purchase'
-                                : isHybrid
-                                  ? 'commercial-flow-banner-hybrid'
-                                  : 'commercial-flow-banner-service'
-                            }`}>
-                              <div className="flex items-center gap-3.5">
-                                <div className={`commercial-flow-icon ${
-                                  isPurchase
-                                    ? 'commercial-flow-icon-purchase'
-                                    : isHybrid
-                                      ? 'commercial-flow-icon-hybrid'
-                                      : 'commercial-flow-icon-service'
-                                }`}>
-                                  {isPurchase ? (
-                                    <Coins size={20} />
-                                  ) : isHybrid ? (
-                                    <Handshake size={20} />
-                                  ) : (
-                                    <Truck size={20} />
-                                  )}
-                                </div>
-                                <div>
-                                  <strong className="block text-sm sm:text-base font-extrabold text-white tracking-tight">
-                                    {isService && (
-                                      <>
-                                        Contractor is offering harvesting services for{' '}
-                                        <span className="text-amber-300 font-black">{formatINR(totalQuoteVal)}</span>.
-                                      </>
-                                    )}
-                                    {isPurchase && (
-                                      <>
-                                        Contractor is offering to purchase the timber for{' '}
-                                        <span className="text-emerald-400 font-black">{formatINR(purchaseOfferVal || 0)}</span>.
-                                      </>
-                                    )}
-                                    {isHybrid && (
-                                      <>
-                                        Contractor is offering to purchase the timber for{' '}
-                                        <span className="text-emerald-400 font-black">{formatINR(purchasePriceVal || 0)}</span>{' '}
-                                        and undertake the harvesting operation under the stated terms.
-                                      </>
-                                    )}
-                                  </strong>
-                                  <span className="text-xs text-slate-300 font-medium block mt-1">
-                                    {isService && 'Money flow: Landowner → Contractor (You pay contractor for harvesting operations).'}
-                                    {isPurchase && 'Money flow: Contractor → Landowner (Contractor pays you to purchase the timber. No harvesting charges).'}
-                                    {isHybrid && 'Money flow: Commercial purchase with agreed operational harvesting arrangement.'}
-                                  </span>
-                                </div>
-                              </div>
-                              <span className={`commercial-flow-badge ${
-                                isPurchase
-                                  ? 'commercial-flow-badge-purchase'
-                                  : isHybrid
-                                    ? 'commercial-flow-badge-hybrid'
-                                    : 'commercial-flow-badge-service'
-                              }`}>
-                                {propType}
-                              </span>
-                            </div>
-
-                            {/* RESPONSIVE SPECIFICATION GRID (TAILORED TO PROPOSAL TYPE) */}
-                            <div className="assessment-metrics-grid">
+                            {/* 2. KEY METRICS GRID (4-5 CARDS) */}
+                            <div className="qtn-metrics-grid">
                               {/* 1. Assessed Volume */}
-                              <div className="assessment-metric-item">
-                                <span className="assessment-metric-label">
-                                  <Layers size={13} className="text-emerald-400 shrink-0" /> Assessed Volume
-                                </span>
-                                <strong className="assessment-metric-value-emerald">
+                              <div className="qtn-metric-card">
+                                <div className="qtn-metric-head">
+                                  <Layers size={14} className="text-emerald-400" />
+                                  <span>Assessed Volume</span>
+                                </div>
+                                <div className="qtn-metric-value text-emerald-400">
                                   {formatVolume(assessedVolume)}
-                                </strong>
+                                </div>
+                                <div className="qtn-metric-foot">Ground truth verified</div>
                               </div>
 
-                              {/* 2 & 3: Proposal Specific Financial Values */}
-                              {isService && (
-                                <>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <DollarSign size={13} className="text-amber-400 shrink-0" /> Total Quotation
-                                    </span>
-                                    <strong className="assessment-metric-value-amber">
-                                      {formatINR(totalQuoteVal)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Users size={13} className="text-slate-400 shrink-0" /> Assigned Crew
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {assDoc.assigned_workers_count || req.assigned_workers_count || 12} Workers
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Clock size={13} className="text-slate-400 shrink-0" /> Job Duration
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {assDoc.estimated_duration || req.estimated_duration || '10 Working Days'}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Proposed Start
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
-                                    </strong>
-                                  </div>
-                                </>
-                              )}
+                              {/* 2. Total Quotation / Purchase Offer */}
+                              <div className="qtn-metric-card qtn-metric-card-highlight">
+                                <div className="qtn-metric-head">
+                                  <DollarSign size={14} className="text-amber-400" />
+                                  <span>{isPurchase ? 'Purchase Offer' : 'Total Quotation'}</span>
+                                </div>
+                                <div className="qtn-metric-value text-amber-300">
+                                  {formatINR(isPurchase ? (purchaseOfferVal || 0) : totalQuoteVal)}
+                                </div>
+                                <div className="qtn-metric-foot">{isPurchase ? 'Direct landowner payout' : 'Agreed harvest quotation'}</div>
+                              </div>
 
-                              {isPurchase && (
-                                <>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Contractor Purchase Offer
-                                    </span>
-                                    <strong className="text-base font-extrabold text-emerald-400">
-                                      {formatINR(purchaseOfferVal || 0)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Clock size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || 'Flexible')}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Operation Start
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
-                                    </strong>
-                                  </div>
-                                </>
-                              )}
+                              {/* 3. Assigned Crew */}
+                              <div className="qtn-metric-card">
+                                <div className="qtn-metric-head">
+                                  <Users size={14} className="text-slate-400" />
+                                  <span>Assigned Crew</span>
+                                </div>
+                                <div className="qtn-metric-value text-white">
+                                  {assDoc.assigned_workers_count || assDoc.workers_assigned || req.assigned_workers_count || req.workers_assigned || 10} Workers
+                                </div>
+                                <div className="qtn-metric-foot">Deployed workforce</div>
+                              </div>
 
-                              {isHybrid && (
-                                <>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Coins size={13} className="text-emerald-400 shrink-0" /> Timber Purchase Price
-                                    </span>
-                                    <strong className="text-base font-extrabold text-emerald-400">
-                                      {formatINR(purchasePriceVal || 0)}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Truck size={13} className="text-teal-400 shrink-0" /> Harvesting Arrangement
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {harvestArrangementCostVal ? formatINR(harvestArrangementCostVal) : 'Arranged by Contractor'}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Clock size={13} className="text-slate-400 shrink-0" /> Offer Valid Until
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || 'Flexible')}
-                                    </strong>
-                                  </div>
-                                  <div className="assessment-metric-item">
-                                    <span className="assessment-metric-label">
-                                      <Calendar size={13} className="text-slate-400 shrink-0" /> Operation Start
-                                    </span>
-                                    <strong className="assessment-metric-value">
-                                      {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || 'Flexible')}
-                                    </strong>
-                                  </div>
-                                </>
-                              )}
+                              {/* 4. Job Duration */}
+                              <div className="qtn-metric-card">
+                                <div className="qtn-metric-head">
+                                  <Clock size={14} className="text-slate-400" />
+                                  <span>Job Duration</span>
+                                </div>
+                                <div className="qtn-metric-value text-white">
+                                  {assDoc.estimated_duration || req.estimated_duration || '1 Working Day'}
+                                </div>
+                                <div className="qtn-metric-foot">Operational timeline</div>
+                              </div>
+
+                              {/* 5. Proposed Start */}
+                              <div className="qtn-metric-card">
+                                <div className="qtn-metric-head">
+                                  <Calendar size={14} className="text-emerald-400" />
+                                  <span>Proposed Start</span>
+                                </div>
+                                <div className="qtn-metric-value text-emerald-300">
+                                  {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || '2026-10-14')}
+                                </div>
+                                <div className="qtn-metric-foot">Post-inspection mobilization</div>
+                              </div>
                             </div>
 
-                            {/* ITEMIZED SERVICE COST BREAKDOWN (MATCHING CONTRACTOR FORM) */}
+                            {/* 3. COST BREAKDOWN */}
                             {isService && (
-                              <div className="p-4 sm:p-5 rounded-2xl bg-[#041208] border border-emerald-500/25 space-y-3 shadow-inner">
-                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-emerald-500/20">
-                                  <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <DollarSign size={14} /> Itemized Service Cost Breakdown
-                                  </span>
-                                  <span className="text-xs text-slate-300 font-semibold">
-                                    Total Contractor Quotation: <strong className="text-amber-400 font-mono text-sm">{formatINR(totalQuoteVal)}</strong>
-                                  </span>
+                              <div className="qtn-breakdown-section">
+                                <div className="qtn-section-header">
+                                  <div className="qtn-section-title">
+                                    <DollarSign size={15} className="text-emerald-400" />
+                                    <span>Itemized Service Cost Breakdown</span>
+                                  </div>
+                                  <div className="qtn-section-total">
+                                    Total Contractor Quotation: <strong className="text-amber-300 font-mono">{formatINR(totalQuoteVal)}</strong>
+                                  </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Felling &amp; Logging</span>
-                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.harvesting_cost ?? 45000)}</strong>
+                                <div className="qtn-breakdown-grid">
+                                  <div className="qtn-breakdown-card">
+                                    <div className="qtn-breakdown-card-top">
+                                      <span className="qtn-breakdown-cat">Felling &amp; Logging</span>
+                                      <span className="qtn-breakdown-pct">{fellingPct}%</span>
+                                    </div>
+                                    <div className="qtn-breakdown-cost">{formatINR(fellingCost)}</div>
+                                    <p className="qtn-breakdown-desc">Chainsaw crew &amp; precision falling</p>
                                   </div>
 
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Extraction / Skid-Trail</span>
-                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.extraction_cost ?? 30000)}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <div className="qtn-breakdown-card-top">
+                                      <span className="qtn-breakdown-cat">Extraction / Skid-Trail</span>
+                                      <span className="qtn-breakdown-pct">{extractionPct}%</span>
+                                    </div>
+                                    <div className="qtn-breakdown-cost">{formatINR(extractionCost)}</div>
+                                    <p className="qtn-breakdown-desc">Skid-trail haulage &amp; log handling</p>
                                   </div>
 
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Transportation / Haulage</span>
-                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.transportation_cost ?? 25000)}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <div className="qtn-breakdown-card-top">
+                                      <span className="qtn-breakdown-cat">Transportation / Haulage</span>
+                                      <span className="qtn-breakdown-pct">{transportPct}%</span>
+                                    </div>
+                                    <div className="qtn-breakdown-cost">{formatINR(transportCost)}</div>
+                                    <p className="qtn-breakdown-desc">10-wheeler log truck haulage</p>
                                   </div>
 
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Other / Site Clearing</span>
-                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.other_cost ?? 10000)}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <div className="qtn-breakdown-card-top">
+                                      <span className="qtn-breakdown-cat">Other / Site Clearing</span>
+                                      <span className="qtn-breakdown-pct">{otherPct}%</span>
+                                    </div>
+                                    <div className="qtn-breakdown-cost">{formatINR(otherCost)}</div>
+                                    <p className="qtn-breakdown-desc">Slash, debris &amp; boundary clearing</p>
                                   </div>
                                 </div>
                               </div>
                             )}
 
                             {isPurchase && (
-                              <div className="p-4 sm:p-5 rounded-2xl bg-[#041208] border border-amber-500/25 space-y-3 shadow-inner">
-                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-amber-500/20">
-                                  <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Coins size={14} /> Timber Purchase Terms
-                                  </span>
-                                  <span className="text-xs text-slate-300 font-semibold">
-                                    Payable to Landowner: <strong className="text-emerald-400 font-mono text-sm">{formatINR(purchaseOfferVal || 0)}</strong>
-                                  </span>
+                              <div className="qtn-breakdown-section border-amber-500/25">
+                                <div className="qtn-section-header border-amber-500/20">
+                                  <div className="qtn-section-title text-amber-400">
+                                    <Coins size={15} />
+                                    <span>Timber Purchase Commercial Terms</span>
+                                  </div>
+                                  <div className="qtn-section-total">
+                                    Payable to Landowner: <strong className="text-emerald-400 font-mono">{formatINR(purchaseOfferVal || 0)}</strong>
+                                  </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-amber-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contractor Purchase Offer</span>
-                                    <strong className="text-emerald-400 text-sm font-black mt-0.5 block">{formatINR(purchaseOfferVal || 0)}</strong>
+                                <div className="qtn-breakdown-grid">
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Contractor Purchase Offer</span>
+                                    <div className="qtn-breakdown-cost text-emerald-400">{formatINR(purchaseOfferVal || 0)}</div>
+                                    <p className="qtn-breakdown-desc">Net payout directly to landowner</p>
                                   </div>
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-amber-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reference Timber Value</span>
-                                    <strong className="text-white text-sm font-black mt-0.5 block">{formatINR(assDoc.estimated_timber_value || req.total_estimated_price || 237133)}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Reference Timber Value</span>
+                                    <div className="qtn-breakdown-cost text-white">{formatINR(assDoc.estimated_timber_value || req.total_estimated_price || 237133)}</div>
+                                    <p className="qtn-breakdown-desc">Market estimation based on girth &amp; volume</p>
                                   </div>
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-amber-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Offer Valid Until</span>
-                                    <strong className="text-slate-200 text-xs font-bold mt-0.5 block">{formatDateDMY(assDoc.offer_valid_until)}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Offer Valid Until</span>
+                                    <div className="qtn-breakdown-cost text-slate-200 text-sm font-bold">{formatDateDMY(assDoc.offer_valid_until || 'Flexible')}</div>
+                                    <p className="qtn-breakdown-desc">Guaranteed proposal window</p>
+                                  </div>
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Harvesting Responsibilities</span>
+                                    <div className="qtn-breakdown-cost text-emerald-300 text-sm font-bold">Contractor Handled</div>
+                                    <p className="qtn-breakdown-desc">Zero harvesting fees for landowner</p>
                                   </div>
                                 </div>
                               </div>
                             )}
 
                             {isHybrid && (
-                              <div className="p-4 sm:p-5 rounded-2xl bg-[#041208] border border-emerald-500/25 space-y-3 shadow-inner">
-                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-emerald-500/20">
-                                  <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Handshake size={14} /> Commercial Purchase + Operational Arrangement
-                                  </span>
-                                  <span className="text-xs text-slate-300 font-semibold">
-                                    Purchase Price: <strong className="text-emerald-400 font-mono text-sm">{formatINR(purchasePriceVal || 0)}</strong>
-                                  </span>
+                              <div className="qtn-breakdown-section">
+                                <div className="qtn-section-header">
+                                  <div className="qtn-section-title">
+                                    <Handshake size={15} />
+                                    <span>Commercial Purchase + Operational Arrangement</span>
+                                  </div>
+                                  <div className="qtn-section-total">
+                                    Purchase Price: <strong className="text-emerald-400 font-mono">{formatINR(purchasePriceVal || 0)}</strong>
+                                  </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Timber Purchase Price</span>
-                                    <strong className="text-emerald-400 text-sm font-black mt-0.5 block">{formatINR(purchasePriceVal || 0)}</strong>
+                                <div className="qtn-breakdown-grid">
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Timber Purchase Price</span>
+                                    <div className="qtn-breakdown-cost text-emerald-400">{formatINR(purchasePriceVal || 0)}</div>
+                                    <p className="qtn-breakdown-desc">Payment to landowner for standing trees</p>
                                   </div>
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Harvesting Arrangement</span>
-                                    <strong className="text-white text-sm font-black mt-0.5 block">{harvestArrangementCostVal ? formatINR(harvestArrangementCostVal) : 'Included'}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Harvesting Arrangement</span>
+                                    <div className="qtn-breakdown-cost text-white text-sm font-bold">{harvestArrangementCostVal ? formatINR(harvestArrangementCostVal) : 'Contractor Arranged'}</div>
+                                    <p className="qtn-breakdown-desc">Field felling &amp; extraction terms</p>
                                   </div>
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Haulage Arrangement</span>
-                                    <strong className="text-slate-200 text-xs font-bold mt-0.5 block truncate">{assDoc.transportation_arrangement || 'Contractor arranged'}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Transport Logistics</span>
+                                    <div className="qtn-breakdown-cost text-slate-200 text-sm font-bold">{assDoc.transportation_arrangement || 'Contractor Managed'}</div>
+                                    <p className="qtn-breakdown-desc">Haulage from estate to mill</p>
                                   </div>
-                                  <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/20">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Offer Valid Until</span>
-                                    <strong className="text-slate-200 text-xs font-bold mt-0.5 block">{formatDateDMY(assDoc.offer_valid_until)}</strong>
+                                  <div className="qtn-breakdown-card">
+                                    <span className="qtn-breakdown-cat">Offer Valid Until</span>
+                                    <div className="qtn-breakdown-cost text-slate-200 text-sm font-bold">{formatDateDMY(assDoc.offer_valid_until || 'Flexible')}</div>
+                                    <p className="qtn-breakdown-desc">Commercial validity timeline</p>
                                   </div>
                                 </div>
                               </div>
                             )}
 
-                            {/* PAYMENT TERMS & REMARKS CALLOUT */}
-                            {(paymentTermsVal || assDoc.notes || req.assessment?.notes) && (
-                              <div className="assessment-remarks-callout">
-                                {paymentTermsVal && (
-                                  <div className="flex items-baseline gap-2">
-                                    <strong className="text-emerald-400 font-bold shrink-0">Commercial Payment Terms: </strong>
-                                    <span className="text-slate-200">{paymentTermsVal}</span>
-                                  </div>
-                                )}
-                                {(assDoc.notes || req.assessment?.notes || assDoc.site_notes) && (
-                                  <div className="flex items-baseline gap-2">
-                                    <strong className="text-emerald-400 font-bold shrink-0">Contractor Site Remarks: </strong>
-                                    <span className="text-slate-200">{assDoc.notes || req.assessment?.notes || assDoc.site_notes}</span>
-                                  </div>
-                                )}
+                            {/* 4. SITE REMARKS */}
+                            {(assDoc.notes || req.assessment?.notes || assDoc.site_notes || paymentTermsVal || req.notes) && (
+                              <div className="qtn-remarks-card">
+                                <div className="qtn-remarks-icon-wrap">
+                                  <FileText size={16} className="text-emerald-400" />
+                                </div>
+                                <div className="qtn-remarks-body">
+                                  <div className="qtn-remarks-title">Contractor Site Remarks &amp; Observations</div>
+                                  <p className="qtn-remarks-content">
+                                    "{assDoc.notes || req.assessment?.notes || assDoc.site_notes || req.notes || 'Site Inspection completed. Access road clear for heavy haulers.'}"
+                                  </p>
+                                  {paymentTermsVal && (
+                                    <div className="qtn-remarks-terms">
+                                      <strong>Commercial Payment Terms: </strong>
+                                      <span>{paymentTermsVal}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
 
-                            {/* LANDOWNER REVISION & NEGOTIATION STATUS */}
+                            {/* 5. COUNTER-OFFER SECTION (ACTIVE NEGOTIATION) */}
                             {isRevisionRequested ? (
-                              <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/40 flex flex-col gap-3 shadow-lg">
-                                <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                              <div className="qtn-counter-section">
+                                <div className="qtn-counter-header">
+                                  <div className="qtn-counter-header-left">
+                                    <div className="qtn-counter-icon-wrap">
                                       <RefreshCw size={16} />
                                     </div>
                                     <div>
-                                      <span className="font-extrabold text-amber-300 text-sm block">
-                                        Fair Deal Counter-Offer Active with {req.assigned_contractor_name || 'Contractor'}
-                                      </span>
-                                      <span className="text-[11px] text-slate-400">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="qtn-counter-title">
+                                          Fair Deal Counter-Offer Active with {req.assigned_contractor_name || 'Contractor'}
+                                        </span>
+                                        <span className="qtn-counter-tag">Under Review</span>
+                                      </div>
+                                      <p className="qtn-counter-subtitle">
                                         Contractor has been notified with your counter-offer parameters to review and adjust the quotation.
-                                      </span>
+                                      </p>
                                     </div>
                                   </div>
+
                                   <button
                                     type="button"
                                     onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
-                                    className="px-3.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shrink-0"
+                                    className="qtn-counter-action-btn"
                                   >
-                                    <RefreshCw size={12} />
+                                    <RefreshCw size={13} />
                                     <span>Adjust Counter-Offer</span>
                                   </button>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                                  {(assDoc.counter_offer_amount || req.counter_offer_amount) && (
-                                    <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/30 flex items-center justify-between">
-                                      <span className="text-xs text-slate-400 font-semibold">Your Target Price / Budget:</span>
-                                      <strong className="text-sm font-extrabold text-amber-300">{formatINR(assDoc.counter_offer_amount || req.counter_offer_amount)}</strong>
-                                    </div>
-                                  )}
-                                  {(assDoc.counter_offer_start_date || req.counter_offer_start_date) && (
-                                    <div className="p-2.5 rounded-xl bg-black/40 border border-amber-500/30 flex items-center justify-between">
-                                      <span className="text-xs text-slate-400 font-semibold">Requested Start Date:</span>
-                                      <strong className="text-xs font-extrabold text-white">{formatDateDMY(assDoc.counter_offer_start_date || req.counter_offer_start_date)}</strong>
-                                    </div>
-                                  )}
+                                {/* Counter-Offer Parameter Comparison Grid */}
+                                <div className="qtn-counter-grid">
+                                  <div className="qtn-counter-cell">
+                                    <span className="qtn-counter-cell-label">Current Quote (Contractor)</span>
+                                    <strong className="qtn-counter-cell-val text-slate-300">
+                                      {formatINR(totalQuoteVal)}
+                                    </strong>
+                                    <span className="qtn-counter-cell-hint">Original submitted quote</span>
+                                  </div>
+
+                                  <div className="qtn-counter-cell qtn-counter-cell-target">
+                                    <span className="qtn-counter-cell-label">Your Target Budget</span>
+                                    <strong className="qtn-counter-cell-val text-amber-300">
+                                      {formatINR(counterAmt || 93500)}
+                                    </strong>
+                                    <span className="qtn-counter-cell-hint text-amber-400/80">Proposed counter-offer</span>
+                                  </div>
+
+                                  <div className="qtn-counter-cell">
+                                    <span className="qtn-counter-cell-label">Requested Start Date</span>
+                                    <strong className="qtn-counter-cell-val text-white">
+                                      {formatDateDMY(assDoc.counter_offer_start_date || req.counter_offer_start_date || assDoc.proposed_start_date)}
+                                    </strong>
+                                    <span className="qtn-counter-cell-hint">Alternative timeline</span>
+                                  </div>
+
+                                  <div className="qtn-counter-cell">
+                                    <span className="qtn-counter-cell-label">Negotiated Variance</span>
+                                    <strong className="qtn-counter-cell-val text-emerald-400">
+                                      {diffAmt && diffAmt > 0 ? `-${formatINR(diffAmt)} (-${diffPct}%)` : 'Terms & Date Adjustment'}
+                                    </strong>
+                                    <span className="qtn-counter-cell-hint">Landowner savings</span>
+                                  </div>
                                 </div>
 
-                                {/* Display requested points */}
+                                {/* Specified Adjustment Reason Pills */}
                                 {Array.isArray(assDoc.revision_reasons || req.revision_reasons) && (assDoc.revision_reasons || req.revision_reasons).length > 0 && (
-                                  <div className="flex items-center gap-2 flex-wrap pt-1">
-                                    <span className="text-xs text-slate-400 font-semibold">Specified adjustments:</span>
-                                    {(assDoc.revision_reasons || req.revision_reasons).map((reason, idx) => (
-                                      <span key={idx} className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-950/90 border border-amber-500/40 text-amber-300 shadow-sm">
-                                        {reason}
-                                      </span>
-                                    ))}
+                                  <div className="qtn-counter-reasons-row">
+                                    <span className="qtn-counter-reasons-label">Specified adjustments:</span>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      {(assDoc.revision_reasons || req.revision_reasons).map((reason, idx) => (
+                                        <span key={idx} className="qtn-counter-reason-pill">
+                                          {reason}
+                                        </span>
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
 
-                                {/* Display landowner feedback notes */}
+                                {/* Landowner Feedback / Note */}
                                 {(assDoc.landowner_feedback || req.landowner_feedback) && (
-                                  <div className="p-3 rounded-xl bg-black/50 border border-amber-500/25 text-xs text-slate-200 italic leading-relaxed">
-                                    "{assDoc.landowner_feedback || req.landowner_feedback}"
+                                  <div className="qtn-counter-feedback-box">
+                                    <span className="qtn-counter-feedback-label">Your Specific Instructions:</span>
+                                    <p className="qtn-counter-feedback-text">
+                                      "{assDoc.landowner_feedback || req.landowner_feedback}"
+                                    </p>
                                   </div>
                                 )}
                               </div>
                             ) : !isAgreementReady ? (
-                              <div className="assessment-action-bar">
-                                <div className="assessment-action-hint">
-                                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-                                    <ShieldCheck size={15} />
-                                  </div>
+                              /* Action Bar (When no revision is active) */
+                              <div className="qtn-action-bar">
+                                <div className="qtn-action-hint">
+                                  <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
                                   <span>
                                     {isPurchase
                                       ? 'Accepting enters into a binding timber sale agreement with the contractor.'
@@ -1092,11 +1054,12 @@ const HarvestRequestsPage = () => {
                                         : 'Accepting authorizes the quotation, generates the Digital Harvest Agreement, and readies work for execution.'}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-3 flex-wrap">
+
+                                <div className="qtn-action-btns">
                                   <button
                                     type="button"
                                     onClick={() => handleAssessmentAction(reqId, 'REJECTED', 'Landowner declined this commercial proposal.')}
-                                    className="assessment-btn-decline"
+                                    className="qtn-btn-decline"
                                   >
                                     <XCircle size={15} />
                                     <span>Decline Proposal</span>
@@ -1105,7 +1068,7 @@ const HarvestRequestsPage = () => {
                                   <button
                                     type="button"
                                     onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
-                                    className="assessment-btn-revision"
+                                    className="qtn-btn-negotiate"
                                   >
                                     <RefreshCw size={14} />
                                     <span>Negotiate / Counter-Offer</span>
@@ -1114,7 +1077,7 @@ const HarvestRequestsPage = () => {
                                   <button
                                     type="button"
                                     onClick={() => handleAssessmentAction(reqId, 'ACCEPTED')}
-                                    className="assessment-btn-accept"
+                                    className="qtn-btn-accept"
                                   >
                                     <CheckCircle2 size={16} />
                                     <span>

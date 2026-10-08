@@ -45,7 +45,10 @@ import {
   UserCheck,
   Phone,
   Building2,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  Handshake,
+  MessageSquare
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -517,6 +520,21 @@ const ContractorDashboard = () => {
                     const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
                     const isRevisionRequested = req.status === 'REVISION_REQUESTED';
 
+                    // Fair Deal counter-proposal details
+                    const counterAmount = Number(req.counter_offer_amount || req.assessment?.counter_offer_amount || 0) || null;
+                    const counterDate = req.counter_offer_start_date || req.assessment?.counter_offer_start_date || null;
+                    const revisionReasons = (Array.isArray(req.revision_reasons) && req.revision_reasons.length > 0)
+                      ? req.revision_reasons
+                      : (Array.isArray(req.assessment?.revision_reasons) && req.assessment?.revision_reasons.length > 0)
+                        ? req.assessment.revision_reasons
+                        : [];
+                    const landownerNotes = (req.landowner_feedback || req.assessment?.landowner_feedback || '').trim();
+                    const isFairDealActive = !isAccepted && (isRevisionRequested || Boolean(counterAmount || counterDate || revisionReasons.length > 0 || landownerNotes));
+
+                    const currentQuote = Number(req.total_quote || req.assessment?.total_quote || 110000);
+                    const targetBudget = counterAmount;
+                    const variancePct = targetBudget && currentQuote ? Math.round(((targetBudget - currentQuote) / currentQuote) * 100) : null;
+
                     const propDetails = req.property_details || {};
                     const propName = req.propertyName || propDetails.propertyName || 'Forest Estate Parcel';
 
@@ -626,14 +644,14 @@ const ContractorDashboard = () => {
                             <span className={`cd-status-pill text-xs py-1.5 px-3.5 ${
                               isAccepted
                                 ? 'cd-status-accepted'
-                                : isRevisionRequested
+                                : isFairDealActive
                                   ? 'cd-status-revision'
                                   : isSubmitted
                                     ? 'cd-status-submitted'
                                     : 'cd-status-pending'
                             }`}>
-                              {isRevisionRequested ? <RefreshCw size={12} /> : <Clock size={12} />}
-                              {isAccepted ? 'Authorized' : isRevisionRequested ? 'Revision Requested' : isSubmitted ? 'Quote Submitted' : 'Pending Assessment'}
+                              {isFairDealActive ? <Handshake size={13} className="text-amber-400 shrink-0" /> : isSubmitted ? <Clock size={12} /> : isAccepted ? <CheckCircle2 size={12} /> : <Clock size={12} />}
+                              {isAccepted ? 'Authorized' : isFairDealActive ? 'Fair Deal Revision Requested' : isSubmitted ? 'Quote Submitted' : 'Pending Assessment'}
                             </span>
 
                             {/* Button to show entire details about that harvest request */}
@@ -663,11 +681,128 @@ const ContractorDashboard = () => {
                               className="cd-btn-view-portal"
                             >
                               <Trees size={14} />
-                              <span>Check Details in Assigned Jobs</span>
+                              <span>Assigned Jobs Hub</span>
                               <ChevronRight size={13} />
                             </button>
                           </div>
                         </div>
+
+                        {/* REFINED PROMINENT FAIR DEAL COUNTER-PROPOSAL PANEL */}
+                        {isFairDealActive && (
+                          <div className="cd-counter-panel">
+                            {/* Panel Header */}
+                            <div className="cd-counter-header">
+                              <div className="cd-counter-title-group">
+                                <div className="cd-counter-icon-box">
+                                  <Handshake size={20} />
+                                </div>
+                                <div className="cd-counter-title-meta">
+                                  <div className="cd-counter-headline-row">
+                                    <span className="cd-counter-headline">
+                                      <Sparkles size={13} className="text-amber-400" />
+                                      Landowner Fair Deal Counter-Proposal
+                                    </span>
+                                    <span className="cd-counter-badge-active">
+                                      Action Needed
+                                    </span>
+                                  </div>
+                                  <p className="cd-counter-subline">
+                                    Landowner has proposed budget and schedule adjustments for job authorization.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="cd-counter-actions">
+                                {targetBudget && (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/contractor/assessment/${reqId}?apply=match`)}
+                                    className="cd-counter-btn-match"
+                                    title="Accept proposed budget and automatically apply it to quotation"
+                                  >
+                                    <CheckCircle2 size={14} />
+                                    <span>Match Target ({formatINR(targetBudget)})</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                  className="cd-counter-btn-revise"
+                                >
+                                  <RefreshCw size={13} />
+                                  <span>Review & Revise Quote</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* 3-Column Metrics Grid */}
+                            <div className="cd-counter-metrics-grid">
+                              {/* Metric 1: Target Budget */}
+                              <div className="cd-counter-metric-card highlight">
+                                <div className="cd-counter-metric-top">
+                                  <span className="cd-counter-metric-label">Landowner Target Budget</span>
+                                  {variancePct !== null && (
+                                    <span className={`cd-counter-variance-tag ${variancePct < 0 ? 'discount' : 'premium'}`}>
+                                      {variancePct > 0 ? `+${variancePct}%` : `${variancePct}%`} vs Quote
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="cd-counter-metric-val amber font-mono">
+                                  {targetBudget ? formatINR(targetBudget) : 'Negotiable'}
+                                </div>
+                                <div className="cd-counter-metric-desc">Client proposed maximum budget</div>
+                              </div>
+
+                              {/* Metric 2: Your Submitted Quote */}
+                              <div className="cd-counter-metric-card">
+                                <div className="cd-counter-metric-top">
+                                  <span className="cd-counter-metric-label">Your Submitted Quote</span>
+                                </div>
+                                <div className="cd-counter-metric-val font-mono">
+                                  {formatINR(currentQuote)}
+                                </div>
+                                <div className="cd-counter-metric-desc">Contractor quote currently on record</div>
+                              </div>
+
+                              {/* Metric 3: Requested Start Date */}
+                              <div className="cd-counter-metric-card">
+                                <div className="cd-counter-metric-top">
+                                  <span className="cd-counter-metric-label">Requested Start Date</span>
+                                </div>
+                                <div className="cd-counter-metric-val emerald font-mono">
+                                  {counterDate ? formatDateDMY(counterDate) : (req.preferred_start_date ? formatDateDMY(req.preferred_start_date) : 'Flexible')}
+                                </div>
+                                <div className="cd-counter-metric-desc">Landowner preferred mobilization</div>
+                              </div>
+                            </div>
+
+                            {/* Landowner Feedback Quote Panel */}
+                            {landownerNotes && (
+                              <div className="cd-counter-feedback-panel">
+                                <div className="cd-counter-feedback-header">
+                                  <MessageSquare size={13} />
+                                  <span>Landowner Feedback & Specific Requests</span>
+                                </div>
+                                <p className="cd-counter-feedback-quote">
+                                  "{landownerNotes}"
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Focus Areas Badges */}
+                            {revisionReasons.length > 0 && (
+                              <div className="cd-counter-focus-row">
+                                <span className="cd-counter-focus-title">Focus Areas:</span>
+                                {revisionReasons.map((r, idx) => (
+                                  <span key={idx} className="cd-counter-chip">
+                                    {r}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* ENTIRE DETAILS ACCORDION (REVEALED ON DEMAND) */}
                         {isExpanded && (

@@ -49,13 +49,15 @@ import {
   AlertCircle,
   Navigation,
   Ban,
-  Sparkles,
+  Info,
   FileCheck,
   Sliders,
   Target,
   Activity,
   ClipboardList,
-  Ruler
+  Ruler,
+  Sparkles,
+  Handshake
 } from 'lucide-react';
 import { calculateApproxTimberValue, formatINR, parseVolumeNumber, formatVolume, TIMBER_VALUE_DISCLAIMER } from '../../utils/timberCalculations';
 
@@ -904,6 +906,29 @@ const AssignedHarvestJobsPage = () => {
     };
   }, [user]);
 
+  // Helper to extract landowner Fair Deal counter-proposal details safely
+  const getFairDealInfo = (r) => {
+    if (!r) return { hasFairDeal: false, counterAmount: null, counterDate: null, revisionReasons: [], landownerNotes: '', isRevisionStatus: false };
+    const counterAmount = Number(r.counter_offer_amount || r.assessment?.counter_offer_amount || 0) || null;
+    const counterDate = r.counter_offer_start_date || r.assessment?.counter_offer_start_date || null;
+    const revisionReasons = (Array.isArray(r.revision_reasons) && r.revision_reasons.length > 0)
+      ? r.revision_reasons
+      : (Array.isArray(r.assessment?.revision_reasons) && r.assessment?.revision_reasons.length > 0)
+        ? r.assessment.revision_reasons
+        : [];
+    const landownerNotes = (r.landowner_feedback || r.assessment?.landowner_feedback || '').trim();
+    const isRevisionStatus = r.status === 'REVISION_REQUESTED' || r.assessment?.status === 'REVISION_REQUESTED';
+    const hasFairDeal = Boolean(isRevisionStatus || counterAmount || counterDate || revisionReasons.length > 0 || landownerNotes);
+    return {
+      hasFairDeal,
+      counterAmount,
+      counterDate,
+      revisionReasons,
+      landownerNotes,
+      isRevisionStatus
+    };
+  };
+
   // Filter requests
   const filteredRequests = assignedRequests.filter((req) => {
     const matchesSearch =
@@ -915,7 +940,8 @@ const AssignedHarvestJobsPage = () => {
 
     const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
     const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
-    const isRevisionRequested = req.status === 'REVISION_REQUESTED';
+    const fairDeal = getFairDealInfo(req);
+    const hasFairDeal = fairDeal.hasFairDeal && !isAccepted;
     const inspected = isJobInspected(req);
     const scheduled = isJobScheduled(req);
     const needsVisit = doesJobNeedVisit(req);
@@ -924,9 +950,9 @@ const AssignedHarvestJobsPage = () => {
     if (statusFilter === 'NEEDS_INSPECTION') matchesStatus = needsVisit;
     if (statusFilter === 'INSPECTION_SCHEDULED') matchesStatus = scheduled;
     if (statusFilter === 'SITE_VERIFIED') matchesStatus = inspected && !isSubmitted && !isAccepted;
-    if (statusFilter === 'PENDING') matchesStatus = !isSubmitted && !isAccepted && !isRevisionRequested;
+    if (statusFilter === 'PENDING') matchesStatus = !isSubmitted && !isAccepted && !hasFairDeal;
     if (statusFilter === 'SUBMITTED') matchesStatus = isSubmitted;
-    if (statusFilter === 'REVISION') matchesStatus = isRevisionRequested;
+    if (statusFilter === 'FAIR_DEAL' || statusFilter === 'REVISION') matchesStatus = hasFairDeal;
     if (statusFilter === 'AUTHORIZED') matchesStatus = isAccepted;
 
     return matchesSearch && matchesStatus;
@@ -935,7 +961,7 @@ const AssignedHarvestJobsPage = () => {
   const needsInspectionCount = assignedRequests.filter(doesJobNeedVisit).length;
   const inspectionScheduledCount = assignedRequests.filter(isJobScheduled).length;
   const siteVerifiedCount = assignedRequests.filter(r => isJobInspected(r) && r.status !== 'ASSESSMENT_SUBMITTED' && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED').length;
-  const revisionCount = assignedRequests.filter(r => r.status === 'REVISION_REQUESTED').length;
+  const fairDealCount = assignedRequests.filter(r => getFairDealInfo(r).hasFairDeal && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED').length;
   const submittedCount = assignedRequests.filter(r => r.status === 'ASSESSMENT_SUBMITTED').length;
   const authorizedCount = assignedRequests.filter(r => r.status === 'OPERATION_READY' || r.status === 'ACCEPTED').length;
 
@@ -945,8 +971,8 @@ const AssignedHarvestJobsPage = () => {
       <div className="dashboard-body">
         <Sidebar />
 
-        <div className="dashboard-workspace">
-          <main className="w-full max-w-6xl mx-auto py-6 flex flex-col gap-8">
+        <div className="contractor-dashboard-workspace">
+          <main className="w-full max-w-5xl mx-auto py-4 flex flex-col gap-6">
 
             {/* HERO HEADER CARD WITH PIPELINE METRICS */}
             <div className="cd-hero-card">
@@ -1015,6 +1041,18 @@ const AssignedHarvestJobsPage = () => {
                       <span className="text-base sm:text-lg font-black text-amber-400">{submittedCount}</span>
                     </div>
                   </div>
+
+                  {fairDealCount > 0 && (
+                    <div className="p-2.5 sm:p-3 rounded-2xl bg-[#140e05] border border-amber-500/40 flex items-center gap-2.5 shadow-md">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                        <Sparkles size={16} />
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] font-bold text-amber-300 uppercase tracking-wider block">Fair Deals</span>
+                        <span className="text-base sm:text-lg font-black text-amber-400">{fairDealCount}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1055,6 +1093,16 @@ const AssignedHarvestJobsPage = () => {
                   All ({assignedRequests.length})
                 </button>
 
+                {fairDealCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('FAIR_DEAL')}
+                    className={`cd-filter-tab ${statusFilter === 'FAIR_DEAL' ? 'active-submitted border-amber-500/60 bg-amber-500/20 text-amber-300 font-extrabold shadow-md' : 'border-amber-500/40 text-amber-300/90'}`}
+                  >
+                    🤝 Fair Deals ({fairDealCount})
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setStatusFilter('NEEDS_INSPECTION')}
@@ -1080,16 +1128,6 @@ const AssignedHarvestJobsPage = () => {
                 >
                   Site Verified ({siteVerifiedCount})
                 </button>
-
-                {revisionCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setStatusFilter('REVISION')}
-                    className={`cd-filter-tab ${statusFilter === 'REVISION' ? 'active-submitted border-amber-500/50 text-amber-300' : ''}`}
-                  >
-                    Revisions Needed ({revisionCount})
-                  </button>
-                )}
 
                 <button
                   type="button"
@@ -1140,7 +1178,8 @@ const AssignedHarvestJobsPage = () => {
                   const reqId = req.id || req._id || 'job_demo';
                   const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
                   const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
-                  const isRevisionRequested = req.status === 'REVISION_REQUESTED';
+                  const fairDealInfo = getFairDealInfo(req);
+                  const isRevisionRequested = (fairDealInfo.hasFairDeal && !isAccepted) || req.status === 'REVISION_REQUESTED';
 
                   // Format schedule dates cleanly
                   const startDate = req.preferred_start_date || req.preferredStartDate;
@@ -1294,57 +1333,50 @@ const AssignedHarvestJobsPage = () => {
 
                     return (
                       <div key={reqId} className={`cd-assigned-card transition-all duration-300 ${isExpanded ? 'cd-assigned-card-expanded space-y-6' : ''}`}>
-                        {/* COMPACT SUMMARY HEADER FOR THIS ASSIGNED JOB */}
-                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-                            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5 sm:mt-0 shadow-sm">
+                        {/* REFINED ASSIGNED JOB HEADER ROW */}
+                        <div className="cd-assigned-header-row">
+                          {/* Left: Tree Icon + Property & Landowner Identity */}
+                          <div className="cd-assigned-identity-group">
+                            <div className="cd-assigned-avatar-box">
                               <Trees size={22} className="text-emerald-400" />
                             </div>
 
-                            <div className="min-w-0 flex-1">
-                              {/* BADGES ROW */}
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <div className="cd-assigned-title-column">
+                              <div className="cd-assigned-title-row">
+                                <h3 className="cd-assigned-prop-title">
+                                  {req.propertyName || propDetails.propertyName || 'Forest Estate Parcel'}
+                                </h3>
                                 <span className="cd-req-id-badge">
                                   Job #{String(reqId).substring(0, 8)}
                                 </span>
                                 <span className="review-badge-green">
                                   <Trees size={12} /> {treeCountBadgeText}
                                 </span>
-                                {totalJobTimberValue > 0 && (
-                                  <span className="review-badge-amber font-bold" title="Approx. Total Timber Value set by landowner">
-                                    <Coins size={12} /> Approx. Value: {formatINR(totalJobTimberValue)}
-                                  </span>
-                                )}
-                                <span className="cd-req-date">
+                              </div>
+
+                              <div className="cd-assigned-meta-subline">
+                                <span className="cd-assigned-landowner-label">
+                                  Landowner: <strong className="text-white font-bold">{ownerNameVal}</strong>
+                                </span>
+                                <span className="cd-verified-owner-tag">
+                                  <UserCheck size={11} className="text-emerald-400" /> Verified Owner
+                                </span>
+                                <span className="cd-dot-separator">•</span>
+                                <span className="cd-assigned-location-label">
+                                  <MapPin size={12} className="text-emerald-400 shrink-0" />
+                                  <span>{req.propertyLocation || req.location || 'Kottayam, Kerala'}</span>
+                                  <span className="text-slate-400">({specificLocationText})</span>
+                                </span>
+                                <span className="cd-dot-separator hidden sm:inline">•</span>
+                                <span className="cd-req-date hidden sm:inline-flex">
                                   <Calendar size={12} className="text-slate-500" /> Assigned: {req.createdAt ? (typeof req.createdAt === 'string' ? req.createdAt.split('T')[0] : new Date(req.createdAt).toISOString().split('T')[0]) : 'Recent'}
                                 </span>
                               </div>
-
-                              {/* TITLE & LANDOWNER ROW */}
-                              <div className="flex items-center gap-2.5 flex-wrap">
-                                <h3 className="text-base sm:text-lg font-extrabold text-white truncate">
-                                  {req.propertyName || propDetails.propertyName || 'Forest Estate Parcel'}
-                                </h3>
-                                <span className="text-slate-600 text-xs hidden sm:inline">•</span>
-                                <span className="text-xs text-slate-300 flex items-center gap-1.5">
-                                  Landowner: <strong className="text-white font-bold">{ownerNameVal}</strong>
-                                </span>
-                                <span className="px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center gap-1">
-                                  <UserCheck size={11} className="text-emerald-400" /> Verified Owner
-                                </span>
-                              </div>
-
-                              {/* LOCATION */}
-                              <p className="text-xs text-slate-300 flex items-center gap-1.5 mt-1">
-                                <MapPin size={13} className="text-emerald-400 shrink-0" />
-                                <span className="font-semibold text-slate-200">{req.propertyLocation || req.location || 'Kottayam, Kerala'}</span>
-                                <span className="text-slate-400">({specificLocationText})</span>
-                              </p>
                             </div>
                           </div>
 
-                          {/* RIGHT SIDE STATUS & ACTIONS */}
-                          <div className="flex items-center flex-wrap gap-2.5 shrink-0 self-start lg:self-center">
+                          {/* Right: Status Pill & Action Buttons */}
+                          <div className="cd-assigned-actions-group">
                             <span className={`cd-status-pill ${
                               isAccepted
                                 ? 'cd-status-accepted'
@@ -1360,17 +1392,17 @@ const AssignedHarvestJobsPage = () => {
                             }`}>
                               {isAccepted ? (
                                 <>
-                                  <CheckCircle2 size={14} className="text-emerald-400" />
+                                  <CheckCircle2 size={13} className="text-emerald-400" />
                                   <span>Operation Authorized</span>
                                 </>
                               ) : isRevisionRequested ? (
                                 <>
-                                  <RefreshCw size={14} className="text-amber-400" />
-                                  <span>Revision Requested</span>
+                                  <RefreshCw size={13} className="text-amber-400" />
+                                  <span>Fair Deal Revision Requested</span>
                                 </>
                               ) : isSubmitted ? (
                                 <>
-                                  <Clock size={14} className="text-amber-400" />
+                                  <Clock size={13} className="text-amber-400" />
                                   <span>
                                     {req.commercial_proposal_type === 'Timber Purchase Offer'
                                       ? 'Purchase Offer Under Review'
@@ -1381,17 +1413,17 @@ const AssignedHarvestJobsPage = () => {
                                 </>
                               ) : isJobInspected(req) ? (
                                 <>
-                                  <ClipboardCheck size={14} className="text-emerald-400" />
-                                  <span>Site Inspected & Verified</span>
+                                  <ClipboardCheck size={13} className="text-emerald-400" />
+                                  <span>Site Inspected &amp; Verified</span>
                                 </>
                               ) : isJobScheduled(req) ? (
                                 <>
-                                  <Calendar size={14} className="text-teal-400" />
+                                  <Calendar size={13} className="text-teal-400" />
                                   <span>Inspection Scheduled</span>
                                 </>
                               ) : (
                                 <>
-                                  <AlertTriangle size={14} className="text-blue-400" />
+                                  <AlertTriangle size={13} className="text-blue-400" />
                                   <span>Inspection Required</span>
                                 </>
                               )}
@@ -1420,12 +1452,12 @@ const AssignedHarvestJobsPage = () => {
                             <button
                               type="button"
                               onClick={() => handleAssessClick(req)}
-                              className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : isJobInspected(req) ? 'border-emerald-400/60 shadow-[0_0_15px_rgba(52,211,153,0.3)]' : ''}`}
+                              className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''}`}
                             >
-                              {isRevisionRequested ? <RefreshCw size={14} /> : <Calculator size={14} />}
+                              {isRevisionRequested ? <RefreshCw size={13} /> : <Calculator size={13} />}
                               <span>
                                 {isRevisionRequested
-                                  ? 'Revise & Resubmit Quote'
+                                  ? 'Revise Quote'
                                   : isSubmitted
                                     ? 'Edit Quote'
                                     : isJobInspected(req)
@@ -1435,6 +1467,275 @@ const AssignedHarvestJobsPage = () => {
                             </button>
                           </div>
                         </div>
+
+                        {/* REFINED DEDICATED FINANCIAL & VALUATION STRIP */}
+                        {Boolean(
+                          (req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer) ||
+                          fairDealInfo.counterAmount ||
+                          totalJobTimberValue > 0
+                        ) && (
+                          <div className="cd-card-financial-strip">
+                            <div className="cd-financial-badges-cluster">
+                              {/* 1. Contractor Quote */}
+                              {(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer) && (
+                                <div className="cd-fin-badge cd-fin-badge-quote">
+                                  <DollarSign size={13} className="text-emerald-400 shrink-0" />
+                                  <span className="cd-fin-badge-label">Your Quote:</span>
+                                  <strong className="cd-fin-badge-value text-emerald-300 font-mono">
+                                    {formatINR(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer)}
+                                  </strong>
+                                </div>
+                              )}
+
+                              {/* 2. Landowner Target (if Fair Deal active) */}
+                              {fairDealInfo.counterAmount && (
+                                <div className="cd-fin-badge cd-fin-badge-target" title="Landowner's proposed target budget for agreement">
+                                  <Sparkles size={13} className="text-amber-400 shrink-0" />
+                                  <span className="cd-fin-badge-label text-amber-200/80">Landowner Target:</span>
+                                  <strong className="cd-fin-badge-value text-amber-300 font-mono">
+                                    {formatINR(fairDealInfo.counterAmount)}
+                                  </strong>
+                                  {(() => {
+                                    const currentQ = Number(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer || 110000);
+                                    const diffPct = Math.round(((fairDealInfo.counterAmount - currentQ) / currentQ) * 100);
+                                    return (
+                                      <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${diffPct < 0 ? 'bg-amber-500/25 text-amber-200' : 'bg-emerald-500/25 text-emerald-200'}`}>
+                                        {diffPct > 0 ? `+${diffPct}%` : `${diffPct}%`}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                              )}
+
+                              {/* 3. Approx. Timber Value */}
+                              {totalJobTimberValue > 0 && (
+                                <div className="cd-fin-badge cd-fin-badge-value" title="Approximate estimated timber value">
+                                  <Coins size={13} className="text-amber-400 shrink-0" />
+                                  <span className="cd-fin-badge-label">Approx. Value:</span>
+                                  <strong className="cd-fin-badge-value text-amber-400 font-mono">
+                                    {formatINR(totalJobTimberValue)}
+                                  </strong>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Right quick shortcut: if landowner proposed budget */}
+                            {fairDealInfo.counterAmount && isRevisionRequested && (
+                              <div className="cd-fin-quick-cta">
+                                <span className="text-slate-400 text-xs hidden md:inline">Negotiation Active:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/contractor/assessment/${reqId}?apply=match`)}
+                                  className="cd-fin-quick-btn"
+                                  title="Instantly open assessment editor with landowner's requested target"
+                                >
+                                  <CheckCircle2 size={12} className="text-emerald-400" />
+                                  <span>Match Target ({formatINR(fairDealInfo.counterAmount)})</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* PROMINENT LANDOWNER FAIR DEAL COUNTER-PROPOSAL & REASONABLE QUOTE GUIDANCE */}
+                        {fairDealInfo.hasFairDeal && !isAccepted && (() => {
+                          const targetBudget = fairDealInfo.counterAmount;
+                          const isRevisedJob = Boolean(req.is_revision || req.assessment?.is_revision || req.previous_quote || req.assessment?.previous_quote);
+                          const origQuote = Number(req.original_quote || req.assessment?.original_quote || req.total_quote || req.assessment?.total_quote || 101750);
+                          const latestQuote = Number(req.total_quote || req.assessment?.total_quote || origQuote);
+                          const quoteToCompare = isRevisedJob ? latestQuote : origQuote;
+                          const reqStartDate = fairDealInfo.counterDate;
+                          const reasons = fairDealInfo.revisionReasons;
+                          const feedback = fairDealInfo.landownerNotes;
+
+                          const diffAmount = (targetBudget && origQuote) ? Number(targetBudget) - Number(origQuote) : null;
+                          const diffPct = (diffAmount !== null && origQuote) ? Math.round((diffAmount / Number(origQuote)) * 100) : null;
+
+                          // Reasonable rate breakdown recommendation for target budget
+                          const suggestedFelling = targetBudget ? Math.round(targetBudget * 0.40) : null;
+                          const suggestedExtraction = targetBudget ? Math.round(targetBudget * 0.28) : null;
+                          const suggestedTransport = targetBudget ? Math.round(targetBudget * 0.22) : null;
+                          const suggestedOther = targetBudget ? targetBudget - (suggestedFelling + suggestedExtraction + suggestedTransport) : null;
+                          const halfwayBudget = targetBudget ? Math.round((origQuote + targetBudget) / 2) : null;
+
+                          return (
+                            <div className="qtn-counter-section">
+                              <div className="qtn-counter-header">
+                                <div className="qtn-counter-title-group">
+                                  <div className="qtn-counter-icon">
+                                    <Handshake size={20} className="text-amber-400" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="qtn-counter-title">
+                                        Landowner Fair Deal Counter-Proposal
+                                      </span>
+                                      <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                        Active Negotiation • Revision Needed
+                                      </span>
+                                    </div>
+                                    <p className="qtn-counter-subtitle">
+                                      The landowner reviewed your quotation of {formatINR(origQuote)} and submitted target parameters to make the agreement reasonable and mutually agreeable.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                  className="qtn-counter-action-btn"
+                                >
+                                  <RefreshCw size={14} />
+                                  <span>Review &amp; Adjust Deal</span>
+                                </button>
+                              </div>
+
+                              <div className="qtn-counter-grid">
+                                <div className="qtn-counter-cell">
+                                  <span className="qtn-counter-cell-label">{isRevisedJob ? 'Revised Quote' : 'Original Contractor Quote'}</span>
+                                  <span className="qtn-counter-cell-val text-white font-mono">
+                                    {formatINR(quoteToCompare)}
+                                  </span>
+                                  <span className="qtn-counter-cell-hint">{isRevisedJob ? `Original baseline: ${formatINR(origQuote)}` : 'Original contractor rate'}</span>
+                                </div>
+
+                                <div className="qtn-counter-cell qtn-counter-cell-target">
+                                  <span className="qtn-counter-cell-label">Landowner Target Budget</span>
+                                  <span className="qtn-counter-cell-val text-amber-400 font-mono font-black">
+                                    {targetBudget ? formatINR(targetBudget) : 'Rate Adjustment Requested'}
+                                  </span>
+                                  <span className="qtn-counter-cell-hint">Landowner proposed ceiling</span>
+                                </div>
+
+                                <div className="qtn-counter-cell">
+                                  <span className="qtn-counter-cell-label">Negotiation Variance</span>
+                                  <span className={`qtn-counter-cell-val font-mono ${diffAmount && diffAmount < 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                    {diffAmount !== null ? `${diffAmount < 0 ? '-' : '+'}${formatINR(Math.abs(diffAmount))} (${diffPct}%)` : 'Adjustment Requested'}
+                                  </span>
+                                  <span className="qtn-counter-cell-hint">Difference vs original quotation</span>
+                                </div>
+
+                                <div className="qtn-counter-cell">
+                                  <span className="qtn-counter-cell-label">Requested Start Date</span>
+                                  <span className="qtn-counter-cell-val text-slate-100">
+                                    {reqStartDate ? formatDateDMY(reqStartDate) : 'Flexible'}
+                                  </span>
+                                  <span className="qtn-counter-cell-hint">Proposed mobilization</span>
+                                </div>
+                              </div>
+
+                              {Array.isArray(reasons) && reasons.length > 0 && (
+                                <div className="qtn-counter-reasons-row">
+                                  <span className="qtn-counter-reasons-label">Landowner Focus Areas:</span>
+                                  {reasons.map((reason, idx) => (
+                                    <span key={idx} className="qtn-counter-reason-pill">
+                                      {reason}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              {feedback && (
+                                <div className="qtn-counter-feedback-box">
+                                  <span className="qtn-counter-feedback-label">Landowner Specific Instructions</span>
+                                  <p className="qtn-counter-feedback-text">"{feedback}"</p>
+                                </div>
+                              )}
+
+                              {/* SUGGESTED COST DISTRIBUTION (PREDEFINED CALCULATION HELPER) */}
+                              {targetBudget && (
+                                <div className="cd-fairdeal-guidance-box">
+                                  <div className="cd-fairdeal-guidance-header">
+                                    <span className="cd-fairdeal-guidance-title">
+                                      <Calculator size={15} className="text-amber-400" />
+                                      Suggested Cost Distribution (For ₹ {targetBudget.toLocaleString('en-IN')})
+                                    </span>
+                                    <span className="text-[11px] text-slate-400">
+                                      Deterministic default breakdown
+                                    </span>
+                                  </div>
+
+                                  <p className="text-xs text-slate-300">
+                                    Suggested breakdown of the target budget across the estimated harvesting cost categories. The contractor can review and modify these values before submitting a revised quotation.
+                                  </p>
+
+                                  <div className="cd-fairdeal-breakdown-grid">
+                                    <div className="cd-fairdeal-breakdown-item">
+                                      <span className="cd-fairdeal-breakdown-label">Felling &amp; Logging</span>
+                                      <span className="cd-fairdeal-breakdown-value">{formatINR(suggestedFelling)}</span>
+                                      <span className="cd-fairdeal-breakdown-pct">40% of target</span>
+                                    </div>
+                                    <div className="cd-fairdeal-breakdown-item">
+                                      <span className="cd-fairdeal-breakdown-label">Extraction</span>
+                                      <span className="cd-fairdeal-breakdown-value">{formatINR(suggestedExtraction)}</span>
+                                      <span className="cd-fairdeal-breakdown-pct">28% of target</span>
+                                    </div>
+                                    <div className="cd-fairdeal-breakdown-item">
+                                      <span className="cd-fairdeal-breakdown-label">Transportation</span>
+                                      <span className="cd-fairdeal-breakdown-value">{formatINR(suggestedTransport)}</span>
+                                      <span className="cd-fairdeal-breakdown-pct">22% of target</span>
+                                    </div>
+                                    <div className="cd-fairdeal-breakdown-item">
+                                      <span className="cd-fairdeal-breakdown-label">Other / Site Clearing</span>
+                                      <span className="cd-fairdeal-breakdown-value">{formatINR(suggestedOther)}</span>
+                                      <span className="cd-fairdeal-breakdown-pct">10% of target</span>
+                                    </div>
+                                  </div>
+
+                                  <p className="text-[11px] text-slate-400 italic">
+                                    Note: These percentages are only a suggested distribution and not market-standard or legally prescribed rates. Predefined calculation is used (no AI).
+                                  </p>
+
+                                  <div className="cd-fairdeal-actions-row">
+                                    {origQuote === targetBudget ? (
+                                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                                        <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                                        <span>✓ Quotation already matches the landowner's target budget.</span>
+                                      </div>
+                                    ) : targetBudget > origQuote ? (
+                                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-semibold">
+                                        <Info size={14} className="text-blue-400 shrink-0" />
+                                        <span>Your quotation is already below the landowner's target budget.</span>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(`/contractor/assessment/${reqId}?apply=match`)}
+                                          className="cd-fairdeal-btn-primary"
+                                          title="Reduce your quote to the landowner's target."
+                                        >
+                                          <CheckCircle2 size={14} />
+                                          <span>Match Target Budget ({formatINR(targetBudget)})</span>
+                                        </button>
+
+                                        {halfwayBudget && (
+                                          <button
+                                            type="button"
+                                            onClick={() => navigate(`/contractor/assessment/${reqId}?apply=halfway`)}
+                                            className="cd-fairdeal-btn-halfway"
+                                            title="Propose a price halfway between your quote and the landowner's target."
+                                          >
+                                            <span>Meet Halfway ({formatINR(halfwayBudget)})</span>
+                                          </button>
+                                        )}
+                                      </>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                                    >
+                                      <Calculator size={13} className="text-emerald-400" />
+                                      <span>Custom Quote Adjustment</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* CONTRACTOR SITE INSPECTION WORKFLOW PIPELINE STRIP */}
                         {(() => {
@@ -1525,7 +1826,7 @@ const AssignedHarvestJobsPage = () => {
                                       <button
                                         type="button"
                                         onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                                        className="cd-btn-inspect-schedule bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black shadow-md cursor-pointer"
+                                        className="cd-btn-inspect-primary"
                                         title="Re-assess quotation with audited tree counts and ground-truth timber volume"
                                       >
                                         <Calculator size={13} />
@@ -1705,58 +2006,7 @@ const AssignedHarvestJobsPage = () => {
                           );
                         })()}
 
-                        {/* LANDOWNER REVISION REQUEST & FAIR DEAL COUNTER-OFFER BANNER */}
-                        {isRevisionRequested && (
-                          <div className="p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-                            <div className="space-y-1.5 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
-                                <h4 className="text-sm font-extrabold text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
-                                  <AlertTriangle size={15} /> Active Landowner Counter-Proposal &amp; Negotiation
-                                </h4>
-                              </div>
-                              <p className="text-xs text-slate-300 leading-relaxed">
-                                The landowner proposed adjustments to reach a fair deal. Review their target budget and adjust the quotation to finalize the agreement.
-                              </p>
-                              <div className="flex items-center gap-3 flex-wrap pt-1 text-xs">
-                                {(req.counter_offer_amount || req.assessment?.counter_offer_amount) && (
-                                  <span className="px-3 py-1 rounded-lg bg-black/60 border border-amber-500/40 text-amber-200 font-bold">
-                                    Landowner Target Price: <strong className="text-amber-400 font-extrabold text-sm">{formatINR(req.counter_offer_amount || req.assessment?.counter_offer_amount)}</strong>
-                                  </span>
-                                )}
-                                {(req.counter_offer_start_date || req.assessment?.counter_offer_start_date) && (
-                                  <span className="px-3 py-1 rounded-lg bg-black/60 border border-amber-500/40 text-slate-200">
-                                    Requested Start: <strong className="text-white font-semibold">{formatDateDMY(req.counter_offer_start_date || req.assessment?.counter_offer_start_date)}</strong>
-                                  </span>
-                                )}
-                              </div>
-                              {Array.isArray(req.revision_reasons || req.assessment?.revision_reasons) && (req.revision_reasons || req.assessment?.revision_reasons).length > 0 && (
-                                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                                  <span className="text-[11px] text-slate-400 font-semibold">Adjustments:</span>
-                                  {(req.revision_reasons || req.assessment?.revision_reasons).map((reason, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-950/80 border border-amber-500/30 text-amber-300">
-                                      {reason}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                              {(req.landowner_feedback || req.assessment?.landowner_feedback) && (
-                                <p className="text-xs text-amber-100/90 italic bg-black/40 border border-amber-500/20 p-2.5 rounded-xl">
-                                  "{req.landowner_feedback || req.assessment?.landowner_feedback}"
-                                </p>
-                              )}
-                            </div>
 
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all shrink-0 hover:scale-[1.02]"
-                            >
-                              <RefreshCw size={14} />
-                              <span>Review &amp; Adjust Deal</span>
-                            </button>
-                          </div>
-                        )}
 
                         {/* DIGITAL HARVEST AGREEMENT FINALIZED BANNER (WHEN OPERATION_READY) */}
                         {(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement) && (
@@ -1808,9 +2058,9 @@ const AssignedHarvestJobsPage = () => {
                             </div>
                             <div className="cd-highlight-item">
                               <span className="cd-highlight-label">Assessment Status</span>
-                              <strong className={`cd-highlight-val flex items-center gap-1.5 ${isAccepted ? 'text-emerald-400' : isSubmitted ? 'text-amber-400' : 'text-blue-400'}`}>
-                                <span className={`w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]' : isSubmitted ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.7)]' : 'bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]'}`} />
-                                <span>{isAccepted ? 'Authorized by Owner' : isSubmitted ? 'Quotation Submitted' : 'Pending Site Visit'}</span>
+                              <strong className={`cd-highlight-val flex items-center gap-1.5 ${isAccepted ? 'text-emerald-400' : isRevisionRequested ? 'text-amber-400' : isSubmitted ? 'text-amber-400' : isJobInspected(req) ? 'text-emerald-300' : 'text-blue-400'}`}>
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-emerald-400' : isRevisionRequested ? 'bg-amber-400' : isSubmitted ? 'bg-amber-400' : isJobInspected(req) ? 'bg-emerald-400' : 'bg-blue-400'}`} />
+                                <span>{isAccepted ? 'Authorized by Owner' : isRevisionRequested ? 'Counter-Offer Active' : isSubmitted ? 'Quotation Submitted' : isJobInspected(req) ? 'Site Verified' : 'Pending Site Visit'}</span>
                               </strong>
                             </div>
                           </div>
@@ -2414,9 +2664,42 @@ const AssignedHarvestJobsPage = () => {
                                       </>
                                     )}
                                   </div>
-                                </div>
-                              );
-                            })()}
+
+                                    {/* ITEMIZED SERVICE COST BREAKDOWN FOR CONTRACTOR */}
+                                    {pType === 'Harvesting Service Quotation' && (
+                                      <div className="p-4 rounded-2xl bg-[#041208] border border-emerald-500/25 space-y-2.5 mt-3 shadow-inner">
+                                        <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-emerald-500/20">
+                                          <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                            <DollarSign size={14} /> Itemized Service Cost Breakdown
+                                          </span>
+                                          <span className="text-xs text-slate-300 font-semibold">
+                                            Total Quotation: <strong className="text-amber-400 font-mono text-sm">{formatINR(assDoc.total_quote ?? req.total_quote ?? 110000)}</strong>
+                                          </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                                          <div className="p-2.5 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Felling &amp; Logging</span>
+                                            <strong className="text-white text-xs sm:text-sm font-black mt-0.5 block">{formatINR(assDoc.harvesting_cost ?? assDoc.felling_cost ?? req.harvesting_cost ?? req.felling_cost ?? 45000)}</strong>
+                                          </div>
+                                          <div className="p-2.5 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Extraction / Skid-Trail</span>
+                                            <strong className="text-white text-xs sm:text-sm font-black mt-0.5 block">{formatINR(assDoc.extraction_cost ?? req.extraction_cost ?? 30000)}</strong>
+                                          </div>
+                                          <div className="p-2.5 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Transportation / Haulage</span>
+                                            <strong className="text-white text-xs sm:text-sm font-black mt-0.5 block">{formatINR(assDoc.transportation_cost ?? req.transportation_cost ?? 25000)}</strong>
+                                          </div>
+                                          <div className="p-2.5 rounded-xl bg-[#07190d] border border-emerald-500/20">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Other / Site Clearing</span>
+                                            <strong className="text-white text-xs sm:text-sm font-black mt-0.5 block">{formatINR(assDoc.other_cost ?? req.other_cost ?? 10000)}</strong>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
 
                             {/* ACTION BAR (SUBMIT ASSESSMENT HERE AFTER CHECKING ALL DETAILS) */}
                             <div className="cd-action-bar flex-wrap gap-4 pt-3 border-t border-emerald-500/20">

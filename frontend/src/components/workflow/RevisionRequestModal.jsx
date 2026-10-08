@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   RefreshCw,
   X,
@@ -12,6 +12,20 @@ import {
 } from 'lucide-react';
 import { formatINR } from '../../utils/timberCalculations';
 import './RevisionRequestModal.css';
+
+const formatDateDMY = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
 
 const REVISION_CATEGORIES = [
   {
@@ -59,6 +73,33 @@ const RevisionRequestModal = ({
   const [counterOfferStartDate, setCounterOfferStartDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const dateInputRef = useRef(null);
+
+  const handleOpenCalendar = () => {
+    if (dateInputRef.current) {
+      try {
+        if (typeof dateInputRef.current.showPicker === 'function') {
+          dateInputRef.current.showPicker();
+        } else {
+          dateInputRef.current.focus();
+        }
+      } catch (err) {
+        dateInputRef.current.focus();
+      }
+    }
+  };
+
+  const getOffsetDateStr = (daysAhead, baseDateStr = null) => {
+    const base = baseDateStr ? new Date(baseDateStr) : new Date();
+    if (isNaN(base.getTime())) return '';
+    const target = new Date(base);
+    target.setDate(target.getDate() + daysAhead);
+    const y = target.getFullYear();
+    const m = String(target.getMonth() + 1).padStart(2, '0');
+    const d = String(target.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
 
   const toggleReason = (label) => {
     setErrorMsg('');
@@ -212,35 +253,136 @@ const RevisionRequestModal = ({
 
             <div className="revision-counter-grid">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Your Target Budget / Counter-Offer (₹)
-                </label>
+                <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Your Target Budget / Counter-Offer (₹)
+                  </label>
+                  {totalQuote ? (
+                    <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                      Contractor Quote: {formatINR(totalQuote)}
+                    </span>
+                  ) : null}
+                </div>
                 <input
                   type="number"
                   min="0"
                   value={counterOfferAmount}
                   onChange={(e) => setCounterOfferAmount(e.target.value)}
-                  placeholder="e.g. 95000"
+                  placeholder={totalQuote ? `Current quote: ₹ ${totalQuote} (e.g. ${Math.round(totalQuote * 0.9)})` : 'e.g. 95000'}
                   className="revision-input"
                 />
-                <span className="text-[11px] text-slate-400 mt-1 block">
-                  Suggest a fair price for the contractor to reconsider.
-                </span>
+                <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400 flex-wrap gap-1">
+                  <span>Suggest a fair price for the contractor to reconsider.</span>
+                  {totalQuote ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-500 font-medium">Quick options:</span>
+                      <button
+                        type="button"
+                        onClick={() => setCounterOfferAmount(String(Math.round(totalQuote * 0.9)))}
+                        className="text-[10.5px] text-amber-400 hover:text-amber-300 underline font-semibold transition-colors"
+                        title="Propose 10% lower than contractor quote"
+                      >
+                        -10% ({formatINR(Math.round(totalQuote * 0.9))})
+                      </button>
+                      <span className="text-slate-600">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setCounterOfferAmount(String(Math.round(totalQuote * 0.85)))}
+                        className="text-[10.5px] text-amber-400 hover:text-amber-300 underline font-semibold transition-colors"
+                        title="Propose 15% lower than contractor quote"
+                      >
+                        -15% ({formatINR(Math.round(totalQuote * 0.85))})
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Preferred Alternative Start Date
-                </label>
-                <input
-                  type="date"
-                  min={new Date().toISOString().split('T')[0]}
-                  value={counterOfferStartDate}
-                  onChange={(e) => setCounterOfferStartDate(e.target.value)}
-                  className="revision-input"
-                />
+                <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Preferred Alternative Start Date
+                  </label>
+                  {startDate && (
+                    <span className="text-[11px] font-medium text-slate-400">
+                      Contractor: <strong className="text-emerald-400 font-semibold">{formatDateDMY(startDate)}</strong>
+                    </span>
+                  )}
+                </div>
+                <div className="revision-date-wrapper">
+                  <input
+                    ref={dateInputRef}
+                    type="date"
+                    min={new Date().toISOString().split('T')[0]}
+                    value={counterOfferStartDate}
+                    onChange={(e) => setCounterOfferStartDate(e.target.value)}
+                    onClick={handleOpenCalendar}
+                    className="revision-input revision-date-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleOpenCalendar}
+                    className="revision-date-picker-btn"
+                    title="Click to open calendar"
+                    aria-label="Open calendar picker"
+                  >
+                    <Calendar size={16} />
+                  </button>
+                </div>
+
+                {/* Quick Date Shortcuts */}
+                <div className="revision-quick-dates-row">
+                  <span className="text-[10px] text-slate-500 font-medium">Quick pick:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {startDate && (
+                      <button
+                        type="button"
+                        onClick={() => setCounterOfferStartDate(typeof startDate === 'string' ? startDate.split('T')[0] : new Date(startDate).toISOString().split('T')[0])}
+                        className={`revision-date-chip ${counterOfferStartDate === (typeof startDate === 'string' ? startDate.split('T')[0] : '') ? 'active' : ''}`}
+                        title="Match contractor proposed start date"
+                      >
+                        Contractor Date
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setCounterOfferStartDate(getOffsetDateStr(3, startDate))}
+                      className={`revision-date-chip ${counterOfferStartDate === getOffsetDateStr(3, startDate) ? 'active' : ''}`}
+                      title="3 days after proposed date"
+                    >
+                      +3 Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCounterOfferStartDate(getOffsetDateStr(7, startDate))}
+                      className={`revision-date-chip ${counterOfferStartDate === getOffsetDateStr(7, startDate) ? 'active' : ''}`}
+                      title="1 week after proposed date"
+                    >
+                      +1 Week
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCounterOfferStartDate(getOffsetDateStr(14, startDate))}
+                      className={`revision-date-chip ${counterOfferStartDate === getOffsetDateStr(14, startDate) ? 'active' : ''}`}
+                      title="2 weeks after proposed date"
+                    >
+                      +2 Weeks
+                    </button>
+                    {counterOfferStartDate && (
+                      <button
+                        type="button"
+                        onClick={() => setCounterOfferStartDate('')}
+                        className="text-[10px] text-slate-500 hover:text-slate-300 ml-1 underline transition-colors"
+                        title="Clear date"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <span className="text-[11px] text-slate-400 mt-1 block">
-                  If the proposed timeline needs modification.
+                  Click the field or calendar icon to select a convenient start date.
                 </span>
               </div>
             </div>

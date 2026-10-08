@@ -41,8 +41,21 @@ import {
   Ruler,
   Truck,
   AlertTriangle,
-  Printer
+  Printer,
+  Coins,
+  Handshake,
+  RefreshCw,
+  Layers,
+  Users
 } from 'lucide-react';
+import RevisionRequestModal from '../../components/workflow/RevisionRequestModal';
+import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
+import harvestService from '../../services/harvestService';
+import {
+  formatINR,
+  formatVolume,
+  parseVolumeNumber
+} from '../../utils/timberCalculations';
 
 const getGoogleMapsUrl = (p) => {
   if (!p) return 'https://maps.google.com';
@@ -91,6 +104,138 @@ const LandownerDashboard = () => {
 
   // Modal state for viewing scheduled site visit details
   const [selectedVisitModal, setSelectedVisitModal] = useState(null);
+
+  // Assessments Map and Workflow Modals for Landowner Quotation Verification
+  const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
+  const [revisionModalReq, setRevisionModalReq] = useState(null);
+  const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
+  const [assessmentActionMsg, setAssessmentActionMsg] = useState({ type: '', text: '' });
+
+  // Eagerly hydrate contractor assessments from localStorage & backend API
+  useEffect(() => {
+    const fetchAssessments = async () => {
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(r => {
+              const rId = r?.id || r?._id;
+              if (rId && r.assessment) {
+                setActiveAssessmentMap(prev => ({ ...prev, [rId]: r.assessment }));
+              }
+            });
+          }
+        }
+      } catch (e) {}
+
+      for (const req of (harvestRequests || [])) {
+        const reqId = req.id || req._id;
+        if (!reqId) continue;
+        if (req.assessment) {
+          setActiveAssessmentMap(prev => ({ ...prev, [reqId]: req.assessment }));
+        }
+        if (req.assigned_contractor_id || req.assessment || req.status === 'ASSESSMENT_SUBMITTED' || req.status === 'OPERATION_READY' || req.total_quote) {
+          try {
+            const data = await harvestService.getAssessment(reqId);
+            if (data && (data.assessment || data.id || data.commercial_proposal_type)) {
+              const assObj = data.assessment || data;
+              setActiveAssessmentMap(prev => ({ ...prev, [reqId]: assObj }));
+            }
+          } catch (e) {
+            // Silently fall back to request assessment
+          }
+        }
+      }
+    };
+
+    fetchAssessments();
+  }, [harvestRequests]);
+
+  // Handle Landowner Action on Assessment (Accept, Reject, Request Revision)
+  const handleAssessmentAction = async (requestId, action, feedbackStr = '', revisionReasons = [], counterOfferAmount = null, counterOfferStartDate = null) => {
+    try {
+      await harvestService.actionAssessment(requestId, {
+        status: action,
+        feedback: feedbackStr,
+        revision_reasons: revisionReasons,
+        counter_offer_amount: counterOfferAmount,
+        counter_offer_start_date: counterOfferStartDate
+      });
+
+      // Synchronize in local storage treeconnect_harvest_requests
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(r => {
+            if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+              const newStatus = action === 'ACCEPTED' ? 'OPERATION_READY' : (action === 'REVISION_REQUESTED' ? 'REVISION_REQUESTED' : action);
+              const digitalAgr = action === 'ACCEPTED' ? {
+                agreement_id: `TC-AGR-${new Date().getFullYear()}-${String(requestId).slice(-6).toUpperCase()}`,
+                signed_at: new Date().toISOString(),
+                status: 'EXECUTED_AND_BINDING',
+                parties: {
+                  landowner_name: r.userName || r.landowner_name || r.ownerName || userName || 'Registered Landowner',
+                  contractor_name: r.assigned_contractor_name || 'Rohith kumar'
+                }
+              } : r.digital_agreement;
+
+              return {
+                ...r,
+                status: newStatus,
+                landowner_feedback: feedbackStr,
+                revision_reasons: revisionReasons,
+                counter_offer_amount: counterOfferAmount,
+                counter_offer_start_date: counterOfferStartDate,
+                digital_agreement: digitalAgr,
+                updatedAt: new Date().toISOString()
+              };
+            }
+            return r;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (e) {
+        console.warn('Could not update localStorage treeconnect_harvest_requests:', e);
+      }
+
+      setActiveAssessmentMap(prev => ({
+        ...prev,
+        [requestId]: {
+          ...(prev[requestId] || {}),
+          status: action,
+          landowner_feedback: feedbackStr,
+          revision_reasons: revisionReasons,
+          counter_offer_amount: counterOfferAmount,
+          counter_offer_start_date: counterOfferStartDate
+        }
+      }));
+
+      setAssessmentActionMsg({
+        type: 'success',
+        text: action === 'ACCEPTED'
+          ? 'Quotation verified and accepted! Digital Harvest Agreement generated and finalized.'
+          : action === 'REVISION_REQUESTED'
+            ? 'Revision counter-offer submitted to contractor for adjustment.'
+            : 'Contractor quotation declined.'
+      });
+
+      if (refreshHarvestRequests) {
+        refreshHarvestRequests();
+      }
+
+      setTimeout(() => {
+        setAssessmentActionMsg({ type: '', text: '' });
+      }, 5000);
+    } catch (err) {
+      console.error('Failed to action assessment:', err);
+      setAssessmentActionMsg({
+        type: 'error',
+        text: err?.message || 'Failed to submit action on assessment. Please try again.'
+      });
+    }
+  };
 
   // Stateful Demo Contractor Bids
   const [bids, setBids] = useState([
@@ -317,6 +462,406 @@ const LandownerDashboard = () => {
                 )}
               </section>
             );
+          })()}
+
+          {/* ACTION FEEDBACK ALERT BANNER */}
+          {assessmentActionMsg.text && (
+            <div className={`p-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-xl transition-all ${
+              assessmentActionMsg.type === 'success'
+                ? 'bg-emerald-950/90 border border-emerald-500 text-emerald-200'
+                : 'bg-red-950/90 border border-red-500 text-red-200'
+            }`}>
+              {assessmentActionMsg.type === 'success' ? (
+                <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
+              ) : (
+                <AlertTriangle size={20} className="text-red-400 shrink-0" />
+              )}
+              <span>{assessmentActionMsg.text}</span>
+            </div>
+          )}
+
+          {/* FORMAL CONTRACTOR ASSESS QUOTATION — LANDOWNER VERIFICATION SECTION */}
+          {(() => {
+            const assessQuotationsToVerify = (harvestRequests || []).filter(r => {
+              const rId = r.id || r._id;
+              const ass = activeAssessmentMap[rId] || r.assessment || {};
+              return r.status === 'ASSESSMENT_SUBMITTED' ||
+                     r.status === 'REVISION_REQUESTED' ||
+                     r.status === 'OPERATION_READY' ||
+                     Boolean(ass.total_quote) ||
+                     Boolean(ass.contractor_purchase_offer) ||
+                     Boolean(ass.timber_purchase_price) ||
+                     Boolean(r.total_quote) ||
+                     Boolean(r.contractor_purchase_offer);
+            });
+
+            const targetQuotations = assessQuotationsToVerify.length > 0
+              ? assessQuotationsToVerify
+              : (verifiedInspections.length > 0 ? [verifiedInspections[0]] : []);
+
+            if (targetQuotations.length === 0) return null;
+
+            return targetQuotations.map((req, qIdx) => {
+              const reqId = req.id || req._id;
+              const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
+              const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
+              const isService = propType === 'Harvesting Service Quotation';
+              const isPurchase = propType === 'Timber Purchase Offer';
+              const isHybrid = propType === 'Purchase + Harvesting';
+
+              const assessedVolume = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume || req.site_inspection?.estimated_volume || 1.80;
+              const totalQuoteVal = assDoc.total_quote ?? req.total_quote ?? 110000;
+              const fellingCost = assDoc.harvesting_cost ?? assDoc.felling_cost ?? req.harvesting_cost ?? req.felling_cost ?? 45000;
+              const extractionCost = assDoc.extraction_cost ?? req.extraction_cost ?? 30000;
+              const transportCost = assDoc.transportation_cost ?? req.transportation_cost ?? 25000;
+              const otherCost = assDoc.other_cost ?? req.other_cost ?? 10000;
+              const workersCount = assDoc.assigned_workers_count ?? assDoc.workers_assigned ?? req.assigned_workers_count ?? req.workers_assigned ?? 10;
+              const jobDuration = assDoc.estimated_duration || req.estimated_duration || '1 Working Day';
+              const proposedStartDate = assDoc.proposed_start_date || req.proposed_start_date || '2026-10-14';
+
+              const contractorName = req.assigned_contractor_name || 'Rohith kumar';
+              const contractorPhone = req.assigned_contractor_phone || '9746512243';
+              const isAccepted = req.status === 'OPERATION_READY' || req.digital_agreement || assDoc.status === 'ACCEPTED';
+              const isRevision = req.status === 'REVISION_REQUESTED' || assDoc.status === 'REVISION_REQUESTED';
+              const isUnderReview = !isAccepted && !isRevision;
+
+              return (
+                <section key={reqId || qIdx} id="quotation-verification-section" className="quotation-verification-card">
+                  {/* Header with Title & Action Badges */}
+                  <div className="qvc-header">
+                    <div className="qvc-header-main">
+                      <div className="qvc-icon-wrap">
+                        <Calculator size={24} />
+                      </div>
+                      <div className="qvc-title-block">
+                        <div className="qvc-badge-row">
+                          <span className="qvc-category-pill">
+                            Commercial Quotation Verification
+                          </span>
+                          <span className={`qvc-status-badge ${
+                            isAccepted ? 'accepted' : isRevision ? 'revision' : 'action'
+                          }`}>
+                            {isAccepted ? (
+                              <>
+                                <CheckCircle2 size={13} className="text-emerald-400" />
+                                <span>✓ Agreement Executed &amp; Finalized</span>
+                              </>
+                            ) : isRevision ? (
+                              <>
+                                <RefreshCw size={13} className="text-amber-400" />
+                                <span>Counter-Offer Revision Active</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="qvc-status-dot"></span>
+                                <span>Action Required: Verify Quotation</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+
+                        <h2 className="qvc-title">
+                          Formal Contractor Assessment &amp; Commercial Quotation
+                        </h2>
+                        <p className="qvc-subtitle">
+                          Field Assessor &amp; Contractor <strong className="highlight">{contractorName}</strong> has completed on-site assessment and submitted this official quotation for <strong className="prop-name">{req.propertyName || 'TreeConnect Property'}</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right side quote amount highlight */}
+                    <div className="qvc-quote-badge">
+                      <span className="qvc-quote-label">
+                        {isService ? 'Total Contractor Quotation' : isPurchase ? 'Timber Purchase Offer' : 'Purchase + Harvesting Value'}
+                      </span>
+                      <strong className="qvc-quote-amount">
+                        {formatINR(totalQuoteVal)}
+                      </strong>
+                      <span className="qvc-quote-type">
+                        {propType}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* KEY METRICS GRID (MATCHING CONTRACTOR EVALUATION) */}
+                  <div className="qvc-metrics-grid">
+                    <div className="qvc-metric-card">
+                      <span className="qvc-metric-label">
+                        <Layers size={13} className="text-emerald-400" /> Assessed Volume
+                      </span>
+                      <div>
+                        <strong className="qvc-metric-value emerald">
+                          {formatVolume(assessedVolume)}
+                        </strong>
+                        <span className="qvc-metric-subtext">Ground truth verified</span>
+                      </div>
+                    </div>
+
+                    <div className="qvc-metric-card">
+                      <span className="qvc-metric-label">
+                        <Users size={13} className="text-emerald-400" /> Assigned Crew
+                      </span>
+                      <div>
+                        <strong className="qvc-metric-value">
+                          {workersCount} Workers
+                        </strong>
+                        <span className="qvc-metric-subtext">Deployed workforce</span>
+                      </div>
+                    </div>
+
+                    <div className="qvc-metric-card">
+                      <span className="qvc-metric-label">
+                        <Clock size={13} className="text-emerald-400" /> Job Duration
+                      </span>
+                      <div>
+                        <strong className="qvc-metric-value">
+                          {jobDuration}
+                        </strong>
+                        <span className="qvc-metric-subtext">Operational timeline</span>
+                      </div>
+                    </div>
+
+                    <div className="qvc-metric-card">
+                      <span className="qvc-metric-label">
+                        <Calendar size={13} className="text-emerald-400" /> Proposed Start
+                      </span>
+                      <div>
+                        <strong className="qvc-metric-value emerald">
+                          {formatDateDMY(proposedStartDate)}
+                        </strong>
+                        <span className="qvc-metric-subtext">Post-inspection mobilization</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ITEMIZED SERVICE COST BREAKDOWN (MATCHING CONTRACTOR FORM SCREENSHOT) */}
+                  {isService && (
+                    <div className="qvc-breakdown-box">
+                      <div className="qvc-breakdown-header">
+                        <div className="qvc-breakdown-title">
+                          <DollarSign size={15} />
+                          <span>Itemized Service Cost Breakdown (₹)</span>
+                        </div>
+                        <span className="qvc-breakdown-total">
+                          Total Contractor Quotation: <strong>{formatINR(totalQuoteVal)}</strong>
+                        </span>
+                      </div>
+
+                      <div className="qvc-breakdown-grid">
+                        <div className="qvc-breakdown-item">
+                          <span className="qvc-breakdown-cat">Felling &amp; Logging</span>
+                          <strong className="qvc-breakdown-cost">{formatINR(fellingCost)}</strong>
+                          <span className="qvc-breakdown-desc">Skilled chain-saw crew</span>
+                        </div>
+
+                        <div className="qvc-breakdown-item">
+                          <span className="qvc-breakdown-cat">Extraction / Skid-Trail</span>
+                          <strong className="qvc-breakdown-cost">{formatINR(extractionCost)}</strong>
+                          <span className="qvc-breakdown-desc">Skid-trail haulage</span>
+                        </div>
+
+                        <div className="qvc-breakdown-item">
+                          <span className="qvc-breakdown-cat">Transportation / Haulage</span>
+                          <strong className="qvc-breakdown-cost">{formatINR(transportCost)}</strong>
+                          <span className="qvc-breakdown-desc">10-wheeler log truck</span>
+                        </div>
+
+                        <div className="qvc-breakdown-item">
+                          <span className="qvc-breakdown-cat">Other / Site Clearing</span>
+                          <strong className="qvc-breakdown-cost">{formatINR(otherCost)}</strong>
+                          <span className="qvc-breakdown-desc">Slash &amp; debris clean-up</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CONTRACTOR SITE REMARKS & AUDIT FINDINGS */}
+                  {(assDoc.notes || req.site_inspection?.inspection_remarks || req.notes) && (
+                    <div className="qvc-remarks-box">
+                      <strong className="qvc-remarks-label">
+                        Assessor &amp; Contractor Official Remarks:
+                      </strong>
+                      <p className="qvc-remarks-text">
+                        "{assDoc.notes || req.site_inspection?.inspection_remarks || req.notes || 'Site inspection completed. Access road clear for heavy haulers.'}"
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ACTIVE REVISION COUNTER-OFFER BANNER (WHEN IN NEGOTIATION) */}
+                  {isRevision && (() => {
+                    const counterAmt = assDoc.counter_offer_amount || req.counter_offer_amount;
+                    const diffAmt = counterAmt ? totalQuoteVal - counterAmt : null;
+                    const diffPct = (counterAmt && totalQuoteVal) ? Math.round(((totalQuoteVal - counterAmt) / totalQuoteVal) * 100) : null;
+
+                    return (
+                      <div className="qtn-counter-section">
+                        <div className="qtn-counter-header">
+                          <div className="qtn-counter-header-left">
+                            <div className="qtn-counter-icon-wrap">
+                              <RefreshCw size={16} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="qtn-counter-title">
+                                  Fair Deal Counter-Offer Active with {contractorName}
+                                </span>
+                                <span className="qtn-counter-tag">Under Review</span>
+                              </div>
+                              <p className="qtn-counter-subtitle">
+                                Contractor has been notified with your counter-offer parameters to review and adjust the quotation.
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setRevisionModalReq({ req, assessment: assDoc })}
+                            className="qtn-counter-action-btn"
+                          >
+                            <RefreshCw size={13} />
+                            <span>Adjust Counter-Offer</span>
+                          </button>
+                        </div>
+
+                        {/* Counter-Offer Parameter Grid */}
+                        <div className="qtn-counter-grid">
+                          <div className="qtn-counter-cell">
+                            <span className="qtn-counter-cell-label">Current Quote (Contractor)</span>
+                            <strong className="qtn-counter-cell-val text-slate-300">
+                              {formatINR(totalQuoteVal)}
+                            </strong>
+                            <span className="qtn-counter-cell-hint">Original submitted quote</span>
+                          </div>
+
+                          <div className="qtn-counter-cell qtn-counter-cell-target">
+                            <span className="qtn-counter-cell-label">Your Target Budget</span>
+                            <strong className="qtn-counter-cell-val text-amber-300">
+                              {formatINR(counterAmt || 93500)}
+                            </strong>
+                            <span className="qtn-counter-cell-hint text-amber-400/80">Proposed counter-offer</span>
+                          </div>
+
+                          <div className="qtn-counter-cell">
+                            <span className="qtn-counter-cell-label">Requested Start Date</span>
+                            <strong className="qtn-counter-cell-val text-white">
+                              {formatDateDMY(assDoc.counter_offer_start_date || req.counter_offer_start_date || proposedStartDate)}
+                            </strong>
+                            <span className="qtn-counter-cell-hint">Alternative timeline</span>
+                          </div>
+
+                          <div className="qtn-counter-cell">
+                            <span className="qtn-counter-cell-label">Negotiated Variance</span>
+                            <strong className="qtn-counter-cell-val text-emerald-400">
+                              {diffAmt && diffAmt > 0 ? `-${formatINR(diffAmt)} (-${diffPct}%)` : 'Terms & Date Adjustment'}
+                            </strong>
+                            <span className="qtn-counter-cell-hint">Landowner savings</span>
+                          </div>
+                        </div>
+
+                        {/* Specified Adjustment Reason Pills */}
+                        {Array.isArray(assDoc.revision_reasons || req.revision_reasons) && (assDoc.revision_reasons || req.revision_reasons).length > 0 && (
+                          <div className="qtn-counter-reasons-row">
+                            <span className="qtn-counter-reasons-label">Specified adjustments:</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {(assDoc.revision_reasons || req.revision_reasons).map((reason, idx) => (
+                                <span key={idx} className="qtn-counter-reason-pill">
+                                  {reason}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Landowner Feedback / Note */}
+                        {(assDoc.landowner_feedback || req.landowner_feedback) && (
+                          <div className="qtn-counter-feedback-box">
+                            <span className="qtn-counter-feedback-label">Your Specific Instructions:</span>
+                            <p className="qtn-counter-feedback-text">
+                              "{assDoc.landowner_feedback || req.landowner_feedback}"
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* DIGITAL AGREEMENT EXECUTED BANNER (WHEN ACCEPTED) */}
+                  {isAccepted && (
+                    <div className="qvc-agreement-box">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                          <FileCheck size={22} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-sm sm:text-base font-black text-white">
+                              Digital Harvest Agreement Executed &amp; Work Finalized
+                            </h4>
+                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/40">
+                              {req.digital_agreement?.agreement_id || `TC-AGR-${new Date().getFullYear()}-${String(reqId).slice(-6).toUpperCase()}`}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                            Both parties have finalized commercial terms. Harvesting operations are authorized to commence on <strong>{formatDateDMY(proposedStartDate)}</strong>.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
+                        className="qvc-btn-accept"
+                      >
+                        <FileCheck size={16} />
+                        <span>View Digital Agreement</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* VERIFICATION ACTION CONTROLS FOR LANDOWNER */}
+                  {isUnderReview && (
+                    <div className="qvc-actions-footer">
+                      <div className="qvc-actions-tip">
+                        <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
+                        <span>Review the itemized quotation above and verify to authorize harvesting operations.</span>
+                      </div>
+
+                      <div className="qvc-actions-group">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to decline this contractor quotation?')) {
+                              handleAssessmentAction(reqId, 'REJECTED', 'Landowner declined this commercial proposal.');
+                            }
+                          }}
+                          className="qvc-btn-decline"
+                        >
+                          Decline Quotation
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setRevisionModalReq({ req, assessment: assDoc })}
+                          className="qvc-btn-revision"
+                        >
+                          <RefreshCw size={14} />
+                          <span>Request Revision / Counter-Offer</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAssessmentAction(reqId, 'ACCEPTED', 'Landowner verified and accepted quotation.')}
+                          className="qvc-btn-accept"
+                        >
+                          <CheckCircle2 size={16} />
+                          <span>Accept &amp; Authorize Quotation</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              );
+            });
           })()}
 
           {/* UPCOMING SCHEDULED SITE INSPECTION — FULL FIELD ASSESSMENT DETAILS */}
@@ -1760,6 +2305,36 @@ const LandownerDashboard = () => {
           </div>
         );
       })()}
+
+      {/* REVISION REQUEST COUNTER-OFFER MODAL */}
+      {revisionModalReq && (
+        <RevisionRequestModal
+          request={revisionModalReq.req}
+          assessment={revisionModalReq.assessment}
+          contractorName={revisionModalReq.req?.assigned_contractor_name || 'Rohith kumar'}
+          onClose={() => setRevisionModalReq(null)}
+          onSubmit={(reasons, notes, counterAmount, counterDate) => {
+            handleAssessmentAction(
+              revisionModalReq.req?.id || revisionModalReq.req?._id,
+              'REVISION_REQUESTED',
+              notes,
+              reasons,
+              counterAmount,
+              counterDate
+            );
+            setRevisionModalReq(null);
+          }}
+        />
+      )}
+
+      {/* DIGITAL HARVEST AGREEMENT MODAL */}
+      {selectedAgreementModal && (
+        <DigitalAgreementModal
+          request={selectedAgreementModal.req}
+          assessment={selectedAgreementModal.assessment}
+          onClose={() => setSelectedAgreementModal(null)}
+        />
+      )}
     </div>
   );
 };

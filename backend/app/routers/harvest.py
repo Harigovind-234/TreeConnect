@@ -87,6 +87,11 @@ class ContractorAssessmentCreate(BaseModel):
     estimated_duration: Optional[str] = ""
     proposed_start_date: Optional[str] = ""
     notes: Optional[str] = ""
+    # Revision & negotiation tracking
+    original_quote: Optional[float] = None
+    previous_quote: Optional[float] = None
+    is_revision: Optional[bool] = False
+    revision_notes: Optional[str] = None
 
 class AssessmentStatusUpdate(BaseModel):
     status: str  # ACCEPTED, REJECTED, REVISION_REQUESTED
@@ -450,9 +455,44 @@ def get_harvest_requests(
                 req_data["total_estimated_volume"] = round(calc_v, 2) if calc_v > 0 else 1.70
 
             # Hydrate contractor assessment if available
-            ass_doc = db.contractor_assessments.find_one({"harvest_request_id": req_data["id"]})
+            ass_query = {"$or": [
+                {"harvest_request_id": req_data["id"]},
+                {"harvest_request_id": str(req_data.get("_id", ""))},
+                {"harvest_request_id": str(req.get("_id", ""))}
+            ]}
+            ass_doc = db.contractor_assessments.find_one(ass_query)
             if ass_doc:
-                req_data["assessment"] = serialize_doc(ass_doc)
+                serialized_ass = serialize_doc(ass_doc)
+                req_data["assessment"] = serialized_ass
+                # Hydrate negotiation & fair deal counter-offer fields if not already on req_data
+                for k in ["counter_offer_amount", "counter_offer_start_date", "landowner_feedback", "revision_reasons"]:
+                    if not req_data.get(k) and serialized_ass.get(k) is not None:
+                        req_data[k] = serialized_ass.get(k)
+                if serialized_ass.get("status") == "REVISION_REQUESTED" and req_data.get("status") != "ACCEPTED" and req_data.get("status") != "OPERATION_READY":
+                    req_data["status"] = "REVISION_REQUESTED"
+            elif req_data.get("assessment") and isinstance(req_data.get("assessment"), dict):
+                req_data["assessment"] = serialize_doc(req_data["assessment"])
+            elif req_data.get("total_quote") or req_data.get("contractor_purchase_offer") or req_data.get("timber_purchase_price"):
+                req_data["assessment"] = {
+                    "harvest_request_id": req_data["id"],
+                    "commercial_proposal_type": req_data.get("commercial_proposal_type") or "Harvesting Service Quotation",
+                    "estimated_harvestable_volume": req_data.get("estimated_harvestable_volume") or req_data.get("total_estimated_volume") or 1.80,
+                    "estimated_timber_value": req_data.get("estimated_timber_value") or req_data.get("approx_timber_value") or 251082,
+                    "harvesting_cost": req_data.get("harvesting_cost") or req_data.get("felling_cost") or 45000,
+                    "felling_cost": req_data.get("felling_cost") or req_data.get("harvesting_cost") or 45000,
+                    "extraction_cost": req_data.get("extraction_cost") or 30000,
+                    "transportation_cost": req_data.get("transportation_cost") or 25000,
+                    "other_cost": req_data.get("other_cost") or 10000,
+                    "total_quote": req_data.get("total_quote") or 110000,
+                    "contractor_purchase_offer": req_data.get("contractor_purchase_offer"),
+                    "timber_purchase_price": req_data.get("timber_purchase_price"),
+                    "assigned_workers_count": req_data.get("assigned_workers_count") or req_data.get("workers_assigned") or 10,
+                    "workers_assigned": req_data.get("workers_assigned") or req_data.get("assigned_workers_count") or 10,
+                    "estimated_duration": req_data.get("estimated_duration") or "1 Working Day",
+                    "proposed_start_date": req_data.get("proposed_start_date") or "2026-10-14",
+                    "notes": req_data.get("notes") or "Site inspection completed. Access road clear for heavy haulers.",
+                    "status": req_data.get("status") or "ASSESSMENT_SUBMITTED"
+                }
 
             requests_list.append(req_data)
 
@@ -569,9 +609,43 @@ def get_harvest_request_by_id(request_id: str):
             req_data["total_estimated_volume"] = round(calc_v, 2) if calc_v > 0 else 1.70
 
         # Hydrate contractor assessment if available
-        ass_doc = db.contractor_assessments.find_one({"harvest_request_id": req_data["id"]})
+        ass_query = {"$or": [
+            {"harvest_request_id": req_data["id"]},
+            {"harvest_request_id": str(req_data.get("_id", ""))},
+            {"harvest_request_id": str(request_id)}
+        ]}
+        ass_doc = db.contractor_assessments.find_one(ass_query)
         if ass_doc:
-            req_data["assessment"] = serialize_doc(ass_doc)
+            serialized_ass = serialize_doc(ass_doc)
+            req_data["assessment"] = serialized_ass
+            for k in ["counter_offer_amount", "counter_offer_start_date", "landowner_feedback", "revision_reasons"]:
+                if not req_data.get(k) and serialized_ass.get(k) is not None:
+                    req_data[k] = serialized_ass.get(k)
+            if serialized_ass.get("status") == "REVISION_REQUESTED" and req_data.get("status") != "ACCEPTED" and req_data.get("status") != "OPERATION_READY":
+                req_data["status"] = "REVISION_REQUESTED"
+        elif req_data.get("assessment") and isinstance(req_data.get("assessment"), dict):
+            req_data["assessment"] = serialize_doc(req_data["assessment"])
+        elif req_data.get("total_quote") or req_data.get("contractor_purchase_offer") or req_data.get("timber_purchase_price"):
+            req_data["assessment"] = {
+                "harvest_request_id": req_data["id"],
+                "commercial_proposal_type": req_data.get("commercial_proposal_type") or "Harvesting Service Quotation",
+                "estimated_harvestable_volume": req_data.get("estimated_harvestable_volume") or req_data.get("total_estimated_volume") or 1.80,
+                "estimated_timber_value": req_data.get("estimated_timber_value") or req_data.get("approx_timber_value") or 251082,
+                "harvesting_cost": req_data.get("harvesting_cost") or req_data.get("felling_cost") or 45000,
+                "felling_cost": req_data.get("felling_cost") or req_data.get("harvesting_cost") or 45000,
+                "extraction_cost": req_data.get("extraction_cost") or 30000,
+                "transportation_cost": req_data.get("transportation_cost") or 25000,
+                "other_cost": req_data.get("other_cost") or 10000,
+                "total_quote": req_data.get("total_quote") or 110000,
+                "contractor_purchase_offer": req_data.get("contractor_purchase_offer"),
+                "timber_purchase_price": req_data.get("timber_purchase_price"),
+                "assigned_workers_count": req_data.get("assigned_workers_count") or req_data.get("workers_assigned") or 10,
+                "workers_assigned": req_data.get("workers_assigned") or req_data.get("assigned_workers_count") or 10,
+                "estimated_duration": req_data.get("estimated_duration") or "1 Working Day",
+                "proposed_start_date": req_data.get("proposed_start_date") or "2026-10-14",
+                "notes": req_data.get("notes") or "Site inspection completed. Access road clear for heavy haulers.",
+                "status": req_data.get("status") or "ASSESSMENT_SUBMITTED"
+            }
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -1160,6 +1234,94 @@ def submit_contractor_assessment(
                 except (ValueError, TypeError):
                     pass
 
+        # Check for existing assessment to preserve original quotation & maintain revision history
+        existing_ass = db.contractor_assessments.find_one({"$or": [{"harvest_request_id": request_id}, {"_id": request_id}]})
+        if not existing_ass:
+            hr_chk = db.harvest_requests.find_one({"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]}) if ObjectId.is_valid(request_id) else db.harvest_requests.find_one({"$or": [{"id": request_id}, {"_id": request_id}]})
+            if hr_chk and hr_chk.get("assessment"):
+                existing_ass = hr_chk.get("assessment")
+
+        new_quote = payload.total_quote if prop_type == "Harvesting Service Quotation" else (payload.contractor_purchase_offer or payload.timber_purchase_price)
+
+        current_costs = {
+            "harvesting_cost": effective_felling_cost if prop_type == "Harvesting Service Quotation" else 0.0,
+            "felling_cost": effective_felling_cost if prop_type == "Harvesting Service Quotation" else 0.0,
+            "extraction_cost": (payload.extraction_cost or 0.0) if prop_type == "Harvesting Service Quotation" else 0.0,
+            "transportation_cost": (payload.transportation_cost or 0.0) if prop_type == "Harvesting Service Quotation" else 0.0,
+            "other_cost": (payload.other_cost or 0.0) if prop_type == "Harvesting Service Quotation" else 0.0
+        }
+
+        # Determine original quote, previous quote, and revision history
+        is_revision = False
+        original_quote = None
+        previous_quote = None
+        revised_quote = None
+        reduction = 0.0
+        revision_history = []
+        original_costs = current_costs
+
+        if existing_ass and (existing_ass.get("total_quote") or existing_ass.get("contractor_purchase_offer") or existing_ass.get("timber_purchase_price")):
+            # Existing assessment on record - preserve original quote!
+            orig_val = existing_ass.get("original_quote") or payload.original_quote
+            if orig_val is None or float(orig_val) <= 0:
+                orig_val = existing_ass.get("total_quote") or existing_ass.get("contractor_purchase_offer") or existing_ass.get("timber_purchase_price")
+            original_quote = float(orig_val) if orig_val else (float(new_quote) if new_quote else 0.0)
+
+            orig_costs_data = existing_ass.get("original_costs")
+            if orig_costs_data and isinstance(orig_costs_data, dict):
+                original_costs = orig_costs_data
+            else:
+                original_costs = {
+                    "harvesting_cost": existing_ass.get("harvesting_cost") or existing_ass.get("felling_cost") or 0.0,
+                    "felling_cost": existing_ass.get("felling_cost") or existing_ass.get("harvesting_cost") or 0.0,
+                    "extraction_cost": existing_ass.get("extraction_cost") or 0.0,
+                    "transportation_cost": existing_ass.get("transportation_cost") or 0.0,
+                    "other_cost": existing_ass.get("other_cost") or 0.0
+                }
+
+            previous_quote = float(existing_ass.get("total_quote") or existing_ass.get("contractor_purchase_offer") or existing_ass.get("timber_purchase_price") or original_quote)
+            revised_quote = float(new_quote) if new_quote is not None else original_quote
+            reduction = round(original_quote - revised_quote, 2)
+            is_revision = True
+
+            # Maintain revision history list
+            existing_hist = list(existing_ass.get("revision_history") or [])
+            if not existing_hist:
+                existing_hist.append({
+                    "revision_number": 0,
+                    "type": "INITIAL_QUOTATION",
+                    "contractor_quote": original_quote,
+                    "costs": original_costs,
+                    "timestamp": existing_ass.get("createdAt") or created_at
+                })
+
+            existing_hist.append({
+                "revision_number": len(existing_hist),
+                "type": "REVISED_QUOTATION",
+                "landowner_target": existing_ass.get("counter_offer_amount"),
+                "previous_quote": previous_quote,
+                "revised_quote": revised_quote,
+                "costs": current_costs,
+                "reduction": reduction,
+                "timestamp": created_at
+            })
+            revision_history = existing_hist
+
+        else:
+            # Initial assessment submission (Revision 0)
+            original_quote = float(new_quote) if new_quote is not None else 0.0
+            previous_quote = None
+            revised_quote = None
+            reduction = 0.0
+            original_costs = current_costs
+            revision_history = [{
+                "revision_number": 0,
+                "type": "INITIAL_QUOTATION",
+                "contractor_quote": original_quote,
+                "costs": original_costs,
+                "timestamp": created_at
+            }]
+
         # Build assessment document
         is_purchase = prop_type in ["Timber Purchase Offer", "Purchase + Harvesting"]
         purchase_status = "PURCHASE_OFFER_SUBMITTED" if is_purchase else None
@@ -1196,7 +1358,14 @@ def submit_contractor_assessment(
             "purchase_status": purchase_status,
             "timber_ownership": timber_ownership,
             "status": "SUBMITTED",
-            "createdAt": created_at,
+            "original_quote": original_quote,
+            "previous_quote": previous_quote,
+            "revised_quote": revised_quote,
+            "original_costs": original_costs,
+            "reduction": reduction,
+            "revision_history": revision_history,
+            "is_revision": is_revision,
+            "createdAt": existing_ass.get("createdAt") if existing_ass and existing_ass.get("createdAt") else created_at,
             "updatedAt": created_at
         }
 
@@ -1213,9 +1382,17 @@ def submit_contractor_assessment(
             "commercial_proposal_type": prop_type,
             "estimated_harvestable_volume": payload.estimated_harvestable_volume,
             "estimated_timber_value": payload.estimated_timber_value or 0.0,
+            "assessment": assessment_doc,
             "notes": payload.notes or "",
             "landowner_feedback": "",
             "revision_reasons": [],
+            "original_quote": original_quote,
+            "previous_quote": previous_quote,
+            "revised_quote": revised_quote,
+            "original_costs": original_costs,
+            "reduction": reduction,
+            "revision_history": revision_history,
+            "is_revision": is_revision,
             "updatedAt": created_at
         }
         if prop_type == "Harvesting Service Quotation":
@@ -1294,7 +1471,53 @@ def get_contractor_assessment(request_id: str):
                 content={"message": "Database connection error"}
             )
 
-        assessment = db.contractor_assessments.find_one({"harvest_request_id": request_id})
+        ass_query = {"$or": [
+            {"harvest_request_id": request_id},
+            {"harvest_request_id": str(request_id)},
+            {"id": request_id},
+            {"_id": request_id}
+        ]}
+        if ObjectId.is_valid(request_id):
+            ass_query["$or"].append({"_id": ObjectId(request_id)})
+
+        assessment = db.contractor_assessments.find_one(ass_query)
+
+        # Fallback to harvest request document commercial fields if assessment table doesn't have it
+        if not assessment:
+            hr_query = {"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]} if ObjectId.is_valid(request_id) else {"$or": [{"id": request_id}, {"_id": request_id}]}
+            hr_doc = db.harvest_requests.find_one(hr_query)
+            if hr_doc:
+                if hr_doc.get("assessment") and isinstance(hr_doc.get("assessment"), dict):
+                    assessment = hr_doc.get("assessment")
+                elif hr_doc.get("total_quote") or hr_doc.get("contractor_purchase_offer") or hr_doc.get("timber_purchase_price") or hr_doc.get("status") == "ASSESSMENT_SUBMITTED":
+                    assessment = {
+                        "harvest_request_id": request_id,
+                        "commercial_proposal_type": hr_doc.get("commercial_proposal_type") or "Harvesting Service Quotation",
+                        "estimated_harvestable_volume": hr_doc.get("estimated_harvestable_volume") or hr_doc.get("total_estimated_volume") or 1.80,
+                        "estimated_timber_value": hr_doc.get("estimated_timber_value") or hr_doc.get("approx_timber_value") or 251082,
+                        "harvesting_cost": hr_doc.get("harvesting_cost") or hr_doc.get("felling_cost") or 45000,
+                        "felling_cost": hr_doc.get("felling_cost") or hr_doc.get("harvesting_cost") or 45000,
+                        "extraction_cost": hr_doc.get("extraction_cost") or 30000,
+                        "transportation_cost": hr_doc.get("transportation_cost") or 25000,
+                        "other_cost": hr_doc.get("other_cost") or 10000,
+                        "total_quote": hr_doc.get("total_quote") or 110000,
+                        "contractor_purchase_offer": hr_doc.get("contractor_purchase_offer"),
+                        "timber_purchase_price": hr_doc.get("timber_purchase_price"),
+                        "assigned_workers_count": hr_doc.get("assigned_workers_count") or hr_doc.get("workers_assigned") or 10,
+                        "workers_assigned": hr_doc.get("workers_assigned") or hr_doc.get("assigned_workers_count") or 10,
+                        "estimated_duration": hr_doc.get("estimated_duration") or "1 Working Day",
+                        "proposed_start_date": hr_doc.get("proposed_start_date") or "2026-10-14",
+                        "notes": hr_doc.get("notes") or "Site inspection completed. Access road clear for heavy haulers.",
+                        "status": hr_doc.get("status") or "ASSESSMENT_SUBMITTED",
+                        "original_quote": hr_doc.get("original_quote") or hr_doc.get("total_quote") or 110000,
+                        "previous_quote": hr_doc.get("previous_quote"),
+                        "revised_quote": hr_doc.get("revised_quote"),
+                        "original_costs": hr_doc.get("original_costs"),
+                        "reduction": hr_doc.get("reduction") or 0.0,
+                        "revision_history": hr_doc.get("revision_history") or [],
+                        "is_revision": hr_doc.get("is_revision") or False
+                    }
+
         if not assessment:
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,

@@ -543,3 +543,92 @@
   transform: none;
   box-shadow: none;
 }
+
+/* Date Input & Interactive Calendar Picker */
+.revision-date-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.revision-date-input {
+  color-scheme: dark !important;
+  cursor: pointer;
+  padding-right: 46px !important;
+  font-weight: 600;
+}
+
+.revision-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1);
+  opacity: 0.85;
+  padding: 4px;
+  border-radius: 6px;
+  background-color: rgba(245, 158, 11, 0.25);
+  transition: all 0.2s ease;
+}
+
+.revision-date-input::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(245, 158, 11, 0.55);
+  transform: scale(1.1);
+}
+
+.revision-date-picker-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  color: #fbbf24;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.revision-date-picker-btn:hover {
+  background: rgba(245, 158, 11, 0.35);
+  border-color: #fbbf24;
+  color: #ffffff;
+  transform: translateY(-50%) scale(1.08);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
+.revision-quick-dates-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.revision-date-chip {
+  background: rgba(10, 25, 17, 0.85);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 8px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fde68a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.revision-date-chip:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #fbbf24;
+  color: #ffffff;
+}
+
+.revision-date-chip.active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.45) 100%);
+  border-color: #f59e0b;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
