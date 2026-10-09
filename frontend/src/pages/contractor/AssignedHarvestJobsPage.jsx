@@ -53,6 +53,7 @@ import {
   AlertCircle,
   Navigation,
   Ban,
+  XCircle,
   Info,
   FileCheck,
   Sliders,
@@ -904,10 +905,20 @@ const AssignedHarvestJobsPage = () => {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
             localRequests = parsed.filter(r => !isFakeOrMockRequest(r));
-            // Keep localStorage clean from any stale fake data
-            if (localRequests.length !== parsed.length) {
-              localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(localRequests));
+            // Sync fresher backend records into localRequests
+            if (backendRequests.length > 0) {
+              const bMap = new Map();
+              backendRequests.forEach(b => {
+                const bId = String(b.id || b._id);
+                if (bId) bMap.set(bId, b);
+              });
+              localRequests = localRequests.map(loc => {
+                const locId = String(loc.id || loc._id);
+                return bMap.has(locId) ? { ...loc, ...bMap.get(locId) } : loc;
+              });
             }
+            // Keep localStorage clean from any stale fake data
+            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(localRequests));
           }
         }
       } catch (e) { }
@@ -1544,13 +1555,63 @@ const AssignedHarvestJobsPage = () => {
                                 </>
                               )}
                             </button>
+                          </div>
+                        </div>
 
+                        {/* REFINED DEDICATED FINANCIAL & ACTION STRIP */}
+                        <div className="cd-card-financial-strip">
+                          <div className="cd-financial-badges-cluster">
+                            {/* 1. Contractor Quote */}
+                            {(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer) && (
+                              <div className="cd-fin-badge cd-fin-badge-quote">
+                                <DollarSign size={13} className="text-emerald-400 shrink-0" />
+                                <span className="cd-fin-badge-label">Your Quote:</span>
+                                <strong className="cd-fin-badge-value text-emerald-300 font-mono">
+                                  {formatINR(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer)}
+                                </strong>
+                              </div>
+                            )}
+
+                            {/* 2. Landowner Target (if Fair Deal active) */}
+                            {fairDealInfo.counterAmount && (
+                              <div className="cd-fin-badge cd-fin-badge-target" title="Landowner's proposed target budget for agreement">
+                                <Sparkles size={13} className="text-amber-400 shrink-0" />
+                                <span className="cd-fin-badge-label text-amber-200/80">Landowner Target:</span>
+                                <strong className="cd-fin-badge-value text-amber-300 font-mono">
+                                  {formatINR(fairDealInfo.counterAmount)}
+                                </strong>
+                                {(() => {
+                                  const currentQ = Number(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer || 110000);
+                                  const diffPct = Math.round(((fairDealInfo.counterAmount - currentQ) / currentQ) * 100);
+                                  return (
+                                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${diffPct < 0 ? 'bg-amber-500/25 text-amber-200' : 'bg-emerald-500/25 text-emerald-200'}`}>
+                                      {diffPct > 0 ? `+${diffPct}%` : `${diffPct}%`}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            )}
+
+                            {/* 3. Approx. Timber Value */}
+                            {totalJobTimberValue > 0 && (
+                              <div className="cd-fin-badge cd-fin-badge-value" title="Approximate estimated timber value">
+                                <Coins size={13} className="text-amber-400 shrink-0" />
+                                <span className="cd-fin-badge-label">Approx. Value:</span>
+                                <strong className="cd-fin-badge-value text-amber-400 font-mono">
+                                  {formatINR(totalJobTimberValue)}
+                                </strong>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Primary Action Buttons */}
+                          <div className="cd-financial-actions-cluster flex items-center gap-2.5 flex-wrap ml-auto">
                             {/* Option to Set or Update Advance by Contractor before starting work */}
                             {!isInProgress && !isCompleted && (
                               <button
                                 type="button"
                                 onClick={() => setSelectedRequestAdvanceModal(req)}
-                                className="cd-btn-assess-cta bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300"
+                                className="cd-btn-assess-cta bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 shadow-sm"
                                 title="Configure or update advance mobilization amount required before work commences"
                               >
                                 <CreditCard size={13} />
@@ -1562,7 +1623,7 @@ const AssignedHarvestJobsPage = () => {
                             <button
                               type="button"
                               onClick={() => handleAssessClick(req)}
-                              className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''}`}
+                              className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''} shadow-md`}
                             >
                               {isRevisionRequested ? <RefreshCw size={13} /> : <Calculator size={13} />}
                               <span>
@@ -1578,60 +1639,18 @@ const AssignedHarvestJobsPage = () => {
                               </span>
                             </button>
 
-                          </div>
-                        </div>
-
-                        {/* REFINED DEDICATED FINANCIAL & VALUATION STRIP */}
-                        {Boolean(
-                          (req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer) ||
-                          fairDealInfo.counterAmount ||
-                          totalJobTimberValue > 0
-                        ) && (
-                          <div className="cd-card-financial-strip">
-                            <div className="cd-financial-badges-cluster">
-                              {/* 1. Contractor Quote */}
-                              {(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer) && (
-                                <div className="cd-fin-badge cd-fin-badge-quote">
-                                  <DollarSign size={13} className="text-emerald-400 shrink-0" />
-                                  <span className="cd-fin-badge-label">Your Quote:</span>
-                                  <strong className="cd-fin-badge-value text-emerald-300 font-mono">
-                                    {formatINR(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer)}
-                                  </strong>
-                                </div>
-                              )}
-
-                              {/* 2. Landowner Target (if Fair Deal active) */}
-                              {fairDealInfo.counterAmount && (
-                                <div className="cd-fin-badge cd-fin-badge-target" title="Landowner's proposed target budget for agreement">
-                                  <Sparkles size={13} className="text-amber-400 shrink-0" />
-                                  <span className="cd-fin-badge-label text-amber-200/80">Landowner Target:</span>
-                                  <strong className="cd-fin-badge-value text-amber-300 font-mono">
-                                    {formatINR(fairDealInfo.counterAmount)}
-                                  </strong>
-                                  {(() => {
-                                    const currentQ = Number(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer || 110000);
-                                    const diffPct = Math.round(((fairDealInfo.counterAmount - currentQ) / currentQ) * 100);
-                                    return (
-                                      <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${diffPct < 0 ? 'bg-amber-500/25 text-amber-200' : 'bg-emerald-500/25 text-emerald-200'}`}>
-                                        {diffPct > 0 ? `+${diffPct}%` : `${diffPct}%`}
-                                      </span>
-                                    );
-                                  })()}
-                                </div>
-                              )}
-
-                              {/* 3. Approx. Timber Value */}
-                              {totalJobTimberValue > 0 && (
-                                <div className="cd-fin-badge cd-fin-badge-value" title="Approximate estimated timber value">
-                                  <Coins size={13} className="text-amber-400 shrink-0" />
-                                  <span className="cd-fin-badge-label">Approx. Value:</span>
-                                  <strong className="cd-fin-badge-value text-amber-400 font-mono">
-                                    {formatINR(totalJobTimberValue)}
-                                  </strong>
-                                </div>
-                              )}
-                            </div>
-
+                            {/* Decline Job if terms unfavourable */}
+                            {!isInProgress && !isCompleted && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDecline(req)}
+                                className="px-3 py-1.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                title="Decline this job assignment if conditions or counter-offer amounts are unfavourable"
+                              >
+                                <XCircle size={13} />
+                                <span>Decline Job</span>
+                              </button>
+                            )}
                             {/* Right quick shortcut: if landowner proposed budget */}
                             {fairDealInfo.counterAmount && isRevisionRequested && (
                               <div className="cd-fin-quick-cta">
@@ -1648,7 +1667,7 @@ const AssignedHarvestJobsPage = () => {
                               </div>
                             )}
                           </div>
-                        )}
+                        </div>
 
                         {/* PROMINENT LANDOWNER FAIR DEAL COUNTER-PROPOSAL & REASONABLE QUOTE GUIDANCE */}
                         {fairDealInfo.hasFairDeal && !isAccepted && (() => {
@@ -2193,9 +2212,9 @@ const AssignedHarvestJobsPage = () => {
                             </div>
                             <div className="cd-highlight-item">
                               <span className="cd-highlight-label">Assessment Status</span>
-                              <strong className={`cd-highlight-val flex items-center gap-1.5 ${isAccepted ? 'text-emerald-400' : isRevisionRequested ? 'text-amber-400' : isSubmitted ? 'text-amber-400' : isJobInspected(req) ? 'text-emerald-300' : 'text-blue-400'}`}>
-                                <span className={`w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-emerald-400' : isRevisionRequested ? 'bg-amber-400' : isSubmitted ? 'bg-amber-400' : isJobInspected(req) ? 'bg-emerald-400' : 'bg-blue-400'}`} />
-                                <span>{isAccepted ? 'Authorized by Owner' : isRevisionRequested ? 'Counter-Offer Active' : isSubmitted ? 'Quotation Submitted' : isJobInspected(req) ? 'Site Verified' : 'Pending Site Visit'}</span>
+                              <strong className={`cd-highlight-val flex items-center gap-1.5 ${isAccepted ? 'text-emerald-400' : isRevisionRequested ? 'text-amber-400' : isSubmitted ? 'text-amber-400' : isJobInspected(req) ? 'text-emerald-300' : isJobScheduled(req) ? 'text-sky-300' : 'text-blue-400'}`}>
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-emerald-400' : isRevisionRequested ? 'bg-amber-400' : isSubmitted ? 'bg-amber-400' : isJobInspected(req) ? 'bg-emerald-400' : isJobScheduled(req) ? 'bg-sky-400' : 'bg-blue-400'}`} />
+                                <span>{isAccepted ? 'Authorized by Owner' : isRevisionRequested ? 'Counter-Offer Active' : isSubmitted ? 'Quotation Submitted' : isJobInspected(req) ? 'Site Verified' : isJobScheduled(req) ? 'Visit Scheduled' : 'Pending Site Visit'}</span>
                               </strong>
                             </div>
                           </div>
@@ -2852,6 +2871,17 @@ const AssignedHarvestJobsPage = () => {
                               </div>
 
                               <div className="flex items-center gap-3">
+                                {!isInProgress && !isCompleted && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDecline(req)}
+                                    className="px-3.5 py-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                                    title="Decline this job assignment if conditions or counter-offer are unfavourable"
+                                  >
+                                    <XCircle size={14} />
+                                    <span>Decline Job</span>
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => toggleExpandJob(reqId)}
@@ -3986,6 +4016,7 @@ const AssignedHarvestJobsPage = () => {
                     onChange={(e) => setDeclineForm(prev => ({ ...prev, reason: e.target.value }))}
                     className="cd-inspection-select"
                   >
+                    <option value="Offered counter-offer / quotation amount is not commercially feasible">Offered counter-offer / quotation amount is not commercially feasible</option>
                     <option value="Inaccessible terrain for heavy haulage vehicles">Inaccessible terrain for heavy haulage vehicles</option>
                     <option value="High-voltage power lines pose excessive hazard">High-voltage power lines pose excessive hazard</option>
                     <option value="Discrepancy in tree boundary or inventory count">Discrepancy in tree boundary or inventory count</option>

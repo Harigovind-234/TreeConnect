@@ -736,15 +736,27 @@ const HarvestRequestsPage = () => {
                         const harvestArrangementCostVal = assDoc.harvesting_arrangement_cost ?? req.harvesting_arrangement_cost;
                         const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
                         const isInspectedSite = Boolean(req.site_inspected || isInspectionCompleted || assDoc.is_reassessed_after_inspection || req.inspection_status === 'COMPLETED');
-                        const isAgreementReady = Boolean(
+                        const isUnderReview = (req.status === 'ASSESSMENT_SUBMITTED' || assDoc.status === 'SUBMITTED') && req.status !== 'OPERATION_READY' && req.status !== 'IN_PROGRESS' && req.status !== 'COMPLETED';
+                        const isAgreementReady = !isUnderReview && Boolean(
                           isAccepted ||
                           req.status === 'OPERATION_READY' ||
                           req.status === 'IN_PROGRESS' ||
                           req.status === 'COMPLETED' ||
-                          req.digital_agreement ||
-                          assDoc.status === 'ACCEPTED' ||
-                          req.advance_payment_request
+                          (req.status === 'ACCEPTED' && req.digital_agreement) ||
+                          (assDoc.status === 'ACCEPTED' && req.digital_agreement)
                         );
+
+                        const previousQuoteVal = assDoc.previous_quote ?? req.previous_quote ?? assDoc.original_quote ?? req.original_quote;
+                        const isRevision = Boolean(
+                          assDoc.is_revision ||
+                          req.is_revision ||
+                          (previousQuoteVal && previousQuoteVal !== totalQuoteVal) ||
+                          (assDoc.reduction && assDoc.reduction > 0) ||
+                          (req.reduction && req.reduction > 0)
+                        );
+                        const reductionAmt = assDoc.reduction ?? req.reduction ?? (previousQuoteVal && totalQuoteVal < previousQuoteVal ? previousQuoteVal - totalQuoteVal : 0);
+                        const reductionPct = (previousQuoteVal && reductionAmt > 0) ? Math.round((reductionAmt / previousQuoteVal) * 100) : 0;
+
                         const fellingCost = assDoc.harvesting_cost ?? assDoc.felling_cost ?? req.harvesting_cost ?? req.felling_cost ?? 45000;
                         const extractionCost = assDoc.extraction_cost ?? req.extraction_cost ?? 30000;
                         const transportCost = assDoc.transportation_cost ?? req.transportation_cost ?? 25000;
@@ -789,6 +801,10 @@ const HarvestRequestsPage = () => {
                                       <span className="qtn-status-pill qtn-status-pill-green">
                                         <CheckCircle2 size={12} /> Executed &amp; Finalized
                                       </span>
+                                    ) : isRevision ? (
+                                      <span className="qtn-status-pill qtn-status-pill-amber">
+                                        <RefreshCw size={12} /> Revised Quotation Received
+                                      </span>
                                     ) : (
                                       <span className="qtn-status-pill qtn-status-pill-blue">
                                         <Clock size={12} /> Proposal Under Review
@@ -813,12 +829,38 @@ const HarvestRequestsPage = () => {
                               {/* Header Right: Price & Print */}
                               <div className="qtn-header-right">
                                 <div className="qtn-price-highlight">
-                                  <span className="qtn-price-label">
-                                    {isPurchase ? 'Purchase Offer' : isHybrid ? 'Purchase Price' : 'Total Quotation'}
-                                  </span>
-                                  <span className="qtn-price-val">
-                                    {formatINR(isPurchase ? (purchaseOfferVal || 0) : isHybrid ? (purchasePriceVal || 0) : totalQuoteVal)}
-                                  </span>
+                                  {isRevision && previousQuoteVal && previousQuoteVal !== totalQuoteVal ? (
+                                    <div className="flex flex-col items-end">
+                                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                                        <span>Previous Quote:</span>
+                                        <span className="line-through font-mono font-semibold text-slate-400">
+                                          {formatINR(previousQuoteVal)}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-baseline gap-1.5 mt-0.5">
+                                        <span className="text-[11px] uppercase tracking-wider font-extrabold text-emerald-400">
+                                          Revised Quote:
+                                        </span>
+                                        <span className="qtn-price-val text-emerald-300">
+                                          {formatINR(isPurchase ? (purchaseOfferVal || 0) : isHybrid ? (purchasePriceVal || 0) : totalQuoteVal)}
+                                        </span>
+                                      </div>
+                                      {reductionAmt > 0 && (
+                                        <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 mt-1 flex items-center gap-1">
+                                          <span>↓ Saved {formatINR(reductionAmt)} ({reductionPct}% negotiated)</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <span className="qtn-price-label">
+                                        {isPurchase ? 'Purchase Offer' : isHybrid ? 'Purchase Price' : 'Total Quotation'}
+                                      </span>
+                                      <span className="qtn-price-val">
+                                        {formatINR(isPurchase ? (purchaseOfferVal || 0) : isHybrid ? (purchasePriceVal || 0) : totalQuoteVal)}
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                                 <button
                                   type="button"
@@ -875,6 +917,56 @@ const HarvestRequestsPage = () => {
                               </div>
                             )}
 
+                            {/* REVISED QUOTATION NOTICE BANNER (WHEN CONTRACTOR HAS SUBMITTED A REVISED QUOTATION) */}
+                            {isRevision && !isAgreementReady && (
+                              <div className="qtn-revision-banner">
+                                <div className="flex items-center gap-3.5 min-w-0">
+                                  <div className="qtn-revision-icon-box">
+                                    <RefreshCw size={18} />
+                                  </div>
+                                  <div className="qtn-revision-info">
+                                    <div className="qtn-revision-title-row">
+                                      <h4 className="qtn-revision-title">
+                                        Contractor Revised Quotation Submitted
+                                      </h4>
+                                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                                        Adjusted to {formatINR(totalQuoteVal)}
+                                      </span>
+                                      {reductionAmt > 0 && (
+                                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30">
+                                          ↓ Saved {formatINR(reductionAmt)} ({reductionPct}% negotiated)
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="qtn-revision-desc">
+                                      Contractor has adjusted this commercial quotation based on mutual negotiation.
+                                      {previousQuoteVal && previousQuoteVal > totalQuoteVal && (
+                                        <> Baseline quotation was <strong className="text-slate-300 line-through font-mono font-semibold">{formatINR(previousQuoteVal)}</strong>.</>
+                                      )}
+                                      {' '}Review the revised terms below to <strong>Accept</strong> or request a <strong>Re-revision</strong>.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="qtn-revision-comparison-capsule self-start sm:self-auto">
+                                  <div className="qtn-revision-comp-col text-right">
+                                    <span className="qtn-revision-comp-label text-slate-400">Previous</span>
+                                    <span className="text-xs text-slate-400 line-through font-mono font-semibold">
+                                      {formatINR(previousQuoteVal || totalQuoteVal)}
+                                    </span>
+                                  </div>
+                                  <div className="qtn-revision-comp-arrow">
+                                    →
+                                  </div>
+                                  <div className="qtn-revision-comp-col text-left">
+                                    <span className="qtn-revision-comp-label text-emerald-400 font-bold">Revised</span>
+                                    <span className="text-sm sm:text-base text-emerald-300 font-mono font-black">
+                                      {formatINR(totalQuoteVal)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {/* 2. KEY METRICS GRID (4-5 CARDS) */}
                             <div className="qtn-metrics-grid">
@@ -1186,11 +1278,13 @@ const HarvestRequestsPage = () => {
                                 <div className="qtn-action-hint">
                                   <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
                                   <span>
-                                    {isPurchase
-                                      ? 'Accepting enters into a binding timber sale agreement with the contractor.'
-                                      : isHybrid
-                                        ? 'Accepting confirms the valuation and generates a binding digital contract.'
-                                        : 'Accepting authorizes the quotation, generates the Digital Harvest Agreement, and readies work for execution.'}
+                                    {isRevision
+                                      ? 'Review the contractor\'s revised quotation. You can accept to generate the binding agreement or request a re-revision.'
+                                      : (isPurchase
+                                        ? 'Accepting enters into a binding timber sale agreement with the contractor.'
+                                        : isHybrid
+                                          ? 'Accepting confirms the valuation and generates a binding digital contract.'
+                                          : 'Accepting authorizes the quotation, generates the Digital Harvest Agreement, and readies work for execution.')}
                                   </span>
                                 </div>
 
@@ -1210,7 +1304,7 @@ const HarvestRequestsPage = () => {
                                     className="qtn-btn-negotiate"
                                   >
                                     <RefreshCw size={14} />
-                                    <span>Negotiate / Counter-Offer</span>
+                                    <span>{isRevision ? 'Re-revise / Further Negotiation' : 'Negotiate / Counter-Offer'}</span>
                                   </button>
 
                                   <button
@@ -1220,11 +1314,13 @@ const HarvestRequestsPage = () => {
                                   >
                                     <CheckCircle2 size={16} />
                                     <span>
-                                      {isPurchase
-                                        ? 'Accept Offer & Execute Contract'
-                                        : isHybrid
-                                          ? 'Accept Proposal & Execute Contract'
-                                          : 'Accept Quote & Execute Agreement'}
+                                      {isRevision
+                                        ? 'Accept Revised Quotation & Execute Agreement'
+                                        : (isPurchase
+                                          ? 'Accept Offer & Execute Contract'
+                                          : isHybrid
+                                            ? 'Accept Proposal & Execute Contract'
+                                            : 'Accept Quote & Execute Agreement')}
                                     </span>
                                   </button>
                                 </div>
@@ -1232,7 +1328,7 @@ const HarvestRequestsPage = () => {
                             )}
 
                             {/* DIGITAL AGREEMENT & ADVANCE MOBILIZATION WORKFLOW */}
-                            {(isAgreementReady || req.advance_payment_request || assDoc.advance_payment_request) && (
+                            {isAgreementReady && (
                               <div className="space-y-4 pt-3">
                                 {/* DIGITAL HARVEST AGREEMENT FINALIZED BANNER */}
                                 <div className="cd-agreement-strip">

@@ -19,15 +19,16 @@ import './RequestAdvancePaymentModal.css';
 
 const RequestAdvancePaymentModal = ({ request, onClose, onSubmit }) => {
   const ass = request?.assessment || {};
+  const existingReq = request?.advance_payment_request || ass?.advance_payment_request || {};
   const acceptedQuotation = Number(
+    existingReq?.accepted_quotation ||
     request?.total_quotation_amount ||
     request?.total_quote ||
     ass?.total_quote ||
     ass?.timber_purchase_price ||
-    99000
+    110000
   );
 
-  const existingReq = request?.advance_payment_request || {};
   const hasExistingReq = Boolean(existingReq?.advance_amount || existingReq?.advance_percentage);
 
   // Initial advance amount and percentage
@@ -62,35 +63,35 @@ const RequestAdvancePaymentModal = ({ request, onClose, onSubmit }) => {
     handlePercentageChange(presetPct);
   };
 
-  // Suggested due date: default 2 days out or before start date
+  // Suggested due date: default to configured due date, or 5 days out
   const defaultDueDate = () => {
     if (existingReq?.due_date) return existingReq.due_date;
-    const startStr = ass?.proposed_start_date || request?.proposed_start_date;
+    const startStr = ass?.advance_due_date || ass?.proposed_start_date || request?.proposed_start_date;
     if (startStr) {
       try {
         const d = new Date(startStr);
-        d.setDate(d.getDate() - 1);
         return d.toISOString().split('T')[0];
       } catch (e) { }
     }
     const target = new Date();
-    target.setDate(target.getDate() + 2);
+    target.setDate(target.getDate() + 5);
     return target.toISOString().split('T')[0];
   };
 
   const [dueDate, setDueDate] = useState(defaultDueDate());
 
   // Structured Payment Details
-  const [upiId, setUpiId] = useState(existingReq?.upi_id || 'treeconnect.contractor@okhdfcbank');
-  const [bankName, setBankName] = useState(existingReq?.bank_name || 'HDFC Bank Ltd, Kottayam Branch');
-  const [accountNumber, setAccountNumber] = useState(existingReq?.bank_account_number || '50200084920194');
-  const [ifscCode, setIfscCode] = useState(existingReq?.ifsc_code || 'HDFC0001234');
+  const [upiId, setUpiId] = useState(existingReq?.upi_id || ass?.advance_upi_id || 'treeconnect.contractor@okhdfcbank');
+  const [bankName, setBankName] = useState(existingReq?.bank_name || ass?.advance_bank_name || 'HDFC Bank Ltd, Kottayam Branch');
+  const [accountNumber, setAccountNumber] = useState(existingReq?.bank_account_number || ass?.advance_bank_account_number || '50200084920194');
+  const [ifscCode, setIfscCode] = useState(existingReq?.ifsc_code || ass?.advance_ifsc_code || 'HDFC0001234');
   const [accountHolder, setAccountHolder] = useState(
-    existingReq?.account_holder_name || request?.assigned_contractor_name || 'Rohith Kumar (Forestry Contractor)'
+    existingReq?.account_holder_name || ass?.advance_account_holder || request?.assigned_contractor_name || 'Rohith Kumar (Forestry Contractor)'
   );
   const [remarks, setRemarks] = useState(
     existingReq?.remarks ||
-    'Advance mobilization fee covers crew staging, chainsaw equipment inspection, and haulage logistics.'
+    ass?.advance_remarks ||
+    'Mobilization advance covers crew staging and haulage logistics.'
   );
 
   const [customInstructions, setCustomInstructions] = useState(

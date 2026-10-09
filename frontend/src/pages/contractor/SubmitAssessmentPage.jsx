@@ -49,7 +49,10 @@ import {
   Sparkles,
   CreditCard,
   QrCode,
-  IndianRupee
+  IndianRupee,
+  Sliders,
+  Check,
+  XCircle
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -198,6 +201,8 @@ const SubmitAssessmentPage = () => {
   const [requestDetails, setRequestDetails] = useState(null);
   const [existingAssessmentData, setExistingAssessmentData] = useState(null);
   const [revisionDraft, setRevisionDraft] = useState(null);
+  const [showCustomAmountBox, setShowCustomAmountBox] = useState(false);
+  const [customAmountInput, setCustomAmountInput] = useState('');
   const autoAppliedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,6 +211,52 @@ const SubmitAssessmentPage = () => {
   const [activePhotoModal, setActivePhotoModal] = useState(null);
   const [dateError, setDateError] = useState('');
   const dateInputRef = useRef(null);
+
+  // Decline Job / Unfavourable Terms State
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineReason, setDeclineReason] = useState('Offered budget or counter-offer amount is below operational feasibility');
+  const [declineNotes, setDeclineNotes] = useState('');
+  const [isDeclining, setIsDeclining] = useState(false);
+
+  const handleDeclineAssignment = async (e) => {
+    if (e) e.preventDefault();
+    setIsDeclining(true);
+    try {
+      const fullReason = declineNotes ? `${declineReason} - ${declineNotes}` : declineReason;
+      await harvestService.declineJob(requestId, { reason: fullReason, feedback: fullReason });
+      
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(item => {
+            if ((item.id || item._id) === requestId) {
+              return {
+                ...item,
+                status: 'PENDING',
+                assigned_contractor_id: null,
+                assigned_contractor_name: null,
+                assigned_contractor_email: null,
+                contractor_decline_reason: fullReason,
+                inspection_status: 'DECLINED'
+              };
+            }
+            return item;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (err) {}
+
+      setShowDeclineModal(false);
+      navigate('/contractor/assigned-jobs', {
+        state: { toastMessage: 'Assignment declined. Job returned to landowner pool.' }
+      });
+    } catch (err) {
+      alert('Could not decline assignment: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsDeclining(false);
+    }
+  };
 
   const approvedInspectionDate = getApprovedInspectionDate(requestDetails);
   const minOperationalDate = (approvedInspectionDate && approvedInspectionDate > getTodayDateString())
@@ -918,8 +969,96 @@ const extractLandownerValue = (req, vol) => {
     }
   };
 
+  const handleApplyCustomTarget = (customAmount, customLabel = null) => {
+    const target = Number(customAmount);
+    const baseline = originalContractorQuote;
+    if (!target || isNaN(target) || target <= 0) return;
+
+    const reductionAmt = Math.max(0, baseline - target);
+    const label = customLabel || `Custom Proposal (${formatRupees(target)})`;
+
+    if (assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation') {
+      const felling = Math.round(target * 0.40);
+      const extraction = Math.round(target * 0.28);
+      const transport = Math.round(target * 0.22);
+      const other = target - (felling + extraction + transport);
+
+      setRevisionDraft({
+        type: 'CUSTOM',
+        label: label,
+        revised_contractor_quote: target,
+        harvesting_cost: felling,
+        extraction_cost: extraction,
+        transportation_cost: transport,
+        other_cost: other,
+        difference: target - baseline,
+        reduction: reductionAmt
+      });
+
+      setAssessmentForm(prev => ({
+        ...prev,
+        harvesting_cost: felling,
+        extraction_cost: extraction,
+        transportation_cost: transport,
+        other_cost: other,
+        total_quote: target,
+        advance_amount: prev.require_advance ? Math.round((target * (Number(prev.advance_percentage) || 30)) / 100) : prev.advance_amount
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Timber Purchase Offer') {
+      setRevisionDraft({
+        type: 'CUSTOM',
+        label: label,
+        revised_contractor_quote: target,
+        difference: target - baseline,
+        reduction: reductionAmt
+      });
+      setAssessmentForm(prev => ({
+        ...prev,
+        contractor_purchase_offer: target
+      }));
+    } else if (assessmentForm.commercial_proposal_type === 'Purchase + Harvesting') {
+      setRevisionDraft({
+        type: 'CUSTOM',
+        label: label,
+        revised_contractor_quote: target,
+        difference: target - baseline,
+        reduction: reductionAmt
+      });
+      setAssessmentForm(prev => ({
+        ...prev,
+        timber_purchase_price: target
+      }));
+    }
+
+    const targetDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date;
+    if (targetDate) {
+      setAssessmentForm(prev => ({
+        ...prev,
+        proposed_start_date: String(targetDate).substring(0, 10)
+      }));
+    }
+  };
+
+  const handleApplyCustomInput = () => {
+    const val = Number(customAmountInput);
+    if (!val || isNaN(val) || val <= 0) {
+      alert('Please enter a valid quotation amount in rupees.');
+      return;
+    }
+    handleApplyCustomTarget(val, `Custom Proposal (${formatRupees(val)})`);
+  };
+
+  const calcCompromise = (ratio) => {
+    const target = Number(landownerTargetBudget);
+    const baseline = originalContractorQuote;
+    const diff = baseline - target;
+    return Math.round(baseline - (diff * ratio));
+  };
+
   const handleResetToOriginalQuote = () => {
     setRevisionDraft(null);
+    setShowCustomAmountBox(false);
+    setCustomAmountInput('');
     if (assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation') {
       setAssessmentForm(prev => ({
         ...prev,
@@ -2226,6 +2365,16 @@ const extractLandownerValue = (req, vol) => {
                                     <span>Meet Halfway ({formatRupees(halfwayBudget)})</span>
                                   </button>
 
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowCustomAmountBox(prev => !prev)}
+                                    className={`cd-btn-custom-compromise ${showCustomAmountBox || revisionDraft?.type === 'CUSTOM' ? 'active-draft' : ''}`}
+                                    title="Suggest a specific custom in-between amount"
+                                  >
+                                    <Sliders size={14} />
+                                    <span>{showCustomAmountBox ? 'Hide Custom Input' : 'Suggest Custom Amount...'}</span>
+                                  </button>
+
                                   {revisionDraft && (
                                     <button
                                       type="button"
@@ -2237,15 +2386,123 @@ const extractLandownerValue = (req, vol) => {
                                       <span>Reset to Original ({formatRupees(originalContractorQuote)})</span>
                                     </button>
                                   )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowDeclineModal(true)}
+                                    className="cd-btn-decline-work"
+                                    title="If landowner counter-offer or terms are not favourable, reject the quotation or decline this work assignment"
+                                  >
+                                    <XCircle size={14} />
+                                    <span>Decline Job / Unfavourable Terms</span>
+                                  </button>
                                 </div>
+
                                 <div className="text-[11px] text-slate-400 flex items-center gap-3 flex-wrap">
                                   <span>• <strong>Match Target Budget:</strong> Reduce your quote to the landowner's target.</span>
                                   <span>• <strong>Meet Halfway:</strong> Propose a price halfway between your quote and the landowner's target.</span>
+                                  <span>• <strong>Suggest Custom Amount:</strong> Type any specific amount or pick a compromise ratio.</span>
                                 </div>
                               </>
                             )}
                           </div>
                         </div>
+
+                        {/* Full-Width Interactive In-Between Custom Drawer */}
+                        {showCustomAmountBox && (
+                          <div className="cd-custom-compromise-drawer">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="flex items-start gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 shadow-inner">
+                                  <Sparkles size={18} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="text-sm font-black uppercase tracking-wider text-white m-0">
+                                      Propose Specific In-Between Amount
+                                    </h4>
+                                    <span className="px-2.5 py-0.5 rounded text-[10.5px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/35 font-mono">
+                                      {formatRupees(targetBudget)} – {formatRupees(originalContractorQuote)}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-slate-300 block mt-1">
+                                    Enter a specific negotiated figure or choose a compromise preset below to balance margins fairly.
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2.5 self-start sm:self-auto">
+                                <div className="relative flex items-center">
+                                  <span className="absolute left-3.5 text-amber-400 font-mono font-bold text-sm pointer-events-none select-none">
+                                    ₹
+                                  </span>
+                                  <input
+                                    type="number"
+                                    placeholder={String(halfwayBudget)}
+                                    value={customAmountInput}
+                                    onChange={(e) => setCustomAmountInput(e.target.value)}
+                                    className="pl-8 pr-3 py-2 rounded-xl bg-black/60 border border-amber-500/40 hover:border-amber-500/70 focus:border-amber-400 text-white font-mono text-sm w-44 tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-500/25 transition-all shadow-inner"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleApplyCustomInput}
+                                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-lg hover:shadow-amber-500/20 active:scale-95"
+                                >
+                                  <Check size={14} className="stroke-[3]" />
+                                  <span>Apply</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Quick Preset Compromise Ratio Chips */}
+                            <div className="flex items-center gap-2 pt-3 border-t border-amber-500/20 flex-wrap">
+                              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Compromise Presets:</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const amt = calcCompromise(0.25);
+                                  setCustomAmountInput(String(amt));
+                                  handleApplyCustomTarget(amt, `25% Compromise (${formatRupees(amt)})`);
+                                }}
+                                className="cd-preset-chip"
+                                title="25% reduction towards landowner target"
+                              >
+                                <span>25% Compromise</span>
+                                <strong className="font-mono text-amber-200">({formatRupees(calcCompromise(0.25))})</strong>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const amt = calcCompromise(0.50);
+                                  setCustomAmountInput(String(amt));
+                                  handleApplyCustomTarget(amt, `50% Halfway (${formatRupees(amt)})`);
+                                }}
+                                className="cd-preset-chip"
+                                title="50% midpoint compromise"
+                              >
+                                <span>50% Halfway</span>
+                                <strong className="font-mono text-amber-200">({formatRupees(calcCompromise(0.50))})</strong>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const amt = calcCompromise(0.75);
+                                  setCustomAmountInput(String(amt));
+                                  handleApplyCustomTarget(amt, `75% Compromise (${formatRupees(amt)})`);
+                                }}
+                                className="cd-preset-chip"
+                                title="75% reduction towards landowner target"
+                              >
+                                <span>75% Compromise</span>
+                                <strong className="font-mono text-amber-200">({formatRupees(calcCompromise(0.75))})</strong>
+                              </button>
+                              <span className="text-[11px] text-slate-400 ml-auto italic">
+                                Auto-distributed: Felling 40% • Extraction 28% • Transport 22% • Other 10%
+                              </span>
+                            </div>
+                          </div>
+                        )}
 
                         {/* 2. Key Negotiation Metrics (4-Column Grid: Section 8) */}
                         <div className="qtn-counter-grid">
@@ -4121,6 +4378,16 @@ const extractLandownerValue = (req, vol) => {
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
+                          onClick={() => setShowDeclineModal(true)}
+                          className="cd-btn-decline-work"
+                          title="If terms or amounts are not favourable, reject the quotation or decline the assigned work"
+                        >
+                          <XCircle size={15} />
+                          <span>Decline Assignment</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={handleSaveDraft}
                           className="cd-btn-draft"
                           title="Save current form values to local browser draft"
@@ -4231,6 +4498,115 @@ const extractLandownerValue = (req, vol) => {
                     className="px-5 py-2 rounded-xl bg-[#0e1612] hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/30 text-emerald-300 font-bold text-xs transition-all cursor-pointer"
                   >
                     Close Lightbox
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DECLINE ASSIGNMENT / UNFAVOURABLE TERMS MODAL */}
+          {showDeclineModal && (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[#0a0f0d]/90 backdrop-blur-md animate-fade-in">
+              <div className="max-w-lg w-full p-6 border border-rose-500/30 rounded-2xl bg-[#121a16] space-y-5 shadow-2xl relative">
+                {/* Modal Header */}
+                <div className="flex items-start justify-between border-b border-rose-500/20 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                      <XCircle size={22} />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-bold text-white m-0">
+                        Decline Job / Unfavourable Terms
+                      </h4>
+                      <p className="text-xs text-slate-400 m-0 mt-0.5">
+                        Release this work assignment back to the landowner pool
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowDeclineModal(false)}
+                    className="p-1.5 rounded-lg bg-[#0e1612] border border-white/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-200/90 leading-relaxed">
+                  If the landowner's requested counter-offer budget or conditions are not commercially viable for your crew, you can decline this assignment. This will unassign your profile and allow the landowner to reassign or adjust terms.
+                </div>
+
+                {/* Reason Selection */}
+                <div className="space-y-3">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
+                    Reason for Declining:
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      'Offered budget or counter-offer amount is below operational feasibility',
+                      'Access terrain constraints or heavy haulage route unviable',
+                      'Schedule conflict with requested operation timeline',
+                      'Specified tree felling volume/conditions differ from site estimate'
+                    ].map((reasonOption, idx) => (
+                      <label
+                        key={idx}
+                        className={`flex items-center gap-3 p-3 rounded-xl border text-xs cursor-pointer transition-all ${
+                          declineReason === reasonOption
+                            ? 'bg-rose-500/15 border-rose-500/40 text-white font-semibold'
+                            : 'bg-black/40 border-white/10 text-slate-300 hover:border-white/20'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="declineReason"
+                          checked={declineReason === reasonOption}
+                          onChange={() => setDeclineReason(reasonOption)}
+                          className="accent-rose-500"
+                        />
+                        <span>{reasonOption}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Optional Custom Notes */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
+                    Additional Notes for Landowner (Optional):
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={declineNotes}
+                    onChange={(e) => setDeclineNotes(e.target.value)}
+                    placeholder="Provide specific feedback on why the offered quotation was unfavourable..."
+                    className="w-full rounded-xl bg-black/60 border border-white/15 p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-400 resize-none font-sans"
+                  />
+                </div>
+
+                {/* Footer Actions */}
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeclineModal(false)}
+                    disabled={isDeclining}
+                    className="px-4 py-2 rounded-xl bg-black/40 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel / Keep Job
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeclineAssignment}
+                    disabled={isDeclining}
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-rose-950"
+                  >
+                    {isDeclining ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" /> Declining...
+                      </>
+                    ) : (
+                      <>
+                        <XCircle size={14} /> Confirm &amp; Decline Job
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

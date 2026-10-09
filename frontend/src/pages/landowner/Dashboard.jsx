@@ -657,9 +657,27 @@ const LandownerDashboard = () => {
 
               const contractorName = req.assigned_contractor_name || 'Rohith kumar';
               const contractorPhone = req.assigned_contractor_phone || '9746512243';
-              const isAccepted = req.status === 'OPERATION_READY' || req.digital_agreement || assDoc.status === 'ACCEPTED';
-              const isRevision = req.status === 'REVISION_REQUESTED' || assDoc.status === 'REVISION_REQUESTED';
-              const isUnderReview = !isAccepted && !isRevision;
+              
+              const isUnderReview = (req.status === 'ASSESSMENT_SUBMITTED' || assDoc.status === 'SUBMITTED') && req.status !== 'OPERATION_READY' && req.status !== 'IN_PROGRESS' && req.status !== 'COMPLETED';
+              const isRevisionActive = req.status === 'REVISION_REQUESTED' || assDoc.status === 'REVISION_REQUESTED';
+              const isAccepted = !isUnderReview && !isRevisionActive && Boolean(
+                req.status === 'OPERATION_READY' ||
+                req.status === 'IN_PROGRESS' ||
+                req.status === 'COMPLETED' ||
+                (req.status === 'ACCEPTED' && req.digital_agreement) ||
+                (assDoc.status === 'ACCEPTED' && req.digital_agreement)
+              );
+
+              const previousQuoteVal = assDoc.previous_quote ?? req.previous_quote ?? assDoc.original_quote ?? req.original_quote;
+              const isRevisionQuote = Boolean(
+                assDoc.is_revision ||
+                req.is_revision ||
+                (previousQuoteVal && previousQuoteVal !== totalQuoteVal) ||
+                (assDoc.reduction && assDoc.reduction > 0) ||
+                (req.reduction && req.reduction > 0)
+              );
+              const reductionAmt = assDoc.reduction ?? req.reduction ?? (previousQuoteVal && totalQuoteVal < previousQuoteVal ? previousQuoteVal - totalQuoteVal : 0);
+              const reductionPct = (previousQuoteVal && reductionAmt > 0) ? Math.round((reductionAmt / previousQuoteVal) * 100) : 0;
 
               return (
                 <section key={reqId || qIdx} id="quotation-verification-section" className="quotation-verification-card">
@@ -675,17 +693,22 @@ const LandownerDashboard = () => {
                             Commercial Quotation Verification
                           </span>
                           <span className={`qvc-status-badge ${
-                            isAccepted ? 'accepted' : isRevision ? 'revision' : 'action'
+                            isAccepted ? 'accepted' : isRevisionActive ? 'revision' : isRevisionQuote ? 'revision' : 'action'
                           }`}>
                             {isAccepted ? (
                               <>
                                 <CheckCircle2 size={13} className="text-emerald-400" />
                                 <span>✓ Agreement Executed &amp; Finalized</span>
                               </>
-                            ) : isRevision ? (
+                            ) : isRevisionActive ? (
                               <>
                                 <RefreshCw size={13} className="text-amber-400" />
                                 <span>Counter-Offer Revision Active</span>
+                              </>
+                            ) : isRevisionQuote ? (
+                              <>
+                                <RefreshCw size={13} className="text-amber-400" />
+                                <span>Revised Quotation Received</span>
                               </>
                             ) : (
                               <>
@@ -707,17 +730,95 @@ const LandownerDashboard = () => {
 
                     {/* Right side quote amount highlight */}
                     <div className="qvc-quote-badge">
-                      <span className="qvc-quote-label">
-                        {isService ? 'Total Contractor Quotation' : isPurchase ? 'Timber Purchase Offer' : 'Purchase + Harvesting Value'}
-                      </span>
-                      <strong className="qvc-quote-amount">
-                        {formatINR(totalQuoteVal)}
-                      </strong>
-                      <span className="qvc-quote-type">
-                        {propType}
-                      </span>
+                      {isRevisionQuote && previousQuoteVal && previousQuoteVal !== totalQuoteVal ? (
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-0.5 justify-end">
+                            <span>Previous:</span>
+                            <span className="line-through font-mono font-semibold text-slate-400">
+                              {formatINR(previousQuoteVal)}
+                            </span>
+                          </div>
+                          <span className="qvc-quote-label text-emerald-400 font-bold">
+                            {isService ? 'Revised Contractor Quotation' : isPurchase ? 'Revised Purchase Offer' : 'Revised Commercial Value'}
+                          </span>
+                          <strong className="qvc-quote-amount text-emerald-300">
+                            {formatINR(totalQuoteVal)}
+                          </strong>
+                          {reductionAmt > 0 && (
+                            <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 mt-1 inline-flex items-center gap-1">
+                              ↓ Saved {formatINR(reductionAmt)} ({reductionPct}% negotiated)
+                            </span>
+                          )}
+                          <span className="qvc-quote-type">
+                            {propType}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="qvc-quote-label">
+                            {isService ? 'Total Contractor Quotation' : isPurchase ? 'Timber Purchase Offer' : 'Purchase + Harvesting Value'}
+                          </span>
+                          <strong className="qvc-quote-amount">
+                            {formatINR(totalQuoteVal)}
+                          </strong>
+                          <span className="qvc-quote-type">
+                            {propType}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
+
+                  {/* REVISED QUOTATION NOTICE BANNER (WHEN CONTRACTOR HAS SUBMITTED A REVISED QUOTATION) */}
+                  {isRevisionQuote && !isAccepted && (
+                    <div className="qtn-revision-banner">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="qtn-revision-icon-box">
+                          <RefreshCw size={18} />
+                        </div>
+                        <div className="qtn-revision-info">
+                          <div className="qtn-revision-title-row">
+                            <h4 className="qtn-revision-title">
+                              Contractor Revised Quotation Submitted
+                            </h4>
+                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                              Adjusted to {formatINR(totalQuoteVal)}
+                            </span>
+                            {reductionAmt > 0 && (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-semibold border border-amber-500/30">
+                                ↓ Saved {formatINR(reductionAmt)} ({reductionPct}% negotiated)
+                              </span>
+                            )}
+                          </div>
+                          <p className="qtn-revision-desc">
+                            Contractor has adjusted this commercial quotation based on mutual negotiation.
+                            {previousQuoteVal && previousQuoteVal > totalQuoteVal && (
+                              <> Baseline quotation was <strong className="text-slate-300 line-through font-mono font-semibold">{formatINR(previousQuoteVal)}</strong>.</>
+                            )}
+                            {' '}Review the revised terms below to <strong>Accept</strong> or request a <strong>Re-revision</strong>.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="qtn-revision-comparison-capsule self-start sm:self-auto">
+                        <div className="qtn-revision-comp-col text-right">
+                          <span className="qtn-revision-comp-label text-slate-400">Previous</span>
+                          <span className="text-xs text-slate-400 line-through font-mono font-semibold">
+                            {formatINR(previousQuoteVal || totalQuoteVal)}
+                          </span>
+                        </div>
+                        <div className="qtn-revision-comp-arrow">
+                          →
+                        </div>
+                        <div className="qtn-revision-comp-col text-left">
+                          <span className="qtn-revision-comp-label text-emerald-400 font-bold">Revised</span>
+                          <span className="text-sm sm:text-base text-emerald-300 font-mono font-black">
+                            {formatINR(totalQuoteVal)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* KEY METRICS GRID (MATCHING CONTRACTOR EVALUATION) */}
                   <div className="qvc-metrics-grid">
@@ -980,7 +1081,11 @@ const LandownerDashboard = () => {
                     <div className="qvc-actions-footer">
                       <div className="qvc-actions-tip">
                         <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-                        <span>Review the itemized quotation above and verify to authorize harvesting operations.</span>
+                        <span>
+                          {isRevisionQuote
+                            ? 'Review the contractor\'s revised quotation. You can accept to authorize harvesting operations or request a further re-revision.'
+                            : 'Review the itemized quotation above and verify to authorize harvesting operations.'}
+                        </span>
                       </div>
 
                       <div className="qvc-actions-group">
@@ -1002,7 +1107,7 @@ const LandownerDashboard = () => {
                           className="qvc-btn-revision"
                         >
                           <RefreshCw size={14} />
-                          <span>Request Revision / Counter-Offer</span>
+                          <span>{isRevisionQuote ? 'Re-revise / Further Negotiation' : 'Request Revision / Counter-Offer'}</span>
                         </button>
 
                         <button
@@ -1011,7 +1116,7 @@ const LandownerDashboard = () => {
                           className="qvc-btn-accept"
                         >
                           <CheckCircle2 size={16} />
-                          <span>Accept &amp; Authorize Quotation</span>
+                          <span>{isRevisionQuote ? 'Accept Revised Quotation & Authorize' : 'Accept & Authorize Quotation'}</span>
                         </button>
                       </div>
                     </div>

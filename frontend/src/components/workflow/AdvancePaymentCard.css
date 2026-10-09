@@ -1,0 +1,400 @@
+/* ==========================================================================
+   ADVANCE PAYMENT & FINANCIAL MOBILIZATION CARD (TreeConnect Design System)
+   Sleek dark glassmorphism, responsive metrics grid, & premium settlement channels
+   ========================================================================== */
+
+.apc-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(8, 28, 18, 0.75) 0%, rgba(3, 14, 9, 0.95) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.apc-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #10b981;
+  border-radius: 4px 0 0 4px;
+}
+
+.apc-card-pending::before {
+  background: #f59e0b;
+}
+
+.apc-card-rejected::before {
+  background: #ef4444;
+}
+
+.apc-card-neutral::before {
+  background: #64748b;
+}
+
+/* Header Area */
+.apc-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.18);
+}
+
+@media (min-width: 640px) {
+  .apc-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.apc-icon-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #34d399;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.apc-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 640px) {
+  .apc-title {
+    font-size: 17px;
+  }
+}
+
+.apc-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* Metrics 5-Column Grid */
+.apc-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .apc-metrics-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .apc-metrics-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.apc-metric-cell {
+  background: rgba(3, 15, 10, 0.85);
+  border: 1px solid rgba(16, 185, 129, 0.16);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  transition: all 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.08);
+}
+
+.apc-metric-cell:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(4, 20, 13, 0.95);
+  transform: translateY(-1px);
+}
+
+.apc-metric-label {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.apc-metric-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .apc-metric-val {
+    font-size: 17px;
+  }
+}
+
+.apc-metric-hint {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* SETTLEMENT DETAILS CONTAINER */
+.apc-accounts-section {
+  background: linear-gradient(135deg, rgba(6, 22, 14, 0.85) 0%, rgba(2, 11, 7, 0.95) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.24);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.12), 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.apc-accounts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.16);
+}
+
+.apc-accounts-title {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.apc-channels-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .apc-channels-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.apc-channel-card {
+  background: #04120b;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+}
+
+.apc-channel-card:hover {
+  border-color: rgba(16, 185, 129, 0.38);
+}
+
+.apc-channel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.apc-channel-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.apc-channel-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.apc-vpa-box {
+  background: #020704;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 9px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.apc-vpa-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6ee7b7;
+  user-select: all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apc-copy-btn {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #a7f3d0;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 6px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.apc-copy-btn:hover {
+  background: rgba(16, 185, 129, 0.28);
+  color: #ffffff;
+  border-color: rgba(16, 185, 129, 0.55);
+}
+
+.apc-copy-btn.copied {
+  background: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  border-color: #10b981;
+}
+
+/* Bank Account Detail Rows */
+.apc-bank-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.apc-bank-row-item {
+  background: #020704;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.apc-bank-row-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.apc-bank-row-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
+.apc-beneficiary-strip {
+  font-size: 11px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.apc-beneficiary-name {
+  color: #f1f5f9;
+  font-weight: 800;
+}
+
+/* Contractor Note Quote */
+.apc-note-box {
+  background: rgba(16, 185, 129, 0.06);
+  border-left: 3px solid #10b981;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.apc-note-box strong {
+  color: #34d399;
+}
+
+/* Alert Boxes */
+.apc-alert-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 14px 18px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .apc-alert-box {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.apc-alert-pending {
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.22) 0%, rgba(30, 20, 10, 0.85) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.38);
+}
+
+.apc-alert-verified {
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.22) 0%, rgba(4, 24, 16, 0.85) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.32);
+}
+
+.apc-alert-rejected {
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.22) 0%, rgba(30, 10, 10, 0.85) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.38);
+}
+
+.apc-alert-progress {
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.22) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.38);
+}

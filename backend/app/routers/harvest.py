@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Header, status
+from fastapi import APIRouter, HTTPException, Header, status, Body
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Union
@@ -541,7 +541,7 @@ def get_harvest_requests(
                 req_data["assessment"] = serialized_ass
 
                 # Hydrate negotiation & fair deal counter-offer fields if not already on req_data
-                for k in ["counter_offer_amount", "counter_offer_start_date", "landowner_feedback", "revision_reasons"]:
+                for k in ["counter_offer_amount", "counter_offer_start_date", "landowner_feedback", "revision_reasons", "original_quote", "previous_quote", "revised_quote", "reduction", "is_revision", "revision_history", "original_costs"]:
                     if not req_data.get(k) and serialized_ass.get(k) is not None:
                         req_data[k] = serialized_ass.get(k)
                 if serialized_ass.get("status") == "REVISION_REQUESTED" and req_data.get("status") != "ACCEPTED" and req_data.get("status") != "OPERATION_READY":
@@ -590,12 +590,15 @@ def get_harvest_requests(
                 req_data["latest_payment"] = serialize_doc(req.get("latest_payment"))
 
             adv_req = req_data.get("advance_payment_request") or (req_data.get("assessment") or {}).get("advance_payment_request") or {}
-            accepted_quote = float(req_data.get("total_quotation_amount") or req_data.get("total_quote") or adv_req.get("accepted_quotation") or 99000.0)
+            accepted_quote = float(adv_req.get("accepted_quotation") or req_data.get("total_quote") or (req_data.get("assessment") or {}).get("total_quote") or req_data.get("total_quotation_amount") or 110000.0)
             verified_total = float(req_data.get("total_verified_paid") or 0.0)
             req_data["total_quotation_amount"] = accepted_quote
             req_data["total_verified_paid"] = verified_total
-            if req_data.get("remaining_balance") is None:
-                req_data["remaining_balance"] = round(max(0.0, accepted_quote - verified_total), 2)
+            if adv_req.get("remaining_balance") is not None:
+                req_data["remaining_balance"] = float(adv_req.get("remaining_balance"))
+            elif req_data.get("remaining_balance") is None or req_data.get("remaining_balance") == accepted_quote:
+                adv_amt = float(adv_req.get("advance_amount") or 0.0)
+                req_data["remaining_balance"] = round(max(0.0, accepted_quote - adv_amt - verified_total), 2)
             if not req_data.get("advance_payment_status"):
                 if req_data.get("latest_payment"):
                     req_data["advance_payment_status"] = req_data["latest_payment"].get("status") or "VERIFICATION_PENDING"
@@ -730,7 +733,7 @@ def get_harvest_request_by_id(request_id: str):
         if ass_doc:
             serialized_ass = serialize_doc(ass_doc)
             req_data["assessment"] = serialized_ass
-            for k in ["counter_offer_amount", "counter_offer_start_date", "landowner_feedback", "revision_reasons"]:
+            for k in ["counter_offer_amount", "counter_offer_start_date", "landowner_feedback", "revision_reasons", "original_quote", "previous_quote", "revised_quote", "reduction", "is_revision", "revision_history", "original_costs"]:
                 if not req_data.get(k) and serialized_ass.get(k) is not None:
                     req_data[k] = serialized_ass.get(k)
             if serialized_ass.get("status") == "REVISION_REQUESTED" and req_data.get("status") != "ACCEPTED" and req_data.get("status") != "OPERATION_READY":
@@ -775,12 +778,15 @@ def get_harvest_request_by_id(request_id: str):
             req_data["latest_payment"] = serialize_doc(req.get("latest_payment"))
 
         adv_req = req_data.get("advance_payment_request") or (req_data.get("assessment") or {}).get("advance_payment_request") or {}
-        accepted_quote = float(req_data.get("total_quotation_amount") or req_data.get("total_quote") or adv_req.get("accepted_quotation") or 99000.0)
+        accepted_quote = float(adv_req.get("accepted_quotation") or req_data.get("total_quote") or (req_data.get("assessment") or {}).get("total_quote") or req_data.get("total_quotation_amount") or 110000.0)
         verified_total = float(req_data.get("total_verified_paid") or 0.0)
         req_data["total_quotation_amount"] = accepted_quote
         req_data["total_verified_paid"] = verified_total
-        if req_data.get("remaining_balance") is None:
-            req_data["remaining_balance"] = round(max(0.0, accepted_quote - verified_total), 2)
+        if adv_req.get("remaining_balance") is not None:
+            req_data["remaining_balance"] = float(adv_req.get("remaining_balance"))
+        elif req_data.get("remaining_balance") is None or req_data.get("remaining_balance") == accepted_quote:
+            adv_amt = float(adv_req.get("advance_amount") or 0.0)
+            req_data["remaining_balance"] = round(max(0.0, accepted_quote - adv_amt - verified_total), 2)
         if not req_data.get("advance_payment_status"):
             if req_data.get("latest_payment"):
                 req_data["advance_payment_status"] = req_data["latest_payment"].get("status") or "VERIFICATION_PENDING"
@@ -883,7 +889,60 @@ def assign_contractor(request_id: str, payload: AssignContractorRequest):
             content={"message": f"Failed to assign contractor: {str(e)}"}
         )
 
-# 5a. POST /api/harvest-requests/{id}/schedule-inspection - Schedule Site Inspection
+# 5a. POST /api/harvest-requests/{id}/decline-job - Contractor declines work / counter-offer
+@router.post("/{request_id}/decline-job")
+def decline_harvest_job(request_id: str, payload: dict = Body(default={})):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found"}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        reason = payload.get("reason") or payload.get("feedback") or "Pricing / terms not favourable for contractor operations"
+
+        # Update harvest request back to PENDING or DECLINED
+        db.harvest_requests.update_one(req_query, {
+            "$set": {
+                "status": "PENDING",
+                "assigned_contractor_id": None,
+                "assigned_contractor_name": None,
+                "assigned_contractor_email": None,
+                "contractor_decline_reason": reason,
+                "inspection_status": "DECLINED",
+                "updatedAt": now_iso
+            }
+        })
+
+        # Update contractor assessment to DECLINED
+        ass_query = {"$or": [{"harvest_request_id": request_id}, {"_id": request_id}]}
+        db.contractor_assessments.update_one(ass_query, {
+            "$set": {
+                "status": "DECLINED",
+                "decline_reason": reason,
+                "updatedAt": now_iso
+            }
+        })
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Job assignment declined successfully. Request returned to landowner pool.", "reason": reason}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to decline job: {str(e)}"}
+        )
+
+# 5b. POST /api/harvest-requests/{id}/schedule-inspection - Schedule Site Inspection
 @router.post("/{request_id}/schedule-inspection")
 def schedule_site_inspection(request_id: str, payload: ScheduleInspectionRequest):
     try:
@@ -1624,6 +1683,12 @@ def submit_contractor_assessment(
             "is_revision": is_revision,
             "updatedAt": created_at
         }
+        if "advance_payment_request" in assessment_doc:
+            hr_update["advance_payment_request"] = assessment_doc["advance_payment_request"]
+            hr_update["advance_payment_status"] = assessment_doc.get("advance_payment_status", "ADVANCE_REQUESTED")
+            hr_update["remaining_balance"] = assessment_doc.get("remaining_balance")
+            hr_update["total_quotation_amount"] = assessment_doc.get("total_quotation_amount")
+            hr_update["total_quote"] = assessment_doc.get("total_quotation_amount")
         if prop_type == "Harvesting Service Quotation":
             hr_update["total_quote"] = payload.total_quote
             hr_update["harvesting_cost"] = effective_felling_cost
@@ -1819,7 +1884,8 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
         # Generate Digital Agreement when Accepted
         if new_status == "ACCEPTED":
             agreement_id = f"TC-AGR-{datetime.now().strftime('%Y%m%d')}-{str(request_id)[-6:].upper()}"
-            total_agreed = (assessment_rec.get("total_quote") or assessment_rec.get("contractor_purchase_offer") or assessment_rec.get("timber_purchase_price")) if assessment_rec else 110000
+            total_agreed = (assessment_rec.get("revised_quote") or assessment_rec.get("total_quote") or assessment_rec.get("contractor_purchase_offer") or assessment_rec.get("timber_purchase_price")) if assessment_rec else 110000
+            req_update["total_quote"] = total_agreed
             digital_agreement = {
                 "agreement_id": agreement_id,
                 "harvest_request_id": request_id,
@@ -1962,16 +2028,19 @@ def request_advance_payment(
             "status": "ADVANCE_REQUESTED"
         }
 
-        # Calculate remaining balance
+        # Calculate remaining balance post-advance
         verified_paid = float(req_doc.get("total_verified_paid") or 0.0)
-        remaining_balance = round(float(payload.accepted_quotation) - verified_paid, 2)
+        remaining_balance = round(max(0.0, float(payload.accepted_quotation) - adv_amount - verified_paid), 2)
+        adv_req_doc["remaining_balance"] = remaining_balance
 
         update_fields = {
             "advance_payment_request": adv_req_doc,
             "advance_payment_status": "ADVANCE_REQUESTED",
             "is_advance_verified": False,
             "total_quotation_amount": float(payload.accepted_quotation),
+            "total_quote": float(payload.accepted_quotation),
             "advance_amount": adv_amount,
+            "advance_percentage": adv_percentage,
             "total_verified_paid": verified_paid,
             "remaining_balance": remaining_balance,
             "can_start_harvest": False,
@@ -1982,6 +2051,7 @@ def request_advance_payment(
         db.contractor_assessments.update_one(
             {"harvest_request_id": str(request_id)},
             {"$set": {
+                "total_quote": float(payload.accepted_quotation),
                 "advance_payment_request": adv_req_doc,
                 "advance_payment_status": "ADVANCE_REQUESTED",
                 "remaining_balance": remaining_balance,

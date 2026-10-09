@@ -4805,6 +4805,102 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   transform: translateY(-1px) !important;
 }
 
+/* Dedicated Revision Notice Banner */
+.qtn-revision-banner {
+  padding: 14px 18px !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, rgba(22, 34, 20, 0.85) 0%, rgba(10, 24, 18, 0.95) 50%, rgba(6, 18, 14, 0.98) 100%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.28) !important;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(245, 158, 11, 0.12) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 14px !important;
+}
+
+.qtn-revision-icon-box {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 12px !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #fbbf24 !important;
+  flex-shrink: 0 !important;
+}
+
+.qtn-revision-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+}
+
+.qtn-revision-title-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.qtn-revision-title {
+  font-size: 13.5px !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.01em !important;
+  margin: 0 !important;
+}
+
+.qtn-revision-desc {
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
+}
+
+.qtn-revision-comparison-capsule {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 8px 14px !important;
+  border-radius: 12px !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+  flex-shrink: 0 !important;
+}
+
+.qtn-revision-comp-col {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.qtn-revision-comp-label {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+
+.qtn-revision-comp-arrow {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 50% !important;
+  background: rgba(245, 158, 11, 0.15) !important;
+  border: 1px solid rgba(245, 158, 11, 0.3) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #fde68a !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  flex-shrink: 0 !important;
+}
+
 /* 2. Key Metrics Grid */
 .qtn-metrics-grid {
   display: grid !important;
