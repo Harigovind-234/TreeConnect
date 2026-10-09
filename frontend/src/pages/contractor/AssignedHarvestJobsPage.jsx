@@ -4,6 +4,9 @@ import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
+import AdvancePaymentCard from '../../components/workflow/AdvancePaymentCard';
+import RequestAdvancePaymentModal from '../../components/workflow/RequestAdvancePaymentModal';
+import RejectPaymentModal from '../../components/workflow/RejectPaymentModal';
 import harvestService from '../../services/harvestService';
 import './ContractorDashboard.css';
 import {
@@ -12,6 +15,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  CreditCard,
   FileText,
   Loader2,
   Mail,
@@ -301,6 +305,8 @@ const AssignedHarvestJobsPage = () => {
   const [declineModalJob, setDeclineModalJob] = useState(null);
   const [preQuoteAdvisoryJob, setPreQuoteAdvisoryJob] = useState(null);
   const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
+  const [selectedRequestAdvanceModal, setSelectedRequestAdvanceModal] = useState(null);
+  const [selectedRejectPaymentModal, setSelectedRejectPaymentModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -675,6 +681,95 @@ const AssignedHarvestJobsPage = () => {
     } catch (err) {
       console.error('Failed to complete inspection:', err);
       alert('Failed to save inspection report: ' + (err.message || 'Unknown error'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmRequestAdvance = async (payload) => {
+    if (!selectedRequestAdvanceModal) return;
+    const reqId = selectedRequestAdvanceModal.id || selectedRequestAdvanceModal._id;
+    try {
+      setActionLoading(true);
+      await harvestService.requestAdvancePayment(reqId, payload);
+      showToast(`Advance payment of ₹${Number(payload.advance_amount).toLocaleString('en-IN')} (${payload.advance_percentage}%) set and sent to landowner successfully.`);
+      setSelectedRequestAdvanceModal(null);
+      await fetchAssignedRequests();
+    } catch (err) {
+      alert('Failed to request advance payment: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleVerifyPayment = async (req, payment) => {
+    const reqId = req.id || req._id;
+    const payId = payment.payment_id;
+    if (!confirm(`Are you sure you want to verify receipt of advance payment (${payId}) for INR ${payment.amount}?`)) return;
+    try {
+      setActionLoading(true);
+      await harvestService.verifyAdvancePayment(reqId, {
+        payment_id: payId,
+        action: 'VERIFY',
+        verification_notes: 'Verified and reconciled by contractor'
+      });
+      showToast('Payment verified successfully. Operational readiness updated.');
+      await fetchAssignedRequests();
+    } catch (err) {
+      alert('Failed to verify payment: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmRejectPayment = async (reason) => {
+    if (!selectedRejectPaymentModal) return;
+    const { req, payment } = selectedRejectPaymentModal;
+    const reqId = req.id || req._id;
+    try {
+      setActionLoading(true);
+      await harvestService.verifyAdvancePayment(reqId, {
+        payment_id: payment.payment_id,
+        action: 'REJECT',
+        rejection_reason: reason,
+        verification_notes: 'Payment record could not be reconciled with contractor bank statement'
+      });
+      showToast('Payment marked as rejected.');
+      setSelectedRejectPaymentModal(null);
+      await fetchAssignedRequests();
+    } catch (err) {
+      alert('Failed to reject payment: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStartHarvest = async (req) => {
+    const reqId = req.id || req._id;
+    if (!confirm('Are you sure you want to start harvesting operations for this job?')) return;
+    try {
+      setActionLoading(true);
+      await harvestService.startHarvest(reqId);
+      showToast('Harvesting operations started successfully! Job status updated to IN_PROGRESS.');
+      await fetchAssignedRequests();
+    } catch (err) {
+      alert('Cannot start harvest: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCompleteHarvest = async (req) => {
+    const reqId = req.id || req._id;
+    const actualYield = prompt('Enter final actual timber yield in m³ (e.g. 1.85):', '1.75');
+    if (actualYield === null) return;
+    try {
+      setActionLoading(true);
+      await harvestService.completeHarvest(reqId, { actual_yield: parseFloat(actualYield) || 0 });
+      showToast('Harvesting operations logged and marked as COMPLETED!');
+      await fetchAssignedRequests();
+    } catch (err) {
+      alert('Cannot complete harvest: ' + (err.response?.data?.detail || err.message));
     } finally {
       setActionLoading(false);
     }
@@ -1178,6 +1273,8 @@ const AssignedHarvestJobsPage = () => {
                   const reqId = req.id || req._id || 'job_demo';
                   const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
                   const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                  const isInProgress = req.status === 'IN_PROGRESS';
+                  const isCompleted = req.status === 'COMPLETED';
                   const fairDealInfo = getFairDealInfo(req);
                   const isRevisionRequested = (fairDealInfo.hasFairDeal && !isAccepted) || req.status === 'REVISION_REQUESTED';
 
@@ -1418,8 +1515,8 @@ const AssignedHarvestJobsPage = () => {
                                 </>
                               ) : isJobScheduled(req) ? (
                                 <>
-                                  <Calendar size={13} className="text-teal-400" />
-                                  <span>Inspection Scheduled</span>
+                                  <Calendar size={13} className={req.site_inspection?.landowner_confirmed ? "text-emerald-400" : "text-teal-400"} />
+                                  <span>{req.site_inspection?.landowner_confirmed ? 'Visit Confirmed by Owner' : 'Inspection Scheduled'}</span>
                                 </>
                               ) : (
                                 <>
@@ -1448,6 +1545,19 @@ const AssignedHarvestJobsPage = () => {
                               )}
                             </button>
 
+                            {/* Option to Set or Update Advance by Contractor before starting work */}
+                            {!isInProgress && !isCompleted && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRequestAdvanceModal(req)}
+                                className="cd-btn-assess-cta bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300"
+                                title="Configure or update advance mobilization amount required before work commences"
+                              >
+                                <CreditCard size={13} />
+                                <span>{req.advance_payment_request ? 'Update Advance' : 'Set Advance'}</span>
+                              </button>
+                            )}
+
                             {/* Direct Assessment CTA */}
                             <button
                               type="button"
@@ -1458,13 +1568,16 @@ const AssignedHarvestJobsPage = () => {
                               <span>
                                 {isRevisionRequested
                                   ? 'Revise Quote'
-                                  : isSubmitted
-                                    ? 'Edit Quote'
-                                    : isJobInspected(req)
-                                      ? 'Submit Verified Quote'
-                                      : 'Assess & Quote'}
+                                  : isAccepted
+                                    ? 'Revise / Adjust Quote'
+                                    : isSubmitted
+                                      ? 'Revise / Edit Quote'
+                                      : isJobInspected(req)
+                                        ? 'Submit Verified Quote'
+                                        : 'Assess & Quote'}
                               </span>
                             </button>
+
                           </div>
                         </div>
 
@@ -1805,6 +1918,14 @@ const AssignedHarvestJobsPage = () => {
                                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
                                           LANDOWNER RESCHEDULE PENDING
                                         </span>
+                                      ) : scheduled && inspectionData.landowner_confirmed ? (
+                                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                                          <Check size={11} className="text-emerald-400" /> LANDOWNER CONFIRMED DATE
+                                        </span>
+                                      ) : scheduled ? (
+                                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                                          AWAITING OWNER CONFIRMATION
+                                        </span>
                                       ) : null}
                                     </div>
                                     <p className="cd-inspection-desc">
@@ -1813,7 +1934,7 @@ const AssignedHarvestJobsPage = () => {
                                         : isRescheduleRequested
                                           ? `Landowner unavailable on original date (${formatDateDMY(inspectionData.scheduled_date)}). Reason: "${inspectionData.reschedule_reason || 'Schedule conflict'}". ${inspectionData.reschedule_notes ? `Notes: "${inspectionData.reschedule_notes}"` : ''}`
                                           : scheduled
-                                            ? `Assessor: ${inspectionData.inspector_name || contractorName} • Contact: ${inspectionData.inspector_phone || contactPhoneVal} • Meeting landowner on-site.`
+                                            ? `${inspectionData.landowner_confirmed ? '✓ Landowner confirmed & accepted appointment date. ' : 'Visit date preferred by contractor. '}Assessor: ${inspectionData.inspector_name || contractorName} • Contact: ${inspectionData.inspector_phone || contactPhoneVal} • Meeting landowner on-site.`
                                             : 'Before entering a binding commercial agreement or submitting final rates, inspect parcel boundaries, tree condition, and log haul truck accessibility.'}
                                     </p>
                                   </div>
@@ -2010,22 +2131,22 @@ const AssignedHarvestJobsPage = () => {
 
                         {/* DIGITAL HARVEST AGREEMENT FINALIZED BANNER (WHEN OPERATION_READY) */}
                         {(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement) && (
-                          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/90 via-[#0e2417] to-emerald-950/90 border-2 border-emerald-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-                            <div className="flex items-center gap-3.5">
-                              <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
-                                <FileCheck size={22} />
+                          <div className="cd-agreement-strip">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="cd-inspection-icon-box cd-inspection-icon-completed shrink-0">
+                                <FileCheck size={18} />
                               </div>
-                              <div>
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="text-sm sm:text-base font-black text-white">
+                                  <h4 className="text-sm font-extrabold text-white">
                                     Digital Harvest Agreement Finalized &amp; Binding
                                   </h4>
-                                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/40">
+                                  <span className="cd-req-id-badge">
                                     {req.digital_agreement?.agreement_id || `TC-AGR-${String(reqId).slice(-6).toUpperCase()}`}
                                   </span>
                                 </div>
-                                <p className="text-xs text-slate-300 mt-0.5">
-                                  Agreement signed and finalized with {ownerNameVal}. Operational work authorized to begin on <strong>{formatDateDMY(req.assessment?.proposed_start_date || req.proposed_start_date || req.preferred_start_date)}</strong>.
+                                <p className="cd-inspection-desc">
+                                  Agreement signed and finalized with <strong className="text-slate-200">{ownerNameVal}</strong>. Operational work authorized to begin on <strong className="text-emerald-300">{formatDateDMY(req.assessment?.proposed_start_date || req.proposed_start_date || req.preferred_start_date)}</strong>.
                                 </p>
                               </div>
                             </div>
@@ -2033,12 +2154,26 @@ const AssignedHarvestJobsPage = () => {
                             <button
                               type="button"
                               onClick={() => setSelectedAgreementModal({ req, assessment: req.assessment })}
-                              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all shrink-0 hover:scale-[1.02]"
+                              className="cd-btn-inspect-primary shrink-0 self-start sm:self-auto cursor-pointer"
                             >
-                              <FileCheck size={16} />
+                              <FileCheck size={14} />
                               <span>View Digital Agreement</span>
                             </button>
                           </div>
+                        )}
+
+                        {/* ADVANCE PAYMENT WORKFLOW (OPERATION_READY / IN_PROGRESS / COMPLETED) */}
+                        {(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement || req.advance_payment_request || req.assessment?.advance_payment_request || req.advance_payment_status || req.latest_payment || req.status === 'IN_PROGRESS' || req.status === 'COMPLETED') && (
+
+                          <AdvancePaymentCard
+                            request={req}
+                            role="contractor"
+                            onRequestAdvance={() => setSelectedRequestAdvanceModal(req)}
+                            onVerifyPayment={(payment) => handleVerifyPayment(req, payment)}
+                            onRejectPayment={(payment) => setSelectedRejectPaymentModal({ req, payment })}
+                            onStartHarvest={() => handleStartHarvest(req)}
+                            onCompleteHarvest={() => handleCompleteHarvest(req)}
+                          />
                         )}
 
                         {/* QUICK HIGHLIGHTS STRIP (VISIBLE WHEN COLLAPSED) */}
@@ -3897,6 +4032,24 @@ const AssignedHarvestJobsPage = () => {
             request={selectedAgreementModal.req}
             assessment={selectedAgreementModal.assessment}
             onClose={() => setSelectedAgreementModal(null)}
+          />
+        )}
+
+        {/* MODAL 7: REQUEST ADVANCE PAYMENT */}
+        {selectedRequestAdvanceModal && (
+          <RequestAdvancePaymentModal
+            request={selectedRequestAdvanceModal}
+            onClose={() => setSelectedRequestAdvanceModal(null)}
+            onSubmit={handleConfirmRequestAdvance}
+          />
+        )}
+
+        {/* MODAL 8: REJECT PAYMENT */}
+        {selectedRejectPaymentModal && (
+          <RejectPaymentModal
+            payment={selectedRejectPaymentModal.payment}
+            onClose={() => setSelectedRejectPaymentModal(null)}
+            onConfirm={handleConfirmRejectPayment}
           />
         )}
 

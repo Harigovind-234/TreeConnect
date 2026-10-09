@@ -317,6 +317,43 @@
   color: #34d399;
 }
 
+/* Form Controls & Input Polish */
+.digital-agr-modal input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) sepia(100%) saturate(300%) hue-rotate(90deg);
+  cursor: pointer;
+}
+
+.digital-agr-modal input[type="number"]::-webkit-outer-spin-button,
+.digital-agr-modal input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.digital-agr-modal input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.digital-agr-modal input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #34d399;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.8);
+  border: 2px solid #04140a;
+}
+
+.digital-agr-modal input[type="range"]::-moz-range-thumb {
+  height: 18px;
+  width: 18px;
+  border-radius: 50%;
+  background: #34d399;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.8);
+  border: 2px solid #04140a;
+}
+
 @media print {
   body * {
     visibility: hidden;

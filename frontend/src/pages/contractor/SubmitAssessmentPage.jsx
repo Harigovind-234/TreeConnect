@@ -46,7 +46,10 @@ import {
   Edit3,
   Save,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  CreditCard,
+  QrCode,
+  IndianRupee
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -300,7 +303,18 @@ const extractLandownerValue = (req, vol) => {
     assigned_workers_count: 12,
     estimated_duration: '10 Working Days',
     proposed_start_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-    notes: 'Site inspection completed. Access road clear for heavy haulers.'
+    notes: 'Site inspection completed. Access road clear for heavy haulers.',
+    // Advance Mobilization Configuration
+    require_advance: true,
+    advance_percentage: 30,
+    advance_amount: 33000,
+    advance_due_date: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+    advance_upi_id: 'treeconnect.contractor@okhdfcbank',
+    advance_bank_name: 'HDFC Bank Ltd, Kottayam Branch',
+    advance_bank_account_number: '50200084920194',
+    advance_ifsc_code: 'HDFC0001234',
+    advance_account_holder: 'Rohith Kumar (Forestry Contractor)',
+    advance_remarks: 'Mobilization advance covers crew staging and haulage logistics.'
   });
 
   // Fetch target harvest request details & existing assessment if any
@@ -449,7 +463,18 @@ const extractLandownerValue = (req, vol) => {
               assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 10,
               estimated_duration: assData.estimated_duration || prev.estimated_duration || '1 Working Day',
               proposed_start_date: cleanExistingDate || (inspDate && inspDate > prev.proposed_start_date ? inspDate : prev.proposed_start_date),
-              notes: assData.notes || prev.notes
+              notes: assData.notes || prev.notes,
+              // Load advance terms if existing
+              require_advance: Boolean(assData.advance_payment_request || combinedData?.advance_payment_request || prev.require_advance),
+              advance_percentage: Number(assData.advance_payment_request?.advance_percentage || combinedData?.advance_payment_request?.advance_percentage || prev.advance_percentage || 30),
+              advance_amount: Number(assData.advance_payment_request?.advance_amount || combinedData?.advance_payment_request?.advance_amount || prev.advance_amount || Math.round(((assData.total_quote || prev.total_quote || 110000) * 30) / 100)),
+              advance_due_date: assData.advance_payment_request?.due_date || combinedData?.advance_payment_request?.due_date || prev.advance_due_date,
+              advance_upi_id: assData.advance_payment_request?.upi_id || combinedData?.advance_payment_request?.upi_id || prev.advance_upi_id,
+              advance_bank_name: assData.advance_payment_request?.bank_name || combinedData?.advance_payment_request?.bank_name || prev.advance_bank_name,
+              advance_bank_account_number: assData.advance_payment_request?.bank_account_number || combinedData?.advance_payment_request?.bank_account_number || prev.advance_bank_account_number,
+              advance_ifsc_code: assData.advance_payment_request?.ifsc_code || combinedData?.advance_payment_request?.ifsc_code || prev.advance_ifsc_code,
+              advance_account_holder: assData.advance_payment_request?.account_holder_name || combinedData?.advance_payment_request?.account_holder_name || prev.advance_account_holder,
+              advance_remarks: assData.advance_payment_request?.remarks || combinedData?.advance_payment_request?.remarks || prev.advance_remarks
             }));
           } else {
             // If no prior assessment exists, default to landowner estimate and ensure start date is after inspection
@@ -657,6 +682,10 @@ const extractLandownerValue = (req, vol) => {
           (Number(updated.other_cost) || 0);
         updated.total_quote = sum;
 
+        if (updated.require_advance) {
+          updated.advance_amount = Math.round((sum * (Number(updated.advance_percentage) || 30)) / 100);
+        }
+
         setRevisionDraft(prevDraft => {
           if (!prevDraft) return prevDraft;
           return {
@@ -669,6 +698,27 @@ const extractLandownerValue = (req, vol) => {
       }
       return updated;
     });
+  };
+
+  const handleAdvancePercentageChange = (pct) => {
+    const val = Math.max(1, Math.min(100, Number(pct) || 0));
+    const quoteVal = Number(assessmentForm.total_quote || assessmentForm.contractor_purchase_offer || assessmentForm.timber_purchase_price || 0);
+    setAssessmentForm(prev => ({
+      ...prev,
+      advance_percentage: val,
+      advance_amount: Math.round((quoteVal * val) / 100)
+    }));
+  };
+
+  const handleAdvanceAmountChange = (amt) => {
+    const val = Math.max(0, Number(amt) || 0);
+    const quoteVal = Number(assessmentForm.total_quote || assessmentForm.contractor_purchase_offer || assessmentForm.timber_purchase_price || 0);
+    const pct = quoteVal > 0 ? Math.min(100, Math.max(1, Math.round((val / quoteVal) * 100))) : 30;
+    setAssessmentForm(prev => ({
+      ...prev,
+      advance_amount: val,
+      advance_percentage: pct
+    }));
   };
 
   const handleUseLandownerVolume = () => {
@@ -1098,7 +1148,20 @@ const extractLandownerValue = (req, vol) => {
         original_quote: originalContractorQuote,
         previous_quote: latestOfficialQuote,
         is_revision: isRevisionSubmission,
-        revision_notes: revisionDraft ? revisionDraft.label : (isRevisionRequested ? 'Contractor revised quotation submitted' : '')
+        revision_notes: revisionDraft ? revisionDraft.label : (isRevisionRequested ? 'Contractor revised quotation submitted' : ''),
+        // Advance Mobilization Payment Fields
+        advance_percentage: assessmentForm.require_advance ? Number(assessmentForm.advance_percentage) : null,
+        advance_amount: assessmentForm.require_advance ? Number(assessmentForm.advance_amount) : null,
+        due_date: assessmentForm.require_advance ? assessmentForm.advance_due_date : null,
+        upi_id: assessmentForm.require_advance ? assessmentForm.advance_upi_id : null,
+        bank_name: assessmentForm.require_advance ? assessmentForm.advance_bank_name : null,
+        bank_account_number: assessmentForm.require_advance ? assessmentForm.advance_bank_account_number : null,
+        ifsc_code: assessmentForm.require_advance ? assessmentForm.advance_ifsc_code : null,
+        account_holder_name: assessmentForm.require_advance ? assessmentForm.advance_account_holder : null,
+        payment_instructions: assessmentForm.require_advance
+          ? `UPI: ${assessmentForm.advance_upi_id} / Bank: ${assessmentForm.advance_bank_name} / A/C: ${assessmentForm.advance_bank_account_number} / IFSC: ${assessmentForm.advance_ifsc_code}`
+          : null,
+        advance_remarks: assessmentForm.require_advance ? assessmentForm.advance_remarks : null
       };
 
       const res = await harvestService.submitAssessment(targetId, payload);
@@ -1143,6 +1206,23 @@ const extractLandownerValue = (req, vol) => {
                   workers_assigned: workersNum,
                   is_reassessed_after_inspection: payload.is_reassessed_after_inspection,
                   reassessed_at: payload.reassessed_at,
+                  advance_payment_request: assessmentForm.require_advance ? {
+                    accepted_quotation: currentTotal,
+                    advance_percentage: Number(assessmentForm.advance_percentage),
+                    advance_amount: Number(assessmentForm.advance_amount),
+                    due_date: assessmentForm.advance_due_date,
+                    upi_id: assessmentForm.advance_upi_id,
+                    bank_name: assessmentForm.advance_bank_name,
+                    bank_account_number: assessmentForm.advance_bank_account_number,
+                    ifsc_code: assessmentForm.advance_ifsc_code,
+                    account_holder_name: assessmentForm.advance_account_holder,
+                    payment_instructions: `UPI: ${assessmentForm.advance_upi_id} / Bank: ${assessmentForm.advance_bank_name} / A/C: ${assessmentForm.advance_bank_account_number} / IFSC: ${assessmentForm.advance_ifsc_code}`,
+                    remarks: assessmentForm.advance_remarks,
+                    requested_at: new Date().toISOString()
+                  } : r.advance_payment_request,
+                  advance_payment_status: assessmentForm.require_advance ? 'ADVANCE_REQUESTED' : (r.advance_payment_status || 'NOT_REQUESTED'),
+                  total_quotation_amount: currentTotal,
+                  remaining_balance: assessmentForm.require_advance ? Math.max(0, currentTotal - Number(assessmentForm.advance_amount)) : (currentTotal),
                   updatedAt: new Date().toISOString()
                 };
               }
@@ -3298,6 +3378,243 @@ const extractLandownerValue = (req, vol) => {
                             </div>
                           </div>
                         </div>
+
+                        {/* 5. ADVANCE MOBILIZATION PAYMENT TERMS SECTION */}
+                        <div className="assessment-operational-section border border-emerald-500/25 bg-[#03140a]">
+                          <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-emerald-500/20">
+                            <div>
+                              <h4 className="assessment-section-title flex items-center gap-2">
+                                <CreditCard size={16} className="text-emerald-400" />
+                                <span>ADVANCE MOBILIZATION PAYMENT TERMS</span>
+                              </h4>
+                              <span className="assessment-section-subtitle">
+                                Set mobilization advance required from landowner before felling operations commence
+                              </span>
+                            </div>
+
+                            <label className="flex items-center gap-2.5 cursor-pointer select-none px-3 py-1.5 rounded-xl bg-black/50 border border-emerald-500/35 hover:border-emerald-400 transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={assessmentForm.require_advance}
+                                onChange={(e) => {
+                                  const req = e.target.checked;
+                                  const quoteVal = Number(assessmentForm.total_quote) || 0;
+                                  setAssessmentForm(prev => ({
+                                    ...prev,
+                                    require_advance: req,
+                                    advance_amount: req ? Math.round((quoteVal * (Number(prev.advance_percentage) || 30)) / 100) : 0
+                                  }));
+                                }}
+                                className="w-4 h-4 rounded text-emerald-500 accent-emerald-500 focus:ring-0 cursor-pointer"
+                              />
+                              <span className="text-xs font-bold text-white">Require Advance Before Starting Work</span>
+                            </label>
+                          </div>
+
+                          {assessmentForm.require_advance && (
+                            <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+                              {/* DUAL SYNCHRONIZED INPUTS: ADVANCE AMOUNT & PERCENTAGE */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/40 focus-within:border-emerald-400 transition-colors">
+                                  <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block mb-1 flex items-center gap-1.5">
+                                    <IndianRupee size={13} />
+                                    Advance Amount (₹) *
+                                  </label>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-slate-400 font-bold font-mono text-base">₹</span>
+                                    <input
+                                      type="number"
+                                      min="100"
+                                      step="100"
+                                      name="advance_amount"
+                                      value={assessmentForm.advance_amount}
+                                      onChange={(e) => handleAdvanceAmountChange(e.target.value)}
+                                      className="w-full bg-transparent text-white font-mono font-black text-lg focus:outline-none placeholder:text-slate-600"
+                                      placeholder="e.g. 30000"
+                                    />
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block mt-1">
+                                    Direct advance amount required before mobilization
+                                  </span>
+                                </div>
+
+                                <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/40 focus-within:border-emerald-400 transition-colors">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                      <Calculator size={13} />
+                                      Advance Share (%)
+                                    </label>
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        name="advance_percentage"
+                                        value={assessmentForm.advance_percentage}
+                                        onChange={(e) => handleAdvancePercentageChange(e.target.value)}
+                                        className="w-14 px-1.5 py-0.5 rounded bg-black/50 border border-emerald-500/40 text-emerald-300 font-mono font-black text-center text-xs focus:outline-none"
+                                      />
+                                      <span className="text-slate-400 font-bold text-xs">%</span>
+                                    </div>
+                                  </div>
+
+                                  <input
+                                    type="range"
+                                    min="5"
+                                    max="80"
+                                    step="5"
+                                    value={assessmentForm.advance_percentage}
+                                    onChange={(e) => handleAdvancePercentageChange(e.target.value)}
+                                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 mt-2"
+                                  />
+
+                                  {/* Preset Pills */}
+                                  <div className="flex items-center justify-between gap-1 mt-2 text-[10px]">
+                                    {[10, 20, 30, 50].map((pct) => (
+                                      <button
+                                        key={pct}
+                                        type="button"
+                                        onClick={() => handleAdvancePercentageChange(pct)}
+                                        className={`px-2 py-0.5 rounded-md font-bold transition-all cursor-pointer ${
+                                          Number(assessmentForm.advance_percentage) === pct
+                                            ? 'bg-emerald-500 text-slate-950 font-black'
+                                            : 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30'
+                                        }`}
+                                      >
+                                        {pct}%
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Live Breakdown Grid */}
+                              <div className="grid grid-cols-2 gap-3 pt-1">
+                                <div className="p-3 rounded-xl bg-[#092212] border border-emerald-500/35">
+                                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+                                    Mobilization Advance Required
+                                  </span>
+                                  <strong className="text-lg sm:text-xl font-black text-white font-mono block mt-1">
+                                    {formatINR(assessmentForm.advance_amount)}
+                                  </strong>
+                                  <span className="text-[10.5px] text-emerald-300 block mt-0.5">
+                                    ({assessmentForm.advance_percentage}% of quotation value)
+                                  </span>
+                                </div>
+
+                                <div className="p-3 rounded-xl bg-[#091a11] border border-slate-700/60">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                    Remaining Balance Post-Advance
+                                  </span>
+                                  <strong className="text-lg sm:text-xl font-black text-amber-300 font-mono block mt-1">
+                                    {formatINR(Math.max(0, (Number(assessmentForm.total_quote) || 0) - (Number(assessmentForm.advance_amount) || 0)))}
+                                  </strong>
+                                  <span className="text-[10.5px] text-slate-400 block mt-0.5">
+                                    Payable upon felling progress / completion
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Payment Due Date & Contractor Payment Accounts */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                <div className="assessment-field-group">
+                                  <label className="assessment-field-label flex items-center gap-1.5">
+                                    <Calendar size={13} className="text-emerald-400" />
+                                    Advance Payment Due Date *
+                                  </label>
+                                  <input
+                                    type="date"
+                                    name="advance_due_date"
+                                    min={getTodayDateString()}
+                                    value={assessmentForm.advance_due_date}
+                                    onChange={handleInputChange}
+                                    style={{ colorScheme: 'dark' }}
+                                    className="assessment-input cursor-pointer font-bold"
+                                  />
+                                </div>
+
+                                <div className="assessment-field-group">
+                                  <label className="assessment-field-label flex items-center gap-1.5">
+                                    <QrCode size={13} className="text-emerald-400" />
+                                    Contractor UPI ID *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    name="advance_upi_id"
+                                    value={assessmentForm.advance_upi_id}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. treeconnect.contractor@okhdfcbank"
+                                    className="assessment-input font-mono text-emerald-300"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="assessment-field-group">
+                                  <label className="assessment-field-label">Bank Name &amp; Branch</label>
+                                  <input
+                                    type="text"
+                                    name="advance_bank_name"
+                                    value={assessmentForm.advance_bank_name}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. HDFC Bank Ltd, Kottayam"
+                                    className="assessment-input"
+                                  />
+                                </div>
+
+                                <div className="assessment-field-group">
+                                  <label className="assessment-field-label">Bank Account Number</label>
+                                  <input
+                                    type="text"
+                                    name="advance_bank_account_number"
+                                    value={assessmentForm.advance_bank_account_number}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. 50200084920194"
+                                    className="assessment-input font-mono"
+                                  />
+                                </div>
+
+                                <div className="assessment-field-group">
+                                  <label className="assessment-field-label">IFSC Code</label>
+                                  <input
+                                    type="text"
+                                    name="advance_ifsc_code"
+                                    value={assessmentForm.advance_ifsc_code}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. HDFC0001234"
+                                    className="assessment-input font-mono uppercase"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="assessment-field-group">
+                                  <label className="assessment-field-label">Beneficiary / Account Holder Name</label>
+                                  <input
+                                    type="text"
+                                    name="advance_account_holder"
+                                    value={assessmentForm.advance_account_holder}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. Rohith Kumar"
+                                    className="assessment-input"
+                                  />
+                                </div>
+
+                                <div className="assessment-field-group">
+                                  <label className="assessment-field-label">Mobilization Note (Optional)</label>
+                                  <input
+                                    type="text"
+                                    name="advance_remarks"
+                                    value={assessmentForm.advance_remarks}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g. Advance mobilization fee covers crew staging and haulage logistics."
+                                    className="assessment-input"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
 
@@ -3815,13 +4132,13 @@ const extractLandownerValue = (req, vol) => {
                         <button
                           type="submit"
                           disabled={isSubmitting}
-                          className={`cd-btn-primary ${(isRevisionRequested || revisionDraft || isAlreadyRevised) ? 'cd-btn-primary-revision' : ''}`}
+                          className={`cd-btn-primary ${(isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? 'cd-btn-primary-revision' : ''}`}
                         >
                           {isSubmitting ? (
                             <>
                               <Loader2 size={16} className="animate-spin" /> Submitting Official Quotation...
                             </>
-                          ) : (isRevisionRequested || revisionDraft || isAlreadyRevised) ? (
+                          ) : (isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? (
                             <>
                               <RefreshCw size={16} /> Submit Revised Quote ({formatRupees(assessmentForm.total_quote || assessmentForm.contractor_purchase_offer || assessmentForm.timber_purchase_price || 93500)})
                             </>

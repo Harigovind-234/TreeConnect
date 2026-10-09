@@ -7,6 +7,8 @@ import ApprovedContractorSelector from '../../components/workflow/ApprovedContra
 import RevisionRequestModal from '../../components/workflow/RevisionRequestModal';
 import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
 import RescheduleInspectionModal from '../../components/workflow/RescheduleInspectionModal';
+import RecordAdvancePaymentModal from '../../components/workflow/RecordAdvancePaymentModal';
+import AdvancePaymentCard from '../../components/workflow/AdvancePaymentCard';
 import harvestService from '../../services/harvestService';
 import './LandownerDashboard.css';
 import {
@@ -17,6 +19,7 @@ import {
   CheckCircle2,
   Calendar,
   CalendarClock,
+  CalendarCheck,
   Layers,
   ChevronRight,
   ShieldCheck,
@@ -119,6 +122,7 @@ const HarvestRequestsPage = () => {
   const [revisionModalReq, setRevisionModalReq] = useState(null);
   const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
   const [rescheduleModalReq, setRescheduleModalReq] = useState(null);
+  const [selectedRecordPaymentModal, setSelectedRecordPaymentModal] = useState(null);
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [loadingAssessments, setLoadingAssessments] = useState({});
   const [actionMessage, setActionMessage] = useState('');
@@ -364,6 +368,118 @@ const HarvestRequestsPage = () => {
       console.error("Error withdrawing reschedule request:", err);
     }
   };
+
+  // Handle Landowner Confirming / Accepting Date Preferred by Contractor
+  const [confirmingDateId, setConfirmingDateId] = useState(null);
+
+  const handleConfirmInspectionDate = async (requestId, inspection) => {
+    setConfirmingDateId(requestId);
+    try {
+      const nowIso = new Date().toISOString();
+      await harvestService.confirmInspectionDate(requestId, {
+        confirmed_by: 'LANDOWNER',
+        notes: 'Date accepted by landowner'
+      });
+
+      // Synchronize in localStorage for instant reactive update
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(r => {
+            if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+              return {
+                ...r,
+                reschedule_requested: false,
+                inspection_status: 'CONFIRMED',
+                site_inspection: {
+                  ...(r.site_inspection || {}),
+                  landowner_confirmed: true,
+                  landowner_confirmed_at: nowIso,
+                  status: 'CONFIRMED',
+                  reschedule_requested: false
+                }
+              };
+            }
+            return r;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (errLocal) {
+        console.warn("Could not sync confirmation to localStorage:", errLocal);
+      }
+
+      const dateStr = formatDateDMY(inspection?.scheduled_date);
+      setActionMessage(`Site inspection visit on ${dateStr} successfully confirmed and accepted! Contractor notified.`);
+      setTimeout(() => setActionMessage(''), 5000);
+      refreshHarvestRequests();
+    } catch (err) {
+      console.error("Error confirming inspection date:", err);
+      setActionMessage("Failed to confirm inspection date: " + (err?.message || 'Error'));
+      setTimeout(() => setActionMessage(''), 4000);
+    } finally {
+      setConfirmingDateId(null);
+    }
+  };
+
+  // Handle Landowner Recording Advance Payment
+  const handleRecordAdvancePayment = async (requestId, paymentData) => {
+    try {
+      const nowIso = new Date().toISOString();
+      const newPayment = {
+        payment_id: `PAY-ADV-${Date.now()}`,
+        harvest_request_id: String(requestId),
+        amount: Number(paymentData.amount),
+        payment_method: paymentData.payment_method,
+        transaction_reference: paymentData.transaction_reference,
+        payment_date: paymentData.payment_date,
+        receipt_url: paymentData.receipt_url || '',
+        notes: paymentData.notes || '',
+        status: 'VERIFICATION_PENDING',
+        created_at: nowIso,
+        updated_at: nowIso
+      };
+
+      // Optimistically update localStorage for zero-latency reactive UI
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(r => {
+            if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+              const prevPayments = Array.isArray(r.payments) ? r.payments : [];
+              return {
+                ...r,
+                advance_payment_status: 'VERIFICATION_PENDING',
+                is_advance_verified: false,
+                latest_payment: newPayment,
+                payments: [newPayment, ...prevPayments.filter(p => p.transaction_reference !== newPayment.transaction_reference)],
+                assessment: {
+                  ...(r.assessment || {}),
+                  advance_payment_status: 'VERIFICATION_PENDING',
+                  latest_payment: newPayment
+                }
+              };
+            }
+            return r;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (errLocal) {
+        console.warn("Could not sync payment record to localStorage:", errLocal);
+      }
+
+      await harvestService.submitAdvancePayment(requestId, paymentData);
+      setActionMessage("Advance mobilization payment recorded successfully! Status: Verification Pending by contractor.");
+      setTimeout(() => setActionMessage(''), 5000);
+      refreshHarvestRequests();
+    } catch (err) {
+      console.error("Error recording advance payment:", err);
+      setActionMessage("Failed to record payment: " + (err.message || 'Error'));
+      setTimeout(() => setActionMessage(''), 5000);
+    }
+  };
+
 
   // Scroll to targeted inspection visit or request if navigated from dashboard
   useEffect(() => {
@@ -620,7 +736,15 @@ const HarvestRequestsPage = () => {
                         const harvestArrangementCostVal = assDoc.harvesting_arrangement_cost ?? req.harvesting_arrangement_cost;
                         const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
                         const isInspectedSite = Boolean(req.site_inspected || isInspectionCompleted || assDoc.is_reassessed_after_inspection || req.inspection_status === 'COMPLETED');
-                        const isAgreementReady = Boolean(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement || assDoc.status === 'ACCEPTED');
+                        const isAgreementReady = Boolean(
+                          isAccepted ||
+                          req.status === 'OPERATION_READY' ||
+                          req.status === 'IN_PROGRESS' ||
+                          req.status === 'COMPLETED' ||
+                          req.digital_agreement ||
+                          assDoc.status === 'ACCEPTED' ||
+                          req.advance_payment_request
+                        );
                         const fellingCost = assDoc.harvesting_cost ?? assDoc.felling_cost ?? req.harvesting_cost ?? req.felling_cost ?? 45000;
                         const extractionCost = assDoc.extraction_cost ?? req.extraction_cost ?? 30000;
                         const transportCost = assDoc.transportation_cost ?? req.transportation_cost ?? 25000;
@@ -729,16 +853,28 @@ const HarvestRequestsPage = () => {
                                     </p>
                                   </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
-                                  className="qtn-btn-agreement"
-                                >
-                                  <FileCheck size={14} />
-                                  <span>View Digital Agreement</span>
-                                </button>
+                                <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
+                                    className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                                    title="Request quotation adjustment, counter-offer budget or renegotiate terms"
+                                  >
+                                    <RefreshCw size={13} />
+                                    <span>Revise Quotation</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
+                                    className="qtn-btn-agreement"
+                                  >
+                                    <FileCheck size={14} />
+                                    <span>View Digital Agreement</span>
+                                  </button>
+                                </div>
                               </div>
                             )}
+
 
                             {/* 2. KEY METRICS GRID (4-5 CARDS) */}
                             <div className="qtn-metrics-grid">
@@ -952,8 +1088,9 @@ const HarvestRequestsPage = () => {
                             )}
 
                             {/* 5. COUNTER-OFFER SECTION (ACTIVE NEGOTIATION) */}
-                            {isRevisionRequested ? (
+                            {isRevisionRequested && (
                               <div className="qtn-counter-section">
+
                                 <div className="qtn-counter-header">
                                   <div className="qtn-counter-header-left">
                                     <div className="qtn-counter-icon-wrap">
@@ -1041,8 +1178,10 @@ const HarvestRequestsPage = () => {
                                   </div>
                                 )}
                               </div>
-                            ) : !isAgreementReady ? (
-                              /* Action Bar (When no revision is active) */
+                            )}
+
+                            {/* Action Bar (When proposal is under review and not yet accepted) */}
+                            {!isAgreementReady && !isRevisionRequested && (
                               <div className="qtn-action-bar">
                                 <div className="qtn-action-hint">
                                   <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
@@ -1090,8 +1229,63 @@ const HarvestRequestsPage = () => {
                                   </button>
                                 </div>
                               </div>
-                            ) : null}
+                            )}
+
+                            {/* DIGITAL AGREEMENT & ADVANCE MOBILIZATION WORKFLOW */}
+                            {(isAgreementReady || req.advance_payment_request || assDoc.advance_payment_request) && (
+                              <div className="space-y-4 pt-3">
+                                {/* DIGITAL HARVEST AGREEMENT FINALIZED BANNER */}
+                                <div className="cd-agreement-strip">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="cd-inspection-icon-box cd-inspection-icon-completed shrink-0">
+                                      <FileCheck size={18} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="text-sm font-extrabold text-white">
+                                          Digital Harvest Agreement Finalized &amp; Binding
+                                        </h4>
+                                        <span className="cd-payment-status-pill cd-payment-pill-verified font-mono">
+                                          {req.digital_agreement?.agreement_id || `TC-AGR-${String(reqId).slice(-6).toUpperCase()}`}
+                                        </span>
+                                      </div>
+                                      <p className="cd-inspection-desc">
+                                        Agreement executed with <strong className="text-slate-200">{req.assigned_contractor_name || 'Assigned Contractor'}</strong>. Proposed operation start date: <strong className="text-emerald-300">{formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date)}</strong>.
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
+                                      className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                                      title="Request quotation adjustment or renegotiate terms"
+                                    >
+                                      <RefreshCw size={13} />
+                                      <span>Revise Quotation</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
+                                      className="cd-btn-inspect-primary shrink-0 cursor-pointer"
+                                    >
+                                      <FileCheck size={14} />
+                                      <span>View Digital Agreement</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* ADVANCE PAYMENT MANAGEMENT CARD */}
+                                <AdvancePaymentCard
+                                  request={req}
+                                  role="landowner"
+                                  onRecordPayment={() => setSelectedRecordPaymentModal(req)}
+                                />
+                              </div>
+                            )}
                           </div>
+
                         );
                       })()}
 
@@ -1113,15 +1307,20 @@ const HarvestRequestsPage = () => {
                                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                                       Reschedule Requested
                                     </span>
+                                  ) : inspection.landowner_confirmed ? (
+                                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
+                                      <CheckCircle2 size={13} className="text-emerald-400" />
+                                      Visit Confirmed &amp; Accepted by You
+                                    </span>
                                   ) : (inspection.reschedule_status === 'ACCEPTED' || (inspection.original_scheduled_date && inspection.original_scheduled_date !== inspection.scheduled_date)) ? (
                                     <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
                                       <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                                       ✓ Rescheduled Visit Confirmed
                                     </span>
                                   ) : (
-                                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5">
-                                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                      Confirmed Visit
+                                    <span className="px-3 py-0.5 rounded-full text-xs font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 flex items-center gap-1.5">
+                                      <Clock size={13} className="text-emerald-400 animate-pulse" />
+                                      Date Preferred by Contractor
                                     </span>
                                   )}
                                 </div>
@@ -1191,6 +1390,71 @@ const HarvestRequestsPage = () => {
                                 >
                                   Keep Original
                                 </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* PROMPT TO CONFIRM CONTRACTOR PREFERRED DATE BANNER */}
+                          {!inspection.reschedule_requested && !inspection.landowner_confirmed && (
+                            <div className="scheduled-btn-confirm-banner">
+                              <div className="flex items-start sm:items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                                  <CalendarCheck size={20} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-extrabold text-white text-sm">
+                                      Date Preferred by Contractor: <strong className="text-emerald-300">{formatDateDMY(inspection.scheduled_date)} ({inspection.time_slot || 'Morning Slot'})</strong>
+                                    </span>
+                                    <span className="text-[11px] font-bold text-emerald-300 bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                                      Acceptance Needed
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                                    The contractor has proposed this visit window. Click <strong>Confirm &amp; Accept Date</strong> to accept, or suggest an alternate date if unavailable.
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto mt-2 sm:mt-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfirmInspectionDate(reqId, inspection)}
+                                  disabled={confirmingDateId === reqId}
+                                  className="scheduled-btn-confirm"
+                                  title="Accept and confirm this preferred inspection date"
+                                >
+                                  {confirmingDateId === reqId ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                  ) : (
+                                    <Check size={16} />
+                                  )}
+                                  <span>{confirmingDateId === reqId ? 'Confirming...' : 'Confirm & Accept Date'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* CONFIRMED NOTICE BANNER */}
+                          {!inspection.reschedule_requested && inspection.landowner_confirmed && (
+                            <div className="scheduled-confirmed-banner">
+                              <div className="flex items-start sm:items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                                  <CheckCircle2 size={19} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-extrabold text-emerald-300 text-sm">
+                                      ✓ Visit Date Confirmed &amp; Accepted by You
+                                    </span>
+                                    <span className="text-[10.5px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                      {formatDateDMY(inspection.scheduled_date)} • {inspection.time_slot || 'Morning Slot'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                                    You have confirmed and accepted this inspection date. The field assessor will arrive during this window.
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1315,16 +1579,43 @@ const HarvestRequestsPage = () => {
                             </div>
                           )}
 
-                          {/* Advisory & Action Bar */}
+                          {/* Preparation Tip for Landowner */}
+                          <div className="scheduled-tip-box text-xs sm:text-sm">
+                            <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                            <div className="min-w-0 flex-1 leading-relaxed text-slate-300">
+                              <strong className="text-white font-bold mr-1.5">Preparation Tip:</strong>
+                              <span>Please ensure estate entrance gate is accessible and boundaries are marked for the survey crew. No tree cutting occurs during this visit.</span>
+                            </div>
+                          </div>
+
+                          {/* Action Bar */}
                           <div className="scheduled-action-bar text-xs sm:text-sm">
-                            <div className="flex items-start sm:items-center gap-2.5 text-slate-300 flex-1 min-w-0">
-                              <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5 sm:mt-0" />
-                              <span className="leading-relaxed">
-                                <strong className="text-white">Preparation Tip:</strong> Please ensure estate entrance gate is accessible and boundaries are marked for the survey crew. No tree cutting occurs during this visit.
-                              </span>
+                            <div className="scheduled-action-group-left">
+                              {/* Confirm and Accept Date preferred by contractor */}
+                              {!inspection.reschedule_requested && !inspection.landowner_confirmed ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfirmInspectionDate(reqId, inspection)}
+                                  disabled={confirmingDateId === reqId}
+                                  className="scheduled-btn-confirm"
+                                  title="Confirm and accept this preferred date for contractor's site visit"
+                                >
+                                  {confirmingDateId === reqId ? (
+                                    <Loader2 size={15} className="animate-spin" />
+                                  ) : (
+                                    <Check size={15} />
+                                  )}
+                                  <span>{confirmingDateId === reqId ? 'Confirming...' : 'Confirm & Accept Date'}</span>
+                                </button>
+                              ) : !inspection.reschedule_requested && inspection.landowner_confirmed ? (
+                                <div className="scheduled-confirmed-badge" title="You have confirmed this appointment date">
+                                  <CheckCircle2 size={15} className="text-emerald-400" />
+                                  <span>Date Accepted by You</span>
+                                </div>
+                              ) : null}
                             </div>
 
-                            <div className="flex items-center gap-3 shrink-0 flex-wrap">
+                            <div className="scheduled-action-group-right">
                               <button
                                 type="button"
                                 onClick={() => setRescheduleModalReq(req)}
@@ -2034,6 +2325,15 @@ const HarvestRequestsPage = () => {
                 onClose={() => setRescheduleModalReq(null)}
                 onSubmit={(data) => handleRescheduleInspection(rescheduleModalReq.id || rescheduleModalReq._id, data)}
                 onWithdraw={() => handleWithdrawReschedule(rescheduleModalReq.id || rescheduleModalReq._id)}
+              />
+            )}
+
+            {/* MODAL FOR RECORDING ADVANCE PAYMENT */}
+            {selectedRecordPaymentModal && (
+              <RecordAdvancePaymentModal
+                request={selectedRecordPaymentModal}
+                onClose={() => setSelectedRecordPaymentModal(null)}
+                onSubmit={(data) => handleRecordAdvancePayment(selectedRecordPaymentModal.id || selectedRecordPaymentModal._id, data)}
               />
             )}
 

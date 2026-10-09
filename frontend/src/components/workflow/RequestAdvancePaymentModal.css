@@ -1,0 +1,383 @@
+/* ==========================================================
+   REQUEST ADVANCE PAYMENT MODAL (CONTRACTOR PORTAL DESIGN SYSTEM)
+   Matches Contractor Portal (Assigned Jobs & Dashboard)
+   ========================================================== */
+
+.cd-advance-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 8, 4, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  overflow-y: auto;
+  animation: cdAdvFadeIn 0.2s ease-out;
+}
+
+@keyframes cdAdvFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cd-advance-modal {
+  width: 100%;
+  max-width: 860px;
+  max-height: 90vh;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #0b1711;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 20px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(16, 185, 129, 0.12);
+  animation: cdAdvScaleIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+@keyframes cdAdvScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Modal Header */
+.cd-advance-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #08130d;
+  flex-shrink: 0;
+  gap: 16px;
+}
+
+/* Modal Scrollable Body */
+.cd-advance-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+/* Modal Fixed Footer */
+.cd-advance-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(16, 185, 129, 0.2);
+  background: #07100b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* Quotation Overview Strip */
+.cd-advance-quote-card {
+  background: linear-gradient(135deg, rgba(6, 28, 16, 0.8) 0%, rgba(4, 18, 11, 0.9) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* Two-Panel Layout */
+.cd-advance-panels-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .cd-advance-panels-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Panel Card */
+.cd-advance-panel {
+  background: rgba(8, 24, 16, 0.7);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.cd-advance-panel-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Bank Account Panel */
+.cd-advance-account-panel {
+  background: rgba(8, 24, 16, 0.7);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Form Groups & Grid */
+.cd-advance-form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .cd-advance-form-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Labels */
+.cd-inspection-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Inputs, Selects, Textareas */
+.cd-advance-input {
+  width: 100%;
+  background: #060e0a;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.cd-advance-input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+  background: #08140e;
+}
+
+.cd-advance-input.monospace {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+input[type="date"].cd-advance-input {
+  color-scheme: dark !important;
+  cursor: pointer;
+}
+
+input[type="date"].cd-advance-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1);
+  opacity: 0.9;
+  padding: 3px;
+  border-radius: 6px;
+  background-color: rgba(16, 185, 129, 0.35);
+  transition: all 0.2s ease;
+}
+
+input[type="date"].cd-advance-input::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(16, 185, 129, 0.65);
+  transform: scale(1.1);
+}
+
+/* Sliders & Chips */
+.cd-advance-range-slider {
+  width: 100%;
+  height: 6px;
+  background: #060e0a;
+  border-radius: 8px;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.cd-advance-range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.7);
+  transition: transform 0.15s ease;
+}
+
+.cd-advance-range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.cd-advance-range-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.7);
+}
+
+/* Preset Chips */
+.cd-advance-chips-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cd-advance-chip {
+  flex: 1;
+  padding: 6px 0;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+}
+
+.cd-advance-chip:hover {
+  color: #ffffff;
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.cd-advance-chip.active {
+  background: #10b981;
+  border-color: #10b981;
+  color: #021a0d;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+/* Buttons */
+.cd-advance-btn-submit {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.6);
+  height: 42px;
+  padding: 0 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.cd-advance-btn-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  color: #021a0d;
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.5);
+  transform: translateY(-1px);
+}
+
+.cd-advance-btn-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.cd-advance-btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.cd-advance-btn-cancel:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .cd-advance-modal {
+    max-height: 94vh;
+    border-radius: 16px;
+    width: 96%;
+  }
+  .cd-advance-header {
+    padding: 14px 18px;
+  }
+  .cd-advance-body {
+    padding: 16px 18px;
+    gap: 14px;
+  }
+  .cd-advance-footer {
+    padding: 14px 18px;
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .cd-advance-footer > * {
+    width: 100%;
+  }
+  .cd-advance-btn-submit,
+  .cd-advance-btn-cancel {
+    width: 100%;
+  }
+}

@@ -122,6 +122,29 @@ export const harvestService = {
     }
   },
 
+  // Landowner confirms & accepts inspection date preferred by contractor
+  confirmInspectionDate: async (requestId, confirmData = {}) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/confirm-inspection`, confirmData);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back to patch for confirmInspectionDate (${requestId}):`, error);
+      const nowIso = new Date().toISOString();
+      const response = await api.patch(`/harvest-requests/${requestId}`, {
+        site_inspection: {
+          landowner_confirmed: true,
+          landowner_confirmed_at: nowIso,
+          status: 'CONFIRMED',
+          reschedule_requested: false,
+          ...confirmData
+        },
+        inspection_status: 'CONFIRMED',
+        reschedule_requested: false
+      });
+      return response.data;
+    }
+  },
+
   // Contractor responds to reschedule (accept, decline, or counter)
   respondReschedule: async (requestId, responseData) => {
     try {
@@ -220,6 +243,72 @@ export const harvestService = {
       return response.data;
     } catch (error) {
       console.error(`Error in harvestService.deleteHarvestRequest (${id}):`, error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Contractor requests advance payment
+  requestAdvancePayment: async (requestId, requestData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/advance-payment/request`, requestData);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.requestAdvancePayment (${requestId}):`, error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Landowner records advance payment
+  submitAdvancePayment: async (requestId, paymentData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/advance-payment/submit`, paymentData);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.submitAdvancePayment (${requestId}):`, error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Contractor / Admin verifies or rejects advance payment
+  verifyAdvancePayment: async (requestId, verifyData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/advance-payment/verify`, verifyData);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.verifyAdvancePayment (${requestId}):`, error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Get harvest payments and remaining balance
+  getPayments: async (requestId) => {
+    try {
+      const response = await api.get(`/harvest-requests/${requestId}/payments`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.getPayments (${requestId}):`, error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Start harvesting operation (checks advance payment verification)
+  startHarvest: async (requestId) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/start`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.startHarvest (${requestId}):`, error);
+      throw error.response?.data || error;
+    }
+  },
+
+  // Complete harvesting operation
+  completeHarvest: async (requestId, completeData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/complete`, completeData);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.completeHarvest (${requestId}):`, error);
       throw error.response?.data || error;
     }
   }
