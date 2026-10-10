@@ -4,6 +4,7 @@ import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import harvestService from '../../services/harvestService';
+import api from '../../services/api';
 import './ContractorDashboard.css';
 import {
   Truck,
@@ -33,6 +34,7 @@ import {
   Info,
   X,
   AlertTriangle,
+  AlertCircle,
   Award,
   TreePine,
   Trees,
@@ -84,6 +86,12 @@ const ContractorDashboard = () => {
   const [assignedRequests, setAssignedRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
 
+  // Notifications Mock for Contractor Dashboard
+  const notifications = [
+    { id: 1, text: "Advance Payment of ₹ 37,538 verified for Job #6ACA2885.", time: "10 mins ago", type: "success" },
+    { id: 2, text: "Landowner 'Harigovind D Nair' accepted your quotation.", time: "2 hours ago", type: "info" }
+  ];
+
   // Compact / Expandable state for harvest requests
   const [expandedReqs, setExpandedReqs] = useState({});
   const [detailModalReq, setDetailModalReq] = useState(null);
@@ -104,12 +112,54 @@ const ContractorDashboard = () => {
 
   const [jobs, setJobs] = useState([]);
 
-  const [fleetEquipment, setFleetEquipment] = useState([
-    { id: 1, name: 'Caterpillar 545D Skidder', category: 'Skidder', status: 'In Operation', location: 'Wayanad Stand #1', operator: 'Dave Miller', lastService: '2026-07-20' },
-    { id: 2, name: 'Tigercat 870D Feller Buncher', category: 'Feller Buncher', status: 'In Operation', location: 'Wayanad Stand #1', operator: 'Sarah Jenkins', lastService: '2026-07-15' },
-    { id: 3, name: 'Komatsu XT445L-5 Harvester', category: 'Harvester', status: 'Maintenance', location: 'Central Workshop', operator: 'Unassigned', lastService: '2026-08-01' },
-    { id: 4, name: 'Volvo FMX Log Hauler Truck', category: 'Log Truck', status: 'In Operation', location: 'Palakkad Route #4', operator: 'Rajesh Kumar', lastService: '2026-07-28' }
-  ]);
+  const [fleetEquipment, setFleetEquipment] = useState([]);
+  const [showFleetModal, setShowFleetModal] = useState(false);
+  const [fleetForm, setFleetForm] = useState({ name: '', category: 'Skidder', status: 'In Operation', location: '', operator: '', lastService: '' });
+  const [editingFleetId, setEditingFleetId] = useState(null);
+
+  useEffect(() => {
+    const fetchFleet = async () => {
+      try {
+        const res = await api.get('/auth/user-profile');
+        if (res.data?.user?.fleet_equipment) {
+          setFleetEquipment(res.data.user.fleet_equipment);
+        }
+      } catch (err) {
+        console.error("Failed to fetch fleet", err);
+      }
+    };
+    fetchFleet();
+  }, []);
+
+  const handleSaveFleet = async () => {
+    let updated = [...fleetEquipment];
+    if (editingFleetId) {
+      updated = updated.map(f => f.id === editingFleetId ? { ...fleetForm, id: editingFleetId } : f);
+    } else {
+      updated.push({ ...fleetForm, id: Date.now().toString() });
+    }
+    
+    try {
+      await api.put('/auth/user-profile/fleet', { fleet_equipment: updated });
+      setFleetEquipment(updated);
+      setShowFleetModal(false);
+    } catch (err) {
+      console.error("Failed to save fleet", err);
+      alert("Failed to save fleet.");
+    }
+  };
+
+  const handleDeleteFleet = async (id) => {
+    const updated = fleetEquipment.filter(f => f.id !== id);
+    try {
+      await api.put('/auth/user-profile/fleet', { fleet_equipment: updated });
+      setFleetEquipment(updated);
+    } catch (err) {
+      console.error("Failed to delete fleet", err);
+      alert("Failed to delete fleet.");
+    }
+  };
+
 
   // Helper to filter out known fake/mock harvest requests
   const isFakeOrMockRequest = (r) => {
@@ -354,41 +404,6 @@ const ContractorDashboard = () => {
         }
       } catch (e) {}
 
-      // Supplement with verified active Kerala forestry listings if catalog has fewer than 3 listings
-      const verifiedKeralaListings = [
-        {
-          id: 'job_wayanad_teak_01',
-          harvestRequestId: null,
-          parcel: 'Wayanad Teakwood Plantation (5.5 Acres)',
-          owner: 'P. K. Varma / Nilambur Heritage Estate',
-          location: 'Mananthavady, Wayanad, Kerala',
-          species: 'Teak (Tectona grandis)',
-          volume: '8.5 m³',
-          deadline: '18-10-2026',
-          estBudget: formatINR(calculateApproxTimberValue('Teak', 8.5)),
-          myBid: savedBids['job_wayanad_teak_01'] ? (typeof savedBids['job_wayanad_teak_01'] === 'number' ? formatINR(savedBids['job_wayanad_teak_01']) : savedBids['job_wayanad_teak_01']) : null
-        },
-        {
-          id: 'job_palakkad_rosewood_02',
-          harvestRequestId: null,
-          parcel: 'Palakkad Hardwood & Rosewood Estate (3.2 Acres)',
-          owner: 'Sunil Menon / Malabar Timber Groves',
-          location: 'Ottapalam, Palakkad, Kerala',
-          species: 'Rosewood & Mahogany',
-          volume: '6.2 m³',
-          deadline: '25-10-2026',
-          estBudget: formatINR(calculateApproxTimberValue('Rosewood', 6.2)),
-          myBid: savedBids['job_palakkad_rosewood_02'] ? (typeof savedBids['job_palakkad_rosewood_02'] === 'number' ? formatINR(savedBids['job_palakkad_rosewood_02']) : savedBids['job_palakkad_rosewood_02']) : null
-        }
-      ];
-
-      verifiedKeralaListings.forEach(item => {
-        if (!seenJobIds.has(item.id)) {
-          jobList.push(item);
-          seenJobIds.add(item.id);
-        }
-      });
-
       setJobs(jobList);
     } catch (err) {
       console.warn("Could not load contractor assigned harvest requests:", err);
@@ -469,20 +484,47 @@ const ContractorDashboard = () => {
         <div className="dashboard-workspace">
           <main className="dashboard-content">
 
-            {/* HERO WELCOME CARD */}
-            <section className="hero-welcome-card card">
-              <div className="hero-welcome-body">
-                <div className="hero-welcome-text">
-                  <span className="hero-greeting-badge">
-                    <Award size={14} /> Verified Kerala Harvesting Contractor
-                  </span>
-                  <h1 className="hero-title-text">Welcome Back, {contractorName}</h1>
-                  <p className="hero-subtitle-text">
-                    Review assigned landowner harvest requests, inspect site specifications & tree inventories, and submit formal contractor assessments & quotations.
-                  </p>
+            {/* TOP ROW: HERO & NOTIFICATIONS */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              
+              {/* HERO WELCOME CARD */}
+              <div className="lg:col-span-2">
+                <section className="hero-welcome-card card h-full mb-0">
+                  <div className="hero-welcome-body">
+                    <div className="hero-welcome-text">
+                      <span className="hero-greeting-badge">
+                        <Award size={14} /> Verified Kerala Harvesting Contractor
+                      </span>
+                      <h1 className="hero-title-text">Welcome Back, {contractorName}</h1>
+                      <p className="hero-subtitle-text">
+                        Review assigned landowner harvest requests, inspect site specifications & tree inventories, and submit formal contractor assessments & quotations.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* RECENT NOTIFICATIONS */}
+              <div className="lg:col-span-1 bg-[#0a1610] border border-emerald-500/20 rounded-2xl p-5 shadow-md flex flex-col h-full">
+                <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <AlertCircle size={16} /> Recent Notifications
+                </h3>
+                <div className="flex flex-col gap-3 overflow-y-auto max-h-[160px] custom-scrollbar pr-1">
+                  {notifications.map(n => (
+                    <div key={n.id} className="text-sm p-3 rounded-xl bg-black/40 border border-slate-800/60 flex flex-col gap-2">
+                      <div className="flex justify-between items-start">
+                        <span className="text-slate-200 leading-relaxed">{n.text}</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-500/70 font-medium self-end">{n.time}</span>
+                    </div>
+                  ))}
+                  {notifications.length === 0 && (
+                     <div className="text-sm text-slate-500 italic p-4 text-center">No recent notifications</div>
+                  )}
                 </div>
               </div>
-            </section>
+
+            </div>
 
             {/* ASSIGNED LANDOWNER HARVEST REQUESTS (ASSESSMENT WORKFLOW) */}
             <section className="dashboard-section card highlight-card border border-emerald-500/30">
@@ -1018,7 +1060,19 @@ const ContractorDashboard = () => {
                   <h2 className="section-heading"><Truck size={18} /> Logging Machinery Fleet Status</h2>
                   <p className="section-subtext">Monitor equipment deployment, assigned operators, and maintenance schedule</p>
                 </div>
-                <span className="dash-user-count font-semibold">{fleetEquipment.length} Fleet Units</span>
+                <div className="flex items-center gap-4">
+                  <span className="dash-user-count font-semibold">{fleetEquipment.length} Fleet Units</span>
+                  <button
+                    onClick={() => {
+                      setEditingFleetId(null);
+                      setFleetForm({ name: '', category: 'Skidder', status: 'In Operation', location: '', operator: '', lastService: '' });
+                      setShowFleetModal(true);
+                    }}
+                    className="cd-btn-primary flex items-center gap-1 text-xs py-1.5 px-3"
+                  >
+                    <Plus size={14} /> Add Equipment
+                  </button>
+                </div>
               </div>
               <div className="table-wrapper">
                 <table className="data-table">
@@ -1030,6 +1084,7 @@ const ContractorDashboard = () => {
                       <th>Deployed Location</th>
                       <th>Assigned Operator</th>
                       <th>Last Serviced</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1046,6 +1101,26 @@ const ContractorDashboard = () => {
                         <td className="text-slate-300">{eq.location}</td>
                         <td className="text-white font-medium">{eq.operator}</td>
                         <td className="text-slate-400 text-xs">{eq.lastService}</td>
+                        <td>
+                          <button
+                            onClick={() => {
+                              setEditingFleetId(eq.id);
+                              setFleetForm(eq);
+                              setShowFleetModal(true);
+                            }}
+                            className="text-emerald-400 hover:text-emerald-300 mr-2 text-xs"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => {
+                              if(window.confirm('Delete this equipment?')) handleDeleteFleet(eq.id);
+                            }}
+                            className="text-red-400 hover:text-red-300 text-xs"
+                          >
+                            Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1264,6 +1339,96 @@ const ContractorDashboard = () => {
           </div>
         </div>
       )}
+      {/* Fleet Modal */}
+      {showFleetModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0a120c] border border-emerald-500/30 rounded-3xl max-w-md w-full p-7 shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-4">{editingFleetId ? 'Edit Equipment' : 'Add Equipment'}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Model / Name</label>
+                <input
+                  type="text"
+                  value={fleetForm.name}
+                  onChange={(e) => setFleetForm({ ...fleetForm, name: e.target.value })}
+                  className="w-full bg-[#041008] border border-emerald-500/20 rounded-lg p-2 text-sm text-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Category</label>
+                  <select
+                    value={fleetForm.category}
+                    onChange={(e) => setFleetForm({ ...fleetForm, category: e.target.value })}
+                    className="w-full bg-[#041008] border border-emerald-500/20 rounded-lg p-2 text-sm text-white"
+                  >
+                    <option value="Skidder">Skidder</option>
+                    <option value="Feller Buncher">Feller Buncher</option>
+                    <option value="Harvester">Harvester</option>
+                    <option value="Log Truck">Log Truck</option>
+                    <option value="Crane">Crane</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Status</label>
+                  <select
+                    value={fleetForm.status}
+                    onChange={(e) => setFleetForm({ ...fleetForm, status: e.target.value })}
+                    className="w-full bg-[#041008] border border-emerald-500/20 rounded-lg p-2 text-sm text-white"
+                  >
+                    <option value="In Operation">In Operation</option>
+                    <option value="Maintenance">Maintenance</option>
+                    <option value="Available">Available</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={fleetForm.location}
+                  onChange={(e) => setFleetForm({ ...fleetForm, location: e.target.value })}
+                  className="w-full bg-[#041008] border border-emerald-500/20 rounded-lg p-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Operator</label>
+                <input
+                  type="text"
+                  value={fleetForm.operator}
+                  onChange={(e) => setFleetForm({ ...fleetForm, operator: e.target.value })}
+                  className="w-full bg-[#041008] border border-emerald-500/20 rounded-lg p-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Last Serviced</label>
+                <input
+                  type="date"
+                  value={fleetForm.lastService}
+                  onChange={(e) => setFleetForm({ ...fleetForm, lastService: e.target.value })}
+                  className="w-full bg-[#041008] border border-emerald-500/20 rounded-lg p-2 text-sm text-white"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowFleetModal(false)}
+                className="px-4 py-2 text-sm text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveFleet}
+                className="cd-btn-primary px-4 py-2 text-sm"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -678,6 +678,8 @@ const LandownerDashboard = () => {
               );
               const reductionAmt = assDoc.reduction ?? req.reduction ?? (previousQuoteVal && totalQuoteVal < previousQuoteVal ? previousQuoteVal - totalQuoteVal : 0);
               const reductionPct = (previousQuoteVal && reductionAmt > 0) ? Math.round((reductionAmt / previousQuoteVal) * 100) : 0;
+              const isRevision = isRevisionActive;
+              const isRevisionRequested = isRevisionActive;
 
               return (
                 <section key={reqId || qIdx} id="quotation-verification-section" className="quotation-verification-card">
@@ -925,7 +927,7 @@ const LandownerDashboard = () => {
                   )}
 
                   {/* ACTIVE REVISION COUNTER-OFFER BANNER (WHEN IN NEGOTIATION) */}
-                  {isRevision && (() => {
+                  {isRevisionActive && (() => {
                     const counterAmt = assDoc.counter_offer_amount || req.counter_offer_amount;
                     const diffAmt = counterAmt ? totalQuoteVal - counterAmt : null;
                     const diffPct = (counterAmt && totalQuoteVal) ? Math.round(((totalQuoteVal - counterAmt) / totalQuoteVal) * 100) : null;
@@ -1046,15 +1048,6 @@ const LandownerDashboard = () => {
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => setRevisionModalReq({ req, assessment: assDoc })}
-                            className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                            title="Request quotation adjustment or renegotiate terms"
-                          >
-                            <RefreshCw size={13} />
-                            <span>Revise Quotation</span>
-                          </button>
                           <button
                             type="button"
                             onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
@@ -1293,7 +1286,7 @@ const LandownerDashboard = () => {
                 )}
 
                 {/* CONFIRMED NOTICE BANNER */}
-                {!inspection.reschedule_requested && inspection.landowner_confirmed && (
+                {!inspection.reschedule_requested && inspection.landowner_confirmed && inspection.status !== 'COMPLETED' && (
                   <div className="scheduled-confirmed-banner">
                     <div className="flex items-start sm:items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
@@ -1311,6 +1304,51 @@ const LandownerDashboard = () => {
                         <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
                           You have confirmed and accepted this inspection date. The field assessor will arrive during this window.
                         </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* COMPLETED INSPECTION BANNER */}
+                {inspection.status === 'COMPLETED' && (
+                  <div className="scheduled-confirmed-banner border-blue-500/30 bg-blue-900/10">
+                    <div className="flex items-start sm:items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/50 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
+                        <CheckCircle2 size={19} />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center w-full flex-wrap gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-blue-300 text-sm">
+                              ✓ Site Inspection Completed & Recorded
+                            </span>
+                            <span className="text-[10.5px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/30">
+                              {formatDateDMY(inspection.inspected_at || inspection.scheduled_date)}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                          The contractor has visited your property and officially recorded the ground-truth timber metrics.
+                        </p>
+                        
+                        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-blue-500/20 pt-3">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-blue-300/70 font-bold uppercase tracking-wider">Verified Trees</span>
+                                <span className="text-blue-100 font-semibold text-sm">{inspection.verified_tree_count || 'N/A'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-blue-300/70 font-bold uppercase tracking-wider">Est. Volume</span>
+                                <span className="text-emerald-400 font-bold text-sm">{inspection.estimated_volume ? `${inspection.estimated_volume} m³` : 'N/A'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-blue-300/70 font-bold uppercase tracking-wider">Timber Quality</span>
+                                <span className="text-blue-100 font-semibold text-sm truncate" title={inspection.timber_condition}>{inspection.timber_condition || 'N/A'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-blue-300/70 font-bold uppercase tracking-wider">Verdict</span>
+                                <span className="text-emerald-400 font-bold text-sm">{inspection.inspection_verdict || 'Feasible'}</span>
+                            </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2700,6 +2738,14 @@ const LandownerDashboard = () => {
           request={selectedRecordPaymentModal}
           onClose={() => setSelectedRecordPaymentModal(null)}
           onSubmit={(data) => handleRecordAdvancePayment(selectedRecordPaymentModal.id || selectedRecordPaymentModal._id, data)}
+          onPaymentSuccess={() => {
+            if (refreshHarvestRequests) refreshHarvestRequests();
+            setAssessmentActionMsg({
+              type: 'success',
+              text: 'Advance payment verified successfully via Razorpay! Work is now authorized to begin.'
+            });
+            setTimeout(() => setAssessmentActionMsg({ type: '', text: '' }), 5000);
+          }}
         />
       )}
     </div>

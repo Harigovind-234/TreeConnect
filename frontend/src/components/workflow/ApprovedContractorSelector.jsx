@@ -85,6 +85,7 @@ const ApprovedContractorSelector = ({
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [districtFilter, setDistrictFilter] = useState('all');
+  const [viewDetailsContractor, setViewDetailsContractor] = useState(null);
 
   useEffect(() => {
     const fetchApprovedContractors = async () => {
@@ -295,23 +296,36 @@ const ApprovedContractorSelector = ({
                     <FileCheck size={13} className="text-emerald-400" /> Admin Approved
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onSelectContractor(c);
-                    }}
-                    className={isSelected ? 'contractor-btn-selected' : 'contractor-btn-select'}
-                  >
-                    {isSelected ? (
-                      <>
-                        <Check size={14} strokeWidth={3} /> Selected Contractor
-                      </>
-                    ) : (
-                      'Select Contractor'
-                    )}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setViewDetailsContractor(c);
+                      }}
+                      className="contractor-btn-select bg-slate-800 text-white border-slate-700 hover:bg-slate-700"
+                    >
+                      More Details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSelectContractor(c);
+                      }}
+                      className={isSelected ? 'contractor-btn-selected' : 'contractor-btn-select'}
+                    >
+                      {isSelected ? (
+                        <>
+                          <Check size={14} strokeWidth={3} /> Selected
+                        </>
+                      ) : (
+                        'Select'
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -320,6 +334,93 @@ const ApprovedContractorSelector = ({
       )}
     </div>
   );
+  if (viewDetailsContractor) {
+    const c = viewDetailsContractor;
+    const fleet = c.fleet_equipment || [];
+    return (
+      <div className={isModal ? "fixed inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-4" : "p-4"}>
+        <div className="bg-[#0a120c] border border-emerald-500/30 rounded-3xl max-w-2xl w-full p-7 max-h-[85vh] overflow-y-auto shadow-2xl relative">
+          <button
+            onClick={() => setViewDetailsContractor(null)}
+            className="absolute top-6 right-6 p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+          >
+            <X size={18} />
+          </button>
+          
+          <h2 className="text-2xl font-bold text-white mb-2">{c.fullName || c.companyName || c.name}</h2>
+          <p className="text-sm text-emerald-400 mb-6 flex items-center gap-1">
+            <ShieldCheck size={16} /> Verified TreeConnect Contractor
+          </p>
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[#041008] border border-emerald-500/20 p-4 rounded-xl">
+                <span className="text-slate-400 text-xs block mb-1">Location</span>
+                <p className="text-white text-sm font-medium">{c.location || c.district || 'Not Specified'}</p>
+              </div>
+              <div className="bg-[#041008] border border-emerald-500/20 p-4 rounded-xl">
+                <span className="text-slate-400 text-xs block mb-1">Experience</span>
+                <p className="text-white text-sm font-medium">{c.experience || c.yearsOfExperience || 'Licensed'}</p>
+              </div>
+              <div className="bg-[#041008] border border-emerald-500/20 p-4 rounded-xl col-span-2">
+                <span className="text-slate-400 text-xs block mb-1">Licences</span>
+                <p className="text-white text-sm font-medium">{c.docType || 'Forest Licence, Trade Licence'}</p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                <Truck size={18} className="text-emerald-400" /> Fleet & Equipment
+              </h3>
+              {fleet.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-emerald-500/20 text-slate-400 text-xs uppercase">
+                        <th className="py-2 pr-4 font-semibold">Machinery Model</th>
+                        <th className="py-2 pr-4 font-semibold">Category</th>
+                        <th className="py-2 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fleet.map((eq, i) => (
+                        <tr key={i} className="border-b border-emerald-500/10 last:border-0 text-white">
+                          <td className="py-3 pr-4 font-medium">{eq.name}</td>
+                          <td className="py-3 pr-4"><span className="px-2 py-1 bg-emerald-900/30 text-emerald-400 text-[10px] uppercase font-bold rounded-full">{eq.category}</span></td>
+                          <td className="py-3">
+                            <span className={`flex items-center gap-1 text-[11px] uppercase font-bold ${eq.status === 'In Operation' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                              {eq.status === 'In Operation' ? <CheckCircle2 size={12}/> : <Wrench size={12}/>}
+                              {eq.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-[#041008] border border-emerald-500/20 text-center">
+                  <p className="text-slate-400 text-sm">No specialized fleet or equipment recorded for this contractor.</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end pt-4 border-t border-emerald-500/20">
+              <button
+                onClick={() => {
+                  setViewDetailsContractor(null);
+                  onSelectContractor(c);
+                }}
+                className="cd-btn-primary flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold shadow-lg"
+              >
+                Select This Contractor
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isModal) {
     return (

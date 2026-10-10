@@ -22,6 +22,8 @@ import {
   CalendarCheck,
   Layers,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   ShieldCheck,
   UserCheck,
   FileText,
@@ -117,6 +119,17 @@ const HarvestRequestsPage = () => {
   const refreshHarvestRequests = landownerCtx.refreshHarvestRequests || (() => { });
   const assignContractorToRequest = landownerCtx.assignContractorToRequest || (() => { });
   const deleteHarvestRequest = landownerCtx.deleteHarvestRequest || (() => { });
+  const setHarvestRequests = landownerCtx.setHarvestRequests;
+
+  const triggerUIUpdate = () => {
+    if (setHarvestRequests) {
+      try {
+        const stored = JSON.parse(localStorage.getItem('treeconnect_harvest_requests'));
+        if (stored) setHarvestRequests(stored);
+      } catch (e) {}
+    }
+    refreshHarvestRequests();
+  };
 
   const [selectedRequestForContractor, setSelectedRequestForContractor] = useState(null);
   const [revisionModalReq, setRevisionModalReq] = useState(null);
@@ -126,6 +139,14 @@ const HarvestRequestsPage = () => {
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [loadingAssessments, setLoadingAssessments] = useState({});
   const [actionMessage, setActionMessage] = useState('');
+  const [expandedRequests, setExpandedRequests] = useState({});
+
+  const toggleRequestExpanded = (reqId) => {
+    setExpandedRequests(prev => ({
+      ...prev,
+      [reqId]: !prev[reqId]
+    }));
+  };
   const [activePhotoModal, setActivePhotoModal] = useState(null); // { photos: [], index: 0, title: '' }
 
   const openPhotoLightbox = (photos, index = 0, title = 'Harvest Site Photo') => {
@@ -143,7 +164,7 @@ const HarvestRequestsPage = () => {
         await deleteHarvestRequest(requestId);
         setActionMessage("Harvest request deleted successfully.");
         setTimeout(() => setActionMessage(''), 3000);
-        refreshHarvestRequests();
+        triggerUIUpdate();
       } catch (err) {
         console.error("Error deleting harvest request:", err);
         setActionMessage("Failed to delete harvest request.");
@@ -152,6 +173,14 @@ const HarvestRequestsPage = () => {
   };
 
   // Fetch assessments eagerly for any request with assigned contractor or assessment
+  // Auto-refresh data every 15 seconds to ensure the page automatically loads changes
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      refreshHarvestRequests();
+    }, 15000);
+    return () => clearInterval(intervalId);
+  }, []); // Only run once on mount
+
   useEffect(() => {
     const fetchAssessments = async () => {
       for (const req of harvestRequests) {
@@ -263,7 +292,7 @@ const HarvestRequestsPage = () => {
       setTimeout(() => setActionMessage(''), 4500);
 
       // Refresh requests list
-      refreshHarvestRequests();
+      triggerUIUpdate();
     } catch (err) {
       console.error("Error updating assessment status:", err);
       setActionMessage("Failed to update assessment status: " + (err.message || 'Error'));
@@ -321,7 +350,7 @@ const HarvestRequestsPage = () => {
 
       setActionMessage(`Suggested alternate inspection date (${formatDateDMY(rescheduleData.suggested_date)}). Contractor has been notified.`);
       setTimeout(() => setActionMessage(''), 5000);
-      refreshHarvestRequests();
+      triggerUIUpdate();
     } catch (err) {
       console.error("Error submitting inspection reschedule:", err);
       setActionMessage("Failed to submit reschedule request: " + (err?.message || 'Error'));
@@ -363,7 +392,7 @@ const HarvestRequestsPage = () => {
 
       setActionMessage("Reschedule request withdrawn. Original appointment schedule retained.");
       setTimeout(() => setActionMessage(''), 4000);
-      refreshHarvestRequests();
+      triggerUIUpdate();
     } catch (err) {
       console.error("Error withdrawing reschedule request:", err);
     }
@@ -412,7 +441,7 @@ const HarvestRequestsPage = () => {
       const dateStr = formatDateDMY(inspection?.scheduled_date);
       setActionMessage(`Site inspection visit on ${dateStr} successfully confirmed and accepted! Contractor notified.`);
       setTimeout(() => setActionMessage(''), 5000);
-      refreshHarvestRequests();
+      triggerUIUpdate();
     } catch (err) {
       console.error("Error confirming inspection date:", err);
       setActionMessage("Failed to confirm inspection date: " + (err?.message || 'Error'));
@@ -581,9 +610,21 @@ const HarvestRequestsPage = () => {
                   const isPendingContractor = !req.assigned_contractor_id && !req.assigned_contractor_email;
                   const isAssigned = Boolean(req.assigned_contractor_id || req.assigned_contractor_email);
                   const isAssessmentSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
-                  const isOperationReady = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                  const isOperationReady = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED' || req.status === 'IN_PROGRESS' || req.status === 'COMPLETED';
                   const isRevisionRequested = req.status === 'REVISION_REQUESTED' || assessment?.status === 'REVISION_REQUESTED';
                   const isAccepted = isOperationReady;
+
+                  const isExpanded = expandedRequests[reqId] !== undefined ? expandedRequests[reqId] : !isOperationReady;
+
+                  const isUnderReview = (req.status === 'ASSESSMENT_SUBMITTED' || assessment?.status === 'SUBMITTED') && req.status !== 'OPERATION_READY' && req.status !== 'IN_PROGRESS' && req.status !== 'COMPLETED';
+                  const isAgreementReady = !isUnderReview && Boolean(
+                    isAccepted ||
+                    req.status === 'OPERATION_READY' ||
+                    req.status === 'IN_PROGRESS' ||
+                    req.status === 'COMPLETED' ||
+                    (req.status === 'ACCEPTED' && req.digital_agreement) ||
+                    (assessment?.status === 'ACCEPTED' && req.digital_agreement)
+                  );
 
                   const inspection = req.site_inspection || {};
                   const isInspectionCompleted = Boolean(
@@ -711,6 +752,13 @@ const HarvestRequestsPage = () => {
                             {statusLabel}
                           </span>
                           <button
+                            onClick={() => toggleRequestExpanded(reqId)}
+                            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                            title={isExpanded ? "Collapse Details" : "View Details"}
+                          >
+                            {isExpanded ? <><ChevronUp size={15} /><span className="hidden sm:inline">Less</span></> : <><ChevronDown size={15} /><span className="hidden sm:inline">Details</span></>}
+                          </button>
+                          <button
                             onClick={() => handleDeleteHarvestRequest(reqId)}
                             className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
                             title="Cancel & Delete Harvest Request"
@@ -721,7 +769,9 @@ const HarvestRequestsPage = () => {
                         </div>
                       </div>
 
-                      {/* FORMAL CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL (SHOWN BEFORE & AFTER SITE VISIT) */}
+                      {isExpanded && (
+                        <>
+                          {/* FORMAL CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL (SHOWN BEFORE & AFTER SITE VISIT) */}
                       {(isAssessmentSubmitted || isAccepted || isRevisionRequested || activeAssessmentMap[reqId] || req.assessment || req.total_quote || req.contractor_purchase_offer) && (() => {
                         const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
                         const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
@@ -736,15 +786,6 @@ const HarvestRequestsPage = () => {
                         const harvestArrangementCostVal = assDoc.harvesting_arrangement_cost ?? req.harvesting_arrangement_cost;
                         const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
                         const isInspectedSite = Boolean(req.site_inspected || isInspectionCompleted || assDoc.is_reassessed_after_inspection || req.inspection_status === 'COMPLETED');
-                        const isUnderReview = (req.status === 'ASSESSMENT_SUBMITTED' || assDoc.status === 'SUBMITTED') && req.status !== 'OPERATION_READY' && req.status !== 'IN_PROGRESS' && req.status !== 'COMPLETED';
-                        const isAgreementReady = !isUnderReview && Boolean(
-                          isAccepted ||
-                          req.status === 'OPERATION_READY' ||
-                          req.status === 'IN_PROGRESS' ||
-                          req.status === 'COMPLETED' ||
-                          (req.status === 'ACCEPTED' && req.digital_agreement) ||
-                          (assDoc.status === 'ACCEPTED' && req.digital_agreement)
-                        );
 
                         const previousQuoteVal = assDoc.previous_quote ?? req.previous_quote ?? assDoc.original_quote ?? req.original_quote;
                         const isRevision = Boolean(
@@ -874,48 +915,7 @@ const HarvestRequestsPage = () => {
                               </div>
                             </div>
 
-                            {/* DIGITAL AGREEMENT CALLOUT (IF FINALIZED) */}
-                            {isAgreementReady && (
-                              <div className="qtn-agreement-banner">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                                    <FileCheck size={20} />
-                                  </div>
-                                  <div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-extrabold text-white text-sm">
-                                        Digital Harvest Agreement Executed &amp; Work Finalized
-                                      </span>
-                                      <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
-                                        {req.digital_agreement?.agreement_id || `TC-AGR-${String(reqId).slice(-6).toUpperCase()}`}
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-slate-300 mt-0.5">
-                                      Both parties have finalized terms. Authorized commencement on <strong>{formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date)}</strong>.
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
-                                  <button
-                                    type="button"
-                                    onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
-                                    className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                                    title="Request quotation adjustment, counter-offer budget or renegotiate terms"
-                                  >
-                                    <RefreshCw size={13} />
-                                    <span>Revise Quotation</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
-                                    className="qtn-btn-agreement"
-                                  >
-                                    <FileCheck size={14} />
-                                    <span>View Digital Agreement</span>
-                                  </button>
-                                </div>
-                              </div>
-                            )}
+
 
                             {/* REVISED QUOTATION NOTICE BANNER (WHEN CONTRACTOR HAS SUBMITTED A REVISED QUOTATION) */}
                             {isRevision && !isAgreementReady && (
@@ -1354,15 +1354,6 @@ const HarvestRequestsPage = () => {
                                   <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
                                     <button
                                       type="button"
-                                      onClick={() => setRevisionModalReq({ reqId, req, assessment: assDoc })}
-                                      className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-                                      title="Request quotation adjustment or renegotiate terms"
-                                    >
-                                      <RefreshCw size={13} />
-                                      <span>Revise Quotation</span>
-                                    </button>
-                                    <button
-                                      type="button"
                                       onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
                                       className="cd-btn-inspect-primary shrink-0 cursor-pointer"
                                     >
@@ -1386,7 +1377,7 @@ const HarvestRequestsPage = () => {
                       })()}
 
                       {/* SCHEDULED SITE INSPECTION VISIT (ACTIVE APPOINTMENT) */}
-                      {isInspectionScheduled && (
+                      {isInspectionScheduled && !isAgreementReady && !isAccepted && (
                         <div id={`inspection-visit-${reqId}`} className="scheduled-inspection-card">
                           <div className="scheduled-inspection-header">
                             <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
@@ -1745,7 +1736,7 @@ const HarvestRequestsPage = () => {
                       )}
 
                       {/* CERTIFIED ON-SITE FIELD AUDIT REPORT (WHEN COMPLETED) */}
-                      {isInspectionCompleted && (
+                      {isInspectionCompleted && !isAgreementReady && !isAccepted && (
                         <div className="completed-inspection-card">
                           {/* 1. Official Certificate Header */}
                           <div className="cert-header">
@@ -2368,6 +2359,8 @@ const HarvestRequestsPage = () => {
                         </div>
                       ) : null}
 
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -2430,6 +2423,14 @@ const HarvestRequestsPage = () => {
                 request={selectedRecordPaymentModal}
                 onClose={() => setSelectedRecordPaymentModal(null)}
                 onSubmit={(data) => handleRecordAdvancePayment(selectedRecordPaymentModal.id || selectedRecordPaymentModal._id, data)}
+                onPaymentSuccess={() => {
+                  refreshHarvestRequests();
+                  setActionMessage('Advance payment verified successfully via Razorpay! Operations are authorized to begin.');
+                  setTimeout(() => {
+                    setActionMessage('');
+                    navigate('/landowner/payments');
+                  }, 2500);
+                }}
               />
             )}
 

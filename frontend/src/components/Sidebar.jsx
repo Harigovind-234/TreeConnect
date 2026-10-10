@@ -51,7 +51,7 @@ const Sidebar = () => {
     {
       group: 'FINANCE',
       items: [
-        { path: '#payments', label: 'Payments', icon: CreditCard },
+        { path: '/landowner/payments', label: 'Payments', icon: CreditCard },
         { path: '#reports', label: 'Reports', icon: BarChart3 },
       ]
     },
@@ -105,7 +105,7 @@ const Sidebar = () => {
       { path: '/contractor/assigned-jobs', label: 'Assigned Jobs', icon: Axe },
       { path: '/contractor/jobs', label: 'Available Jobs', icon: Compass },
       { path: '/contractor/equipment', label: 'Fleet & Equipment', icon: Truck },
-      { path: '/contractor/projects', label: 'Active Operations', icon: FileText },
+      { path: '/contractor/payments', label: 'Payment Details', icon: CreditCard },
     ],
     buyer: [
       { path: '/buyer/dashboard', label: 'Procurement Hub', icon: ShoppingBag },

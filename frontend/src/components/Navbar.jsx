@@ -100,6 +100,13 @@ const Navbar = () => {
                   >
                     <Shield size={16} /> My Dashboard
                   </Link>
+                  <Link 
+                    to="/profile" 
+                    className="dropdown-item"
+                    onClick={() => setDropdownOpen(false)}
+                  >
+                    <User size={16} /> My Profile
+                  </Link>
                   <button className="dropdown-item logout-item" onClick={handleLogout}>
                     <LogOut size={16} /> Sign Out
                   </button>

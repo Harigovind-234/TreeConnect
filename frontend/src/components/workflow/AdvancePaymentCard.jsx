@@ -415,20 +415,27 @@ const AdvancePaymentCard = ({
             </div>
           )}
 
-          {/* PROMINENT ACTION FOR LANDOWNER TO RECORD PAYMENT */}
+          {/* PROMINENT ACTION FOR LANDOWNER TO PAY ADVANCE */}
           {isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && (
-            <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/40 to-teal-950/30 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-              <span className="text-xs text-slate-200 leading-relaxed">
-                Remit advance mobilization fee of <strong className="text-emerald-300 font-mono text-sm">{formatINR(advanceAmount)}</strong> via the account details above, then record transaction UTR.
-              </span>
-              <button
-                type="button"
-                onClick={onRecordPayment}
-                className="cd-btn-inspect-primary shrink-0 cursor-pointer shadow-lg"
-              >
-                <CreditCard size={14} />
-                <span>{paymentStatus === 'REJECTED' ? 'Resubmit Payment Proof' : 'Record Advance Payment'}</span>
-              </button>
+            <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 via-teal-950/40 to-emerald-950/60 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+              <div>
+                <span className="text-xs text-slate-200 leading-relaxed block">
+                  Mobilization Advance Payable: <strong className="text-emerald-300 font-mono text-base font-black">{formatINR(advanceAmount)}</strong> ({advReq?.advance_percentage || 27}%)
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Instant authorization via Razorpay Gateway (UPI, Cards &amp; NetBanking) or manual transfer
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={onRecordPayment}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+                >
+                  <CreditCard size={14} />
+                  <span>Pay {formatINR(advanceAmount)} with Razorpay</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -541,7 +548,14 @@ const AdvancePaymentCard = ({
                 ✓ Advance Payment Verified ({formatINR(advanceAmount)})
               </strong>
               <span className="text-slate-300">
-                Transaction verified by contractor. Mobilization advance credited to this harvesting service job. Remaining balance of <strong className="text-white font-mono">{formatINR(remainingBalance)}</strong> will be settled as agreed upon operation progress/completion.
+                Transaction verified by <strong>{request?.assigned_contractor_name || request?.contractor_name || 'Contractor'}</strong>. Mobilization advance from <strong>{request?.ownerName || request?.owner_name || request?.landownerName || 'Landowner'}</strong> credited to this harvesting service job.
+                {latestPayment?.transaction_reference && (
+                  <span className="block mt-1.5 text-[11px] text-emerald-200 bg-emerald-950/30 p-1.5 rounded border border-emerald-500/20 w-fit">
+                    Ref ID / UTR: <strong className="font-mono">{latestPayment.transaction_reference}</strong>
+                    {latestPayment.payment_method ? ` via ${latestPayment.payment_method}` : ''}
+                  </span>
+                )}
+                <span className="block mt-1.5">Remaining balance of <strong className="text-white font-mono">{formatINR(remainingBalance)}</strong> will be settled as agreed upon operation progress/completion.</span>
               </span>
             </div>
           </div>

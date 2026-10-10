@@ -9,6 +9,7 @@ import re
 import uuid
 
 from app.database import db
+from app.routers import payment
 
 router = APIRouter()
 
@@ -159,13 +160,16 @@ class CompleteInspectionRequest(BaseModel):
     canopy_height: Optional[str] = ""
     estimated_volume: Optional[float] = None
     timber_condition: Optional[str] = "Sound & Top Quality"
-    road_access_verification: Optional[str] = "Heavy 10-wheeler log truck accessible"
-    distance_to_haul_road: Optional[str] = "25 meters"
+    road_access_verification: Optional[str] = ""
+    distance_to_haul_road: Optional[str] = ""
     terrain_assessment: Optional[str] = "Gentle slope (good machinery footing)"
     overhead_hazards: Optional[str] = "Clear of power lines"
     felling_complexity: Optional[str] = "Medium"
     inspection_verdict: Optional[str] = "FEASIBLE"
+    potential_alternative_method: Optional[str] = "No alternative method identified"
     inspection_remarks: Optional[str] = ""
+    landowner_preferred_arrangement: Optional[str] = "OPEN_TO_RECOMMENDATION"
+    is_transportation_required: Optional[bool] = None
     inspection_photos: Optional[List[str]] = []
 
 class DeclineJobRequest(BaseModel):
@@ -1026,6 +1030,16 @@ def complete_site_inspection(request_id: str, payload: CompleteInspectionRequest
         now_iso = datetime.now(timezone.utc).isoformat()
         existing_inspection = req_doc.get("site_inspection") or {}
 
+        is_transp_req = payload.is_transportation_required
+        if is_transp_req is None:
+            is_transp_req = payload.landowner_preferred_arrangement == "INTERESTED_IN_TIMBER_SALE"
+            
+        if is_transp_req:
+            if not payload.road_access_verification:
+                return JSONResponse(status_code=400, content={"message": "road_access_verification is required when transportation is enabled"})
+            if not payload.distance_to_haul_road:
+                return JSONResponse(status_code=400, content={"message": "distance_to_haul_road is required when transportation is enabled"})
+
         inspection_data = {
             **existing_inspection,
             "status": "COMPLETED",
@@ -1037,13 +1051,16 @@ def complete_site_inspection(request_id: str, payload: CompleteInspectionRequest
             "canopy_height": payload.canopy_height or "",
             "estimated_volume": payload.estimated_volume,
             "timber_condition": payload.timber_condition or "Sound & Top Quality",
-            "road_access_verification": payload.road_access_verification or "Heavy 10-wheeler log truck accessible",
-            "distance_to_haul_road": payload.distance_to_haul_road or "25 meters",
+            "road_access_verification": payload.road_access_verification or "",
+            "distance_to_haul_road": payload.distance_to_haul_road or "",
             "terrain_assessment": payload.terrain_assessment or "Gentle slope",
             "overhead_hazards": payload.overhead_hazards or "Clear of power lines",
             "felling_complexity": payload.felling_complexity or "Medium",
             "inspection_verdict": payload.inspection_verdict or "FEASIBLE",
+            "potential_alternative_method": payload.potential_alternative_method or "No alternative method identified",
             "inspection_remarks": payload.inspection_remarks or "",
+            "landowner_preferred_arrangement": payload.landowner_preferred_arrangement or existing_inspection.get("landowner_preferred_arrangement") or "OPEN_TO_RECOMMENDATION",
+            "is_transportation_required": is_transp_req,
             "inspection_photos": payload.inspection_photos or existing_inspection.get("inspection_photos") or [],
             "completed_at": now_iso
         }
@@ -1054,6 +1071,7 @@ def complete_site_inspection(request_id: str, payload: CompleteInspectionRequest
             "site_inspected": True,
             "inspected_at": payload.inspected_at or now_iso,
             "inspection_verdict": payload.inspection_verdict or "FEASIBLE",
+            "potential_alternative_method": payload.potential_alternative_method or "No alternative method identified",
             "updatedAt": now_iso
         }
 
@@ -1497,6 +1515,13 @@ def submit_contractor_assessment(
             hr_chk = db.harvest_requests.find_one({"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]}) if ObjectId.is_valid(request_id) else db.harvest_requests.find_one({"$or": [{"id": request_id}, {"_id": request_id}]})
             if hr_chk and hr_chk.get("assessment"):
                 existing_ass = hr_chk.get("assessment")
+
+        # Enforce that new quotations must be Harvesting Service Quotation
+        if not existing_ass and prop_type != "Harvesting Service Quotation":
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"message": "Harvesting Service Quotation is the only commercial arrangement available for new standard quotations."}
+            )
 
         new_quote = payload.total_quote if prop_type == "Harvesting Service Quotation" else (payload.contractor_purchase_offer or payload.timber_purchase_price)
 
@@ -2078,6 +2103,20 @@ def request_advance_payment(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to request advance payment: {str(e)}"}
         )
+
+@router.post("/{request_id}/advance-payment/order", status_code=status.HTTP_201_CREATED)
+def create_harvest_advance_payment_order(
+    request_id: str,
+    payload: payment.CreateOrderRequest = Body(default=payment.CreateOrderRequest()),
+    idempotency_header: Optional[str] = Header(None, alias="X-Idempotency-Key"),
+    authorization: Optional[str] = Header(None)
+):
+    return payment.create_advance_payment_order(
+        request_id=request_id,
+        payload=payload,
+        idempotency_header=idempotency_header,
+        authorization=authorization
+    )
 
 @router.post("/{request_id}/advance-payment/submit")
 def submit_advance_payment(

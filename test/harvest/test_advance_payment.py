@@ -71,11 +71,15 @@ def test_harvest_job():
             "terms_accepted": True,
             "ready_to_start": True
         },
+        "owner_email": "h4hari2003@gmail.com",
+        "assigned_contractor_email": "rohithsh@gmail.com",
+        "ownerName": "Landowner Hari",
+        "assigned_contractor_name": "Contractor Rohith",
         "updatedAt": now_iso
     }
     
     if db is not None:
-        db.harvest_requests.update_one(query, {"$set": reset_data})
+        db.harvest_requests.update_one(query, {"$set": reset_data}, upsert=True)
         db.harvest_payments.delete_many({"harvest_request_id": req_id})
         db.contractor_assessments.update_one(
             {"harvest_request_id": req_id},
@@ -89,7 +93,8 @@ def test_harvest_job():
                 "remaining_balance": 99000.0,
                 "can_start_harvest": False,
                 "updatedAt": now_iso
-            }}
+            }},
+            upsert=True
         )
 
     return req_id

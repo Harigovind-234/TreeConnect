@@ -20,8 +20,10 @@ import UserDetailPage from './pages/admin/UserDetailPage';
 import AdminPropertiesPage from './pages/admin/AdminPropertiesPage';
 import PropertyDetailPage from './pages/admin/PropertyDetailPage';
 import LandownerDashboard from './pages/landowner/Dashboard';
+import LandownerPaymentsPage from './pages/landowner/PaymentsPage';
 import ContractorDashboard from './pages/contractor/Dashboard';
 import AssignedHarvestJobsPage from './pages/contractor/AssignedHarvestJobsPage';
+import PaymentsPage from './pages/contractor/PaymentsPage';
 import SubmitAssessmentPage from './pages/contractor/SubmitAssessmentPage';
 import BuyerDashboard from './pages/buyer/Dashboard';
 
@@ -34,6 +36,8 @@ import PropertiesPage from './pages/landowner/PropertiesPage';
 import TreeInventoryPage from './pages/landowner/TreeInventoryPage';
 import HarvestRequestsPage from './pages/landowner/HarvestRequestsPage';
 import TimberMarketplacePage from './pages/landowner/TimberMarketplacePage';
+import FleetEquipmentPage from './pages/contractor/FleetEquipmentPage';
+import ProfilePage from './pages/ProfilePage';
 
 function App() {
   return (
@@ -172,6 +176,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/landowner/payments"
+              element={
+                <ProtectedRoute allowedRoles={['landowner']}>
+                  <LandownerPaymentsPage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/contractor/dashboard"
@@ -201,7 +213,7 @@ function App() {
               path="/contractor/fleet"
               element={
                 <ProtectedRoute allowedRoles={['contractor']}>
-                  <ContractorDashboard />
+                  <FleetEquipmentPage />
                 </ProtectedRoute>
               }
             />
@@ -210,6 +222,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['contractor']}>
                   <AssignedHarvestJobsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/payments"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <PaymentsPage />
                 </ProtectedRoute>
               }
             />
@@ -251,6 +271,15 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['buyer']}>
                   <BuyerDashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'landowner', 'contractor', 'buyer']}>
+                  <ProfilePage />
                 </ProtectedRoute>
               }
             />

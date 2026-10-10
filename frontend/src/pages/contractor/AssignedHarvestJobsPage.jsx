@@ -350,7 +350,10 @@ const AssignedHarvestJobsPage = () => {
     overhead_hazards: 'Clear of power lines',
     felling_complexity: 'Medium (Directional Wedging)',
     inspection_verdict: 'FEASIBLE',
+    potential_alternative_method: 'No alternative method identified',
     inspection_remarks: '',
+    landowner_preferred_arrangement: 'HARVESTING_SERVICE',
+    is_transportation_required: false,
     inspection_photos: []
   });
 
@@ -582,7 +585,10 @@ const AssignedHarvestJobsPage = () => {
       overhead_hazards: existing.overhead_hazards || 'Clear of power lines',
       felling_complexity: existing.felling_complexity || 'Medium (Directional Wedging)',
       inspection_verdict: existing.inspection_verdict || 'FEASIBLE',
+      potential_alternative_method: existing.potential_alternative_method || 'No alternative method identified',
       inspection_remarks: existing.inspection_remarks || 'On-site timber inspection completed. Trees are healthy with solid heartwood density. Road entry is clear.',
+      landowner_preferred_arrangement: existing.landowner_preferred_arrangement || 'HARVESTING_SERVICE',
+      is_transportation_required: existing.is_transportation_required !== undefined ? existing.is_transportation_required : ((existing.landowner_preferred_arrangement || 'HARVESTING_SERVICE') === 'INTERESTED_IN_TIMBER_SALE'),
       inspection_photos: Array.isArray(existing.inspection_photos) ? existing.inspection_photos : []
     });
     setAuditModalJob(req);
@@ -645,6 +651,7 @@ const AssignedHarvestJobsPage = () => {
             site_inspected: true,
             inspected_at: nowIso,
             inspection_verdict: auditForm.inspection_verdict,
+            potential_alternative_method: auditForm.potential_alternative_method,
             verified_tree_count: auditForm.verified_tree_count
           };
         }
@@ -668,6 +675,7 @@ const AssignedHarvestJobsPage = () => {
                 site_inspected: true,
                 inspected_at: nowIso,
                 inspection_verdict: auditForm.inspection_verdict,
+                potential_alternative_method: auditForm.potential_alternative_method,
                 verified_tree_count: auditForm.verified_tree_count
               };
             }
@@ -1607,7 +1615,7 @@ const AssignedHarvestJobsPage = () => {
                           {/* Primary Action Buttons */}
                           <div className="cd-financial-actions-cluster flex items-center gap-2.5 flex-wrap ml-auto">
                             {/* Option to Set or Update Advance by Contractor before starting work */}
-                            {!isInProgress && !isCompleted && (
+                            {(isAccepted || req.status === 'OPERATION_READY') && !isInProgress && !isCompleted && (
                               <button
                                 type="button"
                                 onClick={() => setSelectedRequestAdvanceModal(req)}
@@ -2025,8 +2033,9 @@ const AssignedHarvestJobsPage = () => {
                                       <button
                                         type="button"
                                         onClick={() => handleOpenAudit(req)}
-                                        className="cd-btn-inspect-log"
-                                        title="Record site verification findings"
+                                        disabled={!inspectionData.landowner_confirmed}
+                                        className={`cd-btn-inspect-log ${!inspectionData.landowner_confirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        title={inspectionData.landowner_confirmed ? "Record site verification findings" : "Available after landowner approves inspection date"}
                                       >
                                         <ClipboardCheck size={14} />
                                         <span>Log Inspection Findings</span>
@@ -2062,8 +2071,9 @@ const AssignedHarvestJobsPage = () => {
                                       <button
                                         type="button"
                                         onClick={() => handleOpenAudit(req)}
-                                        className="cd-btn-inspect-log"
-                                        title="Record inspection findings if already on site"
+                                        disabled={true}
+                                        className="cd-btn-inspect-log opacity-50 cursor-not-allowed"
+                                        title="Available after landowner approves inspection date"
                                       >
                                         <ClipboardCheck size={14} />
                                         <span>Record Inspection Report</span>
@@ -2112,7 +2122,7 @@ const AssignedHarvestJobsPage = () => {
                                   </div>
                                   <div className="cd-inspection-quick-cell">
                                     <span className="cd-inspection-quick-label">Haul Truck Access</span>
-                                    <span className="cd-inspection-quick-val text-slate-200 truncate" title={inspectionData.road_access_verification || 'Heavy 10-wheeler accessible'}>
+                                    <span className="cd-inspection-quick-val text-slate-200" title={inspectionData.road_access_verification || 'Heavy 10-wheeler accessible'}>
                                       {inspectionData.road_access_verification || 'Heavy 10-wheeler accessible'}
                                     </span>
                                   </div>
@@ -2182,7 +2192,7 @@ const AssignedHarvestJobsPage = () => {
                         )}
 
                         {/* ADVANCE PAYMENT WORKFLOW (OPERATION_READY / IN_PROGRESS / COMPLETED) */}
-                        {(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement || req.advance_payment_request || req.assessment?.advance_payment_request || req.advance_payment_status || req.latest_payment || req.status === 'IN_PROGRESS' || req.status === 'COMPLETED') && (
+                        {(isAccepted || req.status === 'OPERATION_READY' || req.digital_agreement || req.status === 'IN_PROGRESS' || req.status === 'COMPLETED') && (
 
                           <AdvancePaymentCard
                             request={req}
@@ -3354,17 +3364,68 @@ const AssignedHarvestJobsPage = () => {
         )}
 
         {/* MODAL 2: COMPLETE ON-SITE INSPECTION AUDIT FORM */}
-        {auditModalJob && (
+        {auditModalJob && (() => {
+          let reportedTotalTrees = auditModalJob.approxTreesCount || auditModalJob.property_details?.approxTreesCount || 20;
+          let reportedGirth = auditModalJob.property_details?.treeGirth || auditModalJob.property_details?.avgDbhCm || auditModalJob.approx_age_dbh || 'Not provided';
+          let reportedVolume = auditModalJob.property_details?.estimated_harvestable_volume || auditModalJob.approxVolume || auditModalJob.total_estimated_volume || 0;
+
+          const modalTreeGroups = (Array.isArray(auditModalJob.selected_tree_groups) && auditModalJob.selected_tree_groups.length > 0)
+            ? auditModalJob.selected_tree_groups
+            : (Array.isArray(auditModalJob.tree_inventory) && auditModalJob.tree_inventory.length > 0)
+              ? auditModalJob.tree_inventory
+              : (Array.isArray(auditModalJob.tree_inventories) && auditModalJob.tree_inventories.length > 0)
+                ? auditModalJob.tree_inventories
+                : [];
+
+          if (modalTreeGroups.length > 0) {
+            let sumTrees = 0;
+            let sumVol = 0;
+            let girths = [];
+            
+            modalTreeGroups.forEach(g => {
+              if (Array.isArray(g.speciesList) && g.speciesList.length > 0) {
+                g.speciesList.forEach(sp => {
+                  let cnt = Number(sp.numberOfTrees ?? sp.treeCount ?? sp.count ?? 1);
+                  if (cnt === 20 || modalTreeGroups.length === 1) cnt = 1;
+                  sumTrees += cnt;
+                  if (sp.dbh) girths.push(sp.dbh);
+                  if (sp.girth) girths.push(sp.girth);
+                  if (sp.approx_age_dbh) girths.push(sp.approx_age_dbh);
+                  if (sp.volume) sumVol += Number(sp.volume);
+                  if (sp.estimated_harvestable_volume) sumVol += Number(sp.estimated_harvestable_volume);
+                });
+              } else {
+                let cnt = Number(g.numberOfTrees ?? g.treeCount ?? g.count ?? g.quantity ?? 1);
+                if (cnt === 20 || modalTreeGroups.length === 1) cnt = 1;
+                sumTrees += cnt;
+                if (g.dbh) girths.push(g.dbh);
+                if (g.girth) girths.push(g.girth);
+                if (g.approx_age_dbh) girths.push(g.approx_age_dbh);
+                if (g.volume) sumVol += Number(g.volume);
+                if (g.estimatedVolume) sumVol += Number(g.estimatedVolume);
+                if (g.estimated_harvestable_volume) sumVol += Number(g.estimated_harvestable_volume);
+              }
+            });
+            if (sumTrees > 0) reportedTotalTrees = sumTrees;
+            if (sumVol > 0) reportedVolume = sumVol;
+            if (girths.length > 0) reportedGirth = girths[0];
+          }
+
+          const reportedVolStr = reportedVolume ? `${Number(reportedVolume).toFixed(2)} m³` : 'Not provided';
+          
+          return (
           <div className="cd-inspection-modal-overlay">
-            <div className="cd-inspection-modal-box max-w-3xl">
-              <div className="flex items-center justify-between border-b border-emerald-500/20 pb-4 mb-4">
+            <div className="cd-inspection-modal-box cd-schedule-modal" style={{ maxWidth: '850px' }}>
+              
+              {/* Modal Header */}
+              <div className="cd-schedule-modal-header border-b border-emerald-500/20">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
                     <ClipboardCheck size={20} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-white">Record On-Site Inspection & Audit Report</h3>
-                    <p className="text-xs text-slate-300">
+                    <h3 className="text-xl font-bold text-white tracking-tight leading-snug">Record On-Site Inspection & Audit Report</h3>
+                    <p className="text-[13px] text-emerald-100/70 mt-0.5">
                       {auditModalJob.propertyName || 'Parcel Site'} • Certify ground truth timber specs & haulage feasibility
                     </p>
                   </div>
@@ -3372,211 +3433,273 @@ const AssignedHarvestJobsPage = () => {
                 <button
                   type="button"
                   onClick={() => setAuditModalJob(null)}
-                  className="p-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className="p-2 rounded-lg bg-emerald-900/20 border border-emerald-700/30 text-emerald-400 hover:text-white hover:bg-emerald-800/40 transition-colors cursor-pointer"
+                  aria-label="Close modal"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitAudit} className="space-y-5">
-                {/* SECTION 1: TIMBER & TREE VERIFICATION */}
-                <div className="p-4 rounded-2xl bg-[#07130a] border border-emerald-500/25 space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <Trees size={14} /> 1. Standing Timber Ground Verification
-                  </h4>
+              <form onSubmit={handleSubmitAudit} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+                <div className="cd-schedule-modal-body space-y-6">
+                  
+                  {/* SECTION 1: TIMBER & TREE VERIFICATION */}
+                  <div className="p-6 rounded-2xl bg-[#041008] border border-emerald-500/20 shadow-inner">
+                    <h4 className="text-[13px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-2 mb-5">
+                      <Trees size={16} /> 1. Standing Timber Ground Verification
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                      <div className="cd-inspection-form-group mb-0">
+                        <label className="cd-inspection-label">
+                          Verified Standing Trees <span className="text-red-400 ml-1">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={auditForm.verified_tree_count}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, verified_tree_count: Number(e.target.value) }))}
+                          required
+                          className="cd-inspection-input font-bold text-emerald-300 bg-[#020804] border-emerald-500/30 focus:border-emerald-500/60"
+                        />
+                        <span className="text-[11px] text-emerald-200/50 mt-1.5 block">Landowner reported: {reportedTotalTrees}</span>
+                      </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Verified Standing Trees <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={auditForm.verified_tree_count}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, verified_tree_count: Number(e.target.value) }))}
-                        required
-                        className="cd-inspection-input font-bold text-emerald-400"
-                      />
-                      <span className="text-[10px] text-slate-400">Landowner reported: {auditModalJob.approxTreesCount || auditModalJob.property_details?.approxTreesCount || 20}</span>
-                    </div>
+                      <div className="cd-inspection-form-group mb-0">
+                        <label className="cd-inspection-label">
+                          Measured Avg. DBH / Girth
+                        </label>
+                        <input
+                          type="text"
+                          value={auditForm.measured_avg_dbh}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, measured_avg_dbh: e.target.value }))}
+                          placeholder="e.g. 70 - 85 cm"
+                          className="cd-inspection-input bg-[#020804] border-emerald-500/20 focus:border-emerald-500/50"
+                        />
+                        <span className="text-[11px] text-emerald-200/50 mt-1.5 block">Landowner reported: {reportedGirth}</span>
+                      </div>
 
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Measured Avg. DBH / Girth
-                      </label>
-                      <input
-                        type="text"
-                        value={auditForm.measured_avg_dbh}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, measured_avg_dbh: e.target.value }))}
-                        placeholder="e.g. 70 - 85 cm"
-                        className="cd-inspection-input"
-                      />
-                    </div>
+                      <div className="cd-inspection-form-group mb-0">
+                        <label className="cd-inspection-label">
+                          Est. Usable Volume (m³)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={auditForm.estimated_volume}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, estimated_volume: parseFloat(e.target.value) }))}
+                          placeholder="e.g. 1.70"
+                          className="cd-inspection-input bg-[#020804] border-emerald-500/20 focus:border-emerald-500/50"
+                        />
+                        <span className="text-[11px] text-emerald-200/50 mt-1.5 block">Landowner reported: {reportedVolStr}</span>
+                      </div>
 
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Est. Usable Volume (m³)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={auditForm.estimated_volume}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, estimated_volume: parseFloat(e.target.value) }))}
-                        placeholder="e.g. 1.70"
-                        className="cd-inspection-input"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="cd-inspection-form-group mb-0">
-                    <label className="cd-inspection-label">
-                      Timber Quality & Trunk Health Condition
-                    </label>
-                    <select
-                      value={auditForm.timber_condition}
-                      onChange={(e) => setAuditForm(prev => ({ ...prev, timber_condition: e.target.value }))}
-                      className="cd-inspection-select"
-                    >
-                      <option value="Sound & Top Quality">Sound & Top Quality (Dense heartwood, straight bol, no rot)</option>
-                      <option value="Minor Surface Defects">Minor Surface Defects (Some knots, superficial weather cracks)</option>
-                      <option value="Hollow / Heartwood Rot Observed">Hollow / Heartwood Rot Observed (Reduced timber yield)</option>
-                      <option value="Fallen / Storm Split Wood">Fallen / Storm Split Wood</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* SECTION 2: ACCESS & LOGISTICS VERIFICATION */}
-                <div className="p-4 rounded-2xl bg-[#07130a] border border-emerald-500/25 space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
-                    <Truck size={14} /> 2. Site Access & Haulage Logistics Verification
-                  </h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Road Approach & Truck Clearance
-                      </label>
-                      <select
-                        value={auditForm.road_access_verification}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, road_access_verification: e.target.value }))}
-                        className="cd-inspection-select"
-                      >
-                        <option value="Heavy 10-wheeler log truck accessible">Heavy 10-wheeler log truck accessible (Paved & wide)</option>
-                        <option value="Medium 6-wheeler truck only">Medium 6-wheeler truck only (Narrow bridge or turns)</option>
-                        <option value="Tractor & trailer only">Tractor & trailer only (Mud track / steep approach)</option>
-                        <option value="Manual winching / skidding required (No road)">Manual winching / skidding required (No road access)</option>
-                      </select>
-                    </div>
-
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Distance from Cutting Zone to Haul Road
-                      </label>
-                      <input
-                        type="text"
-                        value={auditForm.distance_to_haul_road}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, distance_to_haul_road: e.target.value }))}
-                        placeholder="e.g. 25 meters"
-                        className="cd-inspection-input"
-                      />
-                    </div>
-
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Ground & Terrain Slope
-                      </label>
-                      <select
-                        value={auditForm.terrain_assessment}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, terrain_assessment: e.target.value }))}
-                        className="cd-inspection-select"
-                      >
-                        <option value="Gentle slope (good machinery footing)">Gentle slope (good machinery footing)</option>
-                        <option value="Moderate slope (traction chains recommended)">Moderate slope (traction chains recommended)</option>
-                        <option value="Steep incline (winch extraction mandatory)">Steep incline (winch extraction mandatory)</option>
-                        <option value="Marshy / Soft clay (dry season execution only)">Marshy / Soft clay (dry season execution only)</option>
-                      </select>
-                    </div>
-
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Overhead Power Lines & Infrastructure Hazards
-                      </label>
-                      <select
-                        value={auditForm.overhead_hazards}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, overhead_hazards: e.target.value }))}
-                        className="cd-inspection-select"
-                      >
-                        <option value="Clear of power lines">Clear of power lines (Safe drop zone)</option>
-                        <option value="Low-voltage domestic lines nearby (Directional felling required)">Low-voltage domestic lines nearby (Directional felling required)</option>
-                        <option value="High-tension 11kV line in fall radius (Needs KSEB permit)">High-tension 11kV line in fall radius (Needs KSEB permit)</option>
-                        <option value="Adjacent to residential roof / structures (Sectional felling)">Adjacent to residential roof / structures (Sectional felling)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* SECTION 3: VERDICT & FIELD REMARKS */}
-                <div className="p-4 rounded-2xl bg-[#07130a] border border-emerald-500/25 space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                    <ShieldCheck size={14} /> 3. Feasibility Verdict & Field Inspection Remarks
-                  </h4>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Overall Harvesting Feasibility Verdict <span className="text-red-400">*</span>
-                      </label>
-                      <select
-                        value={auditForm.inspection_verdict}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, inspection_verdict: e.target.value }))}
-                        required
-                        className="cd-inspection-select font-bold text-emerald-400"
-                      >
-                        <option value="FEASIBLE">✓ FEASIBLE - Standard Operational Procedure</option>
-                        <option value="FEASIBLE_WITH_CONDITIONS">⚠ FEASIBLE - Requires Special Rigging / Winch</option>
-                        <option value="HIGH_RISK">⚡ HIGH RISK - Requires Strict Clearances & Permits</option>
-                        <option value="NOT_FEASIBLE">✗ NOT FEASIBLE - Severe Site Inaccessibility / Danger</option>
-                      </select>
-                    </div>
-
-                    <div className="cd-inspection-form-group mb-0">
-                      <label className="cd-inspection-label">
-                        Estimated Felling Complexity
-                      </label>
-                      <select
-                        value={auditForm.felling_complexity}
-                        onChange={(e) => setAuditForm(prev => ({ ...prev, felling_complexity: e.target.value }))}
-                        className="cd-inspection-select"
-                      >
-                        <option value="Low (Straight Drop)">Low (Straight Drop)</option>
-                        <option value="Medium (Directional Wedging)">Medium (Directional Wedging)</option>
-                        <option value="High (Sectional Rigging & Crane)">High (Sectional Rigging & Crane)</option>
-                      </select>
+                      <div className="cd-inspection-form-group mb-0 lg:col-span-3">
+                        <label className="cd-inspection-label">
+                          Timber Quality & Trunk Health Condition
+                        </label>
+                        <select
+                          value={auditForm.timber_condition}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, timber_condition: e.target.value }))}
+                          className="cd-inspection-select bg-[#020804] border-emerald-500/20 focus:border-emerald-500/50"
+                        >
+                          <option value="Sound & Top Quality">Sound & Top Quality (Dense heartwood, straight bol, no rot)</option>
+                          <option value="Minor Surface Defects">Minor Surface Defects (Some knots, superficial weather cracks)</option>
+                          <option value="Hollow / Heartwood Rot Observed">Hollow / Heartwood Rot Observed (Reduced timber yield)</option>
+                          <option value="Fallen / Storm Split Wood">Fallen / Storm Split Wood</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="cd-inspection-form-group mb-0">
-                    <label className="cd-inspection-label">
-                      Inspector Findings & Assessment Remarks
-                    </label>
-                    <textarea
-                      value={auditForm.inspection_remarks}
-                      onChange={(e) => setAuditForm(prev => ({ ...prev, inspection_remarks: e.target.value }))}
-                      placeholder="Add observations about tree heartwood density, soil firmness, truck turn radius, and client expectations..."
-                      className="cd-inspection-textarea"
-                    />
+                  {/* SECTION 2: ACCESS & LOGISTICS VERIFICATION */}
+                  <div className="p-6 rounded-2xl bg-[#041008] border border-teal-500/20 shadow-inner">
+                    <h4 className="text-[13px] font-bold uppercase tracking-widest text-teal-400 flex items-center gap-2 mb-5">
+                      <Truck size={16} /> 2. Site Access & Haulage Logistics Verification
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="cd-inspection-form-group col-span-1 md:col-span-2 mb-0 pb-3 border-b border-teal-500/10">
+                        <label className="cd-inspection-label flex items-center gap-3 cursor-pointer text-teal-200 select-none hover:text-teal-100 transition-colors py-1">
+                          <input
+                            type="checkbox"
+                            checked={auditForm.is_transportation_required}
+                            onChange={(e) => setAuditForm(prev => ({ ...prev, is_transportation_required: e.target.checked }))}
+                            className="w-5 h-5 text-teal-500 rounded bg-[#020804] border-teal-500/40 focus:ring-teal-500 focus:ring-offset-0 focus:ring-offset-transparent cursor-pointer"
+                          />
+                          Is Timber Transportation Required? (Check to assess heavy log haulers)
+                        </label>
+                      </div>
+
+                          <div className="cd-inspection-form-group mb-0">
+                            <label className="cd-inspection-label">
+                              Road Approach & Truck Clearance
+                            </label>
+                            <select
+                              value={auditForm.road_access_verification}
+                              onChange={(e) => setAuditForm(prev => ({ ...prev, road_access_verification: e.target.value }))}
+                              className="cd-inspection-select bg-[#020804] border-teal-500/20 focus:border-teal-500/50"
+                            >
+                              <option value="Heavy 10-wheeler log truck accessible">Heavy 10-wheeler log truck accessible (Paved & wide)</option>
+                              <option value="Medium 6-wheeler truck only">Medium 6-wheeler truck only (Narrow bridge or turns)</option>
+                              <option value="Tractor & trailer only">Tractor & trailer only (Mud track / steep approach)</option>
+                              <option value="Manual winching / skidding required (No road)">Manual winching / skidding required (No road access)</option>
+                            </select>
+                          </div>
+
+                          <div className="cd-inspection-form-group mb-0">
+                            <label className="cd-inspection-label">
+                              Distance from Cutting Zone to Haul Road
+                            </label>
+                            <input
+                              type="text"
+                              value={auditForm.distance_to_haul_road}
+                              onChange={(e) => setAuditForm(prev => ({ ...prev, distance_to_haul_road: e.target.value }))}
+                              placeholder="e.g. 25 meters"
+                              className="cd-inspection-input bg-[#020804] border-teal-500/20 focus:border-teal-500/50"
+                            />
+                          </div>
+
+                      <div className="cd-inspection-form-group mb-0">
+                        <label className="cd-inspection-label">
+                          Ground & Terrain Slope
+                        </label>
+                        <select
+                          value={auditForm.terrain_assessment}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, terrain_assessment: e.target.value }))}
+                          className="cd-inspection-select bg-[#020804] border-teal-500/20 focus:border-teal-500/50"
+                        >
+                          <option value="Gentle slope (good machinery footing)">Gentle slope (good machinery footing)</option>
+                          <option value="Moderate slope (traction chains recommended)">Moderate slope (traction chains recommended)</option>
+                          <option value="Steep incline (winch extraction mandatory)">Steep incline (winch extraction mandatory)</option>
+                          <option value="Marshy / Soft clay (dry season execution only)">Marshy / Soft clay (dry season execution only)</option>
+                        </select>
+                      </div>
+
+                      <div className="cd-inspection-form-group mb-0">
+                        <label className="cd-inspection-label">
+                          Overhead Hazards (Power Lines)
+                        </label>
+                        <select
+                          value={auditForm.overhead_hazards}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, overhead_hazards: e.target.value }))}
+                          className="cd-inspection-select bg-[#020804] border-teal-500/20 focus:border-teal-500/50"
+                        >
+                          <option value="Clear of power lines">Clear of power lines (Safe drop zone)</option>
+                          <option value="Low-voltage domestic lines nearby (Directional felling required)">Low-voltage domestic lines nearby</option>
+                          <option value="High-tension 11kV line in fall radius (Needs KSEB permit)">High-tension 11kV line in fall radius</option>
+                          <option value="Adjacent to residential roof / structures (Sectional felling)">Adjacent to residential roof / structures</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* FIELD PHOTOS UPLOADER */}
-                  <div className="cd-inspection-form-group mb-0">
-                    <label className="cd-inspection-label">
-                      <Camera size={13} className="text-emerald-400" /> Attach Field Inspection Photos
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <label className="px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors">
-                        <Upload size={13} />
-                        <span>Upload Field Photos</span>
+                  {/* SECTION 3: VERDICT & FIELD REMARKS */}
+                  <div className="p-6 rounded-2xl bg-[#041008] border border-emerald-500/20 shadow-inner">
+                    <h4 className="text-[13px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-2 mb-5">
+                      <ShieldCheck size={16} /> 3. Feasibility Verdict & Field Inspection Remarks
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                      <div className="cd-inspection-form-group mb-0">
+                        <label className="cd-inspection-label">
+                          Overall Harvesting Feasibility <span className="text-red-400 ml-1">*</span>
+                        </label>
+                        <select
+                          value={auditForm.inspection_verdict}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, inspection_verdict: e.target.value }))}
+                          required
+                          className={`cd-inspection-select font-bold ${
+                            auditForm.inspection_verdict === 'FEASIBLE' ? 'text-emerald-400 bg-emerald-900/10 border-emerald-500/40' :
+                            auditForm.inspection_verdict === 'FEASIBLE_WITH_CONDITIONS' ? 'text-amber-400 bg-amber-900/10 border-amber-500/40' :
+                            'text-red-400 bg-red-900/10 border-red-500/40'
+                          }`}
+                        >
+                          <option value="FEASIBLE" className="text-emerald-400 bg-[#020804]">✓ FEASIBLE - Standard Operational Procedure</option>
+                          <option value="FEASIBLE_WITH_CONDITIONS" className="text-amber-400 bg-[#020804]">⚠ FEASIBLE - Requires Special Rigging / Winch</option>
+                          <option value="HIGH_RISK" className="text-red-400 bg-[#020804]">⚡ HIGH RISK - Requires Strict Clearances & Permits</option>
+                          <option value="NOT_FEASIBLE" className="text-red-500 bg-[#020804]">✗ NOT FEASIBLE - Severe Site Inaccessibility / Danger</option>
+                        </select>
+                      </div>
+
+                      <div className="cd-inspection-form-group mb-0">
+                        <label className="cd-inspection-label">
+                          Estimated Felling Complexity
+                        </label>
+                        <select
+                          value={auditForm.felling_complexity}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, felling_complexity: e.target.value }))}
+                          className="cd-inspection-select bg-[#020804] border-emerald-500/20 focus:border-emerald-500/50"
+                        >
+                          <option value="Low (Straight Drop)">Low (Straight Drop)</option>
+                          <option value="Medium (Directional Wedging)">Medium (Directional Wedging)</option>
+                          <option value="High (Sectional Rigging & Crane)">High (Sectional Rigging & Crane)</option>
+                        </select>
+                      </div>
+
+                      <div className="cd-inspection-form-group mb-0 md:col-span-2 mt-2">
+                        <label className="cd-inspection-label">
+                          Potential Alternative Method
+                          <span className="block text-[11px] text-gray-400 font-normal mt-1.5 normal-case tracking-normal">Suggest an alternative harvesting method if the current approach is unsuitable. Selecting an alternative does not confirm that the job is safe or feasible.</span>
+                        </label>
+                        <select
+                          value={auditForm.potential_alternative_method}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, potential_alternative_method: e.target.value }))}
+                          className="cd-inspection-select bg-[#020804] border-emerald-500/20 focus:border-emerald-500/50"
+                        >
+                          <option value="No alternative method identified">No alternative method identified</option>
+                          <option value="Crane may be required">Crane may be required</option>
+                          <option value="Special rigging / winch may be required">Special rigging / winch may be required</option>
+                          <option value="Other method — see contractor remarks">Other method — see contractor remarks</option>
+                        </select>
+                      </div>
+
+                      <div className="cd-inspection-form-group mb-0 md:col-span-2">
+                        <label className="cd-inspection-label">
+                          Landowner's Preferred Arrangement
+                        </label>
+                        <select
+                          value={auditForm.landowner_preferred_arrangement}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAuditForm(prev => ({
+                              ...prev,
+                              landowner_preferred_arrangement: val,
+                              is_transportation_required: val === 'INTERESTED_IN_TIMBER_SALE' ? true : prev.is_transportation_required
+                            }));
+                          }}
+                          className="cd-inspection-select bg-[#020804] border-emerald-500/20 focus:border-emerald-500/50"
+                        >
+                          <option value="HARVESTING_SERVICE">HARVESTING_SERVICE — Harvesting services only</option>
+                          <option value="INTERESTED_IN_TIMBER_SALE">INTERESTED_IN_TIMBER_SALE — Interested in selling standing timber</option>
+                        </select>
+                      </div>
+
+                      <div className="cd-inspection-form-group mb-0 md:col-span-2">
+                        <label className="cd-inspection-label">
+                          Contractor Inspection Findings & Remarks
+                        </label>
+                        <textarea
+                          value={auditForm.inspection_remarks}
+                          onChange={(e) => setAuditForm(prev => ({ ...prev, inspection_remarks: e.target.value }))}
+                          placeholder="Add observations about tree heartwood density, soil firmness, truck turn radius, and client expectations..."
+                          className="cd-inspection-textarea bg-[#020804] border-emerald-500/20 focus:border-emerald-500/50 min-h-[100px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 4: FIELD PHOTOS UPLOADER */}
+                  <div className="p-6 rounded-2xl bg-[#041008] border border-emerald-500/20 shadow-inner">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                      <div>
+                        <h4 className="text-[13px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-2 mb-1">
+                          <Camera size={16} /> 4. Field Inspection Photos
+                        </h4>
+                        <p className="text-[12px] text-emerald-100/60">Upload site photos to support your inspection findings</p>
+                      </div>
+                      <label className="px-5 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors whitespace-nowrap">
+                        <Upload size={16} />
+                        <span>Upload Photos</span>
                         <input
                           type="file"
                           multiple
@@ -3585,32 +3708,38 @@ const AssignedHarvestJobsPage = () => {
                           className="hidden"
                         />
                       </label>
-                      <span className="text-[11px] text-slate-400">
-                        {auditForm.inspection_photos.length} photos attached
-                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-4 text-xs font-semibold text-emerald-200/70">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500/50"></span>
+                      {auditForm.inspection_photos.length} {auditForm.inspection_photos.length === 1 ? 'photo' : 'photos'} attached
                     </div>
 
                     {auditForm.inspection_photos.length > 0 && (
-                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mt-3">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
                         {auditForm.inspection_photos.map((ph, idx) => (
-                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-emerald-500/30 h-16 bg-black">
-                            <img src={ph} alt={`Audit photo ${idx + 1}`} className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveAuditPhoto(idx)}
-                              className="absolute top-1 right-1 p-1 bg-red-600/90 text-white rounded-md text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X size={10} />
-                            </button>
+                          <div key={idx} className="relative group rounded-xl overflow-hidden border border-emerald-500/30 aspect-square bg-[#020804] shadow-md">
+                            <img src={ph} alt={`Audit photo ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-start justify-end p-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAuditPhoto(idx)}
+                                className="w-7 h-7 flex items-center justify-center bg-red-500/90 hover:bg-red-500 text-white rounded-lg backdrop-blur-sm shadow-lg transition-transform hover:scale-110"
+                                aria-label="Remove photo"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
+                  
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-emerald-500/20">
+                {/* Action Buttons Footer */}
+                <div className="cd-schedule-modal-footer">
                   <button
                     type="button"
                     onClick={() => setAuditModalJob(null)}
@@ -3621,16 +3750,17 @@ const AssignedHarvestJobsPage = () => {
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="cd-btn-inspect-log px-6 py-2.5 text-xs"
+                    className="cd-btn-inspect-primary !h-[42px] !px-6 !rounded-xl !text-[13px] shadow-[0_4px_16px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_24px_rgba(16,185,129,0.5)] transition-all"
                   >
-                    {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />}
+                    {actionLoading ? <Loader2 size={16} className="animate-spin" /> : <ClipboardCheck size={16} />}
                     <span>Certify & Save Inspection Audit</span>
                   </button>
                 </div>
               </form>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* MODAL 3: VIEW CERTIFIED INSPECTION REPORT */}
         {viewInspectionModalJob && (
@@ -3967,7 +4097,9 @@ const AssignedHarvestJobsPage = () => {
                     setPreQuoteAdvisoryJob(null);
                     handleOpenAudit(req);
                   }}
-                  className="w-full sm:w-auto cd-btn-inspect-log px-4 py-2 text-xs"
+                  disabled={!preQuoteAdvisoryJob.site_inspection?.landowner_confirmed}
+                  title={!preQuoteAdvisoryJob.site_inspection?.landowner_confirmed ? "Landowner must confirm the inspection date first" : ""}
+                  className={`w-full sm:w-auto px-4 py-2 text-xs cd-btn-inspect-log ${!preQuoteAdvisoryJob.site_inspection?.landowner_confirmed ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
                 >
                   <ClipboardCheck size={13} />
                   <span>Record Inspection Now</span>

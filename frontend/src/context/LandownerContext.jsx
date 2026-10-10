@@ -643,7 +643,8 @@ export const LandownerProvider = ({ children }) => {
                 deleteHarvestRequest,
                 assignContractorToRequest,
                 addTimberListing,
-                updateListingStatus
+                updateListingStatus,
+                setHarvestRequests
             }}
         >
             {children}

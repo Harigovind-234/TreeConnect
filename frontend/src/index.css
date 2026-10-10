@@ -43,6 +43,11 @@
   padding: 0;
 }
 
+::selection {
+  background-color: rgba(67, 197, 138, 0.4); /* Theme primary green */
+  color: #ffffff;
+}
+
 body {
   font-family: var(--font-family);
   background-color: var(--bg-dark);
@@ -1196,16 +1201,17 @@ a {
 .sidebar-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .sidebar-group-title {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #6b7280;
-  padding: 6px 12px;
+  padding: 12px 12px 4px 12px;
 }
 
 .sidebar-item {
@@ -1217,7 +1223,7 @@ a {
   color: #9ca3af;
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   text-decoration: none;
   border: none;
   background: transparent;
@@ -1231,15 +1237,17 @@ a {
 }
 
 .sidebar-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
+  background: rgba(16, 185, 129, 0.08);
+  color: #a7f3d0;
+  transform: translateX(4px);
 }
 
 .sidebar-item.active {
-  background: rgba(16, 185, 129, 0.14);
-  color: #34d399;
-  font-weight: 600;
-  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.25);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.02) 100%);
+  color: #10b981;
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 #10b981;
+  border-radius: 8px;
 }
 
 .sidebar-icon {

@@ -105,7 +105,8 @@ def login_user(credentials: UserLogin):
                     "localBody": existing_user.get("localBody") or existing_user.get("panchayat") or "",
                     "village": existing_user.get("village", ""),
                     "isVerified": is_verified,
-                    "status": user_status
+                    "status": user_status,
+                    "fleet_equipment": existing_user.get("fleet_equipment", [])
                 }
 
                 token = create_access_token({"sub": user_id, "role": user_role, "email": clean_email})
@@ -441,7 +442,8 @@ def get_user_profile(email: Optional[str] = None, authorization: Optional[str] =
             "localBody": existing_user.get("localBody") or existing_user.get("panchayat") or "",
             "village": existing_user.get("village", ""),
             "isVerified": existing_user.get("isVerified", True),
-            "status": existing_user.get("status", "Active")
+            "status": existing_user.get("status", "Active"),
+            "fleet_equipment": existing_user.get("fleet_equipment", [])
         }
 
         return JSONResponse(
@@ -510,3 +512,44 @@ def get_approved_users():
             content={"message": f"Failed to fetch approved users: {str(e)}"}
         )
 
+@router.put("/user-profile/fleet")
+def update_user_fleet(request: dict, authorization: Optional[str] = Header(None)):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+        
+        if not authorization or not authorization.startswith("Bearer "):
+            return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"message": "Missing or invalid token"})
+            
+        token = authorization.split(" ")[1]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            query_email = payload.get("email")
+        except JWTError:
+            return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"message": "Invalid token"})
+            
+        clean_email = query_email.strip().lower()
+        existing_user = db.users.find_one({"email": clean_email})
+        
+        if not existing_user:
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "User not found"})
+            
+        fleet = request.get("fleet_equipment", [])
+        
+        db.users.update_one(
+            {"email": clean_email},
+            {"$set": {"fleet_equipment": fleet}}
+        )
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Fleet updated successfully", "fleet_equipment": fleet}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to update fleet: {str(e)}"}
+        )

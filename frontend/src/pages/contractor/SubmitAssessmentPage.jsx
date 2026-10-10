@@ -4,6 +4,7 @@ import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import harvestService from '../../services/harvestService';
+import api from '../../services/api';
 import './ContractorDashboard.css';
 import {
   Calculator,
@@ -40,8 +41,8 @@ import {
   Briefcase,
   Handshake,
   ShoppingBag,
-  RefreshCw,
   ClipboardCheck,
+  Wrench,
   CalendarCheck,
   Edit3,
   Save,
@@ -52,7 +53,8 @@ import {
   IndianRupee,
   Sliders,
   Check,
-  XCircle
+  XCircle,
+  RefreshCw
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -206,6 +208,7 @@ const SubmitAssessmentPage = () => {
   const autoAppliedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fleetEquipment, setFleetEquipment] = useState([]);
   const [feedbackMessage, setFeedbackMessage] = useState({ type: '', text: '' });
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [activePhotoModal, setActivePhotoModal] = useState(null);
@@ -547,7 +550,19 @@ const extractLandownerValue = (req, vol) => {
       }
     };
 
+    const fetchFleet = async () => {
+      try {
+        const res = await api.get('/auth/user-profile');
+        if (res.data?.user?.fleet_equipment) {
+          setFleetEquipment(res.data.user.fleet_equipment);
+        }
+      } catch (err) {
+        console.error("Failed to fetch fleet in quotation page", err);
+      }
+    };
+
     fetchRequestData();
+    fetchFleet();
   }, [requestId]);
 
   const setFallbackDetails = () => {
@@ -2121,7 +2136,42 @@ const extractLandownerValue = (req, vol) => {
 
               {/* BOTTOM SECTION: ASSESSMENT & QUOTATION FORM (STACKED UNDER PROPERTY) */}
               <div className="w-full">
-                <div className="assessment-workspace-card">
+                {(() => {
+                  const isInspectionCompleted = Boolean(
+                    requestDetails?.site_inspected ||
+                    requestDetails?.inspection_status === 'COMPLETED' ||
+                    requestDetails?.inspection_status === 'REPORT_SUBMITTED' ||
+                    requestDetails?.site_inspection?.status === 'COMPLETED' ||
+                    requestDetails?.site_inspection?.status === 'REPORT_SUBMITTED' ||
+                    requestDetails?.status === 'OPERATION_READY' ||
+                    requestDetails?.status === 'ACCEPTED' ||
+                    requestDetails?.status === 'IN_PROGRESS' ||
+                    requestDetails?.status === 'COMPLETED' ||
+                    existingAssessmentData // if they already have one, they can see it
+                  );
+
+                  if (!isInspectionCompleted) {
+                    return (
+                      <div className="assessment-workspace-card flex flex-col items-center justify-center p-12 text-center border border-dashed border-amber-500/30 bg-[#0d1711]">
+                        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
+                          <FileText size={32} className="text-amber-400" />
+                        </div>
+                        <h2 className="text-xl sm:text-2xl font-black text-white mb-2">Site Inspection Pending</h2>
+                        <p className="text-sm text-slate-400 max-w-md mx-auto">
+                          You must complete the physical site inspection and submit your inspection report from the Assigned Jobs dashboard before you can access the Formal Contractor Assessment Form.
+                        </p>
+                        <button
+                          onClick={() => navigate('/contractor/assigned-jobs')}
+                          className="mt-6 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all shadow-lg"
+                        >
+                          Return to Assigned Jobs
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="assessment-workspace-card">
                   {/* Formal Assessment Header */}
                   <div className="assessment-header-block">
                     <div className="flex items-center justify-between gap-4 flex-wrap w-full">
@@ -3150,96 +3200,129 @@ const extractLandownerValue = (req, vol) => {
                             {requestDetails?.site_inspection?.road_access_verification || 'Medium 6-wheeler truck only'}
                           </strong>
                         </div>
+                        {requestDetails?.site_inspection?.landowner_preferred_arrangement && (
+                          <div className="assessment-verified-card">
+                            <span className="assessment-verified-card-label">Landowner Preference</span>
+                            <strong className="assessment-verified-card-val truncate" title={requestDetails.site_inspection.landowner_preferred_arrangement}>
+                              {requestDetails.site_inspection.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ? 'Interested in Timber Sale' : 'Harvesting Service Only'}
+                            </strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CONTRACTOR FLEET DISPLAY */}
+                  {fleetEquipment && fleetEquipment.length > 0 && (
+                    <div className="assessment-verified-section" style={{ marginTop: '24px' }}>
+                      <div className="assessment-verified-header" style={{ paddingBottom: '16px' }}>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                            <Truck size={16} />
+                          </div>
+                          <div>
+                            <span className="assessment-verified-title">
+                              Contractor Fleet & Equipment
+                            </span>
+                            <span className="assessment-verified-desc">
+                              Your registered equipment available for this job.
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto p-5 pt-0">
+                        <table className="w-full text-left border-collapse text-sm">
+                          <thead>
+                            <tr className="border-b border-emerald-500/20 text-slate-400 text-xs uppercase">
+                              <th className="py-2 pr-4 font-semibold">Machinery Model</th>
+                              <th className="py-2 pr-4 font-semibold">Category</th>
+                              <th className="py-2 font-semibold">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fleetEquipment.map((eq, i) => (
+                              <tr key={i} className="border-b border-emerald-500/10 last:border-0 text-white">
+                                <td className="py-3 pr-4 font-medium">{eq.name}</td>
+                                <td className="py-3 pr-4"><span className="px-2 py-1 bg-emerald-900/30 text-emerald-400 text-[10px] uppercase font-bold rounded-full">{eq.category}</span></td>
+                                <td className="py-3">
+                                  <span className={`flex items-center gap-1 text-[11px] uppercase font-bold ${eq.status === 'In Operation' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                    {eq.status === 'In Operation' ? <CheckCircle2 size={12}/> : <Wrench size={12}/>}
+                                    {eq.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   )}
 
                   <form onSubmit={handleSubmit} className="cd-form flex flex-col gap-6">
 
-                    {/* 1. COMMERCIAL PROPOSAL TYPE SELECTOR */}
+                    {/* ADVISORY BANNERS FOR PREFERRED ARRANGEMENT */}
+                    {requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' && (
+                      <div className="-mb-2 p-4 rounded-xl bg-blue-900/20 border border-blue-500/30 text-blue-200 text-[13px] leading-relaxed flex items-start gap-3 shadow-sm">
+                        <Info size={18} className="text-blue-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block text-blue-300 font-bold mb-1 text-[13px]">Landowner Preference Advisory</strong>
+                          During the site visit, the landowner expressed interest in selling the standing timber. You are submitting a standard Harvesting Service quotation. You may want to discuss timber buyers with them directly or adapt your service rates accordingly.
+                        </div>
+                      </div>
+                    )}
+                    
+                    {requestDetails?.site_inspection?.landowner_preferred_arrangement === 'HARVESTING_SERVICE' && (
+                      <div className="-mb-2 p-3.5 rounded-xl bg-emerald-900/20 border border-emerald-500/30 text-emerald-200 text-[13px] font-medium flex items-center gap-2.5 shadow-sm">
+                        <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                        This standard harvesting quotation perfectly matches the landowner's requested arrangement.
+                      </div>
+                    )}
+
+                    {/* 1. LANDOWNER PREFERENCE / PROPOSAL TYPE */}
                     <div className="assessment-proposal-section">
                       <div className="assessment-section-title-row">
                         <label className="assessment-section-title">
                           <Briefcase size={16} className="text-emerald-400" />
-                          Commercial Proposal Type *
+                          Landowner's Preferred Arrangement *
                         </label>
                         <span className="assessment-section-subtitle">
-                          Select the commercial model for this landowner job
+                          The commercial model preference recorded during site inspection
                         </span>
                       </div>
 
-                      {/* Dropdown Selector */}
-                      <div>
-                        <select
-                          name="commercial_proposal_type"
-                          value={assessmentForm.commercial_proposal_type}
-                          onChange={(e) => handleProposalTypeChange(e.target.value)}
-                          className="assessment-input font-bold text-sm bg-[#08180e] text-emerald-300 border-emerald-500/40 cursor-pointer"
-                        >
-                          <option value="Harvesting Service Quotation">Harvesting Service Quotation (Landowner pays Contractor)</option>
-                          <option value="Timber Purchase Offer">Timber Purchase Offer (Contractor pays Landowner)</option>
-                          <option value="Purchase + Harvesting">Purchase + Harvesting (Purchase timber + operational arrangement)</option>
-                        </select>
-                      </div>
-
-                      {/* 3 Interactive Cards for Visual Feedback */}
                       <div className="commercial-type-grid">
-                        {/* Option 1: Harvesting Service Quotation */}
-                        <div
-                          onClick={() => handleProposalTypeChange('Harvesting Service Quotation')}
-                          className={`commercial-type-card ${assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation' ? 'selected' : ''}`}
-                        >
-                          <div className="commercial-type-header">
-                            <span className="commercial-type-title">
-                              <Truck size={15} className="text-blue-400" /> Harvesting Service Quotation
-                            </span>
-                            <span className="commercial-type-badge commercial-type-badge-service">Service Fee</span>
+                        {requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ? (
+                          <div className="commercial-type-card selected cursor-default border-blue-500/40 bg-blue-900/10">
+                            <div className="commercial-type-header">
+                              <span className="commercial-type-title">
+                                <DollarSign size={15} className="text-blue-400" /> Interested in Timber Sale
+                              </span>
+                              <span className="commercial-type-badge bg-blue-500/20 text-blue-300 border-blue-500/30">Purchase Offer</span>
+                            </div>
+                            <div className="commercial-type-flow text-blue-300">
+                              💸 Contractor → Landowner
+                            </div>
+                            <p className="commercial-type-desc">
+                              The landowner wishes to sell their standing timber to you. Provide a direct purchase offer.
+                            </p>
                           </div>
-                          <div className="commercial-type-flow text-blue-300">
-                            💸 Landowner → Contractor
+                        ) : (
+                          <div className="commercial-type-card selected cursor-default">
+                            <div className="commercial-type-header">
+                              <span className="commercial-type-title">
+                                <Truck size={15} className="text-emerald-400" /> Harvesting Service Quotation
+                              </span>
+                              <span className="commercial-type-badge commercial-type-badge-service">Service Fee</span>
+                            </div>
+                            <div className="commercial-type-flow text-emerald-300">
+                              💸 Landowner → Contractor
+                            </div>
+                            <p className="commercial-type-desc">
+                              The landowner wishes to hire you solely for tree felling, extraction, haulage, and site clearance.
+                            </p>
                           </div>
-                          <p className="commercial-type-desc">
-                            Contractor charges the landowner for tree felling, extraction, haulage, and site clearance.
-                          </p>
-                        </div>
-
-                        {/* Option 2: Timber Purchase Offer */}
-                        <div
-                          onClick={() => handleProposalTypeChange('Timber Purchase Offer')}
-                          className={`commercial-type-card ${assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? 'selected' : ''}`}
-                        >
-                          <div className="commercial-type-header">
-                            <span className="commercial-type-title">
-                              <Coins size={15} className="text-amber-400" /> Timber Purchase Offer
-                            </span>
-                            <span className="commercial-type-badge commercial-type-badge-purchase">Timber Purchase</span>
-                          </div>
-                          <div className="commercial-type-flow text-amber-300">
-                            💰 Contractor → Landowner
-                          </div>
-                          <p className="commercial-type-desc">
-                            Contractor offers to buy standing timber from landowner. Service quotation charges do not apply.
-                          </p>
-                        </div>
-
-                        {/* Option 3: Purchase + Harvesting */}
-                        <div
-                          onClick={() => handleProposalTypeChange('Purchase + Harvesting')}
-                          className={`commercial-type-card ${assessmentForm.commercial_proposal_type === 'Purchase + Harvesting' ? 'selected' : ''}`}
-                        >
-                          <div className="commercial-type-header">
-                            <span className="commercial-type-title">
-                              <Handshake size={15} className="text-emerald-400" /> Purchase + Harvesting
-                            </span>
-                            <span className="commercial-type-badge commercial-type-badge-hybrid">Combined</span>
-                          </div>
-                          <div className="commercial-type-flow text-emerald-300">
-                            🤝 Purchase + Operations
-                          </div>
-                          <p className="commercial-type-desc">
-                            Contractor purchases the timber and undertakes harvesting operations under the agreed arrangement.
-                          </p>
-                        </div>
+                        )}
                       </div>
                     </div>
 
@@ -3649,7 +3732,7 @@ const extractLandownerValue = (req, vol) => {
                               </span>
                             </div>
 
-                            <label className="flex items-center gap-2.5 cursor-pointer select-none px-3 py-1.5 rounded-xl bg-black/50 border border-emerald-500/35 hover:border-emerald-400 transition-colors">
+                            <label className="flex items-center gap-3 cursor-pointer select-none px-4 py-2 rounded-xl bg-emerald-950/30 border border-emerald-500/30 hover:bg-emerald-900/40 hover:border-emerald-400 transition-all shadow-sm">
                               <input
                                 type="checkbox"
                                 checked={assessmentForm.require_advance}
@@ -3662,119 +3745,125 @@ const extractLandownerValue = (req, vol) => {
                                     advance_amount: req ? Math.round((quoteVal * (Number(prev.advance_percentage) || 30)) / 100) : 0
                                   }));
                                 }}
-                                className="w-4 h-4 rounded text-emerald-500 accent-emerald-500 focus:ring-0 cursor-pointer"
+                                className="w-4 h-4 rounded bg-[#020804] border-emerald-500/50 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
                               />
-                              <span className="text-xs font-bold text-white">Require Advance Before Starting Work</span>
+                              <span className="text-[13px] font-extrabold text-emerald-300 uppercase tracking-wide">Require Advance Before Starting Work</span>
                             </label>
                           </div>
 
                           {assessmentForm.require_advance && (
-                            <div className="space-y-4 pt-1 animate-in fade-in duration-200">
-                              {/* DUAL SYNCHRONIZED INPUTS: ADVANCE AMOUNT & PERCENTAGE */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/40 focus-within:border-emerald-400 transition-colors">
-                                  <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block mb-1 flex items-center gap-1.5">
-                                    <IndianRupee size={13} />
-                                    Advance Amount (₹) *
-                                  </label>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-slate-400 font-bold font-mono text-base">₹</span>
-                                    <input
-                                      type="number"
-                                      min="100"
-                                      step="100"
-                                      name="advance_amount"
-                                      value={assessmentForm.advance_amount}
-                                      onChange={(e) => handleAdvanceAmountChange(e.target.value)}
-                                      className="w-full bg-transparent text-white font-mono font-black text-lg focus:outline-none placeholder:text-slate-600"
-                                      placeholder="e.g. 30000"
-                                    />
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 block mt-1">
-                                    Direct advance amount required before mobilization
-                                  </span>
-                                </div>
-
-                                <div className="p-3 rounded-xl bg-[#07190d] border border-emerald-500/40 focus-within:border-emerald-400 transition-colors">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                                      <Calculator size={13} />
-                                      Advance Share (%)
+                            <div className="space-y-6 pt-2 animate-in fade-in duration-200">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                {/* COLUMN 1: AMOUNT & BREAKDOWN */}
+                                <div className="flex flex-col">
+                                  {/* Top part: Input */}
+                                  <div className="p-4 bg-[#07190d] border border-emerald-500/40 rounded-t-xl focus-within:border-emerald-400 transition-colors shadow-sm">
+                                    <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+                                      <IndianRupee size={13} />
+                                      Advance Amount (₹) *
                                     </label>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-400 font-bold font-mono text-xl">₹</span>
                                       <input
                                         type="number"
-                                        min="1"
-                                        max="100"
-                                        name="advance_percentage"
-                                        value={assessmentForm.advance_percentage}
-                                        onChange={(e) => handleAdvancePercentageChange(e.target.value)}
-                                        className="w-14 px-1.5 py-0.5 rounded bg-black/50 border border-emerald-500/40 text-emerald-300 font-mono font-black text-center text-xs focus:outline-none"
+                                        min="100"
+                                        step="100"
+                                        name="advance_amount"
+                                        value={assessmentForm.advance_amount}
+                                        onChange={(e) => handleAdvanceAmountChange(e.target.value)}
+                                        className="w-full bg-transparent text-white font-mono font-black text-2xl focus:outline-none placeholder:text-slate-600"
+                                        placeholder="e.g. 30000"
                                       />
-                                      <span className="text-slate-400 font-bold text-xs">%</span>
+                                    </div>
+                                    <span className="text-[11px] text-slate-400 block mt-2">
+                                      Direct advance amount required before mobilization
+                                    </span>
+                                  </div>
+                                  
+                                  {/* Bottom part: Summary */}
+                                  <div className="p-4 bg-[#092212] border border-t-0 border-emerald-500/40 rounded-b-xl shadow-inner">
+                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+                                      Mobilization Advance Required
+                                    </span>
+                                    <strong className="text-xl sm:text-2xl font-black text-white font-mono block mt-1.5">
+                                      {formatINR(assessmentForm.advance_amount)}
+                                    </strong>
+                                    <span className="text-[11px] text-emerald-300 block mt-1">
+                                      ({assessmentForm.advance_percentage}% of quotation value)
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* COLUMN 2: PERCENTAGE & REMAINING */}
+                                <div className="flex flex-col">
+                                  {/* Top part: Input */}
+                                  <div className="p-4 bg-[#07190d] border border-emerald-500/40 rounded-t-xl focus-within:border-emerald-400 transition-colors shadow-sm">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                        <Calculator size={13} />
+                                        Advance Share (%)
+                                      </label>
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max="100"
+                                          name="advance_percentage"
+                                          value={assessmentForm.advance_percentage}
+                                          onChange={(e) => handleAdvancePercentageChange(e.target.value)}
+                                          className="w-16 px-2 py-1 rounded bg-black/50 border border-emerald-500/40 text-emerald-300 font-mono font-black text-center text-sm focus:outline-none focus:border-emerald-400"
+                                        />
+                                        <span className="text-slate-400 font-bold text-sm">%</span>
+                                      </div>
+                                    </div>
+
+                                    <input
+                                      type="range"
+                                      min="5"
+                                      max="80"
+                                      step="5"
+                                      value={assessmentForm.advance_percentage}
+                                      onChange={(e) => handleAdvancePercentageChange(e.target.value)}
+                                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 mt-2 mb-4"
+                                    />
+
+                                    {/* Preset Pills */}
+                                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                                      {[10, 20, 30, 50].map((pct) => (
+                                        <button
+                                          key={pct}
+                                          type="button"
+                                          onClick={() => handleAdvancePercentageChange(pct)}
+                                          className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex-1 ${
+                                            Number(assessmentForm.advance_percentage) === pct
+                                              ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
+                                              : 'bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/30'
+                                          }`}
+                                        >
+                                          {pct}%
+                                        </button>
+                                      ))}
                                     </div>
                                   </div>
 
-                                  <input
-                                    type="range"
-                                    min="5"
-                                    max="80"
-                                    step="5"
-                                    value={assessmentForm.advance_percentage}
-                                    onChange={(e) => handleAdvancePercentageChange(e.target.value)}
-                                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500 mt-2"
-                                  />
-
-                                  {/* Preset Pills */}
-                                  <div className="flex items-center justify-between gap-1 mt-2 text-[10px]">
-                                    {[10, 20, 30, 50].map((pct) => (
-                                      <button
-                                        key={pct}
-                                        type="button"
-                                        onClick={() => handleAdvancePercentageChange(pct)}
-                                        className={`px-2 py-0.5 rounded-md font-bold transition-all cursor-pointer ${
-                                          Number(assessmentForm.advance_percentage) === pct
-                                            ? 'bg-emerald-500 text-slate-950 font-black'
-                                            : 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/30'
-                                        }`}
-                                      >
-                                        {pct}%
-                                      </button>
-                                    ))}
+                                  {/* Bottom part: Summary */}
+                                  <div className="p-4 bg-[#091a11] border border-t-0 border-emerald-500/40 rounded-b-xl shadow-inner">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                      Remaining Balance Post-Advance
+                                    </span>
+                                    <strong className="text-xl sm:text-2xl font-black text-amber-400 font-mono block mt-1.5">
+                                      {formatINR(Math.max(0, (Number(assessmentForm.total_quote) || 0) - (Number(assessmentForm.advance_amount) || 0)))}
+                                    </strong>
+                                    <span className="text-[11px] text-slate-400 block mt-1">
+                                      Payable upon felling progress / completion
+                                    </span>
                                   </div>
-                                </div>
-                              </div>
-
-                              {/* Live Breakdown Grid */}
-                              <div className="grid grid-cols-2 gap-3 pt-1">
-                                <div className="p-3 rounded-xl bg-[#092212] border border-emerald-500/35">
-                                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
-                                    Mobilization Advance Required
-                                  </span>
-                                  <strong className="text-lg sm:text-xl font-black text-white font-mono block mt-1">
-                                    {formatINR(assessmentForm.advance_amount)}
-                                  </strong>
-                                  <span className="text-[10.5px] text-emerald-300 block mt-0.5">
-                                    ({assessmentForm.advance_percentage}% of quotation value)
-                                  </span>
-                                </div>
-
-                                <div className="p-3 rounded-xl bg-[#091a11] border border-slate-700/60">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                    Remaining Balance Post-Advance
-                                  </span>
-                                  <strong className="text-lg sm:text-xl font-black text-amber-300 font-mono block mt-1">
-                                    {formatINR(Math.max(0, (Number(assessmentForm.total_quote) || 0) - (Number(assessmentForm.advance_amount) || 0)))}
-                                  </strong>
-                                  <span className="text-[10.5px] text-slate-400 block mt-0.5">
-                                    Payable upon felling progress / completion
-                                  </span>
                                 </div>
                               </div>
 
                               {/* Payment Due Date & Contractor Payment Accounts */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                <div className="assessment-field-group">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6 pt-5 border-t border-emerald-500/20">
+                                <div className="assessment-field-group mb-0">
                                   <label className="assessment-field-label flex items-center gap-1.5">
                                     <Calendar size={13} className="text-emerald-400" />
                                     Advance Payment Due Date *
@@ -3786,11 +3875,11 @@ const extractLandownerValue = (req, vol) => {
                                     value={assessmentForm.advance_due_date}
                                     onChange={handleInputChange}
                                     style={{ colorScheme: 'dark' }}
-                                    className="assessment-input cursor-pointer font-bold"
+                                    className="assessment-input cursor-pointer font-bold bg-[#020804] border-emerald-500/30 focus:border-emerald-400"
                                   />
                                 </div>
 
-                                <div className="assessment-field-group">
+                                <div className="assessment-field-group mb-0">
                                   <label className="assessment-field-label flex items-center gap-1.5">
                                     <QrCode size={13} className="text-emerald-400" />
                                     Contractor UPI ID *
@@ -3801,13 +3890,13 @@ const extractLandownerValue = (req, vol) => {
                                     value={assessmentForm.advance_upi_id}
                                     onChange={handleInputChange}
                                     placeholder="e.g. treeconnect.contractor@okhdfcbank"
-                                    className="assessment-input font-mono text-emerald-300"
+                                    className="assessment-input font-mono text-emerald-300 bg-[#020804] border-emerald-500/30 focus:border-emerald-400"
                                   />
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <div className="assessment-field-group">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                                <div className="assessment-field-group mb-0">
                                   <label className="assessment-field-label">Bank Name &amp; Branch</label>
                                   <input
                                     type="text"
@@ -3815,11 +3904,11 @@ const extractLandownerValue = (req, vol) => {
                                     value={assessmentForm.advance_bank_name}
                                     onChange={handleInputChange}
                                     placeholder="e.g. HDFC Bank Ltd, Kottayam"
-                                    className="assessment-input"
+                                    className="assessment-input bg-[#020804] border-emerald-500/30 focus:border-emerald-400"
                                   />
                                 </div>
 
-                                <div className="assessment-field-group">
+                                <div className="assessment-field-group mb-0">
                                   <label className="assessment-field-label">Bank Account Number</label>
                                   <input
                                     type="text"
@@ -3827,11 +3916,11 @@ const extractLandownerValue = (req, vol) => {
                                     value={assessmentForm.advance_bank_account_number}
                                     onChange={handleInputChange}
                                     placeholder="e.g. 50200084920194"
-                                    className="assessment-input font-mono"
+                                    className="assessment-input font-mono bg-[#020804] border-emerald-500/30 focus:border-emerald-400"
                                   />
                                 </div>
 
-                                <div className="assessment-field-group">
+                                <div className="assessment-field-group mb-0">
                                   <label className="assessment-field-label">IFSC Code</label>
                                   <input
                                     type="text"
@@ -3839,13 +3928,13 @@ const extractLandownerValue = (req, vol) => {
                                     value={assessmentForm.advance_ifsc_code}
                                     onChange={handleInputChange}
                                     placeholder="e.g. HDFC0001234"
-                                    className="assessment-input font-mono uppercase"
+                                    className="assessment-input font-mono uppercase bg-[#020804] border-emerald-500/30 focus:border-emerald-400"
                                   />
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="assessment-field-group">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                <div className="assessment-field-group mb-0">
                                   <label className="assessment-field-label">Beneficiary / Account Holder Name</label>
                                   <input
                                     type="text"
@@ -3853,11 +3942,11 @@ const extractLandownerValue = (req, vol) => {
                                     value={assessmentForm.advance_account_holder}
                                     onChange={handleInputChange}
                                     placeholder="e.g. Rohith Kumar"
-                                    className="assessment-input"
+                                    className="assessment-input bg-[#020804] border-emerald-500/30 focus:border-emerald-400"
                                   />
                                 </div>
 
-                                <div className="assessment-field-group">
+                                <div className="assessment-field-group mb-0">
                                   <label className="assessment-field-label">Mobilization Note (Optional)</label>
                                   <input
                                     type="text"
@@ -3865,7 +3954,7 @@ const extractLandownerValue = (req, vol) => {
                                     value={assessmentForm.advance_remarks}
                                     onChange={handleInputChange}
                                     placeholder="e.g. Advance mobilization fee covers crew staging and haulage logistics."
-                                    className="assessment-input"
+                                    className="assessment-input bg-[#020804] border-emerald-500/30 focus:border-emerald-400"
                                   />
                                 </div>
                               </div>
@@ -4428,6 +4517,8 @@ const extractLandownerValue = (req, vol) => {
 
                   </form>
                 </div>
+                );
+                })()}
               </div>
 
             </div>
