@@ -372,26 +372,32 @@ const extractLandownerValue = (req, vol) => {
   });
 
   // Fetch target harvest request details & existing assessment if any
+  const [loadError, setLoadError] = useState(null);
+
+  // Fetch target harvest request details & existing assessment if any
   useEffect(() => {
     const fetchRequestData = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         if (requestId && requestId !== 'demo') {
-          // 1. Check local storage treeconnect_harvest_requests first
-          let localMatch = null;
+          // 1. Purge stale mock requests from localStorage to prevent contamination
           try {
             const storedReqs = localStorage.getItem('treeconnect_harvest_requests');
             if (storedReqs) {
-              const parsedReqs = JSON.parse(storedReqs);
-              if (Array.isArray(parsedReqs)) {
-                localMatch = parsedReqs.find(r => r && (String(r.id) === String(requestId) || String(r._id) === String(requestId)));
+              const parsed = JSON.parse(storedReqs);
+              if (Array.isArray(parsed)) {
+                const cleaned = parsed.filter(item => item && item.propertyName !== 'Green Valley Teak Plantation' && item.id !== 'hr_demo_99');
+                if (cleaned.length !== parsed.length) {
+                  localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(cleaned));
+                }
               }
             }
           } catch (e) {
-            console.warn('Could not read treeconnect_harvest_requests from localStorage:', e);
+            console.warn('Could not sanitize treeconnect_harvest_requests from localStorage:', e);
           }
 
-          // 2. Attempt API fetch
+          // 2. Fetch authoritative data from Backend API
           let apiData = null;
           try {
             const res = await harvestService.getHarvestRequestById(requestId);
@@ -400,7 +406,22 @@ const extractLandownerValue = (req, vol) => {
             console.warn('API fetch for harvest request failed:', e);
           }
 
-          const combinedData = localMatch && apiData ? { ...apiData, ...localMatch } : (localMatch || apiData);
+          // 3. Fallback to localStorage only if API is unreachable
+          let localMatch = null;
+          if (!apiData) {
+            try {
+              const storedReqs = localStorage.getItem('treeconnect_harvest_requests');
+              if (storedReqs) {
+                const parsedReqs = JSON.parse(storedReqs);
+                if (Array.isArray(parsedReqs)) {
+                  localMatch = parsedReqs.find(r => r && (String(r.id) === String(requestId) || String(r._id) === String(requestId)) && r.propertyName !== 'Green Valley Teak Plantation');
+                }
+              }
+            } catch (e) {}
+          }
+
+          // Authoritative data: apiData takes precedence
+          const combinedData = apiData || localMatch;
 
           let loVol = 1.70;
           let loVal = 237133;
@@ -409,142 +430,102 @@ const extractLandownerValue = (req, vol) => {
             setRequestDetails(combinedData);
             loVol = extractLandownerVolume(combinedData);
             loVal = extractLandownerValue(combinedData, loVol);
-          } else {
-            setFallbackDetails();
-          }
 
-          // Try fetching existing assessment from API, combinedData, or localStorage
-          let hasExistingAssessment = false;
-          const inspDate = getApprovedInspectionDate(combinedData);
-          let assData = null;
-          try {
-            const existingAssessment = await harvestService.getAssessment(requestId);
-            if (existingAssessment && (existingAssessment.assessment || existingAssessment.id || existingAssessment.commercial_proposal_type)) {
-              assData = existingAssessment.assessment || existingAssessment;
+            // Fetch existing assessment from API
+            let assData = null;
+            try {
+              const existingAssessment = await harvestService.getAssessment(requestId);
+              if (existingAssessment && (existingAssessment.assessment || existingAssessment.id || existingAssessment.commercial_proposal_type)) {
+                assData = existingAssessment.assessment || existingAssessment;
+              }
+            } catch (e) {
+              console.log('No prior assessment recorded from API endpoint.');
             }
-          } catch (e) {
-            console.log('No prior assessment recorded from API endpoint, checking combined harvest request data.');
-          }
 
-          if (!assData && combinedData) {
-            if (combinedData.assessment && typeof combinedData.assessment === 'object') {
+            if (!assData && combinedData.assessment && typeof combinedData.assessment === 'object') {
               assData = combinedData.assessment;
-            } else if (combinedData.total_quote !== undefined || combinedData.contractor_purchase_offer !== undefined || combinedData.timber_purchase_price !== undefined || combinedData.status === 'ASSESSMENT_SUBMITTED') {
-              assData = {
-                commercial_proposal_type: combinedData.commercial_proposal_type || 'Harvesting Service Quotation',
-                estimated_harvestable_volume: combinedData.estimated_harvestable_volume || loVol,
-                estimated_timber_value: combinedData.estimated_timber_value || loVal,
-                harvesting_cost: combinedData.harvesting_cost ?? combinedData.felling_cost ?? 40700,
-                felling_cost: combinedData.felling_cost ?? combinedData.harvesting_cost ?? 40700,
-                extraction_cost: combinedData.extraction_cost ?? 28490,
-                transportation_cost: combinedData.transportation_cost ?? 22385,
-                other_cost: combinedData.other_cost ?? 10175,
-                total_quote: combinedData.total_quote ?? 101750,
-                original_quote: combinedData.original_quote ?? combinedData.total_quote ?? 101750,
-                previous_quote: combinedData.previous_quote,
-                revised_quote: combinedData.revised_quote,
-                original_costs: combinedData.original_costs || {
-                  harvesting_cost: combinedData.harvesting_cost ?? combinedData.felling_cost ?? 40700,
-                  extraction_cost: combinedData.extraction_cost ?? 28490,
-                  transportation_cost: combinedData.transportation_cost ?? 22385,
-                  other_cost: combinedData.other_cost ?? 10175
-                },
-                reduction: combinedData.reduction,
-                revision_history: combinedData.revision_history || [],
-                is_revision: combinedData.is_revision || false,
-                contractor_purchase_offer: combinedData.contractor_purchase_offer,
-                timber_purchase_price: combinedData.timber_purchase_price,
-                harvesting_arrangement_cost: combinedData.harvesting_arrangement_cost,
-                transportation_arrangement: combinedData.transportation_arrangement,
-                payment_terms: combinedData.payment_terms,
-                offer_valid_until: combinedData.offer_valid_until,
-                assigned_workers_count: combinedData.assigned_workers_count ?? combinedData.workers_assigned ?? 10,
-                workers_assigned: combinedData.workers_assigned ?? combinedData.assigned_workers_count ?? 10,
-                estimated_duration: combinedData.estimated_duration || '1 Working Day',
-                proposed_start_date: combinedData.proposed_start_date || '2026-10-10',
-                notes: combinedData.notes || 'Site inspection completed. Access road clear for heavy haulers.'
-              };
-            }
-          }
-
-          if (assData) {
-            hasExistingAssessment = true;
-            // Preserve original_quote and original_costs if missing
-            if (!assData.original_quote && assData.total_quote) {
-              assData.original_quote = assData.total_quote;
-            }
-            if (!assData.original_costs) {
-              assData.original_costs = {
-                harvesting_cost: assData.harvesting_cost ?? assData.felling_cost ?? 40700,
-                extraction_cost: assData.extraction_cost ?? 28490,
-                transportation_cost: assData.transportation_cost ?? 22385,
-                other_cost: assData.other_cost ?? 10175
-              };
-            }
-            setExistingAssessmentData(assData);
-            const cleanExistingDate = assData.proposed_start_date ? String(assData.proposed_start_date).substring(0, 10) : '';
-            if (cleanExistingDate) {
-              const initialDateErr = validateProposedDate(cleanExistingDate, inspDate);
-              if (initialDateErr) setDateError(initialDateErr);
             }
 
-            // If contractor has already submitted an assessment, retain their assessed values
-            const assessedVol = (assData.estimated_harvestable_volume !== undefined && assData.estimated_harvestable_volume !== null && assData.estimated_harvestable_volume !== '')
-              ? parseVolumeNumber(assData.estimated_harvestable_volume)
-              : loVol;
-            const assessedVal = (assData.estimated_timber_value !== undefined && assData.estimated_timber_value !== null && assData.estimated_timber_value !== '')
-              ? Number(assData.estimated_timber_value)
-              : loVal;
+            const inspDate = getApprovedInspectionDate(combinedData);
 
-            const cleanValidUntil = assData.offer_valid_until ? String(assData.offer_valid_until).substring(0, 10) : '';
+            if (assData) {
+              if (!assData.original_quote && assData.total_quote) {
+                assData.original_quote = assData.total_quote;
+              }
+              setExistingAssessmentData(assData);
+              const cleanExistingDate = assData.proposed_start_date ? String(assData.proposed_start_date).substring(0, 10) : '';
+              if (cleanExistingDate) {
+                const initialDateErr = validateProposedDate(cleanExistingDate, inspDate);
+                if (initialDateErr) setDateError(initialDateErr);
+              }
 
-            setAssessmentForm(prev => ({
-              ...prev,
-              commercial_proposal_type: assData.commercial_proposal_type || prev.commercial_proposal_type,
-              estimated_harvestable_volume: assessedVol,
-              estimated_timber_value: assessedVal,
-              harvesting_cost: assData.harvesting_cost ?? assData.felling_cost ?? prev.harvesting_cost,
-              extraction_cost: assData.extraction_cost ?? prev.extraction_cost,
-              transportation_cost: assData.transportation_cost ?? prev.transportation_cost,
-              other_cost: assData.other_cost ?? prev.other_cost,
-              total_quote: assData.total_quote ?? prev.total_quote,
-              contractor_purchase_offer: assData.contractor_purchase_offer ?? prev.contractor_purchase_offer,
-              timber_purchase_price: assData.timber_purchase_price ?? prev.timber_purchase_price,
-              harvesting_arrangement_cost: assData.harvesting_arrangement_cost ?? prev.harvesting_arrangement_cost,
-              transportation_arrangement: assData.transportation_arrangement || prev.transportation_arrangement,
-              payment_terms: assData.payment_terms || prev.payment_terms,
-              offer_valid_until: cleanValidUntil || prev.offer_valid_until,
-              assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 10,
-              estimated_duration: assData.estimated_duration || prev.estimated_duration || '1 Working Day',
-              proposed_start_date: cleanExistingDate || (inspDate && inspDate > prev.proposed_start_date ? inspDate : prev.proposed_start_date),
-              notes: assData.notes || prev.notes,
-              // Load advance terms if existing
-              require_advance: Boolean(assData.advance_payment_request || combinedData?.advance_payment_request || prev.require_advance),
-              advance_percentage: Number(assData.advance_payment_request?.advance_percentage || combinedData?.advance_payment_request?.advance_percentage || prev.advance_percentage || 30),
-              advance_amount: Number(assData.advance_payment_request?.advance_amount || combinedData?.advance_payment_request?.advance_amount || prev.advance_amount || Math.round(((assData.total_quote || prev.total_quote || 110000) * 30) / 100)),
-              advance_due_date: assData.advance_payment_request?.due_date || combinedData?.advance_payment_request?.due_date || prev.advance_due_date,
-              advance_upi_id: assData.advance_payment_request?.upi_id || combinedData?.advance_payment_request?.upi_id || prev.advance_upi_id,
-              advance_bank_name: assData.advance_payment_request?.bank_name || combinedData?.advance_payment_request?.bank_name || prev.advance_bank_name,
-              advance_bank_account_number: assData.advance_payment_request?.bank_account_number || combinedData?.advance_payment_request?.bank_account_number || prev.advance_bank_account_number,
-              advance_ifsc_code: assData.advance_payment_request?.ifsc_code || combinedData?.advance_payment_request?.ifsc_code || prev.advance_ifsc_code,
-              advance_account_holder: assData.advance_payment_request?.account_holder_name || combinedData?.advance_payment_request?.account_holder_name || prev.advance_account_holder,
-              advance_remarks: assData.advance_payment_request?.remarks || combinedData?.advance_payment_request?.remarks || prev.advance_remarks
-            }));
+              const assessedVol = (assData.estimated_harvestable_volume !== undefined && assData.estimated_harvestable_volume !== null && assData.estimated_harvestable_volume !== '')
+                ? parseVolumeNumber(assData.estimated_harvestable_volume)
+                : loVol;
+              const assessedVal = (assData.estimated_timber_value !== undefined && assData.estimated_timber_value !== null && assData.estimated_timber_value !== '')
+                ? Number(assData.estimated_timber_value)
+                : loVal;
+
+              const cleanValidUntil = assData.offer_valid_until ? String(assData.offer_valid_until).substring(0, 10) : '';
+
+              setAssessmentForm(prev => ({
+                ...prev,
+                commercial_proposal_type: assData.commercial_proposal_type || prev.commercial_proposal_type,
+                estimated_harvestable_volume: assessedVol,
+                estimated_timber_value: assessedVal,
+                harvesting_cost: assData.harvesting_cost ?? assData.felling_cost ?? prev.harvesting_cost,
+                extraction_cost: assData.extraction_cost ?? prev.extraction_cost,
+                transportation_cost: assData.transportation_cost ?? prev.transportation_cost,
+                other_cost: assData.other_cost ?? prev.other_cost,
+                total_quote: assData.total_quote ?? prev.total_quote,
+                contractor_purchase_offer: assData.contractor_purchase_offer ?? prev.contractor_purchase_offer,
+                timber_purchase_price: assData.timber_purchase_price ?? prev.timber_purchase_price,
+                harvesting_arrangement_cost: assData.harvesting_arrangement_cost ?? prev.harvesting_arrangement_cost,
+                transportation_arrangement: assData.transportation_arrangement || prev.transportation_arrangement,
+                payment_terms: assData.payment_terms || prev.payment_terms,
+                offer_valid_until: cleanValidUntil || prev.offer_valid_until,
+                assigned_workers_count: assData.assigned_workers_count ?? assData.workers_assigned ?? prev.assigned_workers_count ?? 10,
+                estimated_duration: assData.estimated_duration || prev.estimated_duration || '1 Working Day',
+                proposed_start_date: cleanExistingDate || (inspDate && inspDate > prev.proposed_start_date ? inspDate : prev.proposed_start_date),
+                notes: assData.notes || prev.notes,
+                require_advance: Boolean(assData.advance_payment_request || combinedData?.advance_payment_request || prev.require_advance),
+                advance_percentage: Number(assData.advance_payment_request?.advance_percentage || combinedData?.advance_payment_request?.advance_percentage || prev.advance_percentage || 30),
+                advance_amount: Number(assData.advance_payment_request?.advance_amount || combinedData?.advance_payment_request?.advance_amount || prev.advance_amount || Math.round(((assData.total_quote || prev.total_quote || 110000) * 30) / 100)),
+                advance_due_date: assData.advance_payment_request?.due_date || combinedData?.advance_payment_request?.due_date || prev.advance_due_date,
+                advance_upi_id: assData.advance_payment_request?.upi_id || combinedData?.advance_payment_request?.upi_id || prev.advance_upi_id,
+                advance_bank_name: assData.advance_payment_request?.bank_name || combinedData?.advance_payment_request?.bank_name || prev.advance_bank_name,
+                advance_bank_account_number: assData.advance_payment_request?.bank_account_number || combinedData?.advance_payment_request?.bank_account_number || prev.advance_bank_account_number,
+                advance_ifsc_code: assData.advance_payment_request?.ifsc_code || combinedData?.advance_payment_request?.ifsc_code || prev.advance_ifsc_code,
+                advance_account_holder: assData.advance_payment_request?.account_holder_name || combinedData?.advance_payment_request?.account_holder_name || prev.advance_account_holder,
+                advance_remarks: assData.advance_payment_request?.remarks || combinedData?.advance_payment_request?.remarks || prev.advance_remarks
+              }));
+            } else {
+              // Fresh assessment initiation based on site inspection findings
+              setExistingAssessmentData(null);
+              const siteInsp = combinedData.site_inspection || {};
+              const inspVol = siteInsp.estimated_volume ? Number(siteInsp.estimated_volume) : loVol;
+              setAssessmentForm(prev => ({
+                ...prev,
+                estimated_harvestable_volume: Number(inspVol.toFixed(2)),
+                estimated_timber_value: loVal > 0 ? loVal : calculateApproxTimberValue('Teak', inspVol),
+                proposed_start_date: (inspDate && inspDate > prev.proposed_start_date) ? inspDate : prev.proposed_start_date
+              }));
+            }
           } else {
-            // If no prior assessment exists, default to landowner estimate and ensure start date is after inspection
-            setAssessmentForm(prev => ({
-              ...prev,
-              estimated_harvestable_volume: Number(loVol.toFixed(2)),
-              estimated_timber_value: loVal > 0 ? loVal : calculateApproxTimberValue('Teak', loVol),
-              proposed_start_date: (inspDate && inspDate > prev.proposed_start_date) ? inspDate : prev.proposed_start_date
-            }));
+            setLoadError('Harvest request not found or could not be loaded from database.');
+            setRequestDetails(null);
+            setExistingAssessmentData(null);
           }
         } else {
-          setFallbackDetails();
+          setLoadError('No valid harvest request ID specified.');
+          setRequestDetails(null);
+          setExistingAssessmentData(null);
         }
       } catch (err) {
-        console.warn('Could not fetch harvest request from API, using fallback context:', err);
-        setFallbackDetails();
+        console.error('Error fetching harvest request:', err);
+        setLoadError(err.message || 'Error loading harvest job details.');
+        setRequestDetails(null);
+        setExistingAssessmentData(null);
       } finally {
         setLoading(false);
       }
@@ -564,109 +545,6 @@ const extractLandownerValue = (req, vol) => {
     fetchRequestData();
     fetchFleet();
   }, [requestId]);
-
-  const setFallbackDetails = () => {
-    const fallbackAssessment = {
-      commercial_proposal_type: 'Harvesting Service Quotation',
-      estimated_harvestable_volume: 1.80,
-      estimated_timber_value: 237133,
-      harvesting_cost: 40700,
-      felling_cost: 40700,
-      extraction_cost: 28490,
-      transportation_cost: 22385,
-      other_cost: 10175,
-      total_quote: 101750,
-      original_quote: 101750,
-      counter_offer_amount: 93500,
-      counter_offer_start_date: '2026-10-10',
-      assigned_workers_count: 10,
-      estimated_duration: '1 Working Day',
-      proposed_start_date: '2026-10-10',
-      original_costs: {
-        harvesting_cost: 40700,
-        extraction_cost: 28490,
-        transportation_cost: 22385,
-        other_cost: 10175
-      },
-      revision_history: [
-        {
-          revision_number: 0,
-          type: 'INITIAL_QUOTATION',
-          contractor_quote: 101750,
-          costs: {
-            harvesting_cost: 40700,
-            extraction_cost: 28490,
-            transportation_cost: 22385,
-            other_cost: 10175
-          },
-          timestamp: '2026-10-08T10:00:00Z'
-        }
-      ],
-      status: 'ASSESSMENT_SUBMITTED'
-    };
-
-    setExistingAssessmentData(fallbackAssessment);
-
-    setRequestDetails({
-      id: requestId || 'hr_demo_99',
-      _id: requestId || 'hr_demo_99',
-      propertyName: 'Green Valley Teak Plantation',
-      propertyLocation: 'Kottayam, Kerala',
-      propertyArea: '14.5 Acres',
-      surveyNumber: 'Sy. #184/3B',
-      landType: 'Commercial Hardwood Plantation (Private)',
-      owner_email: 'landowner@treeconnect.in',
-      reason: 'Mature timber harvest',
-      preferred_start_date: '2026-09-10',
-      preferred_end_date: '2026-09-25',
-      required_services: ['Tree felling', 'Cutting', 'Timber extraction', 'Transportation', 'Site clearing'],
-      propertyPhotos: [],
-      site_inspected: true,
-      site_inspection: {
-        status: 'COMPLETED',
-        scheduled_date: '2026-10-12',
-        estimated_volume: 1.8,
-        verified_tree_count: 1,
-        timber_condition: 'Sound & Top Quality',
-        road_access_verification: 'Medium 6-wheeler truck only'
-      },
-      inspection_scheduled_date: '2026-10-12',
-      tree_inventory: [
-        {
-          id: 'inv_1',
-          species: 'Teak',
-          treeCount: 1,
-          estimatedVolume: '1.70 m³',
-          averageAge: '15 Years',
-          averageDBH: '60 - 85 cm',
-          averageHeight: '14 Meters',
-          timberGrade: 'Grade A Commercial Hardwood'
-        }
-      ],
-      total_estimated_volume: 1.70,
-      total_estimated_price: 237133,
-      approx_timber_value: 237133,
-      total_quote: 101750,
-      original_quote: 101750,
-      harvesting_cost: 40700,
-      extraction_cost: 28490,
-      transportation_cost: 22385,
-      other_cost: 10175,
-      counter_offer_amount: 93500,
-      counter_offer_start_date: '2026-10-10',
-      status: 'REVISION_REQUESTED',
-      assessment: fallbackAssessment,
-      site_conditions: {
-        access_availability: 'Heavy vehicle access',
-        road_condition: 'Paved panchayat road (50 meters)',
-        distance_from_road: '50 meters',
-        terrain: 'Gently sloped',
-        additional_notes: 'Easy access from main road. Clear haul path for timber trailers.'
-      },
-      hazards: ['Nearby buildings / structures', 'Public road adjacent'],
-      createdAt: '2026-09-10'
-    });
-  };
 
   // Switch Proposal Type and Clean Obsolete Fields
   const handleProposalTypeChange = (type) => {
@@ -803,13 +681,14 @@ const extractLandownerValue = (req, vol) => {
     requestDetails?.original_quote ||
     existingAssessmentData?.total_quote ||
     requestDetails?.total_quote ||
-    101750
+    assessmentForm?.total_quote ||
+    0
   );
 
   const landownerTargetBudget = Number(
     requestDetails?.counter_offer_amount ||
     existingAssessmentData?.counter_offer_amount ||
-    93500
+    0
   );
 
   const isAlreadyRevised = Boolean(
@@ -1411,7 +1290,7 @@ const extractLandownerValue = (req, vol) => {
     }
   };
 
-  const reqIdDisplay = (requestId || requestDetails?.id || requestDetails?._id || 'hr_demo_99').substring(0, 8);
+  const reqIdDisplay = String(requestId || requestDetails?.id || requestDetails?._id || '').substring(0, 8);
   const servicesList = Array.isArray(requestDetails?.required_services) && requestDetails.required_services.length > 0
     ? requestDetails.required_services
     : ['Tree felling', 'Timber extraction', 'Transportation'];
@@ -1432,6 +1311,7 @@ const extractLandownerValue = (req, vol) => {
 
   const landownerEstimatedVolume = extractLandownerVolume(requestDetails);
   const landownerReferenceTimberValue = extractLandownerValue(requestDetails, landownerEstimatedVolume);
+  const hasExistingAssessment = Boolean(existingAssessmentData);
 
   const isRevisionRequested = requestDetails?.status === 'REVISION_REQUESTED' || existingAssessmentData?.status === 'REVISION_REQUESTED';
   const revisionReasons = (Array.isArray(requestDetails?.revision_reasons) && requestDetails.revision_reasons.length > 0)
@@ -1528,16 +1408,30 @@ const extractLandownerValue = (req, vol) => {
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                       <div className="flex flex-col text-left leading-tight">
                         <span className="text-[11px] font-bold text-emerald-300">
-                          {requestDetails?.status === 'OPERATION_READY' ? 'Quotation Accepted' : 'Quotation Submitted'}
+                          {hasExistingAssessment || requestDetails?.status === 'ASSESSMENT_SUBMITTED'
+                            ? 'Quotation Submitted'
+                            : requestDetails?.status === 'OPERATION_READY' || requestDetails?.status === 'ACCEPTED'
+                            ? 'Quotation Accepted'
+                            : requestDetails?.status === 'REVISION_REQUESTED'
+                            ? 'Revision Requested'
+                            : 'Assessment In Progress'}
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          {requestDetails?.status === 'OPERATION_READY' ? 'Operation Ready' : 'Under Review'}
+                          {hasExistingAssessment || requestDetails?.status === 'ASSESSMENT_SUBMITTED'
+                            ? 'Under Review'
+                            : requestDetails?.status === 'OPERATION_READY' || requestDetails?.status === 'ACCEPTED'
+                            ? 'Operation Ready'
+                            : requestDetails?.status === 'REVISION_REQUESTED'
+                            ? 'Counter-Offer Received'
+                            : 'Drafting Proposal'}
                         </span>
                       </div>
                     </div>
-                    <span className="px-3 py-1.5 rounded-lg bg-[#04120a] border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
-                      Job #{reqIdDisplay}
-                    </span>
+                    {reqIdDisplay && (
+                      <span className="px-3 py-1.5 rounded-lg bg-[#04120a] border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
+                        Job #{reqIdDisplay}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1545,9 +1439,23 @@ const extractLandownerValue = (req, vol) => {
 
           {/* MAIN FORM & DETAILS CONTAINER - STACKED UNDER PROPERTY */}
           {loading ? (
-            <div className="cd-card text-center py-16 flex flex-col items-center justify-center gap-3">
-              <Loader2 size={32} className="text-emerald-400 animate-spin" />
-              <p className="text-white font-semibold text-sm">Loading harvest job details...</p>
+            <div className="cd-card text-center py-20 flex flex-col items-center justify-center gap-3">
+              <Loader2 size={36} className="text-emerald-400 animate-spin" />
+              <p className="text-white font-semibold text-base">Loading harvest job details...</p>
+              <p className="text-xs text-slate-400">Retrieving parcel records & site inspection audit from server...</p>
+            </div>
+          ) : loadError && !requestDetails ? (
+            <div className="cd-card text-center py-16 flex flex-col items-center justify-center gap-3 border border-red-500/30 bg-red-950/20 rounded-2xl p-8">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center font-bold text-xl">!</div>
+              <strong className="text-white font-bold text-base">Unable to Load Job Details</strong>
+              <p className="text-xs text-slate-400 max-w-md">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => navigate('/contractor/assigned-jobs')}
+                className="mt-3 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs cursor-pointer transition-colors"
+              >
+                Back to Assigned Jobs
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-8 w-full">
@@ -1689,7 +1597,7 @@ const extractLandownerValue = (req, vol) => {
                     const pDetails = requestDetails?.property_details || {};
                     const propAreaVal = requestDetails?.propertyArea || (pDetails.totalArea ? `${pDetails.totalArea} ${pDetails.areaUnit || 'Cents'}` : '11 Cents');
                     const landClassVal = requestDetails?.landType || pDetails.propertyType || pDetails.landType || 'Residential Property';
-                    const villageVal = requestDetails?.village || pDetails.village || 'Nagampadam';
+                    const villageVal = requestDetails?.village || pDetails.village || 'Pampady';
                     const localBodyVal = requestDetails?.localBody || pDetails.localBody || 'Meenadom Panchayat';
                     const pinVal = requestDetails?.pinCode || pDetails.pinCode || '686516';
                     const ownerNameVal = requestDetails?.ownerName || pDetails.ownerName || 'Harigovind D Nair';

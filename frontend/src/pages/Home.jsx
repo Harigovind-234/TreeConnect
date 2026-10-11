@@ -48,23 +48,7 @@ const Home = () => {
             </Link>
           </div>
 
-          {/* Unified Glassmorphism Statistics Card */}
-          <div className="hero-stats-card">
-            <div className="stat-item">
-              <span className="stat-number-green">50,000+</span>
-              <span className="stat-label-gray">Acres Managed</span>
-            </div>
 
-            <div className="stat-item">
-              <span className="stat-number-green">$12.4M</span>
-              <span className="stat-label-gray">Timber Traded</span>
-            </div>
-
-            <div className="stat-item">
-              <span className="stat-number-green">98.5%</span>
-              <span className="stat-label-gray">Contract Accuracy</span>
-            </div>
-          </div>
         </div>
       </section>
 

@@ -105,33 +105,53 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
 
       const combined = Array.from(allMap.values());
 
-      // Filter only real requests assigned to this contractor
-      const matched = combined.filter(r => {
-        if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
-        if (isFakeOrMockRequest(r)) return false;
+      const isLandowner = (currentUser?.role || user?.role || '').toLowerCase() === 'landowner';
+      const isContractor = (currentUser?.role || user?.role || '').toLowerCase() === 'contractor';
 
-        const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
-        const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
-        const reqCName = String(r.assigned_contractor_name || r.contractor_name || r.assignedContractorName || '').toLowerCase().trim();
+      let matched = [];
+      if (isContractor) {
+        // Filter only real requests assigned to this contractor
+        matched = combined.filter(r => {
+          if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+          if (isFakeOrMockRequest(r)) return false;
 
-        const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || (currentUser?._id && reqCId === String(currentUser._id))));
-        const isMatchEmail = Boolean(cEmail && (
-          (reqCEmail && (reqCEmail === cEmail || reqCEmail.includes(cEmail) || cEmail.includes(reqCEmail))) ||
-          (reqCName && reqCName === cEmail)
-        ));
+          const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
+          const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
+          const reqCName = String(r.assigned_contractor_name || r.contractor_name || r.assignedContractorName || '').toLowerCase().trim();
 
-        const firstName = cName ? cName.split(' ')[0] : '';
-        const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
-        const isMatchName = Boolean(cName && reqCName && (
-          reqCName === cName ||
-          reqCName.includes(cName) ||
-          cName.includes(reqCName) ||
-          (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
-          (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName))
-        ));
+          const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || (currentUser?._id && reqCId === String(currentUser._id))));
+          const isMatchEmail = Boolean(cEmail && (
+            (reqCEmail && (reqCEmail === cEmail || reqCEmail.includes(cEmail) || cEmail.includes(reqCEmail))) ||
+            (reqCName && reqCName === cEmail)
+          ));
 
-        return isMatchId || isMatchEmail || isMatchName;
-      });
+          const firstName = cName ? cName.split(' ')[0] : '';
+          const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
+          const isMatchName = Boolean(cName && reqCName && (
+            reqCName === cName ||
+            reqCName.includes(cName) ||
+            cName.includes(reqCName) ||
+            (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
+            (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName))
+          ));
+
+          return isMatchId || isMatchEmail || isMatchName;
+        });
+      } else if (isLandowner) {
+        // Filter requests submitted by this landowner
+        matched = combined.filter(r => {
+          if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+          if (isFakeOrMockRequest(r)) return false;
+
+          const rEmail = String(r.userEmail || r.landowner_email || r.landownerEmail || r.ownerEmail || '').toLowerCase().trim();
+          const rId = String(r.landowner_id || r.landownerId || r.owner_id || '');
+
+          const isMatchEmail = Boolean(cEmail && rEmail && (rEmail === cEmail || rEmail.includes(cEmail) || cEmail.includes(rEmail)));
+          const isMatchId = Boolean(cId && rId && (rId === String(cId)));
+
+          return isMatchEmail || isMatchId;
+        });
+      }
 
       setAssignedRequests(matched);
     } catch (err) {
@@ -158,87 +178,150 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
   const liveNotifications = useMemo(() => {
     if (!assignedRequests || assignedRequests.length === 0) return [];
 
+    const isLandowner = (user?.role || '').toLowerCase() === 'landowner';
     const list = [];
 
     assignedRequests.forEach(req => {
       const propName = req.property_name || req.propertyName || `Job #${String(req.id || req._id || '').slice(-6).toUpperCase()}`;
       const ownerName = req.ownerName || req.landownerName || 'Landowner';
+      const contractorName = req.assigned_contractor_name || req.contractor_name || 'Assigned Contractor';
       const reqId = req.id || req._id;
 
-      // 1. Advance payment verified (live real payment)
-      const adv = req.advance_payment;
-      if (adv && (adv.verified || adv.status === 'VERIFIED' || adv.verified_by)) {
-        const amt = adv.amount ? `₹ ${formatINR(adv.amount)}` : '';
-        list.push({
-          id: `pay_${reqId}`,
-          reqId,
-          title: 'Advance Payment Verified',
-          text: `Advance Payment ${amt ? `of ${amt} ` : ''}verified for ${propName}.`,
-          time: getRelativeTime(adv.verified_at || adv.payment_date || req.updated_at || req.updatedAt),
-          timestamp: new Date(adv.verified_at || adv.payment_date || req.updated_at || req.updatedAt || 0).getTime(),
-          type: 'payment'
-        });
-      }
+      if (isLandowner) {
+        // 1. Contractor submitted quotation / assessment
+        if (req.status === 'ASSESSMENT_SUBMITTED' || (req.assessment && (req.assessment.total_quote || req.assessment.total_quote_inr))) {
+          list.push({
+            id: `quote_${reqId}`,
+            reqId,
+            title: 'Quotation Received',
+            text: `${contractorName} submitted timber assessment & quotation for ${propName}.`,
+            time: getRelativeTime(req.assessment?.submitted_at || req.updated_at || req.updatedAt),
+            timestamp: new Date(req.assessment?.submitted_at || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'quote'
+          });
+        }
 
-      // 2. Quotation accepted / Agreement signed (live real status)
-      if (req.status === 'ASSESSMENT_ACCEPTED' || req.status === 'OPERATION_READY' || req.agreement_status === 'SIGNED' || req.agreement_signed) {
-        list.push({
-          id: `agree_${reqId}`,
-          reqId,
-          title: 'Quotation Accepted',
-          text: `Landowner '${ownerName}' accepted your quotation for ${propName}.`,
-          time: getRelativeTime(req.agreement_signed_at || req.accepted_at || req.updated_at || req.updatedAt),
-          timestamp: new Date(req.agreement_signed_at || req.accepted_at || req.updated_at || req.updatedAt || 0).getTime(),
-          type: 'agreement'
-        });
-      }
+        // 2. Inspection Reschedule Request
+        if (req.site_inspection?.reschedule_status === 'REQUESTED' || req.inspection_status === 'RESCHEDULE_REQUESTED') {
+          list.push({
+            id: `resched_${reqId}`,
+            reqId,
+            title: 'Inspection Reschedule Requested',
+            text: `${contractorName} requested to reschedule site inspection for ${propName}.`,
+            time: getRelativeTime(req.site_inspection?.reschedule_requested_at || req.updated_at || req.updatedAt),
+            timestamp: new Date(req.site_inspection?.reschedule_requested_at || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'reschedule'
+          });
+        }
 
-      // 3. Revision requested (live real status)
-      if (req.status === 'REVISION_REQUESTED') {
-        list.push({
-          id: `rev_${reqId}`,
-          reqId,
-          title: 'Revision Requested',
-          text: `Landowner '${ownerName}' requested revisions for ${propName}.`,
-          time: getRelativeTime(req.revision_requested_at || req.updated_at || req.updatedAt),
-          timestamp: new Date(req.revision_requested_at || req.updated_at || req.updatedAt || 0).getTime(),
-          type: 'revision'
-        });
-      }
+        // 3. Advance payment verified
+        const adv = req.advance_payment;
+        if (adv && (adv.verified || adv.status === 'VERIFIED' || adv.verified_by)) {
+          const amt = adv.amount ? `₹ ${formatINR(adv.amount)}` : '';
+          list.push({
+            id: `pay_${reqId}`,
+            reqId,
+            title: 'Advance Payment Verified',
+            text: `Advance Payment ${amt ? `of ${amt} ` : ''}verified for ${propName}.`,
+            time: getRelativeTime(adv.verified_at || adv.payment_date || req.updated_at || req.updatedAt),
+            timestamp: new Date(adv.verified_at || adv.payment_date || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'payment'
+          });
+        }
 
-      // 4. Contractor assigned (live real assignment)
-      if (req.status === 'CONTRACTOR_ASSIGNED') {
-        list.push({
-          id: `assign_${reqId}`,
-          reqId,
-          title: 'New Harvest Job Assigned',
-          text: `New assignment: ${propName} assigned to you for inspection and quotation.`,
-          time: getRelativeTime(req.assigned_at || req.created_at || req.createdAt),
-          timestamp: new Date(req.assigned_at || req.created_at || req.createdAt || 0).getTime(),
-          type: 'assignment'
-        });
-      }
+        // 4. Harvesting In Progress
+        if (req.status === 'IN_PROGRESS') {
+          list.push({
+            id: `prog_${reqId}`,
+            reqId,
+            title: 'Harvesting In Progress',
+            text: `Harvesting operations are actively underway for ${propName}.`,
+            time: getRelativeTime(req.operation_started_at || req.updated_at || req.updatedAt),
+            timestamp: new Date(req.operation_started_at || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'progress'
+          });
+        }
+      } else {
+        // Contractor notifications
+        // 1. Advance payment verified (live real payment)
+        const adv = req.advance_payment;
+        if (adv && (adv.verified || adv.status === 'VERIFIED' || adv.verified_by)) {
+          const amt = adv.amount ? `₹ ${formatINR(adv.amount)}` : '';
+          list.push({
+            id: `pay_${reqId}`,
+            reqId,
+            title: 'Advance Payment Verified',
+            text: `Advance Payment ${amt ? `of ${amt} ` : ''}verified for ${propName}.`,
+            time: getRelativeTime(adv.verified_at || adv.payment_date || req.updated_at || req.updatedAt),
+            timestamp: new Date(adv.verified_at || adv.payment_date || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'payment'
+          });
+        }
 
-      // 5. Active harvesting in progress
-      if (req.status === 'IN_PROGRESS') {
-        list.push({
-          id: `prog_${reqId}`,
-          reqId,
-          title: 'Harvesting In Progress',
-          text: `Harvesting operations are actively underway for ${propName}.`,
-          time: getRelativeTime(req.operation_started_at || req.updated_at || req.updatedAt),
-          timestamp: new Date(req.operation_started_at || req.updated_at || req.updatedAt || 0).getTime(),
-          type: 'progress'
-        });
+        // 2. Quotation accepted / Agreement signed (live real status)
+        if (req.status === 'ASSESSMENT_ACCEPTED' || req.status === 'OPERATION_READY' || req.agreement_status === 'SIGNED' || req.agreement_signed) {
+          list.push({
+            id: `agree_${reqId}`,
+            reqId,
+            title: 'Quotation Accepted',
+            text: `Landowner '${ownerName}' accepted your quotation for ${propName}.`,
+            time: getRelativeTime(req.agreement_signed_at || req.accepted_at || req.updated_at || req.updatedAt),
+            timestamp: new Date(req.agreement_signed_at || req.accepted_at || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'agreement'
+          });
+        }
+
+        // 3. Revision requested (live real status)
+        if (req.status === 'REVISION_REQUESTED') {
+          list.push({
+            id: `rev_${reqId}`,
+            reqId,
+            title: 'Revision Requested',
+            text: `Landowner '${ownerName}' requested revisions for ${propName}.`,
+            time: getRelativeTime(req.revision_requested_at || req.updated_at || req.updatedAt),
+            timestamp: new Date(req.revision_requested_at || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'revision'
+          });
+        }
+
+        // 4. Contractor assigned (live real assignment)
+        if (req.status === 'CONTRACTOR_ASSIGNED') {
+          list.push({
+            id: `assign_${reqId}`,
+            reqId,
+            title: 'New Harvest Job Assigned',
+            text: `New assignment: ${propName} assigned to you for inspection and quotation.`,
+            time: getRelativeTime(req.assigned_at || req.created_at || req.createdAt),
+            timestamp: new Date(req.assigned_at || req.created_at || req.createdAt || 0).getTime(),
+            type: 'assignment'
+          });
+        }
+
+        // 5. Active harvesting in progress
+        if (req.status === 'IN_PROGRESS') {
+          list.push({
+            id: `prog_${reqId}`,
+            reqId,
+            title: 'Harvesting In Progress',
+            text: `Harvesting operations are actively underway for ${propName}.`,
+            time: getRelativeTime(req.operation_started_at || req.updated_at || req.updatedAt),
+            timestamp: new Date(req.operation_started_at || req.updated_at || req.updatedAt || 0).getTime(),
+            type: 'progress'
+          });
+        }
       }
     });
 
     return list.sort((a, b) => b.timestamp - a.timestamp);
-  }, [assignedRequests]);
+  }, [assignedRequests, user?.role]);
 
   const handleNotificationClick = () => {
     setIsOpen(false);
-    navigate('/contractor/assigned-jobs');
+    if ((user?.role || '').toLowerCase() === 'landowner') {
+      navigate('/landowner/harvest-requests');
+    } else {
+      navigate('/contractor/assigned-jobs');
+    }
   };
 
   return (
@@ -340,7 +423,7 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
                 onClick={handleNotificationClick}
                 className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer flex items-center justify-center gap-1 mx-auto"
               >
-                View Assigned Jobs <ExternalLink size={12} />
+                {(user?.role || '').toLowerCase() === 'landowner' ? 'View Harvest Requests' : 'View Assigned Jobs'} <ExternalLink size={12} />
               </button>
             </div>
           )}

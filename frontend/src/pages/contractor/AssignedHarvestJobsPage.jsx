@@ -7,6 +7,7 @@ import DigitalAgreementModal from '../../components/workflow/DigitalAgreementMod
 import AdvancePaymentCard from '../../components/workflow/AdvancePaymentCard';
 import RequestAdvancePaymentModal from '../../components/workflow/RequestAdvancePaymentModal';
 import RejectPaymentModal from '../../components/workflow/RejectPaymentModal';
+import HarvestStageTrackerModal from '../../components/workflow/HarvestStageTrackerModal';
 import harvestService from '../../services/harvestService';
 import './ContractorDashboard.css';
 import {
@@ -308,6 +309,7 @@ const AssignedHarvestJobsPage = () => {
   const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
   const [selectedRequestAdvanceModal, setSelectedRequestAdvanceModal] = useState(null);
   const [selectedRejectPaymentModal, setSelectedRejectPaymentModal] = useState(null);
+  const [selectedStageTrackerModal, setSelectedStageTrackerModal] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -1720,7 +1722,7 @@ const AssignedHarvestJobsPage = () => {
                         {fairDealInfo.hasFairDeal && !isAccepted && (() => {
                           const targetBudget = fairDealInfo.counterAmount;
                           const isRevisedJob = Boolean(req.is_revision || req.assessment?.is_revision || req.previous_quote || req.assessment?.previous_quote);
-                          const origQuote = Number(req.original_quote || req.assessment?.original_quote || req.total_quote || req.assessment?.total_quote || 101750);
+                          const origQuote = Number(req.original_quote || req.assessment?.original_quote || req.total_quote || req.assessment?.total_quote || 0);
                           const latestQuote = Number(req.total_quote || req.assessment?.total_quote || origQuote);
                           const quoteToCompare = isRevisedJob ? latestQuote : origQuote;
                           const reqStartDate = fairDealInfo.counterDate;
@@ -2252,6 +2254,7 @@ const AssignedHarvestJobsPage = () => {
                             onRejectPayment={(payment) => setSelectedRejectPaymentModal({ req, payment })}
                             onStartHarvest={() => handleStartHarvest(req)}
                             onCompleteHarvest={() => handleCompleteHarvest(req)}
+                            onOpenStages={() => setSelectedStageTrackerModal(req)}
                           />
                         )}
 
@@ -4276,6 +4279,20 @@ const AssignedHarvestJobsPage = () => {
             payment={selectedRejectPaymentModal.payment}
             onClose={() => setSelectedRejectPaymentModal(null)}
             onConfirm={handleConfirmRejectPayment}
+          />
+        )}
+
+        {/* MODAL 9: HARVEST STAGE TRACKER & MEDIA VERIFICATION */}
+        {selectedStageTrackerModal && (
+          <HarvestStageTrackerModal
+            request={selectedStageTrackerModal}
+            role="contractor"
+            onClose={() => setSelectedStageTrackerModal(null)}
+            onStageUpdated={async (updatedReq) => {
+              showToast('Harvest stage evidence updated successfully!');
+              await fetchAssignedRequests();
+              setSelectedStageTrackerModal(updatedReq);
+            }}
           />
         )}
 

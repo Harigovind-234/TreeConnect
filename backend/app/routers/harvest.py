@@ -661,8 +661,8 @@ def get_harvest_request_by_id(request_id: str):
                     "propertyName": req_data.get("propertyName", "Registered Property"),
                     "district": (req_data.get("propertyLocation") or "Kottayam").split(",")[0].strip(),
                     "state": "Kerala",
-                    "totalArea": "14.5",
-                    "areaUnit": "Acres"
+                    "totalArea": req_data.get("propertyArea") or "11 Cents",
+                    "areaUnit": ""
                 }
 
         inv_list = []
@@ -2532,15 +2532,123 @@ def start_harvest_execution(request_id: str):
                 )
 
         updated_at = datetime.now(timezone.utc).isoformat()
+        
+        # Default initial harvest stages
+        initial_stages = req_doc.get("harvest_stages") or {
+            "stage_1": {
+                "id": "stage_1",
+                "title": "Site Mobilization & Safety Setup",
+                "status": "IN_PROGRESS",
+                "description": "Equipment on-site, safety perimeters established, and marked trees verified.",
+                "media": [],
+                "updated_at": updated_at
+            },
+            "stage_2": {
+                "id": "stage_2",
+                "title": "Tree Felling Operations",
+                "status": "PENDING",
+                "description": "Directional felling of authorized trees according to safety audit.",
+                "media": [],
+                "updated_at": None
+            },
+            "stage_3": {
+                "id": "stage_3",
+                "title": "De-branching & Bucking (Log Sectioning)",
+                "status": "PENDING",
+                "description": "Delimbing, sectioning into merchantable log lengths, and stacking at landing bay.",
+                "media": [],
+                "updated_at": None
+            },
+            "stage_4": {
+                "id": "stage_4",
+                "title": "Log Scaling, Sizing & Haul Load Prep",
+                "status": "PENDING",
+                "description": "Measurement of log diameters, grade classification, and loading for transit.",
+                "media": [],
+                "updated_at": None
+            }
+        }
+
         db.harvest_requests.update_one(req_query, {"$set": {
             "status": "IN_PROGRESS",
             "actual_start_date": updated_at.split("T")[0],
             "started_at": updated_at,
+            "harvest_stages": initial_stages,
+            "current_harvest_stage": "stage_1",
             "updatedAt": updated_at
         }})
 
         updated_req = db.harvest_requests.find_one(req_query)
         return JSONResponse(status_code=status.HTTP_200_OK, content={"message": "Harvest operation marked as IN_PROGRESS", "harvest_request": serialize_doc(updated_req)})
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
+
+@router.post("/{request_id}/stage-update")
+def update_harvest_stage(request_id: str, payload: dict = Body(...)):
+    """
+    Contractor updates a harvest milestone stage and uploads photos/videos evidence.
+    """
+    try:
+        if db is None:
+            return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
+
+        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "Harvest request not found"})
+
+        stage_id = payload.get("stage_id")
+        stage_status = payload.get("status", "COMPLETED")
+        notes = payload.get("notes", "")
+        media_items = payload.get("media", [])
+        trees_logged = payload.get("trees_logged")
+        measured_volume = payload.get("measured_volume")
+
+        updated_at = datetime.now(timezone.utc).isoformat()
+        stages = req_doc.get("harvest_stages") or {}
+
+        if stage_id in stages:
+            existing_media = stages[stage_id].get("media", [])
+            new_media = existing_media + (media_items or [])
+            stages[stage_id]["status"] = stage_status
+            stages[stage_id]["notes"] = notes
+            stages[stage_id]["media"] = new_media
+            stages[stage_id]["updated_at"] = updated_at
+            if trees_logged is not None:
+                stages[stage_id]["trees_logged"] = trees_logged
+            if measured_volume is not None:
+                stages[stage_id]["measured_volume"] = measured_volume
+
+        # Auto-advance current stage if completed
+        stage_order = ["stage_1", "stage_2", "stage_3", "stage_4"]
+        current_stage = stage_id
+        if stage_status == "COMPLETED":
+            try:
+                curr_idx = stage_order.index(stage_id)
+                if curr_idx < len(stage_order) - 1:
+                    next_stage = stage_order[curr_idx + 1]
+                    current_stage = next_stage
+                    if stages.get(next_stage, {}).get("status") == "PENDING":
+                        stages[next_stage]["status"] = "IN_PROGRESS"
+                        stages[next_stage]["updated_at"] = updated_at
+            except ValueError:
+                pass
+
+        update_data = {
+            "harvest_stages": stages,
+            "current_harvest_stage": current_stage,
+            "updatedAt": updated_at
+        }
+
+        db.harvest_requests.update_one(req_query, {"$set": update_data})
+        updated_req = db.harvest_requests.find_one(req_query)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": f"Harvest stage {stage_id} updated successfully",
+                "harvest_request": serialize_doc(updated_req)
+            }
+        )
     except Exception as e:
         return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": str(e)})
 

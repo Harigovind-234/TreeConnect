@@ -311,6 +311,17 @@ export const harvestService = {
       console.error(`Error in harvestService.completeHarvest (${requestId}):`, error);
       throw error.response?.data || error;
     }
+  },
+
+  // Update harvest operational stage with photos/videos evidence
+  updateHarvestStage: async (requestId, stageData) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/stage-update`, stageData);
+      return response.data;
+    } catch (error) {
+      console.error(`Error in harvestService.updateHarvestStage (${requestId}):`, error);
+      throw error.response?.data || error;
+    }
   }
 };
 

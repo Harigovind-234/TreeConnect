@@ -210,7 +210,7 @@ def create_advance_payment_order(
         if not token_email:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"message": "Authentication required to initiate payment."}
+                content={"message": "User session expired or login required. Please log in to your account and try again."}
             )
 
         # 2. Fetch Harvest Request

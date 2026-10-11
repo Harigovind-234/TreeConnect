@@ -95,10 +95,16 @@ export const PaymentStatus = ({
       );
 
     case 'FAILED':
-      const isAuthError = errorMessage && (
-        errorMessage.includes('Authentication') ||
+      const isGatewayAuthError = errorMessage && (
+        errorMessage.includes('Razorpay Authentication') ||
         errorMessage.includes('RAZORPAY_KEY_SECRET') ||
-        errorMessage.includes('your_test_key_secret')
+        errorMessage.includes('your_test_key_secret') ||
+        errorMessage.includes('Gateway Configuration Error')
+      );
+      const isUserSessionError = errorMessage && (
+        errorMessage.includes('login required') ||
+        errorMessage.includes('session expired') ||
+        errorMessage.includes('Authentication required')
       );
 
       return (
@@ -107,13 +113,25 @@ export const PaymentStatus = ({
             <XCircle size={20} className="text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <strong className="text-sm font-bold text-red-300 block">
-                {isAuthError ? 'Razorpay Gateway Setup Required' : 'Payment Failed or Rejected'}
+                {isUserSessionError
+                  ? 'Session Expired / Login Required'
+                  : isGatewayAuthError
+                  ? 'Razorpay Gateway Setup Required'
+                  : 'Payment Failed or Rejected'}
               </strong>
               <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                 {errorMessage || 'The transaction could not be completed by the payment gateway.'}
               </p>
 
-              {isAuthError && (
+              {isUserSessionError && (
+                <div className="mt-3 p-3 rounded-xl bg-black/50 border border-amber-500/30 text-amber-200 text-[11.5px] space-y-1.5 leading-relaxed">
+                  <p className="text-slate-300">
+                    Your session token has expired or is missing. Please log out and log back in, then return to this page to initiate payment.
+                  </p>
+                </div>
+              )}
+
+              {isGatewayAuthError && (
                 <div className="mt-3 p-3 rounded-xl bg-black/50 border border-amber-500/30 text-amber-200 text-[11.5px] space-y-1.5 leading-relaxed">
                   <strong className="text-amber-300 block font-bold">
                     How to fix this:

@@ -6,7 +6,6 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import harvestService from '../../services/harvestService';
 import { getStoredFleet, saveStoredFleet } from '../../utils/fleetStorage';
-import NotificationBell from '../../components/NotificationBell';
 import './ContractorDashboard.css';
 import {
   Truck,
@@ -291,9 +290,9 @@ const ContractorDashboard = () => {
       if (assigned.length > 0) {
         const enriched = assigned.map(req => ({
           ...req,
-          propertyArea: req.propertyArea || (req.property_details?.totalArea ? `${req.property_details?.totalArea} ${req.property_details?.areaUnit || 'Acres'}` : '14.5 Acres'),
-          surveyNumber: req.surveyNumber || req.property_details?.surveyNumber || 'Sy. #184/3B',
-          landType: req.landType || req.property_details?.propertyType || 'Commercial Hardwood Plantation',
+          propertyArea: req.propertyArea || (req.property_details?.totalArea ? `${req.property_details?.totalArea} ${req.property_details?.areaUnit || 'Cents'}` : ''),
+          surveyNumber: req.surveyNumber || req.property_details?.surveyNumber || '',
+          landType: req.landType || req.property_details?.propertyType || req.property_details?.landType || '',
           propertyPhotos: (Array.isArray(req.photos) && req.photos.length > 0) ? req.photos : ((Array.isArray(req.propertyPhotos) && req.propertyPhotos.length > 0) ? req.propertyPhotos : []),
           tree_inventory: (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
             ? req.selected_tree_groups
@@ -510,9 +509,8 @@ const ContractorDashboard = () => {
                     </p>
                   </div>
 
-                  {/* LIVE NOTIFICATION BELL & ACTIONS */}
+                  {/* ASSIGNED JOBS ACTION */}
                   <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
-                    <NotificationBell dropdownAlign="right" />
                     <button
                       onClick={() => navigate('/contractor/assigned-jobs')}
                       className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"

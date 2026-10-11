@@ -39,6 +39,16 @@ const Navbar = () => {
     buyer: 'badge-buyer'
   };
 
+  // Only show notification badges inside appropriate dashboards
+  const isInsideAppropriateDashboard = () => {
+    if (!isAuthenticated || !user?.role) return false;
+    const role = user.role.toLowerCase();
+    const path = location.pathname.toLowerCase();
+
+    // Strictly visible only when inside the user's role-specific dashboard area
+    return path.startsWith(`/${role}`);
+  };
+
   return (
     <header className="navbar">
       <div className="navbar-container">
@@ -67,7 +77,7 @@ const Navbar = () => {
 
         {/* User Actions */}
         <div className="navbar-actions flex items-center gap-3">
-          {isAuthenticated && (
+          {isInsideAppropriateDashboard() && (
             <NotificationBell dropdownAlign="right" />
           )}
 

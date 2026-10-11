@@ -9,6 +9,7 @@ import DigitalAgreementModal from '../../components/workflow/DigitalAgreementMod
 import RescheduleInspectionModal from '../../components/workflow/RescheduleInspectionModal';
 import RecordAdvancePaymentModal from '../../components/workflow/RecordAdvancePaymentModal';
 import AdvancePaymentCard from '../../components/workflow/AdvancePaymentCard';
+import HarvestStageTrackerModal from '../../components/workflow/HarvestStageTrackerModal';
 import harvestService from '../../services/harvestService';
 import './LandownerDashboard.css';
 import {
@@ -136,6 +137,7 @@ const HarvestRequestsPage = () => {
   const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
   const [rescheduleModalReq, setRescheduleModalReq] = useState(null);
   const [selectedRecordPaymentModal, setSelectedRecordPaymentModal] = useState(null);
+  const [selectedStageViewerModal, setSelectedStageViewerModal] = useState(null);
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [loadingAssessments, setLoadingAssessments] = useState({});
   const [actionMessage, setActionMessage] = useState('');
@@ -1391,6 +1393,7 @@ const HarvestRequestsPage = () => {
                                   request={req}
                                   role="landowner"
                                   onRecordPayment={() => setSelectedRecordPaymentModal(req)}
+                                  onOpenStages={() => setSelectedStageViewerModal(req)}
                                 />
                               </div>
                             )}
@@ -2458,6 +2461,19 @@ const HarvestRequestsPage = () => {
             )}
 
             {/* LIGHTBOX MODAL FOR HARVEST SITE PHOTOS */}
+            {/* HARVEST STAGE EVIDENCE VIEWER MODAL */}
+            {selectedStageViewerModal && (
+              <HarvestStageTrackerModal
+                request={selectedStageViewerModal}
+                role="landowner"
+                onClose={() => setSelectedStageViewerModal(null)}
+                onStageUpdated={(updatedReq) => {
+                  refreshHarvestRequests();
+                  setSelectedStageViewerModal(updatedReq);
+                }}
+              />
+            )}
+            
             {activePhotoModal && (
               <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-[#0a0f0d]/95 backdrop-blur-md animate-fade-in">
                 <div className="max-w-4xl w-full p-6 border border-emerald-500/30 rounded-2xl bg-[#121a16] space-y-4 shadow-2xl relative">

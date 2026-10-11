@@ -17,7 +17,8 @@ import {
   Edit3,
   ShieldCheck,
   ChevronRight,
-  Info
+  Info,
+  Camera
 } from 'lucide-react';
 import { formatINR } from '../../utils/timberCalculations';
 import './AdvancePaymentCard.css';
@@ -86,7 +87,8 @@ const AdvancePaymentCard = ({
   onVerifyPayment,
   onRejectPayment,
   onStartHarvest,
-  onCompleteHarvest
+  onCompleteHarvest,
+  onOpenStages
 }) => {
   const [copiedField, setCopiedField] = useState(null);
 
@@ -623,21 +625,38 @@ const AdvancePaymentCard = ({
 
       {/* IN PROGRESS STATUS */}
       {isInProgress && (
-        <div className="apc-alert-box apc-alert-progress">
+        <div className="apc-alert-box apc-alert-progress flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 text-xs text-blue-200 font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-ping"></span>
-            <span>Harvesting Operations In Progress</span>
+            <div>
+              <span className="block">Harvesting Operations In Progress</span>
+              <span className="text-[11px] text-blue-300 font-normal">
+                {request?.current_harvest_stage ? `Current: Stage ${request.current_harvest_stage.replace('stage_', '')} of 4` : 'Milestone visual verification active'}
+              </span>
+            </div>
           </div>
-          {isContractor && (
-            <button
-              type="button"
-              onClick={onCompleteHarvest}
-              className="cd-btn-inspect-primary bg-blue-600 hover:bg-blue-500 text-white shrink-0 cursor-pointer shadow-md"
-            >
-              <FileCheck size={14} />
-              <span>Log Completion &amp; Actual Yield</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {onOpenStages && (
+              <button
+                type="button"
+                onClick={onOpenStages}
+                className="cd-btn-inspect-primary bg-emerald-600/90 hover:bg-emerald-500 text-white shrink-0 cursor-pointer shadow-md flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-400/30"
+              >
+                <Camera size={14} />
+                <span>{isContractor ? 'Stage Photo / Video Tracker' : 'View Stage Evidence Feed'}</span>
+              </button>
+            )}
+            {isContractor && (
+              <button
+                type="button"
+                onClick={onCompleteHarvest}
+                className="cd-btn-inspect-primary bg-blue-600 hover:bg-blue-500 text-white shrink-0 cursor-pointer shadow-md text-xs font-bold px-3 py-1.5 rounded-xl"
+              >
+                <FileCheck size={14} />
+                <span>Log Completion &amp; Yield</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
