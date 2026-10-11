@@ -147,6 +147,29 @@ const HarvestRequestsPage = () => {
       [reqId]: !prev[reqId]
     }));
   };
+
+  // Auto-expand and scroll to specific harvest request if navigated via query param
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const targetId = params.get('requestId');
+    if (targetId) {
+      const match = harvestRequests.find(r => String(r.id || r._id) === String(targetId));
+      const targetKey = match ? (match.id || match._id) : targetId;
+      setExpandedRequests(prev => ({
+        ...prev,
+        [targetKey]: true
+      }));
+
+      // Scroll smoothly to target card after render
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`harvest-request-${targetKey}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [location.search, harvestRequests]);
   const [activePhotoModal, setActivePhotoModal] = useState(null); // { photos: [], index: 0, title: '' }
 
   const openPhotoLightbox = (photos, index = 0, title = 'Harvest Site Photo') => {

@@ -48,8 +48,18 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateUser = (updatedFields) => {
+    setUser(prev => {
+      const updated = { ...prev, ...updatedFields };
+      localStorage.setItem('treeconnect_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const value = {
     user,
+    setUser,
+    updateUser,
     role: user?.role || null,
     isAuthenticated: !!user,
     loading,

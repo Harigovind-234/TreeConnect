@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
-import harvestService from '../../services/harvestService';
 import api from '../../services/api';
+import harvestService from '../../services/harvestService';
+import { getStoredFleet, saveStoredFleet } from '../../utils/fleetStorage';
+import NotificationBell from '../../components/NotificationBell';
 import './ContractorDashboard.css';
 import {
   Truck,
@@ -86,12 +88,6 @@ const ContractorDashboard = () => {
   const [assignedRequests, setAssignedRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
 
-  // Notifications Mock for Contractor Dashboard
-  const notifications = [
-    { id: 1, text: "Advance Payment of ₹ 37,538 verified for Job #6ACA2885.", time: "10 mins ago", type: "success" },
-    { id: 2, text: "Landowner 'Harigovind D Nair' accepted your quotation.", time: "2 hours ago", type: "info" }
-  ];
-
   // Compact / Expandable state for harvest requests
   const [expandedReqs, setExpandedReqs] = useState({});
   const [detailModalReq, setDetailModalReq] = useState(null);
@@ -112,23 +108,37 @@ const ContractorDashboard = () => {
 
   const [jobs, setJobs] = useState([]);
 
-  const [fleetEquipment, setFleetEquipment] = useState([]);
+  const [fleetEquipment, setFleetEquipment] = useState(() => getStoredFleet());
   const [showFleetModal, setShowFleetModal] = useState(false);
   const [fleetForm, setFleetForm] = useState({ name: '', category: 'Skidder', status: 'In Operation', location: '', operator: '', lastService: '' });
   const [editingFleetId, setEditingFleetId] = useState(null);
 
   useEffect(() => {
     const fetchFleet = async () => {
+      // 1. Load from shared storage
+      const initial = getStoredFleet();
+      setFleetEquipment(initial || []);
+
+      // 2. Try fetching from backend
       try {
         const res = await api.get('/auth/user-profile');
-        if (res.data?.user?.fleet_equipment) {
+        if (res.data?.user && Array.isArray(res.data.user.fleet_equipment)) {
           setFleetEquipment(res.data.user.fleet_equipment);
+          saveStoredFleet(res.data.user.fleet_equipment);
         }
       } catch (err) {
-        console.error("Failed to fetch fleet", err);
+        console.warn("Using local storage fleet fallback", err);
       }
     };
     fetchFleet();
+
+    const handleFleetSync = (e) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setFleetEquipment(e.detail);
+      }
+    };
+    window.addEventListener('treeconnect_fleet_updated', handleFleetSync);
+    return () => window.removeEventListener('treeconnect_fleet_updated', handleFleetSync);
   }, []);
 
   const handleSaveFleet = async () => {
@@ -136,27 +146,29 @@ const ContractorDashboard = () => {
     if (editingFleetId) {
       updated = updated.map(f => f.id === editingFleetId ? { ...fleetForm, id: editingFleetId } : f);
     } else {
-      updated.push({ ...fleetForm, id: Date.now().toString() });
+      updated.push({ ...fleetForm, id: `eq_${Date.now()}` });
     }
     
+    setFleetEquipment(updated);
+    saveStoredFleet(updated);
+    setShowFleetModal(false);
+
     try {
       await api.put('/auth/user-profile/fleet', { fleet_equipment: updated });
-      setFleetEquipment(updated);
-      setShowFleetModal(false);
     } catch (err) {
-      console.error("Failed to save fleet", err);
-      alert("Failed to save fleet.");
+      console.warn("Failed to sync fleet to backend (saved locally)", err);
     }
   };
 
   const handleDeleteFleet = async (id) => {
     const updated = fleetEquipment.filter(f => f.id !== id);
+    setFleetEquipment(updated);
+    saveStoredFleet(updated);
+
     try {
       await api.put('/auth/user-profile/fleet', { fleet_equipment: updated });
-      setFleetEquipment(updated);
     } catch (err) {
-      console.error("Failed to delete fleet", err);
-      alert("Failed to delete fleet.");
+      console.warn("Failed to delete fleet from backend (deleted locally)", err);
     }
   };
 
@@ -484,46 +496,33 @@ const ContractorDashboard = () => {
         <div className="dashboard-workspace">
           <main className="dashboard-content">
 
-            {/* TOP ROW: HERO & NOTIFICATIONS */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-              
-              {/* HERO WELCOME CARD */}
-              <div className="lg:col-span-2">
-                <section className="hero-welcome-card card h-full mb-0">
-                  <div className="hero-welcome-body">
-                    <div className="hero-welcome-text">
-                      <span className="hero-greeting-badge">
-                        <Award size={14} /> Verified Kerala Harvesting Contractor
-                      </span>
-                      <h1 className="hero-title-text">Welcome Back, {contractorName}</h1>
-                      <p className="hero-subtitle-text">
-                        Review assigned landowner harvest requests, inspect site specifications & tree inventories, and submit formal contractor assessments & quotations.
-                      </p>
-                    </div>
+            {/* TOP ROW: HERO & LIVE NOTIFICATION ACTION */}
+            <div className="mb-6">
+              <section className="hero-welcome-card card mb-0">
+                <div className="hero-welcome-body flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="hero-welcome-text max-w-3xl">
+                    <span className="hero-greeting-badge">
+                      <Award size={14} /> Verified Kerala Harvesting Contractor
+                    </span>
+                    <h1 className="hero-title-text">Welcome Back, {contractorName}</h1>
+                    <p className="hero-subtitle-text">
+                      Review assigned landowner harvest requests, inspect site specifications &amp; tree inventories, and submit formal contractor assessments &amp; quotations.
+                    </p>
                   </div>
-                </section>
-              </div>
 
-              {/* RECENT NOTIFICATIONS */}
-              <div className="lg:col-span-1 bg-[#0a1610] border border-emerald-500/20 rounded-2xl p-5 shadow-md flex flex-col h-full">
-                <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <AlertCircle size={16} /> Recent Notifications
-                </h3>
-                <div className="flex flex-col gap-3 overflow-y-auto max-h-[160px] custom-scrollbar pr-1">
-                  {notifications.map(n => (
-                    <div key={n.id} className="text-sm p-3 rounded-xl bg-black/40 border border-slate-800/60 flex flex-col gap-2">
-                      <div className="flex justify-between items-start">
-                        <span className="text-slate-200 leading-relaxed">{n.text}</span>
-                      </div>
-                      <span className="text-[10px] text-emerald-500/70 font-medium self-end">{n.time}</span>
-                    </div>
-                  ))}
-                  {notifications.length === 0 && (
-                     <div className="text-sm text-slate-500 italic p-4 text-center">No recent notifications</div>
-                  )}
+                  {/* LIVE NOTIFICATION BELL & ACTIONS */}
+                  <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
+                    <NotificationBell dropdownAlign="right" />
+                    <button
+                      onClick={() => navigate('/contractor/assigned-jobs')}
+                      className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                    >
+                      <FileText size={14} />
+                      <span>Assigned Jobs</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-
+              </section>
             </div>
 
             {/* ASSIGNED LANDOWNER HARVEST REQUESTS (ASSESSMENT WORKFLOW) */}
@@ -1058,90 +1057,180 @@ const ContractorDashboard = () => {
               <div className="card-header">
                 <div>
                   <h2 className="section-heading"><Truck size={18} /> Logging Machinery Fleet Status</h2>
-                  <p className="section-subtext">Monitor equipment deployment, assigned operators, and maintenance schedule</p>
+                  <p className="section-subtext">Live deployment registry synced with Fleet &amp; Equipment</p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="dash-user-count font-semibold">{fleetEquipment.length} Fleet Units</span>
-                  <button
-                    onClick={() => {
-                      setEditingFleetId(null);
-                      setFleetForm({ name: '', category: 'Skidder', status: 'In Operation', location: '', operator: '', lastService: '' });
-                      setShowFleetModal(true);
-                    }}
-                    className="cd-btn-primary flex items-center gap-1 text-xs py-1.5 px-3"
+                <div className="flex items-center gap-3">
+                  <span className="dash-user-count font-semibold">
+                    {fleetEquipment.reduce((acc, eq) => acc + Math.max(1, parseInt(eq.quantity, 10) || 1), 0)} Units ({fleetEquipment.length} Registered)
+                  </span>
+                  <Link
+                    to="/contractor/equipment"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
                   >
-                    <Plus size={14} /> Add Equipment
-                  </button>
+                    Manage Fleet <ExternalLink size={12} />
+                  </Link>
                 </div>
               </div>
-              <div className="table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Machinery Model</th>
-                      <th>Category</th>
-                      <th>Status</th>
-                      <th>Deployed Location</th>
-                      <th>Assigned Operator</th>
-                      <th>Last Serviced</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fleetEquipment.map((eq) => (
-                      <tr key={eq.id}>
-                        <td className="font-semibold text-white">{eq.name}</td>
-                        <td><span className="dash-tag">{eq.category}</span></td>
-                        <td>
-                          <span className={`status-pill ${eq.status === 'In Operation' ? 'status-green' : 'status-yellow'}`}>
-                            {eq.status === 'In Operation' ? <CheckCircle2 size={13} /> : <Wrench size={13} />}
-                            {eq.status}
-                          </span>
-                        </td>
-                        <td className="text-slate-300">{eq.location}</td>
-                        <td className="text-white font-medium">{eq.operator}</td>
-                        <td className="text-slate-400 text-xs">{eq.lastService}</td>
-                        <td>
-                          <button
-                            onClick={() => {
-                              setEditingFleetId(eq.id);
-                              setFleetForm(eq);
-                              setShowFleetModal(true);
-                            }}
-                            className="text-emerald-400 hover:text-emerald-300 mr-2 text-xs"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => {
-                              if(window.confirm('Delete this equipment?')) handleDeleteFleet(eq.id);
-                            }}
-                            className="text-red-400 hover:text-red-300 text-xs"
-                          >
-                            Delete
-                          </button>
-                        </td>
+              
+              {fleetEquipment.length === 0 ? (
+                <div className="p-8 text-center flex flex-col items-center justify-center text-slate-400">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-3">
+                    <Truck size={24} />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-200">No machinery registered yet.</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-md">
+                    Register logging machinery, harvesters, or haulers in Fleet &amp; Equipment to track active deployment.
+                  </p>
+                  <Link
+                    to="/contractor/equipment"
+                    className="mt-4 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition-all"
+                  >
+                    Open Fleet &amp; Equipment
+                  </Link>
+                </div>
+              ) : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Machinery Model</th>
+                        <th>Asset Tag</th>
+                        <th>Category</th>
+                        <th>Quantity</th>
+                        <th>Status</th>
+                        <th>Last Serviced</th>
+                        <th>Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {fleetEquipment.map((eq) => {
+                        const qty = Math.max(1, parseInt(eq.quantity, 10) || 1);
+                        const tag = eq.regNumber || eq.reg_number || eq.assetTag;
+                        const isAvail = eq.status === 'Available';
+                        const isInUse = eq.status === 'In Use' || eq.status === 'In Operation' || eq.status === 'Active';
+                        const isMaint = eq.status === 'Under Maintenance' || eq.status === 'Maintenance';
+
+                        return (
+                          <tr key={eq.id}>
+                            <td className="font-semibold text-white">
+                              <div>{eq.name || eq.model}</div>
+                            </td>
+                            <td>
+                              {tag ? (
+                                <span className="font-mono text-emerald-400 text-xs font-semibold">{tag}</span>
+                              ) : (
+                                <span className="text-slate-500 text-xs italic">—</span>
+                              )}
+                            </td>
+                            <td><span className="dash-tag">{eq.category || 'Machinery'}</span></td>
+                            <td className="font-mono text-xs font-bold text-white">
+                              {qty} {qty === 1 ? 'Unit' : 'Units'}
+                            </td>
+                            <td>
+                              <span className={`status-pill ${isAvail ? 'status-green' : isInUse ? 'status-blue' : isMaint ? 'status-yellow' : 'status-gray'}`}>
+                                {isAvail ? <CheckCircle2 size={13} /> : isInUse ? <Truck size={13} /> : isMaint ? <Wrench size={13} /> : <Clock size={13} />}
+                                {eq.status || 'Available'}
+                              </span>
+                            </td>
+                            <td className="text-slate-400 text-xs font-mono">{eq.lastService || eq.lastServiced || 'Recent'}</td>
+                            <td>
+                              <Link
+                                to="/contractor/equipment"
+                                className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold inline-flex items-center gap-1"
+                              >
+                                Manage <ChevronRight size={12} />
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
 
           </main>
 
           {/* RIGHT PANEL */}
           <aside className="right-insights-panel">
+            {/* Accreditation / Verification Card */}
+            <div className="contractor-verification-card">
+              <div className="cv-header">
+                <div className="cv-title-group">
+                  <div className="cv-icon-box">
+                    <ShieldCheck size={20} />
+                  </div>
+                  <div>
+                    <h4 className="cv-title">Verification Status</h4>
+                    <span className="text-[11px] text-slate-400 font-medium">State Accredited</span>
+                  </div>
+                </div>
+                <span className="cv-status-badge">
+                  <span className="cv-badge-dot"></span>
+                  Active
+                </span>
+              </div>
+
+              <div className="cv-body">
+                <div className="cv-license-title">
+                  <span>Licensed Kerala Contractor</span>
+                  <span className="cv-license-id">TC-KL-CON-4821</span>
+                </div>
+                <p className="cv-desc">
+                  Verified by TreeConnect State Administration. Authorized for commercial timber felling, selective harvesting, and log transit across all Kerala districts.
+                </p>
+                <div className="cv-scope-tags">
+                  <span className="cv-tag">
+                    <CheckCircle2 size={11} className="text-emerald-400" /> Commercial Felling
+                  </span>
+                  <span className="cv-tag">
+                    <CheckCircle2 size={11} className="text-emerald-400" /> Heavy Log Transport
+                  </span>
+                  <span className="cv-tag">
+                    <CheckCircle2 size={11} className="text-emerald-400" /> Site Assessment
+                  </span>
+                </div>
+                <div className="cv-footer-meta">
+                  <span className="flex items-center gap-1">
+                    <MapPin size={11} /> Kerala Forest Dept
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Calendar size={11} /> Valid 2026–2027
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Operational Readiness Card */}
             <div className="insight-widget card glass-widget">
               <div className="widget-header">
-                <span className="widget-title"><ShieldCheck size={16} /> Verification Status</span>
-                <span className="widget-badge badge-green font-semibold">Active</span>
+                <span className="widget-title"><Activity size={16} /> Operational Readiness</span>
+                <span className="widget-badge badge-green font-semibold">100% Ready</span>
               </div>
-              <div className="p-3 bg-emerald-950/40 rounded-xl border border-emerald-800/60 mt-2">
-                <p className="text-xs text-emerald-300 font-bold mb-1">Licensed Kerala Contractor</p>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Verified by TreeConnect Administrator. Authorized for commercial timber felling and log transport.
-                </p>
+              <div className="space-y-2 mt-3">
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-950/25 border border-emerald-900/40 text-xs">
+                  <span className="text-slate-300 flex items-center gap-2">
+                    <Truck size={14} className="text-emerald-400" /> Registered Equipment
+                  </span>
+                  <span className="font-bold text-white bg-emerald-900/60 px-2 py-0.5 rounded text-[11px]">
+                    {fleetEquipment.length} {fleetEquipment.length === 1 ? 'Unit' : 'Units'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-950/25 border border-emerald-900/40 text-xs">
+                  <span className="text-slate-300 flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-emerald-400" /> Safety & Transit Clearance
+                  </span>
+                  <span className="font-semibold text-emerald-400 text-[11px]">Compliant</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-950/25 border border-emerald-900/40 text-xs">
+                  <span className="text-slate-300 flex items-center gap-2">
+                    <FileText size={14} className="text-emerald-400" /> Active Bids / Jobs
+                  </span>
+                  <span className="font-bold text-white bg-emerald-900/60 px-2 py-0.5 rounded text-[11px]">
+                    {assignedRequests.length}
+                  </span>
+                </div>
               </div>
             </div>
           </aside>

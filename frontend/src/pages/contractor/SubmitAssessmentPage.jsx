@@ -1442,12 +1442,15 @@ const extractLandownerValue = (req, vol) => {
   const landownerFeedback = (requestDetails?.landowner_feedback || existingAssessmentData?.landowner_feedback || '').trim();
   const counterOfferAmount = Number(requestDetails?.counter_offer_amount || existingAssessmentData?.counter_offer_amount || 0) || null;
   const counterOfferStartDate = requestDetails?.counter_offer_start_date || existingAssessmentData?.counter_offer_start_date || null;
+  const isAccepted = requestDetails?.status === 'OPERATION_READY' || requestDetails?.status === 'ACCEPTED';
   const hasFairDeal = Boolean(
-    isRevisionRequested ||
-    counterOfferAmount ||
-    counterOfferStartDate ||
-    revisionReasons.length > 0 ||
-    landownerFeedback
+    !isAccepted && (
+      isRevisionRequested ||
+      counterOfferAmount ||
+      counterOfferStartDate ||
+      revisionReasons.length > 0 ||
+      landownerFeedback
+    )
   );
   const isSiteInspected = Boolean(requestDetails?.site_inspected || requestDetails?.site_inspection?.status === 'COMPLETED');
   const inspectedVolume = requestDetails?.site_inspection?.estimated_volume;
@@ -4465,53 +4468,71 @@ const extractLandownerValue = (req, vol) => {
                       </button>
 
                       <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setShowDeclineModal(true)}
-                          className="cd-btn-decline-work"
-                          title="If terms or amounts are not favourable, reject the quotation or decline the assigned work"
-                        >
-                          <XCircle size={15} />
-                          <span>Decline Assignment</span>
-                        </button>
+                        {isAccepted ? (
+                          <div className="flex items-center gap-3">
+                            <span className="px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-2">
+                              <CheckCircle2 size={16} className="text-emerald-400" />
+                              <span>Quotation Accepted &amp; Operation Authorized</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => navigate('/contractor/assigned-jobs')}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black text-xs transition-all shadow-md cursor-pointer"
+                            >
+                              Go to Assigned Jobs
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setShowDeclineModal(true)}
+                              className="cd-btn-decline-work"
+                              title="If terms or amounts are not favourable, reject the quotation or decline the assigned work"
+                            >
+                              <XCircle size={15} />
+                              <span>Decline Assignment</span>
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={handleSaveDraft}
-                          className="cd-btn-draft"
-                          title="Save current form values to local browser draft"
-                        >
-                          <Save size={15} />
-                          <span>Save Draft</span>
-                        </button>
+                            <button
+                              type="button"
+                              onClick={handleSaveDraft}
+                              className="cd-btn-draft"
+                              title="Save current form values to local browser draft"
+                            >
+                              <Save size={15} />
+                              <span>Save Draft</span>
+                            </button>
 
-                        <button
-                          type="submit"
-                          disabled={isSubmitting}
-                          className={`cd-btn-primary ${(isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? 'cd-btn-primary-revision' : ''}`}
-                        >
-                          {isSubmitting ? (
-                            <>
-                              <Loader2 size={16} className="animate-spin" /> Submitting Official Quotation...
-                            </>
-                          ) : (isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? (
-                            <>
-                              <RefreshCw size={16} /> Submit Revised Quote ({formatRupees(assessmentForm.total_quote || assessmentForm.contractor_purchase_offer || assessmentForm.timber_purchase_price || 93500)})
-                            </>
-                          ) : assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? (
-                            <>
-                              <Coins size={16} /> Submit Timber Purchase Offer
-                            </>
-                          ) : assessmentForm.commercial_proposal_type === 'Purchase + Harvesting' ? (
-                            <>
-                              <Handshake size={16} /> Submit Purchase + Harvesting Proposal
-                            </>
-                          ) : (
-                            <>
-                              <Calculator size={16} /> Submit Assessment
-                            </>
-                          )}
-                        </button>
+                            <button
+                              type="submit"
+                              disabled={isSubmitting}
+                              className={`cd-btn-primary ${(isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? 'cd-btn-primary-revision' : ''}`}
+                            >
+                              {isSubmitting ? (
+                                <>
+                                  <Loader2 size={16} className="animate-spin" /> Submitting Official Quotation...
+                                </>
+                              ) : (isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? (
+                                <>
+                                  <RefreshCw size={16} /> Submit Revised Quote ({formatRupees(assessmentForm.total_quote || assessmentForm.contractor_purchase_offer || assessmentForm.timber_purchase_price || 93500)})
+                                </>
+                              ) : assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? (
+                                <>
+                                  <Coins size={16} /> Submit Timber Purchase Offer
+                                </>
+                              ) : assessmentForm.commercial_proposal_type === 'Purchase + Harvesting' ? (
+                                <>
+                                  <Handshake size={16} /> Submit Purchase + Harvesting Proposal
+                                </>
+                              ) : (
+                                <>
+                                  <Calculator size={16} /> Submit Assessment
+                                </>
+                              )}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 

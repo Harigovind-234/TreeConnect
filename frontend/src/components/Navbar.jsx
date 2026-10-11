@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Trees, LogOut, User, Menu, X, Shield, ChevronDown } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const { user, isAuthenticated, logout } = useAuth();
@@ -65,18 +66,28 @@ const Navbar = () => {
         </nav>
 
         {/* User Actions */}
-        <div className="navbar-actions">
+        <div className="navbar-actions flex items-center gap-3">
+          {isAuthenticated && (
+            <NotificationBell dropdownAlign="right" />
+          )}
+
           {isAuthenticated ? (
-            <div className="user-menu-relative">
+            <div className="user-menu-relative relative">
               <button 
                 className="user-profile-btn"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
               >
-                <img 
-                  src={user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=treeconnect'} 
-                  alt={user?.name} 
-                  className="user-avatar" 
-                />
+                {user?.avatar ? (
+                  <img 
+                    src={user.avatar} 
+                    alt={user?.name} 
+                    className="user-avatar" 
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center justify-center flex-shrink-0">
+                    {user?.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'TC'}
+                  </div>
+                )}
                 <div className="user-info-text">
                   <span className="user-name">{user?.name}</span>
                   <span className={`role-badge ${roleColors[user?.role] || ''}`}>

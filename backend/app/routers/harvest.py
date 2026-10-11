@@ -2346,6 +2346,8 @@ def verify_advance_payment(
                 "rejection_reason": None,
                 "updatedAt": now_iso
             }
+            if req_doc.get("status") not in ["IN_PROGRESS", "COMPLETED"]:
+                update_fields["status"] = "OPERATION_READY"
 
             db.harvest_requests.update_one(req_query, {"$set": update_fields})
             db.contractor_assessments.update_one(
@@ -2501,7 +2503,13 @@ def start_harvest_execution(request_id: str):
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "Harvest request not found"})
 
         curr_status = req_doc.get("status", "PENDING").upper()
-        if not is_valid_transition(curr_status, "IN_PROGRESS"):
+        is_ready_for_ops = (
+            curr_status in ["OPERATION_READY", "ACCEPTED"] or
+            bool(req_doc.get("digital_agreement")) or
+            bool(req_doc.get("is_advance_verified")) or
+            bool(req_doc.get("can_start_harvest"))
+        )
+        if not is_ready_for_ops and not is_valid_transition(curr_status, "IN_PROGRESS"):
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"Cannot start harvest operation from status '{curr_status}'. Request must be in OPERATION_READY status."})
 
         # CRITICAL BUSINESS RULE: Advance payment must be verified before harvesting work begins!

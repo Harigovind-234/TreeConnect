@@ -205,7 +205,7 @@ function App() {
               path="/contractor/equipment"
               element={
                 <ProtectedRoute allowedRoles={['contractor']}>
-                  <ContractorDashboard />
+                  <FleetEquipmentPage />
                 </ProtectedRoute>
               }
             />

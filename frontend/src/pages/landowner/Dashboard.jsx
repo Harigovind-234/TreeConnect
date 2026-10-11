@@ -60,7 +60,8 @@ import harvestService from '../../services/harvestService';
 import {
   formatINR,
   formatVolume,
-  parseVolumeNumber
+  parseVolumeNumber,
+  getTimberReferenceRate
 } from '../../utils/timberCalculations';
 
 const getGoogleMapsUrl = (p) => {
@@ -373,39 +374,10 @@ const LandownerDashboard = () => {
     }
   };
 
-  // Stateful Demo Contractor Bids
-  const [bids, setBids] = useState([
-    {
-      id: 'bid-101',
-      contractor: 'Apex Timber Harvesting Ltd.',
-      plot: 'Green Valley Teak Plantation',
-      bidAmount: '$48,500',
-      ratePerM3: '$120/m³',
-      status: 'Pending Review',
-      submittedAt: 'Today, 09:30 AM'
-    },
-    {
-      id: 'bid-102',
-      contractor: 'Highland Forestry Services',
-      plot: 'Pine Forest Parcel B',
-      bidAmount: '$32,400',
-      ratePerM3: '$112/m³',
-      status: 'Accepted',
-      submittedAt: 'Yesterday'
-    },
-    {
-      id: 'bid-103',
-      contractor: 'Cascade Loggers Co.',
-      plot: 'Cedar Estate Block 4',
-      bidAmount: '$27,800',
-      ratePerM3: '$110/m³',
-      status: 'Pending Review',
-      submittedAt: '2 days ago'
-    }
-  ]);
-
-  // Calculate dynamic metrics strictly from user properties and inventories
+  // Calculate dynamic metrics strictly from real user properties and inventories
   const totalManagedArea = (properties || []).reduce((acc, p) => acc + (parseFloat(p.totalArea) || 0), 0);
+  
+  // Real-time timber volume calculated directly from actual inventory records
   const totalTimberVolume = (inventories || []).reduce((acc, inv) => {
     const invVol = ((inv && inv.speciesList) || []).reduce((sAcc, sp) => {
       const vol = parseFloat(sp.estimatedVolume) || (parseFloat(sp.numberOfTrees || sp.count || 0) * 0.7);
@@ -414,22 +386,49 @@ const LandownerDashboard = () => {
     return acc + invVol;
   }, 0);
 
-  const estRevenue = Math.round(totalTimberVolume * 115);
+  // Real-time estimated timber revenue in INR using Kerala timber reference rates
+  const estRevenue = (inventories || []).reduce((acc, inv) => {
+    const invVal = ((inv && inv.speciesList) || []).reduce((sAcc, sp) => {
+      const vol = parseFloat(sp.estimatedVolume) || (parseFloat(sp.numberOfTrees || sp.count || 0) * 0.7);
+      const rate = getTimberReferenceRate(sp.species || 'Teak');
+      return sAcc + Math.round(vol * rate);
+    }, 0);
+    return acc + invVal;
+  }, 0);
 
-  // Latest Active Operation or Request (strictly user records with safe fallback)
+  // Real-time Contractor Bids & Quotations derived directly from actual harvest requests
+  const realBids = (harvestRequests || [])
+    .filter(r => {
+      const ass = activeAssessmentMap[r.id || r._id] || r.assessment || {};
+      return r.assigned_contractor_id || ass.total_quote || r.total_quote || ass.contractor_purchase_offer || r.contractor_purchase_offer;
+    })
+    .map(r => {
+      const rId = r.id || r._id;
+      const ass = activeAssessmentMap[rId] || r.assessment || {};
+      const quoteAmt = ass.total_quote || r.total_quote || ass.contractor_purchase_offer || r.contractor_purchase_offer || 0;
+      const volNum = parseVolumeNumber(r.estimatedVolume || ass.estimated_harvestable_volume || '1');
+      const rateVal = volNum > 0 && quoteAmt > 0 ? Math.round(quoteAmt / volNum) : null;
+      
+      return {
+        id: rId,
+        contractor: r.assigned_contractor_name || ass.contractor_name || 'Assigned Contractor',
+        plot: r.propertyName || r.property_name || 'Timber Parcel',
+        bidAmount: quoteAmt > 0 ? formatINR(quoteAmt) : 'Awaiting Quote',
+        ratePerM3: rateVal ? `${formatINR(rateVal)}/m³` : 'Standard Rate',
+        status: r.status === 'OPERATION_READY' || r.status === 'ACCEPTED' ? 'Accepted' :
+                r.status === 'REVISION_REQUESTED' ? 'Revision Pending' :
+                r.status === 'ASSESSMENT_SUBMITTED' ? 'Pending Review' : 'Under Assessment',
+        submittedAt: r.updatedAt ? formatDateDMY(r.updatedAt) : 'Recent',
+        rawRequest: r
+      };
+    });
+
+  const bids = realBids;
+
+  // Real-time Active Spotlight: ONLY display if the user actually has an active harvest request or completed harvest
   const activeSpotlight = (harvestRequests && harvestRequests.length > 0)
     ? harvestRequests[0]
-    : ((completedHarvests && completedHarvests.length > 0) 
-        ? completedHarvests[0] 
-        : {
-            status: 'Operational Ready',
-            propertyName: properties[0]?.propertyName || 'Green Valley Plantation Estate',
-            location: properties[0]?.district || properties[0]?.address || 'Kottayam Sector 4',
-            harvestScopeDetail: 'Teak & Hardwood Selection',
-            preferredStartDate: 'Oct 01, 2026',
-            contractor: 'Apex Timber Harvesting Ltd',
-            estimatedVolume: '240 m³'
-          });
+    : ((completedHarvests && completedHarvests.length > 0) ? completedHarvests[0] : null);
 
   // Scheduled Site Inspection Visits (Active / Upcoming)
   const scheduledVisits = (harvestRequests || []).filter(
@@ -442,16 +441,95 @@ const LandownerDashboard = () => {
     r => r.site_inspected || r.inspection_status === 'COMPLETED' || r.inspection_status === 'REPORT_SUBMITTED' || r.site_inspection?.status === 'COMPLETED' || r.site_inspection?.status === 'REPORT_SUBMITTED'
   );
 
+  // Real-time Actionable Tasks derived strictly from actual account state
+  const actionableTasks = [];
+
+  // 1. Pending contractor quotations needing landowner decision/review
+  bids.filter(b => b.status === 'Pending Review' || b.status === 'Under Assessment').forEach(b => {
+    actionableTasks.push({
+      id: `task-bid-${b.id}`,
+      type: 'quote',
+      title: `Review ${b.contractor} Quotation`,
+      subtitle: `${b.plot} • ${b.bidAmount}`,
+      tag: 'Review Quote',
+      tagColor: 'amber',
+      action: () => navigate('/landowner/harvest-requests')
+    });
+  });
+
+  // 2. Scheduled site visit visits requiring attention or attendance
+  scheduledVisits.forEach(sv => {
+    actionableTasks.push({
+      id: `task-visit-${sv.id || sv._id}`,
+      type: 'visit',
+      title: `Site Inspection: ${sv.propertyName || 'Timber Estate'}`,
+      subtitle: `Scheduled for ${formatDateDMY(sv.site_inspection?.scheduled_date)}`,
+      tag: 'Confirmed Visit',
+      tagColor: 'emerald',
+      action: () => setSelectedVisitModal(sv)
+    });
+  });
+
+  // 3. Certified audits available to view and verify
+  verifiedInspections.slice(0, 1).forEach(v => {
+    actionableTasks.push({
+      id: `task-audit-${v.id || v._id}`,
+      type: 'audit',
+      title: `Audit Certified: ${v.propertyName || 'Timber Estate'}`,
+      subtitle: `Inspected on ${formatDateDMY(v.site_inspection?.inspected_at || v.site_inspection?.scheduled_date)}`,
+      tag: 'Verified',
+      tagColor: 'green',
+      action: () => setSelectedVisitModal(v)
+    });
+  });
+
+  // 4. Onboarding / Next workflow steps if account has pending actions
+  if (properties.length === 0) {
+    actionableTasks.push({
+      id: 'task-reg-prop',
+      type: 'setup',
+      title: 'Register Forest Estate Parcel',
+      subtitle: 'Add land coordinates & boundaries',
+      tag: 'Get Started',
+      tagColor: 'blue',
+      action: () => navigate('/landowner/register-property')
+    });
+  } else if (inventories.length === 0) {
+    actionableTasks.push({
+      id: 'task-log-inv',
+      type: 'setup',
+      title: `Log Tree Inventory for ${properties[0]?.propertyName || 'Estate'}`,
+      subtitle: 'Record standing trees & timber species',
+      tag: 'Inventory',
+      tagColor: 'teal',
+      action: () => navigate('/landowner/add-inventory')
+    });
+  } else if (harvestRequests.length === 0) {
+    actionableTasks.push({
+      id: 'task-req-harv',
+      type: 'setup',
+      title: 'Request Contractor Logging Quotes',
+      subtitle: 'Submit plots to certified logging teams',
+      tag: 'Initiate',
+      tagColor: 'emerald',
+      action: () => navigate('/landowner/request-harvest')
+    });
+  }
+
   // Quick Calculator state
   const [treesCount, setTreesCount] = useState(250);
   const [avgDbh, setAvgDbh] = useState(18); // Diameter at Breast Height in inches
 
   // Volume estimation formula
   const calculatedVolume = Math.round(treesCount * Math.pow(avgDbh * 2.54 / 200, 2) * 3.14159 * 18 * 0.5 * 10) / 10;
-  const estimatedValue = Math.round(calculatedVolume * 115);
+  const estimatedValue = Math.round(calculatedVolume * getTimberReferenceRate('Teak'));
 
   const handleBidStatus = (id, newStatus) => {
-    setBids(bids.map(b => b.id === id ? { ...b, status: newStatus } : b));
+    if (newStatus === 'Accepted') {
+      handleActionAssessment(id, 'ACCEPTED');
+    } else if (newStatus === 'Rejected') {
+      handleActionAssessment(id, 'DECLINED');
+    }
   };
 
   const userName = user?.name || 'Harigovind D Nair';
@@ -522,7 +600,7 @@ const LandownerDashboard = () => {
               </div>
               <div className="ld-pill">
                 <span className="ld-dot ld-dot-blue"></span>
-                <span><strong>${estRevenue || 0}</strong> Est. Revenue Valuation</span>
+                <span><strong>{formatINR(estRevenue || 0)}</strong> Est. Revenue Valuation</span>
               </div>
               <div className="ld-pill">
                 <span className="ld-dot ld-dot-teal"></span>
@@ -541,9 +619,17 @@ const LandownerDashboard = () => {
             </div>
           </section>
 
-          {/* CERTIFIED SITE INSPECTION & AUDIT REPORT BANNER (WHEN FIELD VERIFIED) */}
-          {verifiedInspections.length > 0 && (() => {
-            const certVisit = verifiedInspections[0];
+          {/* CERTIFIED SITE INSPECTION & AUDIT REPORT BANNER (WHEN FIELD VERIFIED AND PENDING DECISION) */}
+          {(() => {
+            const pendingCertifiedVisits = verifiedInspections.filter(r => {
+              const rId = r.id || r._id;
+              const ass = activeAssessmentMap[rId] || r.assessment || {};
+              const isFinalized = r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS' || r.status === 'COMPLETED' || (r.status === 'ACCEPTED' && r.digital_agreement) || (ass.status === 'ACCEPTED' && r.digital_agreement);
+              return !isFinalized;
+            });
+            if (pendingCertifiedVisits.length === 0) return null;
+
+            const certVisit = pendingCertifiedVisits[0];
             const ins = certVisit.site_inspection || {};
             const certId = certVisit.id || certVisit._id;
             const certInspector = ins.inspector_name || certVisit.assigned_contractor_name || 'Licensed Forestry Assessor';
@@ -680,6 +766,142 @@ const LandownerDashboard = () => {
               const reductionPct = (previousQuoteVal && reductionAmt > 0) ? Math.round((reductionAmt / previousQuoteVal) * 100) : 0;
               const isRevision = isRevisionActive;
               const isRevisionRequested = isRevisionActive;
+
+              // MINIMIZED SPOTLIGHT CARD FOR ACTIVE / ACCEPTED HARVEST OPERATIONS
+              if (isAccepted) {
+                const advReq = req.advance_payment_request || assDoc.advance_payment_request;
+                const advanceAmount = Number(
+                  advReq?.advance_amount ||
+                  (req.total_verified_paid ? req.total_verified_paid : 38500)
+                );
+                const remainingBal = Number(
+                  advReq?.remaining_balance !== undefined && advReq?.remaining_balance !== null
+                    ? advReq.remaining_balance
+                    : req.remaining_balance !== undefined && req.remaining_balance !== null
+                      ? req.remaining_balance
+                      : Math.max(0, totalQuoteVal - advanceAmount)
+                );
+
+                return (
+                  <section key={reqId || qIdx} id="active-harvest-spotlight-section" className="active-harvest-spotlight-card">
+                    {/* Header: Title, Contractor, Badges, and Primary CTA */}
+                    <div className="active-spotlight-header">
+                      <div className="active-spotlight-title-group">
+                        <div className="active-spotlight-icon-wrap">
+                          <Trees size={26} className="text-emerald-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <span className="active-spotlight-status-pill">
+                              <span className="live-pulse-dot" />
+                              Harvesting Operations In Progress
+                            </span>
+                            <span className="active-spotlight-sub-pill">
+                              <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                              Agreement Signed &amp; Mobilization Advance Verified
+                            </span>
+                          </div>
+                          <h2 className="active-spotlight-heading">
+                            {req.propertyName || 'TreeConnect Property'} — Active Harvest Operations
+                          </h2>
+                          <p className="active-spotlight-subtitle">
+                            Assigned Contractor: <strong className="text-emerald-400 font-bold">{contractorName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(proposedStartDate)}</strong>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="active-spotlight-actions">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/landowner/harvest-requests?requestId=${reqId}`)}
+                          className="active-spotlight-primary-btn"
+                          title="View all assessment certificates, itemized quotes, agreements, and transaction ledgers"
+                        >
+                          <span>View Complete Work &amp; Payment Details</span>
+                          <ArrowRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 4-Item Essential Highlights Grid */}
+                    <div className="active-spotlight-grid">
+                      <div className="active-spotlight-stat">
+                        <span className="active-stat-label">Total Agreed Quotation</span>
+                        <div className="active-stat-value text-emerald-300">
+                          {formatINR(totalQuoteVal)}
+                        </div>
+                        <span className="active-stat-hint">{propType}</span>
+                      </div>
+
+                      <div className="active-spotlight-stat active-stat-advance">
+                        <span className="active-stat-label">Mobilization Advance Verified</span>
+                        <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
+                          <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                          <span>{formatINR(advanceAmount)}</span>
+                        </div>
+                        <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {contractorName}</span>
+                      </div>
+
+                      <div className="active-spotlight-stat">
+                        <span className="active-stat-label">Remaining Balance</span>
+                        <div className="active-stat-value text-slate-200">
+                          {formatINR(remainingBal)}
+                        </div>
+                        <span className="active-stat-hint">Due upon harvest progress / completion</span>
+                      </div>
+
+                      <div className="active-spotlight-stat">
+                        <span className="active-stat-label">Harvest Scope &amp; Crew</span>
+                        <div className="active-stat-value text-white text-base font-bold">
+                          {assessedVolume} m³ • {workersCount} Crew
+                        </div>
+                        <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(proposedStartDate)}</span>
+                      </div>
+                    </div>
+
+                    {/* Pre-conditions Verified & Quick Access Bar */}
+                    <div className="active-spotlight-footer">
+                      <div className="active-spotlight-checklist">
+                        <span className="active-check-item">
+                          <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                          <span>Field Assessment Verified</span>
+                        </span>
+                        <span className="active-check-divider">•</span>
+                        <span className="active-check-item">
+                          <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                          <span>Digital Harvest Agreement Signed</span>
+                        </span>
+                        <span className="active-check-divider">•</span>
+                        <span className="active-check-item">
+                          <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                          <span>₹ {advanceAmount.toLocaleString('en-IN')} Advance Verified</span>
+                        </span>
+                      </div>
+
+                      <div className="active-spotlight-links">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
+                          className="active-spotlight-link-btn"
+                          title="Open executed digital agreement"
+                        >
+                          <FileCheck size={14} />
+                          <span>Digital Agreement</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVisitModal(req)}
+                          className="active-spotlight-link-btn"
+                          title="Open field assessment audit certificate"
+                        >
+                          <FileText size={14} />
+                          <span>Assessment Certificate</span>
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                );
+              }
 
               return (
                 <section key={reqId || qIdx} id="quotation-verification-section" className="quotation-verification-card">
@@ -1024,49 +1246,6 @@ const LandownerDashboard = () => {
                     );
                   })()}
 
-                  {/* DIGITAL AGREEMENT EXECUTED BANNER & ADVANCE PAYMENT (WHEN ACCEPTED) */}
-                  {isAccepted && (
-                    <div className="space-y-4">
-                      <div className="qvc-agreement-box">
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
-                            <FileCheck size={22} />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-sm sm:text-base font-black text-white">
-                                Digital Harvest Agreement Executed &amp; Work Finalized
-                              </h4>
-                              <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/40">
-                                {req.digital_agreement?.agreement_id || `TC-AGR-${new Date().getFullYear()}-${String(reqId).slice(-6).toUpperCase()}`}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
-                              Both parties have finalized commercial terms. Harvesting operations are authorized to commence on <strong>{formatDateDMY(proposedStartDate)}</strong>.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAgreementModal({ req, assessment: assDoc })}
-                            className="qvc-btn-accept"
-                          >
-                            <FileCheck size={16} />
-                            <span>View Digital Agreement</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* ADVANCE MOBILIZATION PAYMENT CARD */}
-                      <AdvancePaymentCard
-                        request={req}
-                        role="landowner"
-                        onRecordPayment={() => setSelectedRecordPaymentModal(req)}
-                      />
-                    </div>
-                  )}
 
 
                   {/* VERIFICATION ACTION CONTROLS FOR LANDOWNER */}
@@ -1567,93 +1746,114 @@ const LandownerDashboard = () => {
             </div>
 
             {/* Widget 2: Today's Tasks */}
-            <div className="ld-widget-card">
-              <div className="ld-widget-header">
-                <span className="ld-widget-title">
-                  <CheckCircle2 size={18} className="text-emerald-400" /> Today's Tasks
-                </span>
-                <span className="ld-badge-amber">
-                  {(scheduledVisits.length > 0 || verifiedInspections.length > 0) ? `${3 + (scheduledVisits.length > 0 ? 1 : 0) + (verifiedInspections.length > 0 ? 1 : 0)} Action Items` : '3 Action Items'}
-                </span>
-              </div>
-              <div className="ld-task-list">
-                {verifiedInspections.length > 0 && (
-                  <div
-                    onClick={() => setSelectedVisitModal(verifiedInspections[0])}
-                    className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 hover:bg-emerald-950/60 transition-colors flex items-center justify-between cursor-pointer"
-                    title="Click to view certified site inspection report"
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileCheck size={14} className="text-emerald-400 shrink-0" />
-                      <span className="text-white font-bold text-xs">
-                        Audit Certified: {verifiedInspections[0].propertyName || 'Estate'} ({formatDateDMY(verifiedInspections[0].site_inspection?.inspected_at || verifiedInspections[0].site_inspection?.scheduled_date)})
-                      </span>
+            <div className="ld-widget-card flex flex-col justify-between">
+              <div>
+                <div className="ld-widget-header">
+                  <span className="ld-widget-title">
+                    <CheckCircle2 size={18} className="text-emerald-400" /> Today's Tasks
+                  </span>
+                  <span className={actionableTasks.length > 0 ? "ld-badge-amber" : "ld-badge-green"}>
+                    {actionableTasks.length === 0 ? 'All Caught Up' : `${actionableTasks.length} ${actionableTasks.length === 1 ? 'Action Item' : 'Action Items'}`}
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 mt-2">
+                  {actionableTasks.length === 0 ? (
+                    <div className="py-6 px-3 text-center rounded-xl bg-[#090d0a]/60 border border-slate-800/60">
+                      <CheckCircle2 size={24} className="text-emerald-400/50 mx-auto mb-1.5" />
+                      <p className="text-xs font-semibold text-white">No Pending Tasks</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Your timber operations & assessments are currently up to date.</p>
                     </div>
-                    <span className="text-[10px] font-black text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/50">
-                      Certified
-                    </span>
-                  </div>
-                )}
-                {scheduledVisits.length > 0 && (
-                  <div
-                    onClick={() => setSelectedVisitModal(scheduledVisits[0])}
-                    className="p-2.5 rounded-xl bg-emerald-950/50 border border-emerald-500/40 hover:bg-emerald-950/70 transition-colors flex items-center justify-between cursor-pointer"
-                    title="Click to view scheduled site visit details"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Calendar size={14} className="text-emerald-400 shrink-0" />
-                      <span className="text-white font-bold text-xs truncate">
-                        Site Visit: {scheduledVisits[0].propertyName || 'Estate'} ({formatDateDMY(scheduledVisits[0].site_inspection?.scheduled_date)})
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-black text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/50 shrink-0 ml-2">
-                      Confirmed
-                    </span>
-                  </div>
-                )}
-                <label className="ld-task-row">
-                  <input type="checkbox" id="t-chk-1" />
-                  <span>Approve Apex Harvesting Bid</span>
-                </label>
-                <label className="ld-task-row">
-                  <input type="checkbox" id="t-chk-2" />
-                  <span>Review Q3 Timber Volume Audit Report</span>
-                </label>
-                <label className="ld-task-row">
-                  <input type="checkbox" id="t-chk-3" />
-                  <span>Verify Sector 4 Access Road Entrance</span>
-                </label>
+                  ) : (
+                    actionableTasks.slice(0, 3).map((task) => (
+                      <div
+                        key={task.id}
+                        onClick={task.action}
+                        className="p-2.5 rounded-xl bg-[#0a130e] hover:bg-[#0d1c14] border border-[#1b3d29]/70 hover:border-emerald-500/40 transition-all flex items-center justify-between gap-2.5 cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center ${
+                            task.type === 'audit' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
+                            task.type === 'visit' ? 'bg-teal-500/15 text-teal-300 border border-teal-500/30' :
+                            task.type === 'quote' ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
+                            'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                          }`}>
+                            {task.type === 'audit' ? <FileCheck size={14} /> :
+                             task.type === 'visit' ? <Calendar size={14} /> :
+                             task.type === 'quote' ? <FileText size={14} /> :
+                             <Plus size={14} />}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors truncate">
+                              {task.title}
+                            </h4>
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                              {task.subtitle}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 tracking-wide ${
+                          task.tagColor === 'amber' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' :
+                          task.tagColor === 'emerald' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' :
+                          task.tagColor === 'green' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
+                          'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                        }`}>
+                          {task.tag}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
+
+              {actionableTasks.length > 3 && (
+                <div className="pt-2 text-right">
+                  <button
+                    onClick={() => navigate('/landowner/harvest-requests')}
+                    className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
+                  >
+                    +{actionableTasks.length - 3} more items &rarr;
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Widget 3: Spot Rate Index */}
             <div className="ld-widget-card">
               <div className="ld-widget-header">
                 <span className="ld-widget-title">
-                  <DollarSign size={18} className="text-emerald-400" /> Spot Rate Index
+                  <DollarSign size={18} className="text-emerald-400" /> Timber Spot Rates
                 </span>
-                <span className="ld-badge-live">LIVE RATES</span>
+                <span className="ld-badge-live">KERALA MARKET</span>
               </div>
               <div className="ld-spot-list">
                 <div className="ld-spot-item">
-                  <span className="ld-spot-name">Rubber Wood Logs</span>
-                  <div>
-                    <span className="ld-spot-price">$115/m³</span>
-                    <span className="ld-spot-up">+2.4%</span>
-                  </div>
-                </div>
-                <div className="ld-spot-item">
-                  <span className="ld-spot-name">Western Red Cedar</span>
-                  <div>
-                    <span className="ld-spot-price">$140/m³</span>
-                    <span className="ld-spot-up">+1.8%</span>
-                  </div>
-                </div>
-                <div className="ld-spot-item">
                   <span className="ld-spot-name">Teak Grade A</span>
                   <div>
-                    <span className="ld-spot-price">$220/m³</span>
-                    <span className="ld-spot-up">+3.1%</span>
+                    <span className="ld-spot-price">{formatINR(getTimberReferenceRate('Teak'))}/m³</span>
+                    <span className="ld-spot-up">Govt Ref</span>
+                  </div>
+                </div>
+                <div className="ld-spot-item">
+                  <span className="ld-spot-name">Rosewood</span>
+                  <div>
+                    <span className="ld-spot-price">{formatINR(getTimberReferenceRate('Rosewood'))}/m³</span>
+                    <span className="ld-spot-up">Premium</span>
+                  </div>
+                </div>
+                <div className="ld-spot-item">
+                  <span className="ld-spot-name">Mahogany</span>
+                  <div>
+                    <span className="ld-spot-price">{formatINR(getTimberReferenceRate('Mahogany'))}/m³</span>
+                    <span className="ld-spot-up">Hardwood</span>
+                  </div>
+                </div>
+                <div className="ld-spot-item">
+                  <span className="ld-spot-name">Rubber Wood</span>
+                  <div>
+                    <span className="ld-spot-price">{formatINR(getTimberReferenceRate('Rubber'))}/m³</span>
+                    <span className="ld-spot-up">Round Log</span>
                   </div>
                 </div>
               </div>
@@ -1726,67 +1926,83 @@ const LandownerDashboard = () => {
                 <span className="ld-badge-live flex items-center gap-1"><TrendingUp size={12} /> Live Rate</span>
               </div>
               <div>
-                <div className="ld-kpi-number">${estRevenue.toLocaleString()}</div>
+                <div className="ld-kpi-number">{formatINR(estRevenue)}</div>
                 <div className="ld-kpi-label">Est. Timber Revenue</div>
               </div>
             </div>
           </section>
 
           {/* 5. ACTIVE HARVEST SPOTLIGHT */}
-          <section className="ld-spotlight-card">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <span className="ld-dot ld-dot-green animate-pulse"></span>
-                <h2 className="text-lg font-extrabold text-white">Active Harvest Operation Spotlight</h2>
-              </div>
-              <span className="ld-badge-green">{activeSpotlight?.status || 'In Progress'}</span>
-            </div>
-
-            <div className="ld-spotlight-inner">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-base font-bold text-white">{activeSpotlight?.propertyName || 'Estate Harvest Operation'}</h3>
-                  <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
-                    <MapPin size={14} className="text-emerald-400" />
-                    <span>{activeSpotlight?.location || 'Estate Plot'} • {activeSpotlight?.harvestScopeDetail || 'Timber Operation'}</span>
-                  </p>
+          {activeSpotlight && (
+            <section className="ld-spotlight-card">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="ld-dot ld-dot-green animate-pulse"></span>
+                  <h2 className="text-lg font-extrabold text-white">Active Harvest Operation Spotlight</h2>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs text-slate-400 block font-semibold">Completion Target</span>
-                  <span className="text-xs font-bold text-emerald-400 mt-0.5 block">{activeSpotlight?.preferredStartDate || 'Sep 15, 2026'}</span>
-                </div>
+                <span className="ld-badge-green">{activeSpotlight?.status || 'Active Operation'}</span>
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-slate-400">Harvest Logging Progress</span>
-                  <span className="text-emerald-400">45% Completed (144 / 320 m³)</span>
+              <div className="ld-spotlight-inner">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white">{activeSpotlight?.propertyName || activeSpotlight?.property_name || 'Timber Harvest Operation'}</h3>
+                    <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
+                      <MapPin size={14} className="text-emerald-400" />
+                      <span>{activeSpotlight?.location || activeSpotlight?.propertyLocation || 'Kerala, India'} • {activeSpotlight?.harvestScopeDetail || activeSpotlight?.tree_species || 'Timber Extraction'}</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs text-slate-400 block font-semibold">Target / Schedule</span>
+                    <span className="text-xs font-bold text-emerald-400 mt-0.5 block">{formatDateDMY(activeSpotlight?.preferredStartDate || activeSpotlight?.proposed_start_date || activeSpotlight?.created_at)}</span>
+                  </div>
                 </div>
-                <div className="ld-progress-bg">
-                  <div className="ld-progress-fill" style={{ width: '45%' }}></div>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-800 text-xs">
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Contractor</span>
-                  <span className="font-bold text-white mt-0.5 block">{activeSpotlight?.contractor || 'Apex Timber Harvesting'}</span>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-slate-400">Harvest Logging Progress</span>
+                    <span className="text-emerald-400">
+                      {activeSpotlight?.status === 'COMPLETED' ? '100% Completed' :
+                       activeSpotlight?.status === 'IN_PROGRESS' ? 'In Progress' :
+                       activeSpotlight?.status === 'OPERATION_READY' ? 'Operation Ready — Dispatch Scheduled' :
+                       'Field Assessment & Mobilization'}
+                    </span>
+                  </div>
+                  <div className="ld-progress-bg">
+                    <div
+                      className="ld-progress-fill"
+                      style={{
+                        width: activeSpotlight?.status === 'COMPLETED' ? '100%' :
+                               activeSpotlight?.status === 'IN_PROGRESS' ? '60%' :
+                               activeSpotlight?.status === 'OPERATION_READY' ? '30%' : '15%'
+                      }}
+                    ></div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Est. Volume</span>
-                  <span className="font-bold text-emerald-400 mt-0.5 block">{activeSpotlight?.estimatedVolume || '320 m³'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Log Destination</span>
-                  <span className="font-semibold text-slate-200 mt-0.5 block">Kottayam Sawmill</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[11px]">Audit Code</span>
-                  <span className="font-mono text-emerald-400 mt-0.5 block">#TH-2026-88B</span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-800 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Contractor</span>
+                    <span className="font-bold text-white mt-0.5 block">{activeSpotlight?.assigned_contractor_name || activeSpotlight?.contractor || 'Awaiting Contractor Assignment'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Est. Volume</span>
+                    <span className="font-bold text-emerald-400 mt-0.5 block">{activeSpotlight?.estimatedVolume || activeSpotlight?.estimated_volume || 'Calculated on Survey'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Quotation / Value</span>
+                    <span className="font-semibold text-slate-200 mt-0.5 block">
+                      {activeSpotlight?.total_quote ? formatINR(activeSpotlight.total_quote) : (activeSpotlight?.assessment?.total_quote ? formatINR(activeSpotlight.assessment.total_quote) : 'Pending Quote')}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Tracking Ref</span>
+                    <span className="font-mono text-emerald-400 mt-0.5 block">#{String(activeSpotlight?.id || activeSpotlight?._id || 'TH-REQ').substring(0, 10).toUpperCase()}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* 6. REGISTERED PROPERTIES PORTFOLIO */}
           <section className="ld-card space-y-4">
@@ -1897,57 +2113,78 @@ const LandownerDashboard = () => {
                 </h2>
                 <span className="text-xs text-slate-400">{bids.length} Active Bids</span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="ld-table">
-                  <thead>
-                    <tr>
-                      <th>Contractor</th>
-                      <th>Target Parcel</th>
-                      <th>Bid Total</th>
-                      <th>Rate</th>
-                      <th>Status</th>
-                      <th className="text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bids.map((b) => (
-                      <tr key={b.id}>
-                        <td className="font-bold text-white">{b.contractor}</td>
-                        <td className="text-slate-300">{b.plot}</td>
-                        <td className="text-emerald-400 font-extrabold">{b.bidAmount}</td>
-                        <td>{b.ratePerM3}</td>
-                        <td>
-                          <span className={b.status === 'Accepted' ? 'ld-badge-green' : b.status === 'Rejected' ? 'ld-badge-live' : 'ld-badge-amber'}>
-                            {b.status}
-                          </span>
-                        </td>
-                        <td className="text-right">
-                          {b.status === 'Pending Review' ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 cursor-pointer transition-colors"
-                                title="Accept Bid"
-                                onClick={() => handleBidStatus(b.id, 'Accepted')}
-                              >
-                                <Check size={14} />
-                              </button>
-                              <button
-                                className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 cursor-pointer transition-colors"
-                                title="Reject Bid"
-                                onClick={() => handleBidStatus(b.id, 'Rejected')}
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-slate-400 text-xs font-semibold">Complete</span>
-                          )}
-                        </td>
+              {bids.length === 0 ? (
+                <div className="py-8 px-4 text-center rounded-xl bg-[#090d0a] border border-slate-800/80">
+                  <Scale size={32} className="text-emerald-500/30 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-white">No Active Contractor Bids</p>
+                  <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                    When contractors submit formal harvesting quotations or bids for your timber parcels, they will appear here in real time.
+                  </p>
+                  <button
+                    onClick={() => navigate('/landowner/request-harvest')}
+                    className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    Request Logging Quotes
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="ld-table">
+                    <thead>
+                      <tr>
+                        <th>Contractor</th>
+                        <th>Target Parcel</th>
+                        <th>Bid Total</th>
+                        <th>Rate</th>
+                        <th>Status</th>
+                        <th className="text-right">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {bids.map((b) => (
+                        <tr key={b.id}>
+                          <td className="font-bold text-white">{b.contractor}</td>
+                          <td className="text-slate-300">{b.plot}</td>
+                          <td className="text-emerald-400 font-extrabold">{b.bidAmount}</td>
+                          <td>{b.ratePerM3}</td>
+                          <td>
+                            <span className={b.status === 'Accepted' ? 'ld-badge-green' : b.status === 'Rejected' ? 'ld-badge-live' : 'ld-badge-amber'}>
+                              {b.status}
+                            </span>
+                          </td>
+                          <td className="text-right">
+                            {b.status === 'Pending Review' ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 cursor-pointer transition-colors"
+                                  title="Accept Bid"
+                                  onClick={() => handleBidStatus(b.id, 'Accepted')}
+                                >
+                                  <Check size={14} />
+                                </button>
+                                <button
+                                  className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 cursor-pointer transition-colors"
+                                  title="Reject Bid"
+                                  onClick={() => handleBidStatus(b.id, 'Rejected')}
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => navigate('/landowner/harvest-requests')}
+                                className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold"
+                              >
+                                View Details
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
 
             {/* Quick Timber Volume Estimator */}
@@ -1999,7 +2236,7 @@ const LandownerDashboard = () => {
                   <div className="w-px h-8 bg-slate-800"></div>
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Market Revenue</span>
-                    <span className="text-xl font-extrabold text-amber-400 block mt-0.5">${estimatedValue.toLocaleString()}</span>
+                    <span className="text-xl font-extrabold text-amber-400 block mt-0.5">{formatINR(estimatedValue)}</span>
                   </div>
                 </div>
               </div>
@@ -2018,12 +2255,16 @@ const LandownerDashboard = () => {
             <div className="flex items-center gap-6">
               <div className="text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">CO₂ Sequestration</span>
-                <span className="text-xl font-black text-emerald-400 mt-0.5 block">~420 Tons/Yr</span>
+                <span className="text-xl font-black text-emerald-400 mt-0.5 block">
+                  ~{totalManagedArea > 0 ? `${Math.round(totalManagedArea * 2.4 * 10) / 10} Tons/Yr` : 'Calculated on Survey'}
+                </span>
               </div>
               <div className="w-px h-8 bg-slate-800"></div>
               <div className="text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Forest Health</span>
-                <span className="text-xl font-black text-white mt-0.5 block">94% Optimal</span>
+                <span className="text-xl font-black text-white mt-0.5 block">
+                  {properties.length > 0 ? '98% Optimal' : 'Pending Survey'}
+                </span>
               </div>
             </div>
           </section>

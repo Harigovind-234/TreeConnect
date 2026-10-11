@@ -103,7 +103,6 @@ const Sidebar = () => {
     contractor: [
       { path: '/contractor/dashboard', label: 'Contractor Hub', icon: LayoutDashboard },
       { path: '/contractor/assigned-jobs', label: 'Assigned Jobs', icon: Axe },
-      { path: '/contractor/jobs', label: 'Available Jobs', icon: Compass },
       { path: '/contractor/equipment', label: 'Fleet & Equipment', icon: Truck },
       { path: '/contractor/payments', label: 'Payment Details', icon: CreditCard },
     ],

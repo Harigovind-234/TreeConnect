@@ -362,12 +362,23 @@ const AssignedHarvestJobsPage = () => {
     feedback: ''
   });
 
+  const isJobAcceptedOrReady = (r) => {
+    if (!r) return false;
+    const status = String(r.status || '').toUpperCase();
+    if (['OPERATION_READY', 'ACCEPTED', 'IN_PROGRESS', 'COMPLETED'].includes(status)) return true;
+    if (Boolean(r.digital_agreement || r.assessment?.digital_agreement)) return true;
+    if (r.assessment?.status === 'ACCEPTED') return true;
+    if (r.is_advance_verified || r.advance_payment_status === 'VERIFIED') return true;
+    if (Array.isArray(r.payments) && r.payments.some(p => p.status === 'VERIFIED')) return true;
+    return false;
+  };
+
   const isJobInspected = (r) => Boolean(r && (r.site_inspected || r.site_inspection?.status === 'COMPLETED' || r.site_inspection?.status === 'REPORT_SUBMITTED' || r.inspection_status === 'COMPLETED' || r.inspection_status === 'REPORT_SUBMITTED'));
-  const isJobScheduled = (r) => Boolean(r && !isJobInspected(r) && (
+  const isJobScheduled = (r) => Boolean(r && !isJobInspected(r) && !isJobAcceptedOrReady(r) && (
     r.site_inspection?.status === 'SCHEDULED' || r.site_inspection?.status === 'CONFIRMED' || r.site_inspection?.status === 'IN_PROGRESS' ||
     r.inspection_status === 'SCHEDULED' || r.inspection_status === 'CONFIRMED' || r.inspection_status === 'IN_PROGRESS'
   ));
-  const doesJobNeedVisit = (r) => Boolean(r && !isJobInspected(r) && !isJobScheduled(r) && r.status !== 'ASSESSMENT_SUBMITTED' && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED' && r.status !== 'REVISION_REQUESTED');
+  const doesJobNeedVisit = (r) => Boolean(r && !isJobInspected(r) && !isJobScheduled(r) && !isJobAcceptedOrReady(r) && r.status !== 'ASSESSMENT_SUBMITTED' && r.status !== 'REVISION_REQUESTED');
 
   const handleOpenSchedule = (req) => {
     const nextDay = new Date();
@@ -759,6 +770,15 @@ const AssignedHarvestJobsPage = () => {
     try {
       setActionLoading(true);
       await harvestService.startHarvest(reqId);
+      setAssignedRequests(prev => prev.map(r => (r.id || r._id) === reqId ? { ...r, status: 'IN_PROGRESS' } : r));
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(item => (item.id || item._id) === reqId ? { ...item, status: 'IN_PROGRESS' } : item);
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (e) { }
       showToast('Harvesting operations started successfully! Job status updated to IN_PROGRESS.');
       await fetchAssignedRequests();
     } catch (err) {
@@ -787,9 +807,9 @@ const AssignedHarvestJobsPage = () => {
   const handleAssessClick = (req) => {
     const reqId = req.id || req._id;
     const inspected = isJobInspected(req);
-    const submitted = req.status === 'ASSESSMENT_SUBMITTED';
-    const accepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
-    const revision = req.status === 'REVISION_REQUESTED';
+    const accepted = isJobAcceptedOrReady(req);
+    const submitted = (req.status === 'ASSESSMENT_SUBMITTED' || req.assessment?.status === 'SUBMITTED') && !accepted;
+    const revision = (req.status === 'REVISION_REQUESTED') && !accepted;
 
     if (inspected || submitted || accepted || revision) {
       navigate(`/contractor/assessment/${reqId}`);
@@ -1052,8 +1072,8 @@ const AssignedHarvestJobsPage = () => {
       req.owner_email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.reason?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
-    const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+    const isAccepted = isJobAcceptedOrReady(req);
+    const isSubmitted = (req.status === 'ASSESSMENT_SUBMITTED' || req.assessment?.status === 'SUBMITTED') && !isAccepted;
     const fairDeal = getFairDealInfo(req);
     const hasFairDeal = fairDeal.hasFairDeal && !isAccepted;
     const inspected = isJobInspected(req);
@@ -1074,10 +1094,10 @@ const AssignedHarvestJobsPage = () => {
 
   const needsInspectionCount = assignedRequests.filter(doesJobNeedVisit).length;
   const inspectionScheduledCount = assignedRequests.filter(isJobScheduled).length;
-  const siteVerifiedCount = assignedRequests.filter(r => isJobInspected(r) && r.status !== 'ASSESSMENT_SUBMITTED' && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED').length;
-  const fairDealCount = assignedRequests.filter(r => getFairDealInfo(r).hasFairDeal && r.status !== 'OPERATION_READY' && r.status !== 'ACCEPTED').length;
-  const submittedCount = assignedRequests.filter(r => r.status === 'ASSESSMENT_SUBMITTED').length;
-  const authorizedCount = assignedRequests.filter(r => r.status === 'OPERATION_READY' || r.status === 'ACCEPTED').length;
+  const siteVerifiedCount = assignedRequests.filter(r => isJobInspected(r) && !isJobAcceptedOrReady(r) && r.status !== 'ASSESSMENT_SUBMITTED').length;
+  const fairDealCount = assignedRequests.filter(r => getFairDealInfo(r).hasFairDeal && !isJobAcceptedOrReady(r)).length;
+  const submittedCount = assignedRequests.filter(r => (r.status === 'ASSESSMENT_SUBMITTED' || r.assessment?.status === 'SUBMITTED') && !isJobAcceptedOrReady(r)).length;
+  const authorizedCount = assignedRequests.filter(isJobAcceptedOrReady).length;
 
   return (
     <div className="dashboard-layout">
@@ -1290,12 +1310,19 @@ const AssignedHarvestJobsPage = () => {
               <div className="flex flex-col gap-8">
                 {filteredRequests.map((req) => {
                   const reqId = req.id || req._id || 'job_demo';
-                  const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
-                  const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                  const isAccepted = isJobAcceptedOrReady(req);
+                  const isSubmitted = (req.status === 'ASSESSMENT_SUBMITTED' || req.assessment?.status === 'SUBMITTED') && !isAccepted;
                   const isInProgress = req.status === 'IN_PROGRESS';
                   const isCompleted = req.status === 'COMPLETED';
+                  const advReq = req.advance_payment_request || req.assessment?.advance_payment_request;
+                  const paymentStatus = req.advance_payment_status || req.assessment?.advance_payment_status || (advReq ? 'ADVANCE_REQUESTED' : 'NOT_REQUESTED');
+                  const isAdvanceVerified = Boolean(
+                    req.is_advance_verified ||
+                    paymentStatus === 'VERIFIED' ||
+                    (Array.isArray(req.payments) && req.payments.some(p => p.status === 'VERIFIED'))
+                  );
                   const fairDealInfo = getFairDealInfo(req);
-                  const isRevisionRequested = (fairDealInfo.hasFairDeal && !isAccepted) || req.status === 'REVISION_REQUESTED';
+                  const isRevisionRequested = (fairDealInfo.hasFairDeal && !isAccepted) || (req.status === 'REVISION_REQUESTED' && !isAccepted);
 
                   // Format schedule dates cleanly
                   const startDate = req.preferred_start_date || req.preferredStartDate;
@@ -1509,7 +1536,9 @@ const AssignedHarvestJobsPage = () => {
                               {isAccepted ? (
                                 <>
                                   <CheckCircle2 size={13} className="text-emerald-400" />
-                                  <span>Operation Authorized</span>
+                                  <span>
+                                    {isCompleted ? 'Operation Completed' : isInProgress ? 'Operations In Progress' : 'Operation Authorized'}
+                                  </span>
                                 </>
                               ) : isRevisionRequested ? (
                                 <>
@@ -1614,8 +1643,8 @@ const AssignedHarvestJobsPage = () => {
 
                           {/* Primary Action Buttons */}
                           <div className="cd-financial-actions-cluster flex items-center gap-2.5 flex-wrap ml-auto">
-                            {/* Option to Set or Update Advance by Contractor before starting work */}
-                            {(isAccepted || req.status === 'OPERATION_READY') && !isInProgress && !isCompleted && (
+                            {/* Option to Set or Update Advance by Contractor before starting work (Only if NOT already verified/paid, agreement not finalized, and payment not pending/verified) */}
+                            {isAccepted && !isAdvanceVerified && !req.digital_agreement && !isInProgress && !isCompleted && paymentStatus !== 'VERIFIED' && paymentStatus !== 'VERIFICATION_PENDING' && (
                               <button
                                 type="button"
                                 onClick={() => setSelectedRequestAdvanceModal(req)}
@@ -1627,28 +1656,38 @@ const AssignedHarvestJobsPage = () => {
                               </button>
                             )}
 
-                            {/* Direct Assessment CTA */}
-                            <button
-                              type="button"
-                              onClick={() => handleAssessClick(req)}
-                              className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''} shadow-md`}
-                            >
-                              {isRevisionRequested ? <RefreshCw size={13} /> : <Calculator size={13} />}
-                              <span>
-                                {isRevisionRequested
-                                  ? 'Revise Quote'
-                                  : isAccepted
-                                    ? 'Revise / Adjust Quote'
+                            {/* Direct Assessment CTA: If quotation is already accepted by owner, provide view-only agreed quote */}
+                            {isAccepted ? (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                className="cd-btn-assess-cta bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 text-slate-200 shadow-sm flex items-center gap-1.5"
+                                title="View finalized quotation accepted by landowner"
+                              >
+                                <Eye size={13} />
+                                <span>View Agreed Quote</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleAssessClick(req)}
+                                className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''} shadow-md`}
+                              >
+                                {isRevisionRequested ? <RefreshCw size={13} /> : <Calculator size={13} />}
+                                <span>
+                                  {isRevisionRequested
+                                    ? 'Revise Quote'
                                     : isSubmitted
                                       ? 'Revise / Edit Quote'
                                       : isJobInspected(req)
                                         ? 'Submit Verified Quote'
                                         : 'Assess & Quote'}
-                              </span>
-                            </button>
+                                </span>
+                              </button>
+                            )}
 
-                            {/* Decline Job if terms unfavourable */}
-                            {!isInProgress && !isCompleted && (
+                            {/* Decline Job if terms unfavourable (Only valid BEFORE commercial agreement / acceptance) */}
+                            {!isAccepted && !isInProgress && !isCompleted && (
                               <button
                                 type="button"
                                 onClick={() => handleOpenDecline(req)}
@@ -1971,15 +2010,18 @@ const AssignedHarvestJobsPage = () => {
                                 <div className="cd-inspection-actions">
                                   {inspected ? (
                                     <>
-                                      <button
-                                        type="button"
-                                        onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                                        className="cd-btn-inspect-primary"
-                                        title="Re-assess quotation with audited tree counts and ground-truth timber volume"
-                                      >
-                                        <Calculator size={13} />
-                                        <span>Re-Assess After Site Visit</span>
-                                      </button>
+                                      {/* Re-Assess After Site Visit: Only prior to formal quotation submission / acceptance */}
+                                      {!isSubmitted && !isAccepted && (
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                          className="cd-btn-inspect-primary"
+                                          title="Re-assess quotation with audited tree counts and ground-truth timber volume"
+                                        >
+                                          <Calculator size={13} />
+                                          <span>Re-Assess After Site Visit</span>
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => setViewInspectionModalJob(req)}
@@ -1989,15 +2031,23 @@ const AssignedHarvestJobsPage = () => {
                                         <Eye size={13} />
                                         <span>View Full Audit Report</span>
                                       </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenAudit(req)}
-                                        className="cd-btn-inspect-secondary"
-                                        title="Update field findings or add notes"
-                                      >
-                                        <RefreshCw size={12} />
-                                        <span>Update Findings</span>
-                                      </button>
+                                      {/* Update Findings: Only editable prior to formal quotation submission / acceptance */}
+                                      {!isSubmitted && !isAccepted ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenAudit(req)}
+                                          className="cd-btn-inspect-secondary"
+                                          title="Update field findings or add notes"
+                                        >
+                                          <RefreshCw size={12} />
+                                          <span>Update Findings</span>
+                                        </button>
+                                      ) : (
+                                        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-1.5" title="Audit findings are certified and locked into the agreed quotation">
+                                          <ShieldCheck size={12} />
+                                          <span>Findings Certified</span>
+                                        </span>
+                                      )}
                                     </>
                                   ) : isRescheduleRequested ? (
                                     <>
@@ -2224,7 +2274,7 @@ const AssignedHarvestJobsPage = () => {
                               <span className="cd-highlight-label">Assessment Status</span>
                               <strong className={`cd-highlight-val flex items-center gap-1.5 ${isAccepted ? 'text-emerald-400' : isRevisionRequested ? 'text-amber-400' : isSubmitted ? 'text-amber-400' : isJobInspected(req) ? 'text-emerald-300' : isJobScheduled(req) ? 'text-sky-300' : 'text-blue-400'}`}>
                                 <span className={`w-2 h-2 rounded-full shrink-0 ${isAccepted ? 'bg-emerald-400' : isRevisionRequested ? 'bg-amber-400' : isSubmitted ? 'bg-amber-400' : isJobInspected(req) ? 'bg-emerald-400' : isJobScheduled(req) ? 'bg-sky-400' : 'bg-blue-400'}`} />
-                                <span>{isAccepted ? 'Authorized by Owner' : isRevisionRequested ? 'Counter-Offer Active' : isSubmitted ? 'Quotation Submitted' : isJobInspected(req) ? 'Site Verified' : isJobScheduled(req) ? 'Visit Scheduled' : 'Pending Site Visit'}</span>
+                                <span>{isAccepted ? (isInProgress ? 'Operations In Progress' : isCompleted ? 'Operation Completed' : 'Authorized by Owner') : isRevisionRequested ? 'Counter-Offer Active' : isSubmitted ? 'Quotation Submitted' : isJobInspected(req) ? 'Site Verified' : isJobScheduled(req) ? 'Visit Scheduled' : 'Pending Site Visit'}</span>
                               </strong>
                             </div>
                           </div>
@@ -2881,7 +2931,7 @@ const AssignedHarvestJobsPage = () => {
                               </div>
 
                               <div className="flex items-center gap-3">
-                                {!isInProgress && !isCompleted && (
+                                {!isAccepted && !isInProgress && !isCompleted && (
                                   <button
                                     type="button"
                                     onClick={() => handleOpenDecline(req)}
@@ -2900,14 +2950,25 @@ const AssignedHarvestJobsPage = () => {
                                   <span>Collapse Details</span>
                                   <ChevronUp size={13} />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAssessClick(req)}
-                                  className="cd-btn-assessment cursor-pointer"
-                                >
-                                  <Calculator size={16} />
-                                  {isSubmitted ? 'Edit / Resubmit Assessment' : isJobInspected(req) ? 'Submit Assessment & Binding Quote' : 'Submit Inspection Assessment & Quote'}
-                                </button>
+                                {isAccepted ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                    className="cd-btn-assessment cursor-pointer bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200"
+                                  >
+                                    <Eye size={16} />
+                                    <span>View Agreed Quotation</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssessClick(req)}
+                                    className="cd-btn-assessment cursor-pointer"
+                                  >
+                                    <Calculator size={16} />
+                                    {isSubmitted ? 'Edit / Resubmit Assessment' : isJobInspected(req) ? 'Submit Assessment & Binding Quote' : 'Submit Inspection Assessment & Quote'}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -4028,17 +4089,19 @@ const AssignedHarvestJobsPage = () => {
                       >
                         Close
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setViewInspectionModalJob(null);
-                          handleAssessClick(viewInspectionModalJob);
-                        }}
-                        className="cd-btn-confirm-schedule"
-                      >
-                        <Calculator size={15} />
-                        <span>Submit Binding Quotation</span>
-                      </button>
+                      {viewInspectionModalJob?.status !== 'OPERATION_READY' && viewInspectionModalJob?.status !== 'ACCEPTED' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setViewInspectionModalJob(null);
+                            handleAssessClick(viewInspectionModalJob);
+                          }}
+                          className="cd-btn-confirm-schedule"
+                        >
+                          <Calculator size={15} />
+                          <span>Submit Binding Quotation</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

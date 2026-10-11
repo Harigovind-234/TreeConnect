@@ -193,8 +193,8 @@ const AdvancePaymentCard = ({
 
         {/* Action Button on Header */}
         <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
-          {/* CONTRACTOR: SET OR UPDATE ADVANCE AMOUNT */}
-          {isContractor && !isVerified && !isInProgress && !isCompleted && (
+          {/* CONTRACTOR: SET OR UPDATE ADVANCE AMOUNT (Only before agreement is finalized and before payment is made) */}
+          {isContractor && !isVerified && !isInProgress && !isCompleted && !request?.digital_agreement && paymentStatus !== 'VERIFICATION_PENDING' && paymentStatus !== 'VERIFIED' && (
             <button
               type="button"
               onClick={onRequestAdvance}
@@ -575,14 +575,16 @@ const AdvancePaymentCard = ({
               </div>
               {isContractor && (
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={onRequestAdvance}
-                    className="cd-btn-inspect-primary cursor-pointer shadow-md"
-                  >
-                    <CreditCard size={13} />
-                    <span>{advReq && paymentStatus !== 'NOT_REQUESTED' ? 'Update Advance Terms' : 'Set Advance Amount'}</span>
-                  </button>
+                  {!request?.digital_agreement && paymentStatus !== 'VERIFICATION_PENDING' && paymentStatus !== 'VERIFIED' && (
+                    <button
+                      type="button"
+                      onClick={onRequestAdvance}
+                      className="cd-btn-inspect-primary cursor-pointer shadow-md"
+                    >
+                      <CreditCard size={13} />
+                      <span>{advReq && paymentStatus !== 'NOT_REQUESTED' ? 'Update Advance Terms' : 'Set Advance Amount'}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={true}
