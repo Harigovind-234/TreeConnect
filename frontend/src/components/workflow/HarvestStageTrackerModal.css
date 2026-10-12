@@ -876,3 +876,29 @@
   align-items: center;
   gap: 6px;
 }
+
+@media (max-width: 640px) {
+  .hst-overlay {
+    padding: 10px 8px;
+  }
+  .hst-modal {
+    max-height: 96vh;
+    max-height: 96dvh;
+    border-radius: 16px;
+  }
+  .hst-header {
+    padding: 14px 16px;
+  }
+  .hst-body {
+    padding: 14px 12px;
+  }
+  .hst-footer {
+    padding: 14px 16px;
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .hst-footer button {
+    width: 100%;
+    justify-content: center;
+  }
+}

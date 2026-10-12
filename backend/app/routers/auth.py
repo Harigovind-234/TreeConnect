@@ -443,7 +443,8 @@ def get_user_profile(email: Optional[str] = None, authorization: Optional[str] =
             "village": existing_user.get("village", ""),
             "isVerified": existing_user.get("isVerified", True),
             "status": existing_user.get("status", "Active"),
-            "fleet_equipment": existing_user.get("fleet_equipment", [])
+            "fleet_equipment": existing_user.get("fleet_equipment", []),
+            "fleet_vehicles": existing_user.get("fleet_vehicles", [])
         }
 
         return JSONResponse(
@@ -537,16 +538,25 @@ def update_user_fleet(request: dict, authorization: Optional[str] = Header(None)
         if not existing_user:
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "User not found"})
             
-        fleet = request.get("fleet_equipment", [])
-        
-        db.users.update_one(
-            {"email": clean_email},
-            {"$set": {"fleet_equipment": fleet}}
-        )
+        update_set = {}
+        if "fleet_equipment" in request:
+            update_set["fleet_equipment"] = request.get("fleet_equipment", [])
+        if "fleet_vehicles" in request:
+            update_set["fleet_vehicles"] = request.get("fleet_vehicles", [])
+            
+        if update_set:
+            db.users.update_one(
+                {"email": clean_email},
+                {"$set": update_set}
+            )
         
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"message": "Fleet updated successfully", "fleet_equipment": fleet}
+            content={
+                "message": "Fleet updated successfully", 
+                "fleet_equipment": request.get("fleet_equipment", existing_user.get("fleet_equipment", [])),
+                "fleet_vehicles": request.get("fleet_vehicles", existing_user.get("fleet_vehicles", []))
+            }
         )
     except Exception as e:
         return JSONResponse(

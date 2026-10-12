@@ -3172,7 +3172,7 @@ const extractLandownerValue = (req, vol) => {
 
                   {/* CONTRACTOR FLEET DISPLAY & SELECTION */}
                   {fleetEquipment && fleetEquipment.length > 0 && (
-                    <div className="assessment-verified-section" style={{ marginTop: '24px' }}>
+                    <div id="contractor-fleet-allocation-section" className="assessment-verified-section" style={{ marginTop: '24px' }}>
                       <div className="assessment-verified-header" style={{ paddingBottom: '16px' }}>
                         <div className="flex items-center justify-between w-full flex-wrap gap-3">
                           <div className="flex items-center gap-2.5">
@@ -3500,6 +3500,67 @@ const extractLandownerValue = (req, vol) => {
                             </p>
                           </div>
                         )}
+
+                        {/* 2. ASSIGNED FLEET & EQUIPMENT SUMMARY (REPLACES VACANT SPACE) */}
+                        {(() => {
+                          const allocatedList = Object.values(selectedEquipment).filter(eq => eq && Number(eq.count) > 0);
+                          const totalUnits = allocatedList.reduce((sum, item) => sum + (Number(item?.count) || 0), 0);
+
+                          return (
+                            <div className="commercial-type-card assigned-equipment-card cursor-default">
+                              <div className="commercial-type-header">
+                                <span className="commercial-type-title text-emerald-300 font-bold flex items-center gap-1.5">
+                                  <Wrench size={15} className="text-emerald-400" /> Assigned Fleet &amp; Equipment
+                                </span>
+                                <span className="commercial-type-badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                                  {totalUnits} {totalUnits === 1 ? 'Unit' : 'Units'} Assigned
+                                </span>
+                              </div>
+                              <div className="commercial-type-flow text-emerald-300">
+                                🚜 Machinery &amp; Tools Deployed for Site Operations
+                              </div>
+
+                              {allocatedList.length > 0 ? (
+                                <div className="flex flex-col gap-2 mt-1">
+                                  <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
+                                    {allocatedList.map((eq, idx) => (
+                                      <div
+                                        key={eq.id || idx}
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#041009] border border-emerald-500/30 text-xs text-white"
+                                        title={`${eq.name} (${eq.category || 'Machinery'}): ${eq.count} units`}
+                                      >
+                                        <span className="font-semibold text-slate-200 truncate max-w-[130px]">{eq.name}</span>
+                                        <span className="font-mono font-extrabold text-emerald-400 bg-emerald-500/15 border border-emerald-500/35 px-1.5 py-0.5 rounded text-[10.5px]">
+                                          ×{eq.count}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => document.getElementById('contractor-fleet-allocation-section')?.scrollIntoView({ behavior: 'smooth' })}
+                                    className="text-[11.5px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition-colors cursor-pointer mt-0.5 text-left w-fit"
+                                  >
+                                    <span>Modify allocated machinery ({totalUnits} units total) ↓</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-2 mt-1">
+                                  <p className="commercial-type-desc text-slate-400">
+                                    No equipment units assigned yet. Allocate chainsaws, winches or haulers from your registered fleet below.
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => document.getElementById('contractor-fleet-allocation-section')?.scrollIntoView({ behavior: 'smooth' })}
+                                    className="text-[11.5px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition-colors cursor-pointer mt-0.5 text-left w-fit"
+                                  >
+                                    <span>+ Allocate equipment for this job ↓</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 

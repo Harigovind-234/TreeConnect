@@ -384,3 +384,38 @@
     color: #000000 !important;
   }
 }
+
+@media (max-width: 640px) {
+  .digital-agr-overlay {
+    padding: 10px 8px;
+  }
+  .digital-agr-modal {
+    max-height: 96vh;
+    max-height: 96dvh;
+    border-radius: 16px;
+  }
+  .digital-agr-header {
+    padding: 14px 16px;
+  }
+  .digital-agr-body {
+    padding: 14px 12px;
+    gap: 16px;
+  }
+  .digital-agr-document {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+  .digital-agr-footer {
+    padding: 14px 16px;
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .digital-agr-footer button {
+    width: 100%;
+    justify-content: center;
+  }
+  .digital-agr-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

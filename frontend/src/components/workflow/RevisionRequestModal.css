@@ -632,3 +632,24 @@
   color: #ffffff;
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
 }
+
+@media (max-width: 640px) {
+  .revision-modal-overlay {
+    padding: 10px 8px;
+  }
+  .revision-modal-container {
+    padding: 18px 16px;
+    border-radius: 18px;
+    max-height: 94vh;
+    max-height: 94dvh;
+    gap: 16px;
+  }
+  .revision-modal-footer {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  .revision-modal-footer button {
+    width: 100%;
+    justify-content: center;
+  }
+}

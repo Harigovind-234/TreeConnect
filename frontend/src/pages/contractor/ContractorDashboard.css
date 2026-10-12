@@ -50,6 +50,13 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 640px) {
+  .cd-card {
+    padding: 18px 16px !important;
+    border-radius: 16px !important;
+  }
+}
+
 .cd-card:hover {
   border-color: rgba(16, 185, 129, 0.4);
   box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6), 0 0 25px rgba(16, 185, 129, 0.1);
@@ -2384,7 +2391,7 @@ input[type="date"].cd-input::-webkit-calendar-picker-indicator {
 
 @media (min-width: 860px) {
   .commercial-type-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
@@ -2400,9 +2407,20 @@ input[type="date"].cd-input::-webkit-calendar-picker-indicator {
   flex-direction: column !important;
   gap: 7px !important;
   text-align: left !important;
-  min-height: 150px !important;
-  max-height: 175px !important;
+  min-height: 155px !important;
   box-sizing: border-box !important;
+}
+
+.assigned-equipment-card {
+  background: linear-gradient(145deg, #07190e 0%, #05130b 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+  cursor: default !important;
+}
+
+.assigned-equipment-card:hover {
+  border-color: rgba(16, 185, 129, 0.55) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.15) !important;
 }
 
 .commercial-type-card:hover {
@@ -4355,8 +4373,8 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
 
 @media (max-width: 768px) {
   .assessment-page-container {
-    padding: 16px;
-    gap: 20px;
+    padding: 0;
+    gap: 16px;
   }
 }
 
@@ -6557,6 +6575,33 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   justify-content: flex-end !important;
   gap: 12px !important;
   flex-shrink: 0 !important;
+  flex-wrap: wrap !important;
+}
+
+@media (max-width: 640px) {
+  .eq-modal-overlay {
+    padding: 10px 8px !important;
+  }
+  .eq-modal-card {
+    max-height: calc(100vh - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    border-radius: 16px !important;
+  }
+  .eq-modal-header {
+    padding: 14px 16px !important;
+  }
+  .eq-modal-body {
+    padding: 16px 14px !important;
+  }
+  .eq-modal-footer {
+    padding: 12px 16px !important;
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+  }
+  .eq-modal-footer button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
 }
 
 .eq-btn-cancel {
@@ -6763,5 +6808,194 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   font-size: 0.7rem !important;
   color: #64748b !important;
   padding-top: 2px !important;
+}
+
+/* ==========================================================
+   FLEET & VEHICLES ENHANCEMENTS: TABS, BUTTONS & DATA TABLES
+   ========================================================== */
+.fleet-btn-action-vehicle {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(6, 78, 59, 0.6) 100%) !important;
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(16, 185, 129, 0.42) !important;
+  font-weight: 800 !important;
+  font-size: 0.8125rem !important;
+  border-radius: 12px !important;
+  padding: 10px 18px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease-in-out !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+.fleet-btn-action-vehicle:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.32) 0%, rgba(6, 78, 59, 0.85) 100%) !important;
+  color: #ffffff !important;
+  border-color: #34d399 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.32) !important;
+}
+
+/* Fleet View Navigation Tabs */
+.fleet-tabs-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: #08140c !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border-radius: 14px !important;
+  padding: 5px !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+.fleet-tab-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 8px 16px !important;
+  border-radius: 10px !important;
+  font-size: 0.8rem !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  cursor: pointer !important;
+  transition: all 0.18s ease !important;
+  white-space: nowrap !important;
+  user-select: none !important;
+}
+
+.fleet-tab-btn:hover {
+  color: #e2e8f0 !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+.fleet-tab-btn.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(6, 78, 59, 0.75) 100%) !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+}
+
+.fleet-tab-count {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 2px 7px !important;
+  border-radius: 9999px !important;
+  font-size: 0.7rem !important;
+  font-family: monospace, sans-serif !important;
+  font-weight: 800 !important;
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+.fleet-tab-btn.active .fleet-tab-count {
+  background: #10b981 !important;
+  color: #041208 !important;
+  border-color: #34d399 !important;
+}
+
+/* Beautiful Data Table with Solid Grid Borders & Contrast */
+.fleet-table-container {
+  border: 1px solid rgba(16, 185, 129, 0.24) !important;
+  border-radius: 14px !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  background: #050e09 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.fleet-data-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  text-align: left !important;
+  min-width: 900px !important;
+}
+
+.fleet-th {
+  background: linear-gradient(180deg, #0a2013 0%, #07170e 100%) !important;
+  color: #a7f3d0 !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.07em !important;
+  padding: 13px 16px !important;
+  border-bottom: 2px solid rgba(16, 185, 129, 0.38) !important;
+  border-right: 1px solid rgba(16, 185, 129, 0.16) !important;
+  white-space: nowrap !important;
+}
+
+.fleet-th:last-child {
+  border-right: none !important;
+}
+
+.fleet-tr {
+  transition: all 0.15s ease !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15) !important;
+}
+
+.fleet-tr:nth-child(odd) {
+  background: #08160e !important;
+}
+
+.fleet-tr:nth-child(even) {
+  background: #040e08 !important;
+}
+
+.fleet-tr:hover {
+  background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.fleet-tr:last-child {
+  border-bottom: none !important;
+}
+
+.fleet-td {
+  padding: 14px 16px !important;
+  border-right: 1px solid rgba(16, 185, 129, 0.12) !important;
+  vertical-align: middle !important;
+}
+
+.fleet-td:last-child {
+  border-right: none !important;
+}
+
+/* Vehicle License Plate / Monospace Reg Tag */
+.fleet-plate-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  font-family: monospace, ui-monospace, sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.08em !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  background: #06180d !important;
+  border: 1.5px solid rgba(16, 185, 129, 0.4) !important;
+  color: #6ee7b7 !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Vehicle Capacity / Specs Tag */
+.fleet-spec-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 2px 7px !important;
+  border-radius: 6px !important;
 }
 

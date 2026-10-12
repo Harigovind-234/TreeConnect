@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -17,7 +17,10 @@ import {
   TrendingUp,
   Truck,
   Compass,
-  FileText
+  FileText,
+  Menu,
+  X,
+  ChevronRight
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -25,11 +28,49 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const role = user?.role || 'landowner';
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleLogout = () => {
+    setIsOpen(false);
     if (logout) logout();
     navigate('/login');
   };
+
+  // Close drawer on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname, location.search]);
+
+  // Support global custom events to open/toggle sidebar drawer
+  useEffect(() => {
+    const handleToggle = () => setIsOpen(prev => !prev);
+    const handleClose = () => setIsOpen(false);
+    window.addEventListener('treeconnect_toggle_sidebar', handleToggle);
+    window.addEventListener('treeconnect_close_sidebar', handleClose);
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('treeconnect_toggle_sidebar', handleToggle);
+      window.removeEventListener('treeconnect_close_sidebar', handleClose);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Prevent background scrolling while mobile drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   // Grouped Navigation for Landowner Enterprise View
   const landownerGroups = [
@@ -143,37 +184,107 @@ const Sidebar = () => {
     }
   };
 
+  // Determine current active item title for mobile header display
+  const allNavItems = role === 'landowner'
+    ? landownerGroups.flatMap((g) => g.items)
+    : role === 'admin'
+    ? adminGroups.flatMap((g) => g.items)
+    : (menuConfig[role] || []);
+  const currentActive = allNavItems.find((item) => checkIsActive(item.path));
+  const currentTitle = currentActive?.label || 'Portal Navigation';
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <span className="sidebar-role-badge">{role.toUpperCase()} PORTAL</span>
+    <>
+      {/* 1. Mobile Sticky Portal Bar Trigger (Visible only on screens < 1024px) */}
+      <div className="sidebar-mobile-bar">
+        <button
+          type="button"
+          className="sidebar-mobile-toggle-btn"
+          onClick={() => setIsOpen(true)}
+          aria-label="Open portal navigation drawer"
+        >
+          <Menu size={17} />
+          <span>{role.toUpperCase()} MENU</span>
+        </button>
+
+        <div className="sidebar-mobile-active-info">
+          <span className="sidebar-mobile-indicator" />
+          <span className="sidebar-mobile-title">{currentTitle}</span>
+        </div>
       </div>
 
-      <nav className="sidebar-nav">
-        {role === 'landowner' || role === 'admin' ? (
-          (role === 'landowner' ? landownerGroups : adminGroups).map((group) => (
-            <div key={group.group} className="sidebar-group">
-              <span className="sidebar-group-title">{group.group}</span>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isHash = item.path.includes('#');
-                if (isHash) {
+      {/* 2. Mobile Backdrop Overlay */}
+      <div
+        className={`sidebar-backdrop ${isOpen ? 'active' : ''}`}
+        onClick={() => setIsOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* 3. Aside Drawer Container */}
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <div className="flex items-center justify-between w-full">
+            <span className="sidebar-role-badge">{role.toUpperCase()} PORTAL</span>
+            <button
+              type="button"
+              className="sidebar-close-btn"
+              onClick={() => setIsOpen(false)}
+              aria-label="Close portal navigation drawer"
+              title="Close Menu"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          {role === 'landowner' || role === 'admin' ? (
+            (role === 'landowner' ? landownerGroups : adminGroups).map((group) => (
+              <div key={group.group} className="sidebar-group">
+                <span className="sidebar-group-title">{group.group}</span>
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isHash = item.path.includes('#');
+                  if (isHash) {
+                    return (
+                      <button
+                        key={item.label}
+                        className="sidebar-item sidebar-item-btn cursor-pointer"
+                        onClick={() => {
+                          setIsOpen(false);
+                          handleNavClick(item.path);
+                        }}
+                      >
+                        <Icon size={18} className="sidebar-icon" />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  }
+                  const isActive = checkIsActive(item.path);
                   return (
-                    <button
-                      key={item.label}
-                      className="sidebar-item sidebar-item-btn cursor-pointer"
-                      onClick={() => handleNavClick(item.path)}
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setIsOpen(false)}
+                      className={`sidebar-item ${isActive ? 'active' : ''}`}
                     >
                       <Icon size={18} className="sidebar-icon" />
                       <span>{item.label}</span>
-                    </button>
+                    </Link>
                   );
-                }
+                })}
+              </div>
+            ))
+          ) : (
+            <div className="sidebar-group">
+              {(menuConfig[role] || []).map((item) => {
+                const Icon = item.icon;
                 const isActive = checkIsActive(item.path);
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
+                    onClick={() => setIsOpen(false)}
                     className={`sidebar-item ${isActive ? 'active' : ''}`}
                   >
                     <Icon size={18} className="sidebar-icon" />
@@ -182,52 +293,35 @@ const Sidebar = () => {
                 );
               })}
             </div>
-          ))
-        ) : (
-          <div className="sidebar-group">
-            {(menuConfig[role] || []).map((item) => {
-              const Icon = item.icon;
-              const isActive = checkIsActive(item.path);
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`sidebar-item ${isActive ? 'active' : ''}`}
-                >
-                  <Icon size={18} className="sidebar-icon" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </nav>
+          )}
+        </nav>
 
-      <div className="sidebar-footer">
-        <div className="sidebar-user-card">
-          <img
-            src={user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=tree'}
-            alt={user?.name || 'User'}
-            className="sidebar-avatar"
-          />
-          <div className="sidebar-user-details">
-            <span className="sidebar-user-name">
-              {user?.name || (role === 'admin' ? 'TreeConnect Admin' : 'Harigovind D Nair')}
-            </span>
-            <span className="sidebar-user-role">
-              {user?.title || (role === 'admin' ? 'Platform Administrator' : role === 'contractor' ? 'Verified Contractor' : role === 'buyer' ? 'Timber Buyer' : 'Forest Estate Owner')}
-            </span>
+        <div className="sidebar-footer">
+          <div className="sidebar-user-card">
+            <img
+              src={user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=tree'}
+              alt={user?.name || 'User'}
+              className="sidebar-avatar"
+            />
+            <div className="sidebar-user-details">
+              <span className="sidebar-user-name">
+                {user?.name || (role === 'admin' ? 'TreeConnect Admin' : 'Harigovind D Nair')}
+              </span>
+              <span className="sidebar-user-role">
+                {user?.title || (role === 'admin' ? 'Platform Administrator' : role === 'contractor' ? 'Verified Contractor' : role === 'buyer' ? 'Timber Buyer' : 'Forest Estate Owner')}
+              </span>
+            </div>
+            <button
+              className="sidebar-logout-btn"
+              onClick={handleLogout}
+              title="Log Out"
+            >
+              <LogOut size={16} />
+            </button>
           </div>
-          <button
-            className="sidebar-logout-btn"
-            onClick={handleLogout}
-            title="Log Out"
-          >
-            <LogOut size={16} />
-          </button>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 

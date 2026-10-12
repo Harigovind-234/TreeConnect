@@ -47,6 +47,14 @@
   padding: 36px 42px;
   box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .ld-card {
+    padding: 18px 16px !important;
+    border-radius: 18px !important;
+  }
 }
 
 .ld-card:hover {

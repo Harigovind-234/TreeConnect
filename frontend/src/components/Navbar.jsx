@@ -76,7 +76,20 @@ const Navbar = () => {
         </nav>
 
         {/* User Actions */}
-        <div className="navbar-actions flex items-center gap-3">
+        <div className="navbar-actions flex items-center gap-2 sm:gap-3">
+          {isInsideAppropriateDashboard() && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('treeconnect_toggle_sidebar'))}
+              className="mobile-portal-nav-btn"
+              title="Toggle Portal Navigation Drawer"
+              aria-label="Toggle Portal Navigation Drawer"
+            >
+              <Menu size={16} />
+              <span className="mobile-portal-nav-text">{user?.role?.toUpperCase()}</span>
+            </button>
+          )}
+
           {isInsideAppropriateDashboard() && (
             <NotificationBell dropdownAlign="right" />
           )}
@@ -160,6 +173,18 @@ const Navbar = () => {
               <Link to={getDashboardPath(user?.role)} onClick={() => setMobileMenuOpen(false)}>
                 Dashboard ({user?.role})
               </Link>
+              {isInsideAppropriateDashboard() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    window.dispatchEvent(new CustomEvent('treeconnect_toggle_sidebar'));
+                  }}
+                  className="mobile-portal-action-link"
+                >
+                  ☰ Open {user?.role ? user.role.toUpperCase() : 'PORTAL'} Navigation
+                </button>
+              )}
               <button onClick={handleLogout} className="mobile-logout">
                 Sign Out
               </button>

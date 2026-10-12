@@ -52,3 +52,30 @@ export const saveStoredFleet = (list) => {
   }
 };
 
+export const getStoredVehicles = () => {
+  try {
+    const raw = localStorage.getItem('treeconnect_fleet_vehicles');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Error reading vehicles from localStorage:', e);
+  }
+  return [];
+};
+
+export const saveStoredVehicles = (list) => {
+  try {
+    const safeList = Array.isArray(list) ? list : [];
+    localStorage.setItem('treeconnect_fleet_vehicles', JSON.stringify(safeList));
+    window.dispatchEvent(new CustomEvent('treeconnect_vehicles_updated', { detail: safeList }));
+    return safeList;
+  } catch (e) {
+    console.warn('Error saving vehicles to localStorage:', e);
+    return list;
+  }
+};
+
