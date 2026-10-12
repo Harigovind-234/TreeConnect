@@ -4,14 +4,14 @@ from app.config import MONGODB_URL, DATABASE_NAME
 db = None
 
 try:
-    client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=3000, socketTimeoutMS=5000)
+    client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=10000, socketTimeoutMS=15000)
     client.admin.command("ping")
     print("[OK] MongoDB Connected Successfully")
     db = client[DATABASE_NAME]
 except Exception as e:
     print(f"[WARN] Primary MongoDB ({MONGODB_URL}) failed: {e}. Trying localhost fallback...")
     try:
-        client = MongoClient("mongodb://localhost:27017", serverSelectionTimeoutMS=3000, socketTimeoutMS=5000)
+        client = MongoClient("mongodb://localhost:27017", serverSelectionTimeoutMS=5000, socketTimeoutMS=5000)
         client.admin.command("ping")
         print("[OK] Connected to Localhost MongoDB Successfully")
         db = client[DATABASE_NAME]
