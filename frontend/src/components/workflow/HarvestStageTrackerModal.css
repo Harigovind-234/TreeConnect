@@ -681,3 +681,198 @@
 .hst-btn-complete:active {
   transform: translateY(0.5px);
 }
+
+/* ==========================================================
+   ENHANCED STAGE TRACKER CONTROLS & STATUS BADGES
+   ========================================================== */
+
+/* Stage Subtext & Required Pills */
+.hst-field-sub {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-top: -4px;
+  line-height: 1.4;
+}
+
+.hst-required-pill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.hst-optional-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+/* Radio Pill Group (Yes / No) */
+.hst-radio-pill-group {
+  display: inline-flex;
+  gap: 8px;
+  background: #020804;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  width: fit-content;
+}
+
+.hst-radio-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.hst-radio-pill:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.hst-radio-pill.active-yes {
+  background: rgba(16, 185, 129, 0.22);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.hst-radio-pill.active-no {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+.hst-radio-pill:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Error Text */
+.hst-error-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f87171;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+/* Reviewer Comments & Feedback Box */
+.hst-reviewer-comments-box {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  margin-bottom: 12px;
+  animation: hstFadeIn 0.2s ease;
+}
+
+.hst-reviewer-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #f87171;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.hst-reviewer-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #fca5a5;
+  margin: 0;
+}
+
+/* Stage Status Badges */
+.hst-badge-verified {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.45) !important;
+}
+
+.hst-badge-submitted {
+  background: rgba(59, 130, 246, 0.18) !important;
+  color: #60a5fa !important;
+  border-color: rgba(59, 130, 246, 0.45) !important;
+}
+
+.hst-badge-rejected {
+  background: rgba(239, 68, 68, 0.18) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.45) !important;
+}
+
+.hst-badge-in_progress {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+}
+
+.hst-badge-not_started {
+  background: rgba(148, 163, 184, 0.12) !important;
+  color: #94a3b8 !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+/* Notice / Info Banner for Timber Purchase Scenario */
+.hst-info-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
+  font-size: 12px;
+  color: #a7f3d0;
+  margin-bottom: 12px;
+}
+
+.hst-info-notice-icon {
+  color: #34d399;
+  flex-shrink: 0;
+}
+
+/* Reject Confirmation Modal inside tracker */
+.hst-reject-dialog {
+  background: #09170e;
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.hst-reject-dialog-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f87171;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

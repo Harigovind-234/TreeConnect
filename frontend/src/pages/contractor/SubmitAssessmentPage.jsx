@@ -5,6 +5,7 @@ import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import harvestService from '../../services/harvestService';
 import api from '../../services/api';
+import { getStoredFleet, saveStoredFleet } from '../../utils/fleetStorage';
 import './ContractorDashboard.css';
 import {
   Calculator,
@@ -208,7 +209,8 @@ const SubmitAssessmentPage = () => {
   const autoAppliedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [fleetEquipment, setFleetEquipment] = useState([]);
+  const [fleetEquipment, setFleetEquipment] = useState(() => getStoredFleet() || []);
+  const [selectedEquipment, setSelectedEquipment] = useState({}); // { [equipmentId]: { count: number, name: string, category: string, total: number } }
   const [feedbackMessage, setFeedbackMessage] = useState({ type: '', text: '' });
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [activePhotoModal, setActivePhotoModal] = useState(null);
@@ -499,6 +501,36 @@ const extractLandownerValue = (req, vol) => {
                 advance_account_holder: assData.advance_payment_request?.account_holder_name || combinedData?.advance_payment_request?.account_holder_name || prev.advance_account_holder,
                 advance_remarks: assData.advance_payment_request?.remarks || combinedData?.advance_payment_request?.remarks || prev.advance_remarks
               }));
+
+              if (Array.isArray(assData.assigned_fleet_equipment) && assData.assigned_fleet_equipment.length > 0) {
+                const initialSelected = {};
+                assData.assigned_fleet_equipment.forEach(item => {
+                  if (item && item.id) {
+                    initialSelected[item.id] = {
+                      id: item.id,
+                      name: item.name || item.model || 'Equipment',
+                      category: item.category || 'Machinery',
+                      count: Number(item.count || item.quantity_used || 1),
+                      total: Number(item.total_available || item.quantity || 1)
+                    };
+                  }
+                });
+                setSelectedEquipment(initialSelected);
+              } else if (Array.isArray(combinedData.assigned_fleet_equipment) && combinedData.assigned_fleet_equipment.length > 0) {
+                const initialSelected = {};
+                combinedData.assigned_fleet_equipment.forEach(item => {
+                  if (item && item.id) {
+                    initialSelected[item.id] = {
+                      id: item.id,
+                      name: item.name || item.model || 'Equipment',
+                      category: item.category || 'Machinery',
+                      count: Number(item.count || item.quantity_used || 1),
+                      total: Number(item.total_available || item.quantity || 1)
+                    };
+                  }
+                });
+                setSelectedEquipment(initialSelected);
+              }
             } else {
               // Fresh assessment initiation based on site inspection findings
               setExistingAssessmentData(null);
@@ -532,13 +564,20 @@ const extractLandownerValue = (req, vol) => {
     };
 
     const fetchFleet = async () => {
+      // First load cached fleet from localStorage
+      const cached = getStoredFleet();
+      if (Array.isArray(cached) && cached.length > 0) {
+        setFleetEquipment(cached);
+      }
+
       try {
         const res = await api.get('/auth/user-profile');
-        if (res.data?.user?.fleet_equipment) {
+        if (res.data?.user?.fleet_equipment && Array.isArray(res.data.user.fleet_equipment)) {
           setFleetEquipment(res.data.user.fleet_equipment);
+          saveStoredFleet(res.data.user.fleet_equipment);
         }
       } catch (err) {
-        console.error("Failed to fetch fleet in quotation page", err);
+        console.warn("Failed to fetch fleet in quotation page from API, using cached fleet", err);
       }
     };
 
@@ -1172,6 +1211,14 @@ const extractLandownerValue = (req, vol) => {
         // Operational fields
         assigned_workers_count: workersNum,
         workers_assigned: workersNum,
+        assigned_fleet_equipment: Object.values(selectedEquipment).filter(eq => eq && eq.count > 0).map(eq => ({
+          id: eq.id,
+          name: eq.name,
+          category: eq.category,
+          quantity_used: eq.count,
+          count: eq.count,
+          total_available: eq.total
+        })),
         estimated_duration: assessmentForm.estimated_duration || '',
         proposed_start_date: assessmentForm.proposed_start_date || '',
         notes: assessmentForm.notes || '',
@@ -3123,21 +3170,38 @@ const extractLandownerValue = (req, vol) => {
                     </div>
                   )}
 
-                  {/* CONTRACTOR FLEET DISPLAY */}
+                  {/* CONTRACTOR FLEET DISPLAY & SELECTION */}
                   {fleetEquipment && fleetEquipment.length > 0 && (
                     <div className="assessment-verified-section" style={{ marginTop: '24px' }}>
                       <div className="assessment-verified-header" style={{ paddingBottom: '16px' }}>
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                            <Truck size={16} />
+                        <div className="flex items-center justify-between w-full flex-wrap gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                              <Truck size={16} />
+                            </div>
+                            <div>
+                              <span className="assessment-verified-title">
+                                Contractor Fleet &amp; Equipment Allocation
+                              </span>
+                              <span className="assessment-verified-desc">
+                                Select machinery units to deploy for this harvesting contract.
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span className="assessment-verified-title">
-                              Contractor Fleet & Equipment
+
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center gap-1.5">
+                              <CheckCircle2 size={13} className="text-emerald-400" />
+                              {Object.values(selectedEquipment).reduce((sum, item) => sum + (Number(item?.count) || 0), 0)} Units Allocated
                             </span>
-                            <span className="assessment-verified-desc">
-                              Your registered equipment available for this job.
-                            </span>
+                            <Link
+                              to="/contractor/equipment"
+                              className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-semibold text-xs flex items-center gap-1 transition-colors"
+                              title="Manage registered machines and stock"
+                            >
+                              <span>Manage Fleet</span>
+                              <ChevronRight size={12} />
+                            </Link>
                           </div>
                         </div>
                       </div>
@@ -3145,27 +3209,229 @@ const extractLandownerValue = (req, vol) => {
                       <div className="overflow-x-auto p-5 pt-0">
                         <table className="w-full text-left border-collapse text-sm">
                           <thead>
-                            <tr className="border-b border-emerald-500/20 text-slate-400 text-xs uppercase">
-                              <th className="py-2 pr-4 font-semibold">Machinery Model</th>
-                              <th className="py-2 pr-4 font-semibold">Category</th>
-                              <th className="py-2 font-semibold">Status</th>
+                            <tr className="border-b border-emerald-500/20 text-slate-400 text-xs uppercase tracking-wider">
+                              <th className="py-2.5 pr-4 font-semibold">Select</th>
+                              <th className="py-2.5 pr-4 font-semibold">Machinery Model</th>
+                              <th className="py-2.5 pr-4 font-semibold">Category</th>
+                              <th className="py-2.5 pr-4 font-semibold">Current Status</th>
+                              <th className="py-2.5 pr-4 font-semibold text-center">Currently Available</th>
+                              <th className="py-2.5 font-semibold text-center">Units Used for Job</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {fleetEquipment.map((eq, i) => (
-                              <tr key={i} className="border-b border-emerald-500/10 last:border-0 text-white">
-                                <td className="py-3 pr-4 font-medium">{eq.name}</td>
-                                <td className="py-3 pr-4"><span className="px-2 py-1 bg-emerald-900/30 text-emerald-400 text-[10px] uppercase font-bold rounded-full">{eq.category}</span></td>
-                                <td className="py-3">
-                                  <span className={`flex items-center gap-1 text-[11px] uppercase font-bold ${eq.status === 'In Operation' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                    {eq.status === 'In Operation' ? <CheckCircle2 size={12}/> : <Wrench size={12}/>}
-                                    {eq.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
+                            {fleetEquipment.map((eq, i) => {
+                              const eqId = eq.id || `fleet_${i}`;
+                              const totalQty = Math.max(1, parseInt(eq.quantity, 10) || 1);
+                              const normStatus = String(eq.status || 'Available').trim().toLowerCase();
+                              const isMaintenance = normStatus.includes('maintenance') || normStatus.includes('repair');
+                              const isUnavailable = normStatus.includes('unavailable') || normStatus.includes('out of service');
+                              const isOperable = !isMaintenance && !isUnavailable;
+
+                              // Available units in inventory
+                              const availableQty = isOperable ? totalQty : 0;
+                              const selectedData = selectedEquipment[eqId] || null;
+                              const isChecked = Boolean(selectedData && selectedData.count > 0);
+                              const usedCount = selectedData ? Number(selectedData.count || 0) : 0;
+
+                              const handleToggle = (checked) => {
+                                setSelectedEquipment(prev => {
+                                  const next = { ...prev };
+                                  if (checked) {
+                                    next[eqId] = {
+                                      id: eqId,
+                                      name: eq.name || eq.model || 'Equipment',
+                                      category: eq.category || 'Machinery',
+                                      count: 1,
+                                      total: availableQty
+                                    };
+                                  } else {
+                                    delete next[eqId];
+                                  }
+                                  return next;
+                                });
+                              };
+
+                              const handleCountChange = (delta) => {
+                                setSelectedEquipment(prev => {
+                                  const currentCount = prev[eqId] ? Number(prev[eqId].count || 0) : 0;
+                                  const newCount = Math.max(1, Math.min(availableQty, currentCount + delta));
+                                  return {
+                                    ...prev,
+                                    [eqId]: {
+                                      id: eqId,
+                                      name: eq.name || eq.model || 'Equipment',
+                                      category: eq.category || 'Machinery',
+                                      count: newCount,
+                                      total: availableQty
+                                    }
+                                  };
+                                });
+                              };
+
+                              const handleDirectInput = (val) => {
+                                const parsed = parseInt(val, 10);
+                                setSelectedEquipment(prev => {
+                                  if (isNaN(parsed) || parsed <= 0) {
+                                    const next = { ...prev };
+                                    delete next[eqId];
+                                    return next;
+                                  }
+                                  const clamped = Math.min(availableQty, Math.max(1, parsed));
+                                  return {
+                                    ...prev,
+                                    [eqId]: {
+                                      id: eqId,
+                                      name: eq.name || eq.model || 'Equipment',
+                                      category: eq.category || 'Machinery',
+                                      count: clamped,
+                                      total: availableQty
+                                    }
+                                  };
+                                });
+                              };
+
+                              return (
+                                <tr
+                                  key={eqId}
+                                  className={`border-b border-emerald-500/10 last:border-0 text-white transition-colors ${
+                                    isChecked ? 'bg-emerald-950/20' : 'hover:bg-slate-900/30'
+                                  }`}
+                                >
+                                  {/* Checkbox selector */}
+                                  <td className="py-3 pr-4">
+                                    <input
+                                      type="checkbox"
+                                      disabled={!isOperable || availableQty === 0}
+                                      checked={isChecked}
+                                      onChange={(e) => handleToggle(e.target.checked)}
+                                      className="w-4 h-4 rounded bg-[#020804] border-emerald-500/50 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                      title={!isOperable ? 'Machinery currently under maintenance or unavailable' : 'Select to assign to this job'}
+                                    />
+                                  </td>
+
+                                  {/* Machinery Model Name */}
+                                  <td className="py-3 pr-4 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <span className={isChecked ? 'text-emerald-300 font-bold' : 'text-slate-200'}>
+                                        {eq.name || eq.model}
+                                      </span>
+                                      {isChecked && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                                          Selected
+                                        </span>
+                                      )}
+                                    </div>
+                                    {(eq.brand || eq.regNumber) && (
+                                      <span className="text-[11px] text-slate-400 block font-normal">
+                                        {[eq.brand, eq.regNumber].filter(Boolean).join(' • ')}
+                                      </span>
+                                    )}
+                                  </td>
+
+                                  {/* Category */}
+                                  <td className="py-3 pr-4">
+                                    <span className="px-2.5 py-1 bg-emerald-900/30 text-emerald-400 text-[10px] uppercase font-bold rounded-full border border-emerald-500/20">
+                                      {eq.category || 'Machinery'}
+                                    </span>
+                                  </td>
+
+                                  {/* Status */}
+                                  <td className="py-3 pr-4">
+                                    <span className={`inline-flex items-center gap-1.5 text-[11px] uppercase font-bold px-2 py-0.5 rounded-md ${
+                                      isMaintenance
+                                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                        : isUnavailable
+                                        ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                        : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                    }`}>
+                                      {isMaintenance ? <Wrench size={12} /> : isUnavailable ? <AlertTriangle size={12} /> : <CheckCircle2 size={12} />}
+                                      {eq.status || 'Available'}
+                                    </span>
+                                  </td>
+
+                                  {/* Currently Available Quantity */}
+                                  <td className="py-3 pr-4 text-center">
+                                    <div className="inline-flex flex-col items-center">
+                                      <span className={`font-mono text-sm font-bold ${
+                                        availableQty > 0 ? 'text-emerald-400' : 'text-slate-500'
+                                      }`}>
+                                        {availableQty} {availableQty === 1 ? 'Unit' : 'Units'}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400">
+                                        of {totalQty} Total
+                                      </span>
+                                    </div>
+                                  </td>
+
+                                  {/* No of Equipments Used / Assigned */}
+                                  <td className="py-3 text-center">
+                                    {isChecked ? (
+                                      <div className="inline-flex items-center justify-center gap-2 bg-[#020b05] border border-emerald-500/40 rounded-xl px-2 py-1 shadow-sm">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCountChange(-1)}
+                                          disabled={usedCount <= 1}
+                                          className="w-6 h-6 rounded bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 flex items-center justify-center font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                          title="Decrease allocated units"
+                                        >
+                                          -
+                                        </button>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max={availableQty}
+                                          value={usedCount}
+                                          onChange={(e) => handleDirectInput(e.target.value)}
+                                          className="w-10 bg-transparent text-emerald-300 font-mono font-bold text-center text-sm focus:outline-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCountChange(1)}
+                                          disabled={usedCount >= availableQty}
+                                          className="w-6 h-6 rounded bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 flex items-center justify-center font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                          title="Increase allocated units"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        disabled={!isOperable || availableQty === 0}
+                                        onClick={() => handleToggle(true)}
+                                        className="px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-950/30 hover:bg-emerald-900/50 text-emerald-400 border border-emerald-500/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                                      >
+                                        + Assign Unit
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
+                      </div>
+
+                      {/* Summary Banner below fleet selection */}
+                      <div className="px-5 py-3 border-t border-emerald-500/15 bg-[#031208]/60 flex items-center justify-between flex-wrap gap-2 text-xs">
+                        <span className="text-slate-400">
+                          {Object.values(selectedEquipment).filter(e => e && e.count > 0).length === 0 ? (
+                            <span>💡 Select the machinery units you plan to mobilize to show on the official quotation report.</span>
+                          ) : (
+                            <span className="text-emerald-300 font-medium">
+                              ✓ Deployed for this contract:{' '}
+                              <strong>
+                                {Object.values(selectedEquipment)
+                                  .filter(e => e && e.count > 0)
+                                  .map(e => `${e.count}x ${e.name}`)
+                                  .join(', ')}
+                              </strong>
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-slate-400 text-[11px]">
+                          Real-time stock verified against contractor equipment inventory
+                        </span>
                       </div>
                     </div>
                   )}
@@ -4360,6 +4626,17 @@ const extractLandownerValue = (req, vol) => {
                           <span className="cd-final-review-label">Start Date</span>
                           <span className="cd-final-review-val text-white">
                             {formatDateDMY(assessmentForm.proposed_start_date || '2026-10-10')}
+                          </span>
+                        </div>
+
+                        <div className="cd-final-review-item col-span-full">
+                          <span className="cd-final-review-label">Machinery &amp; Fleet Allocated</span>
+                          <span className="cd-final-review-val text-emerald-300">
+                            {(() => {
+                              const activeAllocated = Object.values(selectedEquipment).filter(e => e && e.count > 0);
+                              if (activeAllocated.length === 0) return 'Standard Equipment Package';
+                              return activeAllocated.map(e => `${e.count}x ${e.name} (of ${e.total} available)`).join(', ');
+                            })()}
                           </span>
                         </div>
                       </div>

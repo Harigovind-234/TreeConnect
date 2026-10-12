@@ -1183,6 +1183,46 @@ const HarvestRequestsPage = () => {
                               </div>
                             )}
 
+                            {/* 3.5 ALLOCATED CONTRACTOR FLEET & MACHINERY */}
+                            {(() => {
+                              const assignedFleet = assDoc.assigned_fleet_equipment || req.assigned_fleet_equipment || req.assessment?.assigned_fleet_equipment || [];
+                              if (!Array.isArray(assignedFleet) || assignedFleet.length === 0) return null;
+                              return (
+                                <div className="qtn-breakdown-section border-emerald-500/25 bg-[#04140b]/80">
+                                  <div className="qtn-section-header border-emerald-500/20">
+                                    <div className="qtn-section-title text-emerald-300">
+                                      <Truck size={15} />
+                                      <span>Allocated Machinery &amp; Fleet Equipment</span>
+                                    </div>
+                                    <div className="qtn-section-total text-emerald-400">
+                                      {assignedFleet.reduce((sum, f) => sum + (Number(f.quantity_used || f.count || 1)), 0)} Units Deployed
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                    {assignedFleet.map((eq, fIdx) => (
+                                      <div key={fIdx} className="p-3 rounded-xl bg-[#030d07] border border-emerald-500/25 flex items-center justify-between">
+                                        <div>
+                                          <strong className="text-white text-xs block font-bold">{eq.name || eq.model}</strong>
+                                          <span className="text-[10px] text-emerald-400 uppercase font-semibold">{eq.category || 'Machinery'}</span>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-mono font-bold text-xs">
+                                            {eq.quantity_used || eq.count || 1} Used
+                                          </span>
+                                          {eq.total_available && (
+                                            <span className="text-[10px] text-slate-400 block mt-0.5">
+                                              ({eq.total_available} in fleet)
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
                             {/* 4. SITE REMARKS */}
                             {(assDoc.notes || req.assessment?.notes || assDoc.site_notes || paymentTermsVal || req.notes) && (
                               <div className="qtn-remarks-card">

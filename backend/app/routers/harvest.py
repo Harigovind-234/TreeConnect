@@ -99,9 +99,9 @@ class ContractorAssessmentCreate(BaseModel):
     # Common commercial fields
     payment_terms: Optional[str] = None
     offer_valid_until: Optional[str] = None
-    # Operational fields
     assigned_workers_count: Optional[int] = None
     workers_assigned: Optional[int] = None
+    assigned_fleet_equipment: Optional[List[dict]] = []
     estimated_duration: Optional[str] = ""
     proposed_start_date: Optional[str] = ""
     notes: Optional[str] = ""
@@ -1634,6 +1634,7 @@ def submit_contractor_assessment(
             # Operational manpower & schedule
             "assigned_workers_count": workers_count,
             "workers_assigned": workers_count,
+            "assigned_fleet_equipment": payload.assigned_fleet_equipment or [],
             "estimated_duration": payload.estimated_duration or "",
             "proposed_start_date": payload.proposed_start_date or "",
             "notes": payload.notes or "",
@@ -1759,6 +1760,8 @@ def submit_contractor_assessment(
         if workers_count is not None:
             hr_update["assigned_workers_count"] = workers_count
             hr_update["workers_assigned"] = workers_count
+        if payload.assigned_fleet_equipment is not None:
+            hr_update["assigned_fleet_equipment"] = payload.assigned_fleet_equipment
         if payload.estimated_duration:
             hr_update["estimated_duration"] = payload.estimated_duration
         if payload.proposed_start_date:
@@ -2598,37 +2601,50 @@ def update_harvest_stage(request_id: str, payload: dict = Body(...)):
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "Harvest request not found"})
 
         stage_id = payload.get("stage_id")
-        stage_status = payload.get("status", "COMPLETED")
+        stage_status = payload.get("status", "SUBMITTED")
         notes = payload.get("notes", "")
         media_items = payload.get("media", [])
         trees_logged = payload.get("trees_logged")
         measured_volume = payload.get("measured_volume")
+        reviewer_comments = payload.get("reviewer_comments")
+        stage_data = payload.get("stage_data") or {}
 
         updated_at = datetime.now(timezone.utc).isoformat()
         stages = req_doc.get("harvest_stages") or {}
 
         if stage_id in stages:
             existing_media = stages[stage_id].get("media", [])
-            new_media = existing_media + (media_items or [])
+            # If payload passes full replace_media flag, replace; otherwise append or use supplied media
+            if payload.get("replace_media"):
+                new_media = media_items or []
+            else:
+                new_media = existing_media + (media_items or [])
             stages[stage_id]["status"] = stage_status
             stages[stage_id]["notes"] = notes
             stages[stage_id]["media"] = new_media
             stages[stage_id]["updated_at"] = updated_at
+            if reviewer_comments is not None:
+                stages[stage_id]["reviewer_comments"] = reviewer_comments
+            if stage_data:
+                stages[stage_id]["stage_data"] = {
+                    **(stages[stage_id].get("stage_data") or {}),
+                    **stage_data
+                }
             if trees_logged is not None:
                 stages[stage_id]["trees_logged"] = trees_logged
             if measured_volume is not None:
                 stages[stage_id]["measured_volume"] = measured_volume
 
-        # Auto-advance current stage if completed
+        # Auto-advance current stage if verified or completed
         stage_order = ["stage_1", "stage_2", "stage_3", "stage_4"]
-        current_stage = stage_id
-        if stage_status == "COMPLETED":
+        current_stage = req_doc.get("current_harvest_stage") or stage_id
+        if stage_status in ["COMPLETED", "VERIFIED"]:
             try:
                 curr_idx = stage_order.index(stage_id)
                 if curr_idx < len(stage_order) - 1:
                     next_stage = stage_order[curr_idx + 1]
                     current_stage = next_stage
-                    if stages.get(next_stage, {}).get("status") == "PENDING":
+                    if stages.get(next_stage, {}).get("status") in ["PENDING", "NOT_STARTED"]:
                         stages[next_stage]["status"] = "IN_PROGRESS"
                         stages[next_stage]["updated_at"] = updated_at
             except ValueError:
