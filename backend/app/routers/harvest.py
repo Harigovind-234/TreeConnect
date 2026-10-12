@@ -461,7 +461,9 @@ def get_harvest_requests(
                     p_query = {"$or": [{"_id": p_id}, {"id": p_id}]}
                 p_doc = db.properties.find_one(p_query)
                 if p_doc:
-                    req_data["property_details"] = serialize_doc(p_doc)
+                    p_info = serialize_doc(p_doc)
+                    p_info["photos"] = []
+                    req_data["property_details"] = p_info
                 else:
                     req_data["property_details"] = {
                         "propertyName": req_data.get("propertyName", "Registered Property"),
