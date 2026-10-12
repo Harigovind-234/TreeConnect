@@ -17,14 +17,7 @@
   background-color: #0a0f0d !important;
 }
 
-.admin-dashboard-container .sidebar-container {
-  position: sticky !important;
-  top: 64px !important;
-  height: calc(100vh - 64px) !important;
-  background: #0a0f0d !important;
-  border-right: 1px solid rgba(16, 185, 129, 0.15) !important;
-  z-index: 40;
-}
+
 
 .admin-dashboard-workspace {
   flex: 1;

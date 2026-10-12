@@ -23,6 +23,18 @@ export const harvestService = {
     }
   },
 
+  // Get contractor harvest requests
+  getContractorHarvestRequests: async (params = {}) => {
+    try {
+      const queryParams = typeof params === 'object' ? { all_records: true, ...params } : { all_records: true };
+      const response = await api.get('/harvest-requests', { params: queryParams });
+      return response.data;
+    } catch (error) {
+      console.error('Error in harvestService.getContractorHarvestRequests:', error);
+      throw error.response?.data || error;
+    }
+  },
+
   // Get single harvest request by ID
   getHarvestRequestById: async (id) => {
     try {

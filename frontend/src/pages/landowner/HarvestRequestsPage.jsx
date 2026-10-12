@@ -150,10 +150,12 @@ const HarvestRequestsPage = () => {
     }));
   };
 
-  // Auto-expand and scroll to specific harvest request if navigated via query param
+  // Auto-expand, scroll to, or open stages modal for specific harvest request if navigated via query param
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const targetId = params.get('requestId');
+    const shouldOpenStages = params.get('openStages') === 'true';
+
     if (targetId) {
       const match = harvestRequests.find(r => String(r.id || r._id) === String(targetId));
       const targetKey = match ? (match.id || match._id) : targetId;
@@ -161,6 +163,10 @@ const HarvestRequestsPage = () => {
         ...prev,
         [targetKey]: true
       }));
+
+      if (match && shouldOpenStages) {
+        setSelectedStageViewerModal(match);
+      }
 
       // Scroll smoothly to target card after render
       const timer = setTimeout(() => {
@@ -585,19 +591,30 @@ const HarvestRequestsPage = () => {
                   <Axe size={13} /> Registered Estate Harvesting Requests
                 </div>
                 <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                  Harvest Requests &amp; Contractor Assessments
+                  Harvest Requests &amp; Field Assessments
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed max-w-2xl">
-                  Track submitted harvest requests, assign platform-verified contractors, and review contractor assessments &amp; quotations.
+                  Track submitted harvest requests, assign platform-verified contractors, coordinate site visits, and review commercial assessments &amp; quotations.
                 </p>
               </div>
 
-              <button
-                onClick={() => navigate('/landowner/request-harvest')}
-                className="ld-btn-action"
-              >
-                <Plus size={16} /> Submit New Harvest Request
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => navigate('/landowner/harvest-operations')}
+                  className="px-4 py-2.5 rounded-xl bg-[#06140b] hover:bg-[#0a1e12] border border-emerald-500/30 text-emerald-300 font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                >
+                  <Truck size={16} className="text-emerald-400" />
+                  <span>Harvest Operations</span>
+                </button>
+
+                <button
+                  onClick={() => navigate('/landowner/request-harvest')}
+                  className="ld-btn-action"
+                >
+                  <Plus size={16} /> Submit New Harvest Request
+                </button>
+              </div>
             </div>
 
             {/* ACTION ALERT MESSAGE */}
@@ -609,28 +626,35 @@ const HarvestRequestsPage = () => {
             )}
 
             {/* REQUEST LIST */}
-            {harvestRequests.length === 0 ? (
-              <div className="ld-card text-center py-16 flex flex-col items-center justify-center gap-4">
-                <Axe size={48} className="text-emerald-500/30 mx-auto" />
-                <h3 className="font-bold text-white text-lg">No Active Harvest Requests Found</h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  You haven't submitted any harvesting requests for your registered properties yet.
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={() => navigate('/landowner/request-harvest')}
-                    className="ld-btn-action"
-                  >
-                    <Plus size={16} /> Submit Harvest Request
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-6">
-                {harvestRequests.map((req) => {
-                  const reqId = req.id || req._id || 'unknown';
-                  const assessment = activeAssessmentMap[reqId];
-                  const isLoadingAssessment = loadingAssessments[reqId];
+            {(() => {
+              const displayedRequests = harvestRequests;
+
+              if (harvestRequests.length === 0) {
+                return (
+                  <div className="ld-card text-center py-16 flex flex-col items-center justify-center gap-4">
+                    <Axe size={48} className="text-emerald-500/30 mx-auto" />
+                    <h3 className="font-bold text-white text-lg">No Active Harvest Requests Found</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      You haven't submitted any harvesting requests for your registered properties yet.
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => navigate('/landowner/request-harvest')}
+                        className="ld-btn-action"
+                      >
+                        <Plus size={16} /> Submit Harvest Request
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="flex flex-col gap-6">
+                  {displayedRequests.map((req) => {
+                    const reqId = req.id || req._id || 'unknown';
+                    const assessment = activeAssessmentMap[reqId];
+                    const isLoadingAssessment = loadingAssessments[reqId];
 
                   const isPendingContractor = !req.assigned_contractor_id && !req.assigned_contractor_email;
                   const isAssigned = Boolean(req.assigned_contractor_id || req.assigned_contractor_email);
@@ -639,7 +663,9 @@ const HarvestRequestsPage = () => {
                   const isRevisionRequested = req.status === 'REVISION_REQUESTED' || assessment?.status === 'REVISION_REQUESTED';
                   const isAccepted = isOperationReady;
 
-                  const isExpanded = expandedRequests[reqId] !== undefined ? expandedRequests[reqId] : !isOperationReady;
+                  const isExpanded = expandedRequests[reqId] !== undefined
+                    ? expandedRequests[reqId]
+                    : !isOperationReady;
 
                   const isUnderReview = (req.status === 'ASSESSMENT_SUBMITTED' || assessment?.status === 'SUBMITTED') && req.status !== 'OPERATION_READY' && req.status !== 'IN_PROGRESS' && req.status !== 'COMPLETED';
                   const isAgreementReady = !isUnderReview && Boolean(
@@ -796,6 +822,44 @@ const HarvestRequestsPage = () => {
 
                       {isExpanded && (
                         <>
+                          {/* HARVEST OPERATION STATUS BANNER (LINKING TO DEDICATED OPERATIONS PAGE) */}
+                          {isOperationReady && (
+                            <div className="mb-6 rounded-2xl bg-gradient-to-r from-[#07190e] via-[#0b2414] to-[#05140b] border border-emerald-500/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+                              <div className="flex items-center gap-3.5">
+                                <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+                                  <Truck size={24} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wider flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                      Harvest Operation Active
+                                    </span>
+                                    <span className="text-xs font-mono text-slate-300">
+                                      Job #{String(reqId).substring(0, 8).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <h4 className="text-base font-extrabold text-white mt-1">
+                                    Operational Execution Underway with {req.assigned_contractor_name || 'Assigned Contractor'}
+                                  </h4>
+                                  <p className="text-xs text-slate-300 mt-0.5">
+                                    Live field logistics, tree felling, 4-stage milestones, and high-resolution photo evidence are managed in Harvest Operations.
+                                  </p>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/landowner/harvest-operations?requestId=${reqId}&openStages=true`)}
+                                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all cursor-pointer shrink-0 self-start md:self-auto"
+                              >
+                                <Camera size={16} />
+                                <span>Track Harvest Operations</span>
+                                <ChevronRight size={15} />
+                              </button>
+                            </div>
+                          )}
+
                           {/* FORMAL CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL (SHOWN BEFORE & AFTER SITE VISIT) */}
                       {(isAssessmentSubmitted || isAccepted || isRevisionRequested || activeAssessmentMap[reqId] || req.assessment || req.total_quote || req.contractor_purchase_offer) && (() => {
                         const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
@@ -2431,7 +2495,8 @@ const HarvestRequestsPage = () => {
                   );
                 })}
               </div>
-            )}
+            );
+          })()}
 
             {/* MODAL FOR CONTRACTOR SELECTION */}
             {selectedRequestForContractor && (

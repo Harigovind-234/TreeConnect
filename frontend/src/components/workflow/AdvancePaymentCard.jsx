@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CreditCard,
   Building2,
@@ -18,7 +19,10 @@ import {
   ShieldCheck,
   ChevronRight,
   Info,
-  Camera
+  Camera,
+  Truck,
+  Sparkles,
+  Award
 } from 'lucide-react';
 import { formatINR } from '../../utils/timberCalculations';
 import './AdvancePaymentCard.css';
@@ -90,6 +94,7 @@ const AdvancePaymentCard = ({
   onCompleteHarvest,
   onOpenStages
 }) => {
+  const navigate = useNavigate();
   const [copiedField, setCopiedField] = useState(null);
 
   const reqId = request?.id || request?._id;
@@ -98,9 +103,14 @@ const AdvancePaymentCard = ({
   const paymentStatus = request?.advance_payment_status || request?.assessment?.advance_payment_status || (advReq ? 'ADVANCE_REQUESTED' : 'NOT_REQUESTED');
   const isVerified = Boolean(request?.is_advance_verified || paymentStatus === 'VERIFIED');
 
-  const isOperationReady = request?.status === 'OPERATION_READY' || request?.status === 'ACCEPTED' || Boolean(request?.digital_agreement);
-  const isInProgress = request?.status === 'IN_PROGRESS';
-  const isCompleted = request?.status === 'COMPLETED';
+  const stagesData = request?.harvest_stages || {};
+  const verifiedCount = Object.values(stagesData).filter(s => {
+    const st = String(s?.status || '').toUpperCase();
+    return st === 'VERIFIED' || st === 'COMPLETED';
+  }).length;
+  const isCompleted = request?.status === 'COMPLETED' || verifiedCount === 4;
+  const isInProgress = !isCompleted && (request?.status === 'IN_PROGRESS' || verifiedCount > 0);
+  const isOperationReady = !isCompleted && !isInProgress && (request?.status === 'OPERATION_READY' || request?.status === 'ACCEPTED' || Boolean(request?.digital_agreement));
 
   const acceptedQuotation = Number(
     advReq?.accepted_quotation ||
@@ -649,11 +659,51 @@ const AdvancePaymentCard = ({
             {isContractor && (
               <button
                 type="button"
-                onClick={onCompleteHarvest}
-                className="cd-btn-inspect-primary bg-blue-600 hover:bg-blue-500 text-white shrink-0 cursor-pointer shadow-md text-xs font-bold px-3 py-1.5 rounded-xl"
+                onClick={() => navigate('/contractor/harvest-operations')}
+                className="cd-btn-inspect-primary bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 cursor-pointer shadow-md text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-400/30"
               >
-                <FileCheck size={14} />
-                <span>Log Completion &amp; Yield</span>
+                <Truck size={14} />
+                <span>Harvest Operations</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* HARVEST OPERATION COMPLETED STATUS */}
+      {isCompleted && (
+        <div className="apc-alert-box apc-alert-verified bg-emerald-950/70 border border-emerald-400/70 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 text-xs text-emerald-200 font-bold">
+            <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
+            <div>
+              <span className="block text-white font-extrabold text-sm flex items-center gap-1.5">
+                <Sparkles size={14} className="text-emerald-400" />
+                Harvesting Operation Successfully Completed!
+              </span>
+              <span className="text-[11px] text-emerald-300 font-medium">
+                All 4 milestones verified &amp; certified by landowner. Tree felling, delimbing, bucking &amp; transit scaling finalized.
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {onOpenStages && (
+              <button
+                type="button"
+                onClick={onOpenStages}
+                className="cd-btn-inspect-primary bg-emerald-700/80 hover:bg-emerald-600 text-white shrink-0 cursor-pointer shadow-md flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border border-emerald-400/30"
+              >
+                <Camera size={14} />
+                <span>View Certified Milestones</span>
+              </button>
+            )}
+            {isContractor && (
+              <button
+                type="button"
+                onClick={() => navigate('/contractor/harvest-operations')}
+                className="cd-btn-inspect-primary bg-emerald-600 hover:bg-emerald-500 text-white shrink-0 cursor-pointer shadow-md text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-400/30"
+              >
+                <Truck size={14} />
+                <span>Harvest Operations</span>
               </button>
             )}
           </div>

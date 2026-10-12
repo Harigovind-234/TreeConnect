@@ -86,6 +86,7 @@ const Sidebar = () => {
       group: 'OPERATIONS',
       items: [
         { path: '/landowner/harvest-requests', label: 'Harvest Requests', icon: Axe },
+        { path: '/landowner/harvest-operations', label: 'Harvest Operations', icon: Truck },
         { path: '/landowner/marketplace', label: 'Timber Marketplace', icon: ShoppingBag },
       ]
     },
@@ -144,6 +145,7 @@ const Sidebar = () => {
     contractor: [
       { path: '/contractor/dashboard', label: 'Contractor Hub', icon: LayoutDashboard },
       { path: '/contractor/assigned-jobs', label: 'Assigned Jobs', icon: Axe },
+      { path: '/contractor/harvest-operations', label: 'Harvest Operations', icon: Truck },
       { path: '/contractor/equipment', label: 'Fleet & Equipment', icon: Truck },
       { path: '/contractor/payments', label: 'Payment Details', icon: CreditCard },
     ],

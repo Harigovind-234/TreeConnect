@@ -768,7 +768,6 @@ const AssignedHarvestJobsPage = () => {
 
   const handleStartHarvest = async (req) => {
     const reqId = req.id || req._id;
-    if (!confirm('Are you sure you want to start harvesting operations for this job?')) return;
     try {
       setActionLoading(true);
       await harvestService.startHarvest(reqId);
@@ -935,32 +934,70 @@ const AssignedHarvestJobsPage = () => {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
             localRequests = parsed.filter(r => !isFakeOrMockRequest(r));
-            // Sync fresher backend records into localRequests
-            if (backendRequests.length > 0) {
-              const bMap = new Map();
-              backendRequests.forEach(b => {
-                const bId = String(b.id || b._id);
-                if (bId) bMap.set(bId, b);
-              });
-              localRequests = localRequests.map(loc => {
-                const locId = String(loc.id || loc._id);
-                return bMap.has(locId) ? { ...loc, ...bMap.get(locId) } : loc;
-              });
-            }
-            // Keep localStorage clean from any stale fake data
-            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(localRequests));
           }
         }
       } catch (e) { }
 
+      const getCanonId = (r) => {
+        const raw = String(r?.id || r?._id || '').trim().toLowerCase();
+        return raw.length >= 8 ? raw.substring(0, 8) : raw;
+      };
+
       const allMap = new Map();
-      [...backendRequests, ...localRequests].forEach(r => {
-        const rId = r?.id || r?._id;
-        if (rId && !allMap.has(rId) && !isFakeOrMockRequest(r)) {
-          allMap.set(rId, r);
+
+      // Put backendRequests first (MongoDB ground truth)
+      backendRequests.forEach(b => {
+        const cKey = getCanonId(b);
+        if (cKey && !isFakeOrMockRequest(b)) {
+          allMap.set(cKey, b);
         }
       });
+
+      // Merge localRequests
+      localRequests.forEach(loc => {
+        const cKey = getCanonId(loc);
+        if (!cKey || isFakeOrMockRequest(loc)) return;
+        const existing = allMap.get(cKey);
+        if (!existing) {
+          allMap.set(cKey, loc);
+        } else {
+          // Merge harvest stages
+          const exStages = existing.harvest_stages || {};
+          const locStages = loc.harvest_stages || {};
+          const mergedStages = { ...locStages, ...exStages };
+
+          ['stage_1', 'stage_2', 'stage_3', 'stage_4'].forEach(sKey => {
+            const exS = exStages[sKey];
+            const locS = locStages[sKey];
+            if (exS || locS) {
+              const status = (exS?.status === 'VERIFIED' || locS?.status === 'VERIFIED')
+                ? 'VERIFIED'
+                : (exS?.status === 'SUBMITTED' || locS?.status === 'SUBMITTED')
+                  ? 'SUBMITTED'
+                  : (exS?.status || locS?.status);
+              mergedStages[sKey] = {
+                ...(locS || {}),
+                ...(exS || {}),
+                status
+              };
+            }
+          });
+
+          const vCount = Object.values(mergedStages).filter(s => String(s?.status || '').toUpperCase() === 'VERIFIED').length;
+          allMap.set(cKey, {
+            ...loc,
+            ...existing,
+            status: vCount === 4 ? 'COMPLETED' : (existing.status || loc.status),
+            harvest_stages: mergedStages
+          });
+        }
+      });
+
       const combinedRequests = Array.from(allMap.values());
+      // Keep localStorage in sync with clean combined requests
+      try {
+        localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(combinedRequests));
+      } catch (e) {}
 
       let assigned = combinedRequests.filter(r => {
         if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
@@ -1000,7 +1037,7 @@ const AssignedHarvestJobsPage = () => {
         const activeAssigned = combinedRequests.filter(r => {
           if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
           if (isFakeOrMockRequest(r)) return false;
-          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
+          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS' || r.status === 'COMPLETED';
           if (!statusMatch) return false;
 
           const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();

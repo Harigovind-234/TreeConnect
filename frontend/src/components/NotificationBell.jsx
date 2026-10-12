@@ -10,7 +10,9 @@ import {
   X,
   Clock,
   Truck,
-  ArrowRight
+  ArrowRight,
+  Camera,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import harvestService from '../services/harvestService';
@@ -252,6 +254,50 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
             type: 'progress'
           });
         }
+
+        // 5. Stage milestone completions & contractor evidence submissions
+        const stages = req.harvest_stages || {};
+        const stageConfigs = [
+          { key: 'stage_1', num: 1, name: 'Mobilization & Safety' },
+          { key: 'stage_2', num: 2, name: 'Felling Operations' },
+          { key: 'stage_3', num: 3, name: 'De-branching & Bucking' },
+          { key: 'stage_4', num: 4, name: 'Scaling & Transit Prep' },
+        ];
+
+        stageConfigs.forEach(({ key, num, name }) => {
+          const st = stages[key];
+          if (st) {
+            const rawStatus = String(st.status || '').toUpperCase().trim();
+            const isCompleted = rawStatus === 'VERIFIED' || rawStatus === 'COMPLETED';
+            const isSubmitted = rawStatus === 'SUBMITTED' || rawStatus === 'SUBMITTED_FOR_VERIFICATION';
+            const hasMedia = Array.isArray(st.media) && st.media.length > 0;
+            const updatedTime = st.verified_at || st.completed_at || st.submitted_at || st.updated_at || req.updated_at || req.updatedAt;
+
+            if (isCompleted) {
+              list.push({
+                id: `stage_comp_${key}_${reqId}`,
+                reqId,
+                stageNum: num,
+                title: `Stage ${num} Completed: ${name}`,
+                text: `${contractorName} completed Stage ${num} (${name}) with verified logs for ${propName}.`,
+                time: getRelativeTime(updatedTime),
+                timestamp: new Date(updatedTime || 0).getTime() + 1000,
+                type: 'stage_complete'
+              });
+            } else if (isSubmitted || hasMedia) {
+              list.push({
+                id: `stage_sub_${key}_${reqId}`,
+                reqId,
+                stageNum: num,
+                title: `Stage ${num} Evidence Uploaded: ${name}`,
+                text: `${contractorName} uploaded work photos & evidence for Stage ${num} (${name}) at ${propName}.`,
+                time: getRelativeTime(updatedTime),
+                timestamp: new Date(updatedTime || 0).getTime(),
+                type: 'stage_evidence'
+              });
+            }
+          }
+        });
       } else {
         // Contractor notifications
         // 1. Advance payment verified (live real payment)
@@ -326,10 +372,14 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
     return list.sort((a, b) => b.timestamp - a.timestamp);
   }, [assignedRequests, user?.role]);
 
-  const handleNotificationClick = () => {
+  const handleNotificationClick = (notif) => {
     setIsOpen(false);
     if ((user?.role || '').toLowerCase() === 'landowner') {
-      navigate('/landowner/harvest-requests');
+      if (notif?.type === 'stage_complete' || notif?.type === 'stage_evidence' || notif?.stageNum) {
+        navigate(`/landowner/harvest-operations?requestId=${notif.reqId}&openStages=true`);
+      } else {
+        navigate(`/landowner/harvest-requests?requestId=${notif?.reqId || ''}`);
+      }
     } else {
       navigate('/contractor/assigned-jobs');
     }
@@ -337,6 +387,10 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
 
   const getNotificationIcon = (type) => {
     switch (type) {
+      case 'stage_complete':
+        return <CheckCircle2 size={15} />;
+      case 'stage_evidence':
+        return <Camera size={15} />;
       case 'payment':
         return <DollarSign size={15} />;
       case 'agreement':
@@ -356,6 +410,10 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
 
   const getNotificationIconClass = (type) => {
     switch (type) {
+      case 'stage_complete':
+        return 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300';
+      case 'stage_evidence':
+        return 'bg-teal-500/20 border-teal-500/40 text-teal-300';
       case 'payment':
         return 'bg-amber-500/15 border-amber-500/35 text-amber-400';
       case 'agreement':
@@ -367,7 +425,7 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
       case 'reschedule':
         return 'bg-orange-500/15 border-orange-500/35 text-orange-400';
       case 'progress':
-        return 'bg-emerald-500/15 border-emerald-500/35 text-emerald-400';
+        return 'bg-blue-500/15 border-blue-500/35 text-blue-400';
       default:
         return 'bg-emerald-500/15 border-emerald-500/35 text-emerald-400';
     }
@@ -456,7 +514,7 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
               liveNotifications.map(n => (
                 <div
                   key={n.id}
-                  onClick={handleNotificationClick}
+                  onClick={() => handleNotificationClick(n)}
                   className="p-3 rounded-xl bg-gradient-to-br from-[#081a10] to-[#040e08] hover:from-[#0c2417] hover:to-[#07160d] border border-emerald-500/25 hover:border-emerald-500/50 transition-all cursor-pointer flex gap-3 group shadow-sm"
                 >
                   {/* Distinct Category Icon Badge */}

@@ -35,6 +35,7 @@ import CreateTimberListing from './pages/landowner/CreateTimberListing';
 import PropertiesPage from './pages/landowner/PropertiesPage';
 import TreeInventoryPage from './pages/landowner/TreeInventoryPage';
 import HarvestRequestsPage from './pages/landowner/HarvestRequestsPage';
+import HarvestOperationsPage from './pages/landowner/HarvestOperationsPage';
 import TimberMarketplacePage from './pages/landowner/TimberMarketplacePage';
 import FleetEquipmentPage from './pages/contractor/FleetEquipmentPage';
 import ProfilePage from './pages/ProfilePage';
@@ -169,6 +170,14 @@ function App() {
               }
             />
             <Route
+              path="/landowner/harvest-operations"
+              element={
+                <ProtectedRoute allowedRoles={['landowner']}>
+                  <HarvestOperationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/landowner/marketplace"
               element={
                 <ProtectedRoute allowedRoles={['landowner']}>
@@ -222,6 +231,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['contractor']}>
                   <AssignedHarvestJobsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/harvest-operations"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <HarvestOperationsPage />
                 </ProtectedRoute>
               }
             />

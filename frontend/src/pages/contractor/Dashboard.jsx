@@ -224,14 +224,64 @@ const ContractorDashboard = () => {
         }
       } catch (e) { }
 
+      const getCanonId = (r) => {
+        const raw = String(r?.id || r?._id || '').trim().toLowerCase();
+        return raw.length >= 8 ? raw.substring(0, 8) : raw;
+      };
+
       const allMap = new Map();
-      [...backendRequests, ...localRequests].forEach(r => {
-        const rId = r?.id || r?._id;
-        if (rId && !allMap.has(rId) && !isFakeOrMockRequest(r)) {
-          allMap.set(rId, r);
+
+      // Put backendRequests first (MongoDB ground truth)
+      backendRequests.forEach(b => {
+        const cKey = getCanonId(b);
+        if (cKey && !isFakeOrMockRequest(b)) {
+          allMap.set(cKey, b);
         }
       });
+
+      // Merge localRequests
+      localRequests.forEach(loc => {
+        const cKey = getCanonId(loc);
+        if (!cKey || isFakeOrMockRequest(loc)) return;
+        const existing = allMap.get(cKey);
+        if (!existing) {
+          allMap.set(cKey, loc);
+        } else {
+          const exStages = existing.harvest_stages || {};
+          const locStages = loc.harvest_stages || {};
+          const mergedStages = { ...locStages, ...exStages };
+
+          ['stage_1', 'stage_2', 'stage_3', 'stage_4'].forEach(sKey => {
+            const exS = exStages[sKey];
+            const locS = locStages[sKey];
+            if (exS || locS) {
+              const status = (exS?.status === 'VERIFIED' || locS?.status === 'VERIFIED')
+                ? 'VERIFIED'
+                : (exS?.status === 'SUBMITTED' || locS?.status === 'SUBMITTED')
+                  ? 'SUBMITTED'
+                  : (exS?.status || locS?.status);
+              mergedStages[sKey] = {
+                ...(locS || {}),
+                ...(exS || {}),
+                status
+              };
+            }
+          });
+
+          const vCount = Object.values(mergedStages).filter(s => String(s?.status || '').toUpperCase() === 'VERIFIED').length;
+          allMap.set(cKey, {
+            ...loc,
+            ...existing,
+            status: vCount === 4 ? 'COMPLETED' : (existing.status || loc.status),
+            harvest_stages: mergedStages
+          });
+        }
+      });
+
       const combinedRequests = Array.from(allMap.values());
+      try {
+        localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(combinedRequests));
+      } catch (e) {}
 
       let assigned = combinedRequests.filter(r => {
         if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
@@ -271,7 +321,7 @@ const ContractorDashboard = () => {
         const activeAssigned = combinedRequests.filter(r => {
           if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
           if (isFakeOrMockRequest(r)) return false;
-          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS';
+          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS' || r.status === 'COMPLETED';
           if (!statusMatch) return false;
 
           const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
@@ -554,9 +604,11 @@ const ContractorDashboard = () => {
               ) : (
                 <div className="flex flex-col gap-6 pt-2">
                   {assignedRequests.map((req) => {
-                    const reqId = req.id || req._id || 'job_demo';
+                    const verifiedCount = Object.values(req.harvest_stages || {}).filter(s => String(s?.status || '').toUpperCase() === 'VERIFIED').length;
+                    const isCompleted = req.status === 'COMPLETED' || verifiedCount === 4;
+                    const isInProgress = !isCompleted && (req.status === 'IN_PROGRESS' || verifiedCount > 0);
                     const isSubmitted = req.status === 'ASSESSMENT_SUBMITTED';
-                    const isAccepted = req.status === 'OPERATION_READY' || req.status === 'ACCEPTED';
+                    const isAccepted = !isCompleted && !isInProgress && (req.status === 'OPERATION_READY' || req.status === 'ACCEPTED');
                     const isRevisionRequested = req.status === 'REVISION_REQUESTED';
 
                     // Fair Deal counter-proposal details
@@ -681,16 +733,20 @@ const ContractorDashboard = () => {
                           {/* Right: Status Pill & Action Buttons */}
                           <div className="flex items-center flex-wrap gap-2.5 shrink-0 self-start lg:self-center">
                             <span className={`cd-status-pill text-xs py-1.5 px-3.5 ${
-                              isAccepted
-                                ? 'cd-status-accepted'
-                                : isFairDealActive
-                                  ? 'cd-status-revision'
-                                  : isSubmitted
-                                    ? 'cd-status-submitted'
-                                    : 'cd-status-pending'
+                              isCompleted
+                                ? 'cd-status-accepted !bg-emerald-950 !border-emerald-400 !text-emerald-300'
+                                : isInProgress
+                                  ? '!bg-blue-950/90 !border-blue-400/80 !text-blue-300'
+                                  : isAccepted
+                                    ? 'cd-status-accepted'
+                                    : isFairDealActive
+                                      ? 'cd-status-revision'
+                                      : isSubmitted
+                                        ? 'cd-status-submitted'
+                                        : 'cd-status-pending'
                             }`}>
-                              {isFairDealActive ? <Handshake size={13} className="text-amber-400 shrink-0" /> : isSubmitted ? <Clock size={12} /> : isAccepted ? <CheckCircle2 size={12} /> : <Clock size={12} />}
-                              {isAccepted ? 'Authorized' : isFairDealActive ? 'Fair Deal Revision Requested' : isSubmitted ? 'Quote Submitted' : 'Pending Assessment'}
+                              {isCompleted ? <CheckCircle2 size={13} className="text-emerald-400 shrink-0" /> : isInProgress ? <Clock size={12} className="text-blue-400" /> : isFairDealActive ? <Handshake size={13} className="text-amber-400 shrink-0" /> : isSubmitted ? <Clock size={12} /> : isAccepted ? <CheckCircle2 size={12} /> : <Clock size={12} />}
+                              {isCompleted ? '✓ Harvest Completed' : isInProgress ? `Harvest In Progress (${verifiedCount}/4)` : isAccepted ? 'Authorized' : isFairDealActive ? 'Fair Deal Revision Requested' : isSubmitted ? 'Quote Submitted' : 'Pending Assessment'}
                             </span>
 
                             {/* Button to show entire details about that harvest request */}

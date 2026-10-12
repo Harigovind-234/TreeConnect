@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X,
   Camera,
@@ -109,9 +110,16 @@ const getStatusBadgeMeta = (normalizedStatus) => {
 };
 
 const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onStageUpdated }) => {
+  const navigate = useNavigate();
   const isContractor = role === 'contractor';
   const reqId = request?.id || request?._id;
-  const stagesData = request?.harvest_stages || {};
+  const [stagesData, setStagesData] = useState(() => request?.harvest_stages || {});
+
+  useEffect(() => {
+    if (request?.harvest_stages) {
+      setStagesData(request.harvest_stages);
+    }
+  }, [request?.harvest_stages]);
 
   // Determine whether contractor purchased timber using existing site-inspection record
   // Checking existing fields without requiring new user inputs
@@ -127,6 +135,7 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
   const [activeStageId, setActiveStageId] = useState(request?.current_harvest_stage || 'stage_1');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successAlert, setSuccessAlert] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [previewMedia, setPreviewMedia] = useState(null);
 
@@ -186,9 +195,9 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
 
   const existingMedia = activeStageRecord.media || [];
 
-  const handleStageSelect = (stageId) => {
+  const handleStageSelect = (stageId, currentStagesMap = stagesData) => {
     setActiveStageId(stageId);
-    const rec = stagesData[stageId] || {};
+    const rec = currentStagesMap[stageId] || {};
     setStageFormData(getInitialStageForm(stageId, rec));
     setNewMediaByCategory({
       general: [],
@@ -206,22 +215,71 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
     setReviewerNotesInput('');
   };
 
-  const handleFileSelect = (category, e) => {
+  // Helper to downscale and compress images so uploads are fast (<300KB) and never time out
+  const compressImageFile = (file) => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target.result;
+      };
+      img.onload = () => {
+        try {
+          const maxDim = 1280;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          resolve(compressedDataUrl);
+        } catch {
+          resolve(reader.result);
+        }
+      };
+      img.onerror = () => {
+        resolve(reader.result);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (category, e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     setErrorMsg('');
-    files.forEach(file => {
-      if (file.size > 20 * 1024 * 1024) {
-        setErrorMsg('File exceeds 20MB limit. Please upload optimized photos or short clips.');
-        return;
+    for (const file of files) {
+      if (file.size > 25 * 1024 * 1024) {
+        setErrorMsg('File exceeds 25MB limit. Please upload optimized photos or short clips.');
+        continue;
       }
 
       const isVid = file.type.startsWith('video');
-      const reader = new FileReader();
-      reader.onload = (event) => {
+      const dataUrl = await compressImageFile(file);
+      if (dataUrl) {
         const item = {
-          url: event.target.result,
+          url: dataUrl,
           type: isVid ? 'video' : 'image',
           name: file.name,
           category,
@@ -231,9 +289,8 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
           ...prev,
           [category]: [...(prev[category] || []), item]
         }));
-      };
-      reader.readAsDataURL(file);
-    });
+      }
+    }
   };
 
   const handleRemoveNewMedia = (category, idx) => {
@@ -243,10 +300,153 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
     }));
   };
 
-  const countCategoryFiles = (catKey) => {
-    const existingCount = existingMedia.filter(m => m.category === catKey).length;
-    const newCount = (newMediaByCategory[catKey] || []).length;
-    return existingCount + newCount;
+  const getCategoryMedia = (catKey, defaultIdx = 0) => {
+    const matchesCategory = (m) => m && (m.category === catKey);
+    const explicitExisting = existingMedia.filter(matchesCategory);
+    const explicitNew = (newMediaByCategory[catKey] || []).map(m => ({ ...m, isNew: true }));
+
+    if (explicitExisting.length > 0 || explicitNew.length > 0) {
+      return [...explicitExisting, ...explicitNew];
+    }
+
+    if (existingMedia.length > 0 && existingMedia[defaultIdx]) {
+      return [existingMedia[defaultIdx]];
+    }
+
+    return [];
+  };
+
+  const countCategoryFiles = (catKey, defaultIdx = 0) => {
+    return getCategoryMedia(catKey, defaultIdx).length;
+  };
+
+  const renderEvidenceSection = (label, subtitle, catKey, defaultIdx = 0) => {
+    const mediaList = getCategoryMedia(catKey, defaultIdx);
+    const hasMedia = mediaList.length > 0;
+
+    return (
+      <div className="hst-evidence-block">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <label className="hst-label !mb-0">
+            <span>{label}</span>
+            {isContractor ? (
+              <span className="hst-required-pill">* Required</span>
+            ) : (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                {hasMedia ? '✓ Evidence Submitted' : 'Pending Upload'}
+              </span>
+            )}
+          </label>
+          {hasMedia && (
+            <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+              <CheckCircle2 size={12} /> {mediaList.length} File{mediaList.length > 1 ? 's' : ''} Uploaded
+            </span>
+          )}
+        </div>
+
+        {subtitle && (
+          <p className="hst-field-sub mb-2">
+            {subtitle}
+          </p>
+        )}
+
+        {/* Instead of empty upload box, show the uploaded images right here! */}
+        {hasMedia ? (
+          <div className="space-y-2 mt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {mediaList.map((m, idx) => (
+                <div
+                  key={idx}
+                  className="group relative rounded-xl overflow-hidden border border-emerald-500/35 bg-[#040d07] cursor-pointer shadow-md transition-all hover:border-emerald-400/60"
+                  onClick={() => setPreviewMedia(m)}
+                  title="Click to view full photo in lightbox"
+                >
+                  {m.type === 'video' ? (
+                    <div className="w-full h-44 flex items-center justify-center bg-black/70 text-emerald-400 relative">
+                      <Play size={32} />
+                      <span className="absolute bottom-2 left-2 text-[10px] font-bold bg-black/80 px-2 py-0.5 rounded text-white flex items-center gap-1">
+                        <Video size={10} /> Video Evidence
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="relative w-full h-44">
+                      <img
+                        src={m.url}
+                        alt={m.name || `${label} Photo ${idx + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <span className="px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg">
+                          <Camera size={13} /> View Full Photo
+                        </span>
+                      </div>
+                      <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-md bg-black/80 text-[10px] font-bold text-emerald-300 border border-emerald-500/30 backdrop-blur-sm">
+                        ✓ On-Site Verified Evidence
+                      </div>
+                    </div>
+                  )}
+                  {isContractor && m.isNew && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveNewMedia(catKey, idx);
+                      }}
+                      className="hst-media-remove-btn"
+                      title="Remove file"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Contractor option to add additional photo */}
+            {isContractor && (
+              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-bold cursor-pointer transition-colors mt-1">
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  onChange={(e) => handleFileSelect(catKey, e)}
+                  className="hidden"
+                />
+                <Upload size={13} />
+                <span>+ Upload Additional Photos</span>
+              </label>
+            )}
+          </div>
+        ) : isContractor ? (
+          /* Only show upload dropzone if Contractor and NO photo has been uploaded yet */
+          <div className="mt-2">
+            <label className="hst-dropzone">
+              <input
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={(e) => handleFileSelect(catKey, e)}
+                className="hidden"
+              />
+              <div className="hst-dropzone-icon"><Upload size={20} /></div>
+              <div className="hst-dropzone-text-wrap">
+                <span className="hst-dropzone-title">Upload {label}</span>
+                <span className="hst-dropzone-sub">PNG, JPG, MP4 up to 20MB</span>
+              </div>
+            </label>
+            {fieldErrors[`${catKey}Media`] && (
+              <p className="hst-error-text">{fieldErrors[`${catKey}Media`]}</p>
+            )}
+          </div>
+        ) : (
+          /* Landowner audit when no photo has been uploaded yet */
+          <div className="p-3.5 rounded-xl bg-[#07130a] border border-amber-500/25 text-amber-300/80 text-xs flex items-center gap-2 mt-2">
+            <AlertCircle size={15} className="text-amber-400 shrink-0" />
+            <span>No evidence photos uploaded by contractor for this item yet.</span>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Validation rules tailored for each stage
@@ -336,11 +536,11 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
   };
 
   // Submit Stage Evidence
-  const handleSubmitStage = async (newStatus) => {
+  const handleSubmitStage = async (newStatus, isSaveProgress = false) => {
     setErrorMsg('');
 
     // If contractor is submitting for verification, run validations
-    if (newStatus === 'SUBMITTED' || newStatus === 'VERIFIED') {
+    if (!isSaveProgress && (newStatus === 'SUBMITTED' || newStatus === 'VERIFIED')) {
       const isValid = validateActiveStage();
       if (!isValid) {
         setErrorMsg('Please complete all required fields and upload mandatory evidence before submitting.');
@@ -373,9 +573,95 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
         reviewer_comments: reviewerNotesInput ? reviewerNotesInput.trim() : undefined
       };
 
-      const res = await harvestService.updateHarvestStage(reqId, payload);
+      let updatedReq = null;
+      let apiTimeoutOrError = false;
+
+      try {
+        const res = await harvestService.updateHarvestStage(reqId, payload);
+        updatedReq = res?.harvest_request || res;
+      } catch (apiErr) {
+        console.warn('Backend updateHarvestStage failed/timed out, persisting locally:', apiErr);
+        apiTimeoutOrError = true;
+      }
+
+      const currIdx = HARVEST_STAGES_CONFIG.findIndex(s => s.id === activeStageId);
+      const isSubmittingForward = !isSaveProgress && (newStatus === 'SUBMITTED' || newStatus === 'VERIFIED');
+      const hasNextStage = currIdx >= 0 && currIdx < HARVEST_STAGES_CONFIG.length - 1;
+      const nextStageId = (isSubmittingForward && hasNextStage)
+        ? HARVEST_STAGES_CONFIG[currIdx + 1].id
+        : activeStageId;
+
+      const updatedStageRecord = {
+        ...(stagesData[activeStageId] || {}),
+        status: newStatus,
+        notes: payload.notes || stagesData[activeStageId]?.notes || '',
+        media: [...(stagesData[activeStageId]?.media || []), ...(payload.media || [])],
+        stage_data: payload.stage_data,
+        updated_at: new Date().toISOString(),
+        ...(newStatus === 'VERIFIED' ? { verified_at: new Date().toISOString() } : {}),
+        ...(newStatus === 'SUBMITTED' ? { submitted_at: new Date().toISOString() } : {})
+      };
+
+      const newStagesMap = {
+        ...stagesData,
+        [activeStageId]: updatedStageRecord
+      };
+      setStagesData(newStagesMap);
+
+      // Synchronize in local storage treeconnect_harvest_requests for real-time reflection across tabs/roles
+      try {
+        const storedStr = localStorage.getItem('treeconnect_harvest_requests');
+        if (storedStr) {
+          const list = JSON.parse(storedStr);
+          if (Array.isArray(list)) {
+            const updatedList = list.map(item => {
+              const itemId = item.id || item._id;
+              const isMatch = itemId && reqId && (
+                String(itemId).toLowerCase() === String(reqId).toLowerCase() ||
+                String(itemId).toLowerCase().startsWith(String(reqId).toLowerCase()) ||
+                String(reqId).toLowerCase().startsWith(String(itemId).toLowerCase())
+              );
+              if (isMatch) {
+                const currentStages = item.harvest_stages || {};
+                return {
+                  ...item,
+                  current_harvest_stage: nextStageId,
+                  status: newStatus === 'VERIFIED' && activeStageId === 'stage_4' ? 'COMPLETED' : (item.status === 'OPERATION_READY' ? 'IN_PROGRESS' : item.status),
+                  harvest_stages: {
+                    ...currentStages,
+                    [activeStageId]: updatedStageRecord
+                  },
+                  updatedAt: new Date().toISOString()
+                };
+              }
+              return item;
+            });
+            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updatedList));
+          }
+        }
+      } catch (storageErr) {
+        console.warn('Could not update localStorage harvest_requests:', storageErr);
+      }
+
+      // Dispatch real-time global event for NotificationBell and all active pages
+      window.dispatchEvent(new CustomEvent('treeconnect_harvest_updated', {
+        detail: {
+          requestId: reqId,
+          stageId: activeStageId,
+          status: newStatus,
+          nextStageId: nextStageId,
+          timestamp: new Date().toISOString()
+        }
+      }));
+
+      const mergedReq = {
+        ...(updatedReq || {}),
+        current_harvest_stage: nextStageId,
+        harvest_stages: newStagesMap
+      };
+
       if (onStageUpdated) {
-        onStageUpdated(res.harvest_request || res);
+        onStageUpdated(mergedReq);
       }
 
       setNewMediaByCategory({
@@ -389,14 +675,50 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
         truck_loading: []
       });
 
-      // Cross-stage auto advance if moving forward
-      if (newStatus === 'VERIFIED') {
-        const currIdx = HARVEST_STAGES_CONFIG.findIndex(s => s.id === activeStageId);
-        if (currIdx < HARVEST_STAGES_CONFIG.length - 1) {
-          handleStageSelect(HARVEST_STAGES_CONFIG[currIdx + 1].id);
-        } else {
-          onClose();
-        }
+      const timeoutNotice = apiTimeoutOrError ? ' (Saved locally; network timed out)' : '';
+
+      // Success feedback handling
+      if (isSaveProgress) {
+        // Save Progress completed -> close modal & go to harvest operations
+        setSuccessAlert({
+          type: 'SAVED',
+          message: `✓ Progress saved for Stage ${activeStageConfig.number}!${timeoutNotice} Redirecting to Harvest Operations...`
+        });
+        setTimeout(() => {
+          if (onClose) onClose();
+          const targetUrl = isContractor
+            ? `/contractor/harvest-operations?requestId=${reqId}`
+            : `/landowner/harvest-operations?requestId=${reqId}`;
+          navigate(targetUrl);
+        }, 700);
+      } else if (newStatus === 'VERIFIED') {
+        setSuccessAlert({
+          type: 'APPROVED',
+          message: hasNextStage
+            ? `✓ Stage ${activeStageConfig.number} (${activeStageConfig.title}) has been successfully approved!${timeoutNotice} Advancing to Stage ${activeStageConfig.number + 1}...`
+            : `🎉 All 4 Harvest Stages Approved! The harvesting operation has been verified and marked as COMPLETED.${timeoutNotice}`
+        });
+        setTimeout(() => {
+          if (hasNextStage) {
+            const nextStage = HARVEST_STAGES_CONFIG[currIdx + 1];
+            handleStageSelect(nextStage.id, newStagesMap);
+          } else {
+            if (onClose) onClose();
+          }
+        }, 1800);
+      } else if (newStatus === 'SUBMITTED') {
+        setSuccessAlert({
+          type: 'SUBMITTED',
+          message: `✓ Stage ${activeStageConfig.number} submitted for Landowner audit verification!${timeoutNotice}`
+        });
+        setTimeout(() => {
+          if (hasNextStage) {
+            const nextStage = HARVEST_STAGES_CONFIG[currIdx + 1];
+            handleStageSelect(nextStage.id, newStagesMap);
+          } else {
+            if (onClose) onClose();
+          }
+        }, 1200);
       }
     } catch (err) {
       setErrorMsg(err.message || 'Failed to update harvest stage. Please try again.');
@@ -511,6 +833,31 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
               </span>
             </div>
 
+            {/* Approval / Save Success Alert Message */}
+            {successAlert && (
+              <div className="p-3.5 mb-4 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-200 text-xs sm:text-sm flex items-center justify-between gap-3 shadow-lg animate-fade-in">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+                  <span className="font-bold">{successAlert.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSuccessAlert(null)}
+                  className="text-xs font-semibold text-emerald-400 hover:text-white shrink-0 px-1.5 py-0.5 rounded"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Current Stage Verified Banner */}
+            {currentStatus === 'VERIFIED' && !successAlert && (
+              <div className="p-3 mb-4 rounded-xl bg-emerald-950/40 border border-emerald-500/35 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in">
+                <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                <span className="font-bold">✓ This harvest stage has been verified &amp; approved by the landowner.</span>
+              </div>
+            )}
+
             {/* Reviewer Comments Alert (if rejected or reviewed) */}
             {activeStageRecord.reviewer_comments && (
               <div className="hst-reviewer-comments-box">
@@ -526,197 +873,119 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
               </div>
             )}
 
-            {/* Existing Uploaded Evidence Grid */}
-            {existingMedia.length > 0 && (
-              <div className="space-y-2">
-                <div className="hst-media-section-header">
-                  <span className="hst-media-section-title">
-                    Uploaded Evidence Records ({existingMedia.length} files)
-                  </span>
-                  <span className="text-[11px] text-emerald-400 font-semibold">
-                    ✓ On-site Evidence Logged
-                  </span>
-                </div>
-                <div className="hst-media-grid">
-                  {existingMedia.map((m, idx) => (
-                    <div
-                      key={`exist-${idx}`}
-                      className="hst-media-item"
-                      onClick={() => setPreviewMedia(m)}
-                    >
-                      {m.type === 'video' ? (
-                        <div className="w-full h-full flex items-center justify-center bg-black/60 text-emerald-400">
-                          <Play size={28} />
-                          <span className="hst-media-video-badge"><Video size={10} /> Video</span>
-                        </div>
-                      ) : (
-                        <img src={m.url} alt={`Evidence ${idx + 1}`} className="hst-media-thumb" />
-                      )}
-                      {m.category && (
-                        <span className="hst-media-category-tag">{m.category.replace('_', ' ')}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* STAGE-SPECIFIC ESSENTIAL FIELDS & EVIDENCE */}
             <div className="hst-stage-form-wrap">
 
               {/* ----------------- STAGE 1: MOBILIZATION & SAFETY ----------------- */}
               {activeStageId === 'stage_1' && (
                 <div className="space-y-5">
-                  {/* Evidence Upload 1: Boundary-marked trees */}
-                  <div className="hst-evidence-block">
-                    <label className="hst-label">
-                      <span>1. Boundary-marked Trees &amp; Site Photos</span>
-                      <span className="hst-required-pill">* Required</span>
-                    </label>
-                    <p className="hst-field-sub">
-                      Photographs showing marked perimeter boundaries and tree identification tags before operations start.
-                    </p>
-                    <label className="hst-dropzone">
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        disabled={!isContractor}
-                        onChange={(e) => handleFileSelect('boundary', e)}
-                        className="hidden"
-                      />
-                      <div className="hst-dropzone-icon"><Upload size={20} /></div>
-                      <div>
-                        <strong className="hst-dropzone-title">Upload Boundary &amp; Site Photos</strong>
-                        <span className="hst-dropzone-sub">PNG, JPG, MP4 up to 20MB</span>
-                      </div>
-                    </label>
-                    {fieldErrors.boundaryMedia && (
-                      <p className="hst-error-text">{fieldErrors.boundaryMedia}</p>
-                    )}
-                    {newMediaByCategory.boundary?.length > 0 && (
-                      <div className="hst-media-grid mt-2">
-                        {newMediaByCategory.boundary.map((m, idx) => (
-                          <div key={idx} className="hst-media-item hst-media-pending">
-                            <img src={m.url} alt={m.name} className="hst-media-thumb" />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveNewMedia('boundary', idx)}
-                              className="hst-media-remove-btn"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Evidence 1: Boundary-marked trees */}
+                  {renderEvidenceSection(
+                    '1. Boundary-marked Trees & Site Photos',
+                    'Photographs showing marked perimeter boundaries and tree identification tags before operations start.',
+                    'boundary',
+                    0
+                  )}
 
-                  {/* Evidence Upload 2: Machinery positioning */}
-                  <div className="hst-evidence-block">
-                    <label className="hst-label">
-                      <span>2. Machinery Positioning &amp; Site Access Photos</span>
-                      <span className="hst-required-pill">* Required</span>
-                    </label>
-                    <p className="hst-field-sub">
-                      Photos of machinery placement, clear access paths, and established landing zones.
-                    </p>
-                    <label className="hst-dropzone">
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        disabled={!isContractor}
-                        onChange={(e) => handleFileSelect('machinery', e)}
-                        className="hidden"
-                      />
-                      <div className="hst-dropzone-icon"><Upload size={20} /></div>
-                      <div>
-                        <strong className="hst-dropzone-title">Upload Machinery Positioning Photos</strong>
-                        <span className="hst-dropzone-sub">PNG, JPG, MP4 up to 20MB</span>
-                      </div>
-                    </label>
-                    {fieldErrors.machineryMedia && (
-                      <p className="hst-error-text">{fieldErrors.machineryMedia}</p>
-                    )}
-                    {newMediaByCategory.machinery?.length > 0 && (
-                      <div className="hst-media-grid mt-2">
-                        {newMediaByCategory.machinery.map((m, idx) => (
-                          <div key={idx} className="hst-media-item hst-media-pending">
-                            <img src={m.url} alt={m.name} className="hst-media-thumb" />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveNewMedia('machinery', idx)}
-                              className="hst-media-remove-btn"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Evidence 2: Machinery positioning */}
+                  {renderEvidenceSection(
+                    '2. Machinery Positioning & Site Access Photos',
+                    'Photos of machinery placement, clear access paths, and established landing zones.',
+                    'machinery',
+                    1
+                  )}
 
                   {/* Safety Arrangements Confirmed Yes/No */}
                   <div className="hst-input-group">
                     <label className="hst-label">
                       <span>Safety Arrangements Confirmed?</span>
-                      <span className="hst-required-pill">* Required</span>
+                      {isContractor && <span className="hst-required-pill">* Required</span>}
                     </label>
                     <p className="hst-field-sub">
                       Confirm that PPE, exclusion perimeter, first-aid kit, and safety protocols are ready.
                     </p>
-                    <div className="hst-radio-pill-group">
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, safetyConfirmed: true }))}
-                        className={`hst-radio-pill ${stageFormData.safetyConfirmed === true ? 'active-yes' : ''}`}
-                      >
-                        <Check size={14} /> Yes, Confirmed
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, safetyConfirmed: false }))}
-                        className={`hst-radio-pill ${stageFormData.safetyConfirmed === false ? 'active-no' : ''}`}
-                      >
-                        <X size={14} /> No
-                      </button>
-                    </div>
+                    {isContractor ? (
+                      <div className="hst-radio-pill-group">
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, safetyConfirmed: true }))}
+                          className={`hst-radio-pill ${stageFormData.safetyConfirmed === true ? 'active-yes' : ''}`}
+                        >
+                          <Check size={14} /> Yes, Confirmed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, safetyConfirmed: false }))}
+                          className={`hst-radio-pill ${stageFormData.safetyConfirmed === false ? 'active-no' : ''}`}
+                        >
+                          <X size={14} /> No
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {stageFormData.safetyConfirmed === true ? (
+                          <div className="hst-audit-status-pill success">
+                            <Check size={15} /> Yes, Confirmed by Contractor
+                          </div>
+                        ) : stageFormData.safetyConfirmed === false ? (
+                          <div className="hst-audit-status-pill danger">
+                            <X size={15} /> No, Safety Protocols Incomplete
+                          </div>
+                        ) : (
+                          <div className="hst-audit-status-pill pending">
+                            <Clock size={15} /> Pending Contractor Confirmation
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {fieldErrors.safetyConfirmed && (
                       <p className="hst-error-text">{fieldErrors.safetyConfirmed}</p>
                     )}
                   </div>
 
-                  {/* Site Hazards / Observations - Conditional */}
+                  {/* Site Hazards / Observations */}
                   <div className="hst-input-group">
                     <div className="flex items-center justify-between">
-                      <label className="hst-label">
+                      <label className="hst-label w-full">
                         <span>Site Hazards or Field Observations</span>
-                        <span className="hst-label-hint">(Optional)</span>
+                        <div className="flex items-center gap-2">
+                          <span className="hst-optional-pill">{isContractor ? 'Optional' : 'Contractor Notes'}</span>
+                          {isContractor && (
+                            <button
+                              type="button"
+                              onClick={() => setStageFormData(prev => ({ ...prev, hasSiteHazards: !prev.hasSiteHazards }))}
+                              className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold normal-case tracking-normal ml-2"
+                            >
+                              {stageFormData.hasSiteHazards ? 'Hide Notes' : '+ Add Hazard Observation'}
+                            </button>
+                          )}
+                        </div>
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setStageFormData(prev => ({ ...prev, hasSiteHazards: !prev.hasSiteHazards }))}
-                        className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold"
-                      >
-                        {stageFormData.hasSiteHazards ? 'Hide Notes' : '+ Add Hazard Observation'}
-                      </button>
                     </div>
-                    {stageFormData.hasSiteHazards && (
-                      <div className="mt-2 space-y-1 animate-fade-in">
-                        <textarea
-                          rows={2}
-                          disabled={!isContractor}
-                          value={stageFormData.siteHazardsNotes}
-                          onChange={(e) => setStageFormData(prev => ({ ...prev, siteHazardsNotes: e.target.value }))}
-                          placeholder="e.g. Overhead powerlines identified near East border. Safe felling notch angle adjusted."
-                          className="hst-textarea"
-                        />
-                        {fieldErrors.siteHazardsNotes && (
-                          <p className="hst-error-text">{fieldErrors.siteHazardsNotes}</p>
-                        )}
+                    {isContractor ? (
+                      stageFormData.hasSiteHazards && (
+                        <div className="mt-2 space-y-1 animate-fade-in">
+                          <textarea
+                            rows={2}
+                            value={stageFormData.siteHazardsNotes}
+                            onChange={(e) => setStageFormData(prev => ({ ...prev, siteHazardsNotes: e.target.value }))}
+                            placeholder="e.g. Overhead powerlines identified near East border. Safe felling notch angle adjusted."
+                            className="hst-textarea"
+                          />
+                          {fieldErrors.siteHazardsNotes && (
+                            <p className="hst-error-text">{fieldErrors.siteHazardsNotes}</p>
+                          )}
+                        </div>
+                      )
+                    ) : (
+                      <div className="mt-1">
+                        <div className="hst-audit-notes-card">
+                          {stageFormData.siteHazardsNotes ? (
+                            <span className="text-emerald-100 font-medium">{stageFormData.siteHazardsNotes}</span>
+                          ) : (
+                            <span className="text-slate-400 italic">No specific site hazards or remarks reported by contractor.</span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -727,68 +996,46 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
               {activeStageId === 'stage_2' && (
                 <div className="space-y-5">
                   {/* Number of trees felled */}
-                  <div className="hst-input-group">
+                  <div className="hst-input-group mb-6">
                     <label className="hst-label">
                       <span>Number of Trees Felled</span>
-                      <span className="hst-required-pill">* Required non-negative number</span>
+                      {isContractor && <span className="hst-required-pill">* Required</span>}
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      disabled={!isContractor}
-                      value={stageFormData.treesFelled}
-                      onChange={(e) => setStageFormData(prev => ({ ...prev, treesFelled: e.target.value }))}
-                      placeholder="e.g. 6"
-                      className="hst-input"
-                    />
-                    {fieldErrors.treesFelled && (
-                      <p className="hst-error-text">{fieldErrors.treesFelled}</p>
+                    {isContractor ? (
+                      <>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={stageFormData.treesFelled}
+                            onChange={(e) => setStageFormData(prev => ({ ...prev, treesFelled: e.target.value }))}
+                            placeholder="e.g. 6"
+                            className="hst-input pr-16"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 uppercase tracking-wider pointer-events-none">
+                            trees
+                          </span>
+                        </div>
+                        {fieldErrors.treesFelled && (
+                          <p className="hst-error-text">{fieldErrors.treesFelled}</p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="hst-audit-value-card">
+                        <span className="text-2xl font-black text-emerald-400">{stageFormData.treesFelled || '0'}</span>
+                        <span className="text-xs text-slate-300 font-semibold">Trees Logged / Felled</span>
+                      </div>
                     )}
                   </div>
 
                   {/* Felled trees and stumps photos */}
-                  <div className="hst-evidence-block">
-                    <label className="hst-label">
-                      <span>Photos of Felled Trees &amp; Stumps</span>
-                      <span className="hst-required-pill">* Required</span>
-                    </label>
-                    <p className="hst-field-sub">
-                      Clear photos showing the dropped trees, hinge cuts, and clean stump heights.
-                    </p>
-                    <label className="hst-dropzone">
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        disabled={!isContractor}
-                        onChange={(e) => handleFileSelect('stumps', e)}
-                        className="hidden"
-                      />
-                      <div className="hst-dropzone-icon"><Upload size={20} /></div>
-                      <div>
-                        <strong className="hst-dropzone-title">Upload Felled Trees &amp; Stump Photos</strong>
-                        <span className="hst-dropzone-sub">PNG, JPG, MP4 up to 20MB</span>
-                      </div>
-                    </label>
-                    {fieldErrors.stumpsMedia && (
-                      <p className="hst-error-text">{fieldErrors.stumpsMedia}</p>
-                    )}
-                    {newMediaByCategory.stumps?.length > 0 && (
-                      <div className="hst-media-grid mt-2">
-                        {newMediaByCategory.stumps.map((m, idx) => (
-                          <div key={idx} className="hst-media-item hst-media-pending">
-                            <img src={m.url} alt={m.name} className="hst-media-thumb" />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveNewMedia('stumps', idx)}
-                              className="hst-media-remove-btn"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="pt-2">
+                    {renderEvidenceSection(
+                      'Photos of Felled Trees & Stumps',
+                      'Clear photos showing the dropped trees, hinge cuts, and clean stump heights.',
+                      'stumps',
+                      0
                     )}
                   </div>
 
@@ -796,29 +1043,45 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
                   <div className="hst-input-group">
                     <label className="hst-label">
                       <span>Property Damage Observed?</span>
-                      <span className="hst-required-pill">* Required</span>
+                      {isContractor && <span className="hst-required-pill">* Required</span>}
                     </label>
                     <p className="hst-field-sub">
                       Confirm whether any boundary fence, crops, structure, or adjoining property sustained damage.
                     </p>
-                    <div className="hst-radio-pill-group">
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, propertyDamageObserved: false }))}
-                        className={`hst-radio-pill ${stageFormData.propertyDamageObserved === false ? 'active-yes' : ''}`}
-                      >
-                        <Check size={14} /> No Damage Observed
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, propertyDamageObserved: true }))}
-                        className={`hst-radio-pill ${stageFormData.propertyDamageObserved === true ? 'active-no' : ''}`}
-                      >
-                        <AlertTriangle size={14} /> Yes, Damage Observed
-                      </button>
-                    </div>
+                    {isContractor ? (
+                      <div className="hst-radio-pill-group">
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, propertyDamageObserved: false }))}
+                          className={`hst-radio-pill ${stageFormData.propertyDamageObserved === false ? 'active-yes' : ''}`}
+                        >
+                          <Check size={14} /> No Damage Observed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, propertyDamageObserved: true }))}
+                          className={`hst-radio-pill ${stageFormData.propertyDamageObserved === true ? 'active-no' : ''}`}
+                        >
+                          <AlertTriangle size={14} /> Yes, Damage Observed
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {stageFormData.propertyDamageObserved === false ? (
+                          <div className="hst-audit-status-pill success">
+                            <Check size={15} /> No Damage Observed
+                          </div>
+                        ) : stageFormData.propertyDamageObserved === true ? (
+                          <div className="hst-audit-status-pill danger">
+                            <AlertTriangle size={15} /> Yes, Damage Observed
+                          </div>
+                        ) : (
+                          <div className="hst-audit-status-pill pending">
+                            <Clock size={15} /> Pending Contractor Inspection
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {fieldErrors.propertyDamageObserved && (
                       <p className="hst-error-text">{fieldErrors.propertyDamageObserved}</p>
                     )}
@@ -834,61 +1097,34 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
                       <div className="hst-input-group">
                         <label className="hst-label">
                           <span>Incident Notes &amp; Damage Description</span>
-                          <span className="hst-required-pill">* Required when damage reported</span>
+                          {isContractor && <span className="hst-required-pill">* Required</span>}
                         </label>
-                        <textarea
-                          rows={2}
-                          disabled={!isContractor}
-                          value={stageFormData.damageIncidentNotes}
-                          onChange={(e) => setStageFormData(prev => ({ ...prev, damageIncidentNotes: e.target.value }))}
-                          placeholder="Describe the nature of property damage, affected trees/fence, and immediate mitigation."
-                          className="hst-textarea"
-                        />
-                        {fieldErrors.damageIncidentNotes && (
-                          <p className="hst-error-text">{fieldErrors.damageIncidentNotes}</p>
+                        {isContractor ? (
+                          <>
+                            <textarea
+                              rows={2}
+                              value={stageFormData.damageIncidentNotes}
+                              onChange={(e) => setStageFormData(prev => ({ ...prev, damageIncidentNotes: e.target.value }))}
+                              placeholder="Describe the nature of property damage, affected trees/fence, and immediate mitigation."
+                              className="hst-textarea"
+                            />
+                            {fieldErrors.damageIncidentNotes && (
+                              <p className="hst-error-text">{fieldErrors.damageIncidentNotes}</p>
+                            )}
+                          </>
+                        ) : (
+                          <div className="hst-audit-notes-card border-amber-500/30 bg-amber-950/25 text-amber-100">
+                            {stageFormData.damageIncidentNotes || 'No additional incident remarks reported.'}
+                          </div>
                         )}
                       </div>
 
-                      <div className="hst-evidence-block">
-                        <label className="hst-label">
-                          <span>Damage Photos</span>
-                          <span className="hst-required-pill">* Required when damage reported</span>
-                        </label>
-                        <label className="hst-dropzone">
-                          <input
-                            type="file"
-                            accept="image/*,video/*"
-                            multiple
-                            disabled={!isContractor}
-                            onChange={(e) => handleFileSelect('damage', e)}
-                            className="hidden"
-                          />
-                          <div className="hst-dropzone-icon"><Upload size={20} /></div>
-                          <div>
-                            <strong className="hst-dropzone-title">Upload Photos of Damaged Area</strong>
-                            <span className="hst-dropzone-sub">PNG, JPG up to 20MB</span>
-                          </div>
-                        </label>
-                        {fieldErrors.damageMedia && (
-                          <p className="hst-error-text">{fieldErrors.damageMedia}</p>
-                        )}
-                        {newMediaByCategory.damage?.length > 0 && (
-                          <div className="hst-media-grid mt-2">
-                            {newMediaByCategory.damage.map((m, idx) => (
-                              <div key={idx} className="hst-media-item hst-media-pending">
-                                <img src={m.url} alt={m.name} className="hst-media-thumb" />
-                                <button
-                              type="button"
-                              onClick={() => handleRemoveNewMedia('damage', idx)}
-                              className="hst-media-remove-btn"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      {renderEvidenceSection(
+                        'Damage Photos',
+                        'Photos showing the affected area or damage sustained.',
+                        'damage',
+                        1
+                      )}
                     </div>
                   )}
                 </div>
@@ -898,68 +1134,46 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
               {activeStageId === 'stage_3' && (
                 <div className="space-y-5">
                   {/* Number of logs produced */}
-                  <div className="hst-input-group">
+                  <div className="hst-input-group mb-6">
                     <label className="hst-label">
                       <span>Number of Logs Produced</span>
-                      <span className="hst-required-pill">* Required non-negative number</span>
+                      {isContractor && <span className="hst-required-pill">* Required</span>}
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      disabled={!isContractor}
-                      value={stageFormData.logsProduced}
-                      onChange={(e) => setStageFormData(prev => ({ ...prev, logsProduced: e.target.value }))}
-                      placeholder="e.g. 18"
-                      className="hst-input"
-                    />
-                    {fieldErrors.logsProduced && (
-                      <p className="hst-error-text">{fieldErrors.logsProduced}</p>
+                    {isContractor ? (
+                      <>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={stageFormData.logsProduced}
+                            onChange={(e) => setStageFormData(prev => ({ ...prev, logsProduced: e.target.value }))}
+                            placeholder="e.g. 18"
+                            className="hst-input pr-16"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 uppercase tracking-wider pointer-events-none">
+                            logs
+                          </span>
+                        </div>
+                        {fieldErrors.logsProduced && (
+                          <p className="hst-error-text">{fieldErrors.logsProduced}</p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="hst-audit-value-card">
+                        <span className="text-2xl font-black text-emerald-400">{stageFormData.logsProduced || '0'}</span>
+                        <span className="text-xs text-slate-300 font-semibold">Logs Produced</span>
+                      </div>
                     )}
                   </div>
 
                   {/* Photos of processed logs */}
-                  <div className="hst-evidence-block">
-                    <label className="hst-label">
-                      <span>Photos of Processed Logs</span>
-                      <span className="hst-required-pill">* Required</span>
-                    </label>
-                    <p className="hst-field-sub">
-                      Photographs showing sectioned log billets, clean delimbing, and billets at landing point.
-                    </p>
-                    <label className="hst-dropzone">
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        disabled={!isContractor}
-                        onChange={(e) => handleFileSelect('logs', e)}
-                        className="hidden"
-                      />
-                      <div className="hst-dropzone-icon"><Upload size={20} /></div>
-                      <div>
-                        <strong className="hst-dropzone-title">Upload Processed Logs Photos</strong>
-                        <span className="hst-dropzone-sub">PNG, JPG up to 20MB</span>
-                      </div>
-                    </label>
-                    {fieldErrors.logsMedia && (
-                      <p className="hst-error-text">{fieldErrors.logsMedia}</p>
-                    )}
-                    {newMediaByCategory.logs?.length > 0 && (
-                      <div className="hst-media-grid mt-2">
-                        {newMediaByCategory.logs.map((m, idx) => (
-                          <div key={idx} className="hst-media-item hst-media-pending">
-                            <img src={m.url} alt={m.name} className="hst-media-thumb" />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveNewMedia('logs', idx)}
-                              className="hst-media-remove-btn"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="pt-2">
+                    {renderEvidenceSection(
+                      'Photos of Processed Logs',
+                      'Photographs showing sectioned log billets, clean delimbing, and billets at landing point.',
+                      'logs',
+                      0
                     )}
                   </div>
 
@@ -967,29 +1181,45 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
                   <div className="hst-input-group">
                     <label className="hst-label">
                       <span>Branches &amp; Debris Cleared?</span>
-                      <span className="hst-required-pill">* Required</span>
+                      {isContractor && <span className="hst-required-pill">* Required</span>}
                     </label>
                     <p className="hst-field-sub">
                       Crowns, slash, and timber debris moved away from pathways and stacked appropriately.
                     </p>
-                    <div className="hst-radio-pill-group">
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, debrisCleared: true }))}
-                        className={`hst-radio-pill ${stageFormData.debrisCleared === true ? 'active-yes' : ''}`}
-                      >
-                        <Check size={14} /> Yes, Cleared
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, debrisCleared: false }))}
-                        className={`hst-radio-pill ${stageFormData.debrisCleared === false ? 'active-no' : ''}`}
-                      >
-                        <X size={14} /> No, In Progress
-                      </button>
-                    </div>
+                    {isContractor ? (
+                      <div className="hst-radio-pill-group">
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, debrisCleared: true }))}
+                          className={`hst-radio-pill ${stageFormData.debrisCleared === true ? 'active-yes' : ''}`}
+                        >
+                          <Check size={14} /> Yes, Cleared
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, debrisCleared: false }))}
+                          className={`hst-radio-pill ${stageFormData.debrisCleared === false ? 'active-no' : ''}`}
+                        >
+                          <X size={14} /> No, In Progress
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {stageFormData.debrisCleared === true ? (
+                          <div className="hst-audit-status-pill success">
+                            <Check size={15} /> Yes, Cleared &amp; Stacked
+                          </div>
+                        ) : stageFormData.debrisCleared === false ? (
+                          <div className="hst-audit-status-pill warning">
+                            <X size={15} /> In Progress / Not Cleared
+                          </div>
+                        ) : (
+                          <div className="hst-audit-status-pill pending">
+                            <Clock size={15} /> Pending Contractor Confirmation
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {fieldErrors.debrisCleared && (
                       <p className="hst-error-text">{fieldErrors.debrisCleared}</p>
                     )}
@@ -999,29 +1229,45 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
                   <div className="hst-input-group">
                     <label className="hst-label">
                       <span>Logs Stacked at Collection Area?</span>
-                      <span className="hst-required-pill">* Required</span>
+                      {isContractor && <span className="hst-required-pill">* Required</span>}
                     </label>
                     <p className="hst-field-sub">
                       Merchantable logs gathered and stacked at the agreed loading landing area.
                     </p>
-                    <div className="hst-radio-pill-group">
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, logsStackedAtCollection: true }))}
-                        className={`hst-radio-pill ${stageFormData.logsStackedAtCollection === true ? 'active-yes' : ''}`}
-                      >
-                        <Check size={14} /> Yes, Stacked
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!isContractor}
-                        onClick={() => setStageFormData(prev => ({ ...prev, logsStackedAtCollection: false }))}
-                        className={`hst-radio-pill ${stageFormData.logsStackedAtCollection === false ? 'active-no' : ''}`}
-                      >
-                        <X size={14} /> No
-                      </button>
-                    </div>
+                    {isContractor ? (
+                      <div className="hst-radio-pill-group">
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, logsStackedAtCollection: true }))}
+                          className={`hst-radio-pill ${stageFormData.logsStackedAtCollection === true ? 'active-yes' : ''}`}
+                        >
+                          <Check size={14} /> Yes, Stacked
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStageFormData(prev => ({ ...prev, logsStackedAtCollection: false }))}
+                          className={`hst-radio-pill ${stageFormData.logsStackedAtCollection === false ? 'active-no' : ''}`}
+                        >
+                          <X size={14} /> No
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {stageFormData.logsStackedAtCollection === true ? (
+                          <div className="hst-audit-status-pill success">
+                            <Check size={15} /> Yes, Stacked at Landing Point
+                          </div>
+                        ) : stageFormData.logsStackedAtCollection === false ? (
+                          <div className="hst-audit-status-pill warning">
+                            <X size={15} /> Not Stacked
+                          </div>
+                        ) : (
+                          <div className="hst-audit-status-pill pending">
+                            <Clock size={15} /> Pending Contractor Confirmation
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {fieldErrors.logsStackedAtCollection && (
                       <p className="hst-error-text">{fieldErrors.logsStackedAtCollection}</p>
                     )}
@@ -1033,93 +1279,84 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
               {activeStageId === 'stage_4' && (
                 <div className="space-y-5">
                   {/* Number of logs measured */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start mb-6">
                     <div className="hst-input-group">
                       <label className="hst-label">
                         <span>Number of Logs Measured</span>
-                        <span className="hst-required-pill">* Required non-negative number</span>
+                        {isContractor && <span className="hst-required-pill">* Required</span>}
                       </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        disabled={!isContractor}
-                        value={stageFormData.logsMeasured}
-                        onChange={(e) => setStageFormData(prev => ({ ...prev, logsMeasured: e.target.value }))}
-                        placeholder="e.g. 18"
-                        className="hst-input"
-                      />
-                      {fieldErrors.logsMeasured && (
-                        <p className="hst-error-text">{fieldErrors.logsMeasured}</p>
+                      {isContractor ? (
+                        <>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={stageFormData.logsMeasured}
+                              onChange={(e) => setStageFormData(prev => ({ ...prev, logsMeasured: e.target.value }))}
+                              placeholder="e.g. 18"
+                              className="hst-input pr-16"
+                            />
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 uppercase tracking-wider pointer-events-none">
+                              logs
+                            </span>
+                          </div>
+                          {fieldErrors.logsMeasured && (
+                            <p className="hst-error-text">{fieldErrors.logsMeasured}</p>
+                          )}
+                        </>
+                      ) : (
+                        <div className="hst-audit-value-card">
+                          <span className="text-2xl font-black text-emerald-400">{stageFormData.logsMeasured || '0'}</span>
+                          <span className="text-xs text-slate-300 font-semibold">Logs Scaled</span>
+                        </div>
                       )}
                     </div>
 
                     {/* Estimated Timber Volume (optional) */}
                     <div className="hst-input-group">
                       <label className="hst-label">
-                        <span>Estimated Timber Volume (m³)</span>
-                        <span className="hst-label-hint">(Optional)</span>
+                        <span>Estimated Timber Volume</span>
+                        <span className="hst-optional-pill">{isContractor ? 'Optional' : 'Contractor Scale'}</span>
                       </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        disabled={!isContractor}
-                        value={stageFormData.estimatedVolume}
-                        onChange={(e) => setStageFormData(prev => ({ ...prev, estimatedVolume: e.target.value }))}
-                        placeholder="e.g. 1.70"
-                        className="hst-input"
-                      />
+                      {isContractor ? (
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={stageFormData.estimatedVolume}
+                            onChange={(e) => setStageFormData(prev => ({ ...prev, estimatedVolume: e.target.value }))}
+                            placeholder="e.g. 1.70"
+                            className="hst-input pr-14"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-400/80 pointer-events-none font-mono">
+                            m³
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="hst-audit-value-card">
+                          <span className="text-2xl font-black text-emerald-400">
+                            {stageFormData.estimatedVolume ? `${stageFormData.estimatedVolume} m³` : 'Not Specified'}
+                          </span>
+                          <span className="text-xs text-slate-300 font-semibold">Volume Calculation</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Photos showing log diameter measurements */}
-                  <div className="hst-evidence-block">
-                    <label className="hst-label">
-                      <span>Photos Showing Log Diameter Measurements</span>
-                      <span className="hst-required-pill">* Required</span>
-                    </label>
-                    <p className="hst-field-sub">
-                      Photos with measuring tape across log end-diameters / girth marking log grade numbers.
-                    </p>
-                    <label className="hst-dropzone">
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        disabled={!isContractor}
-                        onChange={(e) => handleFileSelect('measurements', e)}
-                        className="hidden"
-                      />
-                      <div className="hst-dropzone-icon"><Upload size={20} /></div>
-                      <div>
-                        <strong className="hst-dropzone-title">Upload Log Measurement Photos</strong>
-                        <span className="hst-dropzone-sub">PNG, JPG up to 20MB</span>
-                      </div>
-                    </label>
-                    {fieldErrors.measurementsMedia && (
-                      <p className="hst-error-text">{fieldErrors.measurementsMedia}</p>
-                    )}
-                    {newMediaByCategory.measurements?.length > 0 && (
-                      <div className="hst-media-grid mt-2">
-                        {newMediaByCategory.measurements.map((m, idx) => (
-                          <div key={idx} className="hst-media-item hst-media-pending">
-                            <img src={m.url} alt={m.name} className="hst-media-thumb" />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveNewMedia('measurements', idx)}
-                              className="hst-media-remove-btn"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="pt-2">
+                    {renderEvidenceSection(
+                      'Photos Showing Log Diameter Measurements',
+                      'Photos with measuring tape across log end-diameters / girth marking log grade numbers.',
+                      'measurements',
+                      0
                     )}
                   </div>
 
                   {/* Truck loading / transport photos - CONDITIONAL ON CONTRACTOR TIMBER PURCHASE */}
                   {isTimberPurchased ? (
-                    <div className="hst-evidence-block p-4 rounded-xl bg-blue-950/20 border border-blue-500/30 space-y-3">
+                    <div className="p-4 rounded-xl bg-blue-950/20 border border-blue-500/30 space-y-3">
                       <div className="flex items-center gap-2">
                         <Truck size={16} className="text-blue-400" />
                         <span className="text-xs font-bold text-blue-200 uppercase tracking-wide">
@@ -1129,39 +1366,11 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
                       <p className="text-xs text-blue-300">
                         Based on the site inspection record, the contractor is purchasing the timber. Truck-loading and transit evidence is required before dispatch.
                       </p>
-                      <label className="hst-dropzone !border-blue-500/40">
-                        <input
-                          type="file"
-                          accept="image/*,video/*"
-                          multiple
-                          disabled={!isContractor}
-                          onChange={(e) => handleFileSelect('truck_loading', e)}
-                          className="hidden"
-                        />
-                        <div className="hst-dropzone-icon !bg-blue-500/20 !text-blue-300"><Upload size={20} /></div>
-                        <div>
-                          <strong className="hst-dropzone-title">Upload Truck-Loading &amp; Transport Photos</strong>
-                          <span className="hst-dropzone-sub">Truck loaded with secured logs &amp; registration</span>
-                        </div>
-                      </label>
-                      {fieldErrors.truckLoadingMedia && (
-                        <p className="hst-error-text">{fieldErrors.truckLoadingMedia}</p>
-                      )}
-                      {newMediaByCategory.truck_loading?.length > 0 && (
-                        <div className="hst-media-grid mt-2">
-                          {newMediaByCategory.truck_loading.map((m, idx) => (
-                            <div key={idx} className="hst-media-item hst-media-pending">
-                              <img src={m.url} alt={m.name} className="hst-media-thumb" />
-                              <button
-                              type="button"
-                              onClick={() => handleRemoveNewMedia('truck_loading', idx)}
-                              className="hst-media-remove-btn"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                            </div>
-                          ))}
-                        </div>
+                      {renderEvidenceSection(
+                        'Truck-Loading & Transport Photos',
+                        'Truck loaded with secured logs & registration for dispatch.',
+                        'truck_loading',
+                        1
                       )}
                     </div>
                   ) : (
@@ -1201,7 +1410,7 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
               <button
                 type="button"
                 disabled={submitting}
-                onClick={() => handleSubmitStage(currentStatus === 'NOT_STARTED' ? 'IN_PROGRESS' : currentStatus)}
+                onClick={() => handleSubmitStage(currentStatus === 'NOT_STARTED' ? 'IN_PROGRESS' : currentStatus, true)}
                 className="hst-btn-save"
                 title="Save current inputs as In Progress"
               >

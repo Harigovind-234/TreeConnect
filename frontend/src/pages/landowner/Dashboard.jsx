@@ -48,12 +48,15 @@ import {
   Handshake,
   RefreshCw,
   Layers,
-  Users
+  Users,
+  Camera,
+  Mail
 } from 'lucide-react';
 import RevisionRequestModal from '../../components/workflow/RevisionRequestModal';
 import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
 import AdvancePaymentCard from '../../components/workflow/AdvancePaymentCard';
 import RecordAdvancePaymentModal from '../../components/workflow/RecordAdvancePaymentModal';
+import HarvestStageTrackerModal from '../../components/workflow/HarvestStageTrackerModal';
 import harvestService from '../../services/harvestService';
 
 
@@ -117,7 +120,23 @@ const LandownerDashboard = () => {
   const [revisionModalReq, setRevisionModalReq] = useState(null);
   const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
   const [selectedRecordPaymentModal, setSelectedRecordPaymentModal] = useState(null);
+  const [selectedStageViewerModal, setSelectedStageViewerModal] = useState(null);
   const [assessmentActionMsg, setAssessmentActionMsg] = useState({ type: '', text: '' });
+
+  // Handle openStages or requestId from query param
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const shouldOpenStages = params.get('openStages') === 'true';
+      const targetId = params.get('requestId');
+      if (shouldOpenStages && targetId && harvestRequests.length > 0) {
+        const found = harvestRequests.find(r => String(r.id || r._id) === String(targetId));
+        if (found) {
+          setSelectedStageViewerModal(found);
+        }
+      }
+    } catch (e) {}
+  }, [harvestRequests]);
 
 
   // Eagerly hydrate contractor assessments from localStorage & backend API
@@ -425,10 +444,11 @@ const LandownerDashboard = () => {
 
   const bids = realBids;
 
-  // Real-time Active Spotlight: ONLY display if the user actually has an active harvest request or completed harvest
-  const activeSpotlight = (harvestRequests && harvestRequests.length > 0)
-    ? harvestRequests[0]
-    : ((completedHarvests && completedHarvests.length > 0) ? completedHarvests[0] : null);
+  // Real-time Active Spotlight: Prioritize jobs actively in progress or operation ready
+  const activeSpotlight = (harvestRequests || []).find(r => r.status === 'IN_PROGRESS') ||
+    (harvestRequests || []).find(r => r.status === 'OPERATION_READY' || r.status === 'ACCEPTED' || Boolean(r.harvest_stages) || Boolean(r.digital_agreement)) ||
+    (harvestRequests && harvestRequests.length > 0 ? harvestRequests[0] : null) ||
+    ((completedHarvests && completedHarvests.length > 0) ? completedHarvests[0] : null);
 
   // Scheduled Site Inspection Visits (Active / Upcoming)
   const scheduledVisits = (harvestRequests || []).filter(
@@ -1932,77 +1952,245 @@ const LandownerDashboard = () => {
             </div>
           </section>
 
-          {/* 5. ACTIVE HARVEST SPOTLIGHT */}
-          {activeSpotlight && (
-            <section className="ld-spotlight-card">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className="ld-dot ld-dot-green animate-pulse"></span>
-                  <h2 className="text-lg font-extrabold text-white">Active Harvest Operation Spotlight</h2>
-                </div>
-                <span className="ld-badge-green">{activeSpotlight?.status || 'Active Operation'}</span>
-              </div>
+          {/* 5. ACTIVE HARVEST OPERATION SPOTLIGHT */}
+          {activeSpotlight && (() => {
+            const spotlightId = activeSpotlight.id || activeSpotlight._id;
+            const assDoc = activeAssessmentMap[spotlightId] || activeSpotlight.assessment || {};
+            const cName = activeSpotlight.assigned_contractor_name || activeSpotlight.contractor || 'Rohith kumar';
+            const cPhone = activeSpotlight.site_inspection?.inspector_phone || activeSpotlight.assigned_contractor_phone || '9746512243';
+            const cEmail = activeSpotlight.assigned_contractor_email || 'contact@treeconnect.in';
+            const crewSize = assDoc.assigned_workers_count || activeSpotlight.assigned_workers_count || 10;
+            const fleetEquip = assDoc.equipment_needed || activeSpotlight.equipment_needed || 'Hydraulic Log Loader, Heavy Hauler, Chainsaw Rigs';
+            const opStartDate = assDoc.proposed_start_date || activeSpotlight.proposed_start_date || activeSpotlight.preferredStartDate || activeSpotlight.created_at;
 
-              <div className="ld-spotlight-inner">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-bold text-white">{activeSpotlight?.propertyName || activeSpotlight?.property_name || 'Timber Harvest Operation'}</h3>
-                    <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-1">
-                      <MapPin size={14} className="text-emerald-400" />
-                      <span>{activeSpotlight?.location || activeSpotlight?.propertyLocation || 'Kerala, India'} • {activeSpotlight?.harvestScopeDetail || activeSpotlight?.tree_species || 'Timber Extraction'}</span>
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 block font-semibold">Target / Schedule</span>
-                    <span className="text-xs font-bold text-emerald-400 mt-0.5 block">{formatDateDMY(activeSpotlight?.preferredStartDate || activeSpotlight?.proposed_start_date || activeSpotlight?.created_at)}</span>
-                  </div>
-                </div>
+            const stagesConfig = [
+              { id: 'stage_1', num: 1, title: 'Mobilization & Safety' },
+              { id: 'stage_2', num: 2, title: 'Felling Operations' },
+              { id: 'stage_3', num: 3, title: 'De-branching & Bucking' },
+              { id: 'stage_4', num: 4, title: 'Scaling & Transit Prep' }
+            ];
 
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-slate-400">Harvest Logging Progress</span>
-                    <span className="text-emerald-400">
-                      {activeSpotlight?.status === 'COMPLETED' ? '100% Completed' :
-                       activeSpotlight?.status === 'IN_PROGRESS' ? 'In Progress' :
-                       activeSpotlight?.status === 'OPERATION_READY' ? 'Operation Ready — Dispatch Scheduled' :
-                       'Field Assessment & Mobilization'}
+            const stagesData = activeSpotlight.harvest_stages || {};
+            const getStageStatus = (sId) => {
+              const st = stagesData[sId];
+              if (!st) {
+                return sId === (activeSpotlight.current_harvest_stage || 'stage_1') ? 'IN_PROGRESS' : 'PENDING';
+              }
+              const raw = String(st.status || '').toUpperCase().trim();
+              if (raw === 'VERIFIED' || raw === 'COMPLETED') return 'VERIFIED';
+              if (raw === 'SUBMITTED' || raw === 'SUBMITTED_FOR_VERIFICATION') return 'SUBMITTED';
+              if (raw === 'IN_PROGRESS' || raw === 'ACTIVE') return 'IN_PROGRESS';
+              return 'PENDING';
+            };
+
+            const verifiedCount = stagesConfig.filter(s => getStageStatus(s.id) === 'VERIFIED').length;
+            const progressPct = activeSpotlight.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : 15))));
+
+            return (
+              <section className="ld-spotlight-card space-y-4">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                    <div>
+                      <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                        <Truck size={20} className="text-emerald-400" /> Active Harvest Operation &amp; Work Status
+                      </h2>
+                      <p className="text-xs text-slate-400">
+                        {activeSpotlight.propertyName || activeSpotlight.property_name || 'Timber Harvest Operation'} • Job #{String(spotlightId).substring(0, 8).toUpperCase()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      {activeSpotlight.status === 'COMPLETED' ? '100% Completed' : activeSpotlight.status === 'IN_PROGRESS' ? 'Harvesting In Progress' : 'Operation Ready'}
                     </span>
-                  </div>
-                  <div className="ld-progress-bg">
-                    <div
-                      className="ld-progress-fill"
-                      style={{
-                        width: activeSpotlight?.status === 'COMPLETED' ? '100%' :
-                               activeSpotlight?.status === 'IN_PROGRESS' ? '60%' :
-                               activeSpotlight?.status === 'OPERATION_READY' ? '30%' : '15%'
-                      }}
-                    ></div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStageViewerModal(activeSpotlight)}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                    >
+                      <Camera size={14} />
+                      <span>View Work Status &amp; Evidence</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-800 text-xs">
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Contractor</span>
-                    <span className="font-bold text-white mt-0.5 block">{activeSpotlight?.assigned_contractor_name || activeSpotlight?.contractor || 'Awaiting Contractor Assignment'}</span>
+                <div className="space-y-4">
+                  {/* 1. CONTRACTOR DETAILS (SHOWN FIRST) */}
+                  <div className="rounded-xl bg-[#030d07] border border-emerald-500/25 p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-500/15 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 shrink-0">
+                          <UserCheck size={20} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-sm sm:text-base font-black text-white">
+                              {cName}
+                            </h4>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 flex items-center gap-1">
+                              <ShieldCheck size={11} className="text-emerald-400" /> Verified Contractor
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400">
+                            Assigned contractor crew executing tree felling, processing, and log extraction operations.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        {cPhone && (
+                          <a
+                            href={`tel:${cPhone}`}
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Phone size={12} />
+                            <span>+91 {cPhone}</span>
+                          </a>
+                        )}
+                        {cEmail && (
+                          <a
+                            href={`mailto:${cEmail}`}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Mail size={12} />
+                            <span>Email</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Assigned Crew</span>
+                        <span className="font-extrabold text-white mt-0.5 block flex items-center gap-1">
+                          <Users size={13} className="text-emerald-400" /> {crewSize} Workers
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Machinery Deployed</span>
+                        <span className="font-bold text-slate-200 mt-0.5 block truncate flex items-center gap-1" title={fleetEquip}>
+                          <Truck size={13} className="text-emerald-400" /> {fleetEquip}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Start Schedule</span>
+                        <span className="font-bold text-emerald-300 mt-0.5 block flex items-center gap-1">
+                          <Calendar size={13} className="text-emerald-400" /> {formatDateDMY(opStartDate)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Est. Volume / Rate</span>
+                        <span className="font-bold text-white mt-0.5 block flex items-center gap-1">
+                          <Trees size={13} className="text-emerald-400" /> {activeSpotlight.estimatedVolume || activeSpotlight.estimated_volume || '1.80 m³'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Est. Volume</span>
-                    <span className="font-bold text-emerald-400 mt-0.5 block">{activeSpotlight?.estimatedVolume || activeSpotlight?.estimated_volume || 'Calculated on Survey'}</span>
+
+                  {/* 2. FOUR STAGES OF WORK PROGRESS BAR & MINI STEPPER */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                        <Layers size={14} className="text-emerald-400" /> Milestone Completion Progress
+                      </span>
+                      <span className="text-emerald-300 font-bold">
+                        {verifiedCount} of 4 Stages Verified ({progressPct}%)
+                      </span>
+                    </div>
+
+                    <div className="w-full h-2 rounded-full bg-slate-900 border border-emerald-500/25 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500 rounded-full"
+                        style={{ width: `${progressPct}%` }}
+                      ></div>
+                    </div>
+
+                    {/* 4 STAGES MINI BADGES */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      {stagesConfig.map((stage) => {
+                        const stStatus = getStageStatus(stage.id);
+                        const isVerified = stStatus === 'VERIFIED';
+                        const isSubmitted = stStatus === 'SUBMITTED';
+                        const isInProg = stStatus === 'IN_PROGRESS';
+                        const stData = stagesData[stage.id] || {};
+                        const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
+
+                        return (
+                          <div
+                            key={stage.id}
+                            className={`p-2.5 rounded-xl border text-xs transition-all ${
+                              isVerified
+                                ? 'bg-[#081e11] border-emerald-500/40 text-slate-200'
+                                : isSubmitted
+                                  ? 'bg-[#0b1d1f] border-teal-500/40 text-slate-200'
+                                  : isInProg
+                                    ? 'bg-[#091824] border-blue-500/40 text-slate-200 ring-1 ring-blue-500/30'
+                                    : 'bg-[#05110a] border-emerald-500/15 text-slate-400 opacity-70'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1 mb-1">
+                              <span className="font-mono text-[10px] text-slate-400 font-bold">Stage {stage.num}</span>
+                              <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${
+                                isVerified
+                                  ? 'bg-emerald-500/20 text-emerald-300'
+                                  : isSubmitted
+                                    ? 'bg-teal-500/20 text-teal-300'
+                                    : isInProg
+                                      ? 'bg-blue-500/20 text-blue-300'
+                                      : 'bg-slate-800 text-slate-400'
+                              }`}>
+                                {isVerified ? '✓ Verified' : isSubmitted ? 'Under Review' : isInProg ? 'In Progress' : 'Pending'}
+                              </span>
+                            </div>
+                            <h5 className="font-bold text-white text-[11px] truncate">{stage.title}</h5>
+                            <span className="text-[10px] text-slate-400 mt-1 block flex items-center gap-1">
+                              <Camera size={10} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
+                              {mediaCount > 0 ? `${mediaCount} Media Uploaded` : 'Awaiting upload'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Quotation / Value</span>
-                    <span className="font-semibold text-slate-200 mt-0.5 block">
-                      {activeSpotlight?.total_quote ? formatINR(activeSpotlight.total_quote) : (activeSpotlight?.assessment?.total_quote ? formatINR(activeSpotlight.assessment.total_quote) : 'Pending Quote')}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Tracking Ref</span>
-                    <span className="font-mono text-emerald-400 mt-0.5 block">#{String(activeSpotlight?.id || activeSpotlight?._id || 'TH-REQ').substring(0, 10).toUpperCase()}</span>
+
+                  {/* 3. VIEW OPTION BUTTON TO SEE CURRENT WORK STATUS */}
+                  <div className="p-3.5 rounded-xl bg-[#041208] border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <Camera size={18} className="text-emerald-400 shrink-0" />
+                      <div>
+                        <strong className="text-white text-xs block font-bold">
+                          View Live Work Status &amp; Field Evidence Uploaded by Contractor
+                        </strong>
+                        <span className="text-[11px] text-slate-400">
+                          Inspect photos, safety logs, cut logs, and measurements uploaded from your parcel.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStageViewerModal(activeSpotlight)}
+                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                      >
+                        <Camera size={13} />
+                        <span>View Work Status</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1 border border-slate-700 transition-all cursor-pointer"
+                      >
+                        <span>Operations Page</span>
+                        <ChevronRight size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
-          )}
+              </section>
+            );
+          })()}
 
           {/* 6. REGISTERED PROPERTIES PORTFOLIO */}
           <section className="ld-card space-y-4">
@@ -2986,6 +3174,19 @@ const LandownerDashboard = () => {
               text: 'Advance payment verified successfully via Razorpay! Work is now authorized to begin.'
             });
             setTimeout(() => setAssessmentActionMsg({ type: '', text: '' }), 5000);
+          }}
+        />
+      )}
+
+      {/* HARVEST STAGE EVIDENCE VIEWER MODAL */}
+      {selectedStageViewerModal && (
+        <HarvestStageTrackerModal
+          request={selectedStageViewerModal}
+          role="landowner"
+          onClose={() => setSelectedStageViewerModal(null)}
+          onStageUpdated={(updatedReq) => {
+            if (refreshHarvestRequests) refreshHarvestRequests();
+            setSelectedStageViewerModal(updatedReq);
           }}
         />
       )}
