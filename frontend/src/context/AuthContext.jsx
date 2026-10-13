@@ -4,11 +4,18 @@ import { authService } from '../services/authService';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(() => {
+    try {
+      const storedUser = authService.getCurrentUser();
+      const token = authService.getToken();
+      return (storedUser && token) ? storedUser : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Check initial user from local storage
     const storedUser = authService.getCurrentUser();
     const token = authService.getToken();
     if (storedUser && token) {

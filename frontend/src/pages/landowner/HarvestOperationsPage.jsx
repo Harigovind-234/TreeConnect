@@ -6,6 +6,7 @@ import { useLandowner } from '../../context/LandownerContext';
 import { useAuth } from '../../context/AuthContext';
 import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
 import HarvestStageTrackerModal from '../../components/workflow/HarvestStageTrackerModal';
+import RecordAdvancePaymentModal from '../../components/workflow/RecordAdvancePaymentModal';
 import harvestService from '../../services/harvestService';
 import './LandownerDashboard.css';
 import {
@@ -32,7 +33,8 @@ import {
   Axe,
   Building2,
   Sparkles,
-  Award
+  Award,
+  CreditCard
 } from 'lucide-react';
 import {
   formatINR,
@@ -67,9 +69,28 @@ const HarvestOperationsPage = () => {
   const [contractorRequests, setContractorRequests] = useState([]);
   const [selectedStageViewerModal, setSelectedStageViewerModal] = useState(null);
   const [selectedAgreementModal, setSelectedAgreementModal] = useState(null);
+  const [selectedFinalPaymentModal, setSelectedFinalPaymentModal] = useState(null);
   const [activeAssessmentMap, setActiveAssessmentMap] = useState({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [approvalToast, setApprovalToast] = useState(null);
+
+  const handleRecordFinalPayment = async (requestId, paymentData) => {
+    try {
+      await harvestService.submitAdvancePayment(requestId, {
+        ...paymentData,
+        payment_purpose: 'FINAL_PAYMENT'
+      });
+      setApprovalToast('✓ Final settlement payment recorded! Status: Verification Pending by contractor.');
+      if (isContractor) {
+        await fetchContractorRequests();
+      } else {
+        await refreshHarvestRequests();
+      }
+      setTimeout(() => setApprovalToast(null), 5000);
+    } catch (err) {
+      alert('Failed to record final payment: ' + (err.message || 'Error'));
+    }
+  };
 
   // Fetch contractor requests from API and localStorage
   const fetchContractorRequests = async () => {
@@ -602,37 +623,126 @@ const HarvestOperationsPage = () => {
                       </div>
                     </div>
 
-                    {/* CELEBRATORY SUCCESSFUL COMPLETION MESSAGE BANNER */}
+                    {/* CELEBRATORY SUCCESSFUL COMPLETION MESSAGE BANNER & SETTLEMENT */}
                     {isCompleted && (
-                      <div className="my-2 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#031d0d] via-[#093318] to-[#031d0d] border border-emerald-400/70 shadow-[0_4px_25px_rgba(16,185,129,0.3)] flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in relative overflow-hidden">
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-500/25">
-                            <CheckCircle2 size={26} className="text-emerald-400 animate-pulse" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 flex items-center gap-1 shadow-sm">
-                                <Sparkles size={12} /> Operation Successful &amp; Complete
-                              </span>
-                              <span className="text-xs text-emerald-300 font-bold flex items-center gap-1">
-                                <Award size={13} className="text-emerald-400" /> All 4 Milestones Verified (100%)
-                              </span>
+                      <div className="space-y-3 my-2">
+                        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#031d0d] via-[#093318] to-[#031d0d] border border-emerald-400/70 shadow-[0_4px_25px_rgba(16,185,129,0.3)] flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in relative overflow-hidden">
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-500/25">
+                              <CheckCircle2 size={26} className="text-emerald-400 animate-pulse" />
                             </div>
-                            <h3 className="text-base sm:text-lg font-black text-white mt-1">
-                              🎉 Harvesting Operation Successfully Completed!
-                            </h3>
-                            <p className="text-xs text-slate-200 mt-0.5 leading-relaxed">
-                              Mobilization, tree felling, delimbing &amp; bucking, and transit scaling have all been successfully completed and approved by the landowner.
-                            </p>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 flex items-center gap-1 shadow-sm">
+                                  <Sparkles size={12} /> Operation Successful &amp; Complete
+                                </span>
+                                <span className="text-xs text-emerald-300 font-bold flex items-center gap-1">
+                                  <Award size={13} className="text-emerald-400" /> All 4 Milestones Verified (100%)
+                                </span>
+                              </div>
+                              <h3 className="text-base sm:text-lg font-black text-white mt-1">
+                                🎉 Harvesting Operation Successfully Completed!
+                              </h3>
+                              <p className="text-xs text-slate-200 mt-0.5 leading-relaxed">
+                                Mobilization, tree felling, delimbing &amp; bucking, and transit scaling have all been successfully completed and approved by the landowner.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                            <div className="px-3.5 py-2 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                              <CheckCircle2 size={14} className="text-emerald-400" />
+                              <span>100% Quality Certified</span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                          <div className="px-3.5 py-2 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-sm">
-                            <CheckCircle2 size={14} className="text-emerald-400" />
-                            <span>100% Quality Certified</span>
-                          </div>
-                        </div>
+                        {/* POST-HARVEST FINANCIAL SETTLEMENT CALLOUT */}
+                        {(() => {
+                          const acceptedQuote = Number(req.total_quotation_amount || req.total_quote || 81000);
+                          const verifiedAdvance = Number(req.total_verified_paid || 36100);
+                          const remBalance = Number(
+                            req.remaining_balance !== undefined && req.remaining_balance !== null
+                              ? req.remaining_balance
+                              : Math.max(0, acceptedQuote - verifiedAdvance)
+                          );
+                          const isFullySettled = Boolean(req.is_fully_paid || (remBalance <= 0 && req.is_advance_verified) || req.final_payment_status === 'VERIFIED');
+                          const isFinalPending = req.final_payment_status === 'VERIFICATION_PENDING';
+
+                          if (isFullySettled) {
+                            return (
+                              <div className="p-3.5 rounded-xl bg-[#031d0d] border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                                <div className="flex items-center gap-2.5 text-emerald-200 font-bold">
+                                  <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+                                  <span>
+                                    Contract 100% Fully Settled • Full harvest contract amount of <strong className="text-white font-mono">{formatINR(acceptedQuote)}</strong> cleared to contractor.
+                                  </span>
+                                </div>
+                                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold border border-emerald-500/40 text-[11px]">
+                                  ✓ All Dues Settled
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          if (remBalance > 0) {
+                            return (
+                              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#031a0c] via-[#052914] to-[#031a0c] border border-emerald-500/60 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
+                                      Financial Settlement Required
+                                    </span>
+                                    <span className="text-xs text-amber-300 font-bold">
+                                      Remaining Balance: <strong className="font-mono text-white text-sm">{formatINR(remBalance)}</strong>
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-300 leading-relaxed">
+                                    {isFinalPending
+                                      ? `Final settlement payment of ${formatINR(remBalance)} was submitted by landowner and is awaiting contractor reconciliation.`
+                                      : !isContractor
+                                        ? `Mobilization advance of ${formatINR(verifiedAdvance)} was credited. Please pay the remaining balance of ${formatINR(remBalance)} to settle the harvesting contract.`
+                                        : `Contract completed. Awaiting landowner to submit the remaining balance of ${formatINR(remBalance)}.`}
+                                  </p>
+                                </div>
+
+                                {!isContractor && !isFinalPending && (
+                                  <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedFinalPaymentModal({ req, defaultAmount: remBalance, initialTab: 'razorpay' })}
+                                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
+                                    >
+                                      <CreditCard size={15} />
+                                      <span>Pay {formatINR(remBalance)} with Razorpay</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedFinalPaymentModal({ req, defaultAmount: remBalance, initialTab: 'manual' })}
+                                      className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                                    >
+                                      <Building2 size={14} className="text-slate-400" />
+                                      <span>Manual Transfer</span>
+                                    </button>
+                                  </div>
+                                )}
+
+                                {isContractor && isFinalPending && (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate('/contractor/assigned-jobs')}
+                                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer shrink-0 transition-all"
+                                  >
+                                    <CheckCircle2 size={15} />
+                                    <span>Verify Payment in Assigned Jobs</span>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          return null;
+                        })()}
                       </div>
                     )}
 
@@ -919,6 +1029,23 @@ const HarvestOperationsPage = () => {
           role="landowner"
           onClose={() => setSelectedAgreementModal(null)}
           onAccept={() => setSelectedAgreementModal(null)}
+        />
+      )}
+
+      {/* FINAL SETTLEMENT PAYMENT MODAL */}
+      {selectedFinalPaymentModal && (
+        <RecordAdvancePaymentModal
+          request={selectedFinalPaymentModal.req || selectedFinalPaymentModal}
+          mode="final"
+          defaultAmount={selectedFinalPaymentModal.defaultAmount || selectedFinalPaymentModal.remaining_balance || 44900}
+          initialTab={selectedFinalPaymentModal.initialTab || 'razorpay'}
+          onClose={() => setSelectedFinalPaymentModal(null)}
+          onSubmit={(data) => handleRecordFinalPayment((selectedFinalPaymentModal.req || selectedFinalPaymentModal).id || (selectedFinalPaymentModal.req || selectedFinalPaymentModal)._id, data)}
+          onPaymentSuccess={() => {
+            refreshHarvestRequests();
+            setApprovalToast('✓ Final contract settlement payment verified successfully! Thank you.');
+            setTimeout(() => setApprovalToast(null), 5000);
+          }}
         />
       )}
     </div>

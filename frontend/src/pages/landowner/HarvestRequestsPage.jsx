@@ -482,12 +482,14 @@ const HarvestRequestsPage = () => {
     }
   };
 
-  // Handle Landowner Recording Advance Payment
+  // Handle Landowner Recording Advance or Final Payment
   const handleRecordAdvancePayment = async (requestId, paymentData) => {
     try {
       const nowIso = new Date().toISOString();
+      const isFinal = paymentData?.payment_purpose === 'FINAL_PAYMENT';
+      const payPrefix = isFinal ? 'PAY-FIN' : 'PAY-ADV';
       const newPayment = {
-        payment_id: `PAY-ADV-${Date.now()}`,
+        payment_id: `${payPrefix}-${Date.now()}`,
         harvest_request_id: String(requestId),
         amount: Number(paymentData.amount),
         payment_method: paymentData.payment_method,
@@ -495,6 +497,7 @@ const HarvestRequestsPage = () => {
         payment_date: paymentData.payment_date,
         receipt_url: paymentData.receipt_url || '',
         notes: paymentData.notes || '',
+        payment_purpose: isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_PAYMENT',
         status: 'VERIFICATION_PENDING',
         created_at: nowIso,
         updated_at: nowIso
@@ -508,6 +511,15 @@ const HarvestRequestsPage = () => {
           const updated = parsed.map(r => {
             if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
               const prevPayments = Array.isArray(r.payments) ? r.payments : [];
+              const isHarvestDone = r.is_advance_verified || r.status === 'COMPLETED';
+              if (isFinal || isHarvestDone) {
+                return {
+                  ...r,
+                  final_payment_status: 'VERIFICATION_PENDING',
+                  latest_payment: newPayment,
+                  payments: [newPayment, ...prevPayments.filter(p => p.transaction_reference !== newPayment.transaction_reference)]
+                };
+              }
               return {
                 ...r,
                 advance_payment_status: 'VERIFICATION_PENDING',
@@ -530,11 +542,13 @@ const HarvestRequestsPage = () => {
       }
 
       await harvestService.submitAdvancePayment(requestId, paymentData);
-      setActionMessage("Advance mobilization payment recorded successfully! Status: Verification Pending by contractor.");
+      setActionMessage(isFinal
+        ? "Final contract settlement recorded successfully! Status: Verification Pending by contractor."
+        : "Advance mobilization payment recorded successfully! Status: Verification Pending by contractor.");
       setTimeout(() => setActionMessage(''), 5000);
       refreshHarvestRequests();
     } catch (err) {
-      console.error("Error recording advance payment:", err);
+      console.error("Error recording payment:", err);
       setActionMessage("Failed to record payment: " + (err.message || 'Error'));
       setTimeout(() => setActionMessage(''), 5000);
     }
@@ -1496,7 +1510,7 @@ const HarvestRequestsPage = () => {
                                 <AdvancePaymentCard
                                   request={req}
                                   role="landowner"
-                                  onRecordPayment={() => setSelectedRecordPaymentModal(req)}
+                                  onRecordPayment={(opts) => setSelectedRecordPaymentModal({ req, ...(opts || {}) })}
                                   onOpenStages={() => setSelectedStageViewerModal(req)}
                                 />
                               </div>
@@ -2551,15 +2565,16 @@ const HarvestRequestsPage = () => {
             {/* MODAL FOR RECORDING ADVANCE PAYMENT */}
             {selectedRecordPaymentModal && (
               <RecordAdvancePaymentModal
-                request={selectedRecordPaymentModal}
+                request={selectedRecordPaymentModal.req || selectedRecordPaymentModal}
+                mode={selectedRecordPaymentModal.mode}
+                defaultAmount={selectedRecordPaymentModal.defaultAmount}
                 onClose={() => setSelectedRecordPaymentModal(null)}
-                onSubmit={(data) => handleRecordAdvancePayment(selectedRecordPaymentModal.id || selectedRecordPaymentModal._id, data)}
+                onSubmit={(data) => handleRecordAdvancePayment((selectedRecordPaymentModal.req || selectedRecordPaymentModal).id || (selectedRecordPaymentModal.req || selectedRecordPaymentModal)._id, data)}
                 onPaymentSuccess={() => {
                   refreshHarvestRequests();
-                  setActionMessage('Advance payment verified successfully via Razorpay! Operations are authorized to begin.');
+                  setActionMessage('Payment verified successfully via Razorpay! Contract records updated.');
                   setTimeout(() => {
                     setActionMessage('');
-                    navigate('/landowner/payments');
                   }, 2500);
                 }}
               />
@@ -2583,6 +2598,25 @@ const HarvestRequestsPage = () => {
                       ...(safeId ? { id: safeId, _id: safeId } : {})
                     };
                   });
+                }}
+              />
+            )}
+
+            {/* RECORD ADVANCE / FINAL PAYMENT MODAL */}
+            {selectedRecordPaymentModal && (
+              <RecordAdvancePaymentModal
+                request={selectedRecordPaymentModal.req || selectedRecordPaymentModal}
+                mode={selectedRecordPaymentModal.mode}
+                defaultAmount={selectedRecordPaymentModal.defaultAmount}
+                initialTab={selectedRecordPaymentModal.initialTab || 'razorpay'}
+                onClose={() => setSelectedRecordPaymentModal(null)}
+                onSubmit={() => {
+                  triggerUIUpdate();
+                  setSelectedRecordPaymentModal(null);
+                }}
+                onPaymentSuccess={() => {
+                  triggerUIUpdate();
+                  setSelectedRecordPaymentModal(null);
                 }}
               />
             )}

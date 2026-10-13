@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
@@ -50,7 +50,8 @@ import {
   Layers,
   Users,
   Camera,
-  Mail
+  Mail,
+  CreditCard
 } from 'lucide-react';
 import RevisionRequestModal from '../../components/workflow/RevisionRequestModal';
 import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
@@ -95,11 +96,44 @@ const LandownerDashboard = () => {
 
   // Safely extract landowner context state with array fallbacks
   const landownerCtx = useLandowner() || {};
-  const properties = landownerCtx.properties || [];
-  const inventories = landownerCtx.inventories || [];
-  const harvestRequests = landownerCtx.harvestRequests || [];
-  const timberListings = landownerCtx.timberListings || [];
-  const completedHarvests = landownerCtx.completedHarvests || [];
+
+  // Resolve active landowner email synchronously from auth or stored user
+  const storedUser = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('treeconnect_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }, []);
+  const activeUser = user || storedUser;
+  const currentEmail = (activeUser?.email || '').toLowerCase().trim();
+
+  const rawProps = landownerCtx.properties || [];
+  const rawHarvests = landownerCtx.harvestRequests || [];
+  const rawInvs = landownerCtx.inventories || [];
+  const rawListings = landownerCtx.timberListings || [];
+  const rawCompleted = landownerCtx.completedHarvests || [];
+
+  const filterByOwnerEmail = useCallback((list) => {
+    if (!currentEmail || !Array.isArray(list)) return [];
+    return list.filter(item => {
+      if (!item) return false;
+      const itemEmail = String(
+        item.userEmail ||
+        item.owner_email ||
+        item.landowner_email ||
+        item.ownerEmail ||
+        ''
+      ).toLowerCase().trim();
+      return itemEmail === currentEmail;
+    });
+  }, [currentEmail]);
+
+  const properties = useMemo(() => filterByOwnerEmail(rawProps), [filterByOwnerEmail, rawProps]);
+  const inventories = useMemo(() => filterByOwnerEmail(rawInvs), [filterByOwnerEmail, rawInvs]);
+  const harvestRequests = useMemo(() => filterByOwnerEmail(rawHarvests), [filterByOwnerEmail, rawHarvests]);
+  const timberListings = useMemo(() => filterByOwnerEmail(rawListings), [filterByOwnerEmail, rawListings]);
+  const completedHarvests = useMemo(() => filterByOwnerEmail(rawCompleted), [filterByOwnerEmail, rawCompleted]);
+
   const refreshProperties = landownerCtx.refreshProperties;
   const refreshHarvestRequests = landownerCtx.refreshHarvestRequests;
 
@@ -110,7 +144,7 @@ const LandownerDashboard = () => {
     if (refreshHarvestRequests) {
       refreshHarvestRequests();
     }
-  }, []);
+  }, [currentEmail, refreshProperties, refreshHarvestRequests]);
 
   // Modal state for viewing scheduled site visit details
   const [selectedVisitModal, setSelectedVisitModal] = useState(null);
@@ -122,6 +156,11 @@ const LandownerDashboard = () => {
   const [selectedRecordPaymentModal, setSelectedRecordPaymentModal] = useState(null);
   const [selectedStageViewerModal, setSelectedStageViewerModal] = useState(null);
   const [assessmentActionMsg, setAssessmentActionMsg] = useState({ type: '', text: '' });
+
+  // Stable request ID sequence to prevent re-triggering assessment effects when array reference changes
+  const harvestRequestIds = useMemo(() => {
+    return (harvestRequests || []).map(r => r.id || r._id).filter(Boolean).join(',');
+  }, [harvestRequests]);
 
   // Handle openStages or requestId from query param
   useEffect(() => {
@@ -136,21 +175,24 @@ const LandownerDashboard = () => {
         }
       }
     } catch (e) {}
-  }, [harvestRequests]);
+  }, [harvestRequestIds, harvestRequests]);
 
-
-  // Eagerly hydrate contractor assessments from localStorage & backend API
+  // Hydrate contractor assessments from localStorage & backend API with stable batching (prevents infinite loops)
   useEffect(() => {
+    let isMounted = true;
     const fetchAssessments = async () => {
+      const updates = {};
       try {
-        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        const stored = localStorage.getItem(`treeconnect_harvest_requests_${currentEmail}`) || localStorage.getItem('treeconnect_harvest_requests');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
             parsed.forEach(r => {
+              const rEmail = String(r?.owner_email || r?.userEmail || r?.landowner_email || '').toLowerCase().trim();
+              if (currentEmail && rEmail && rEmail !== currentEmail) return;
               const rId = r?.id || r?._id;
               if (rId && r.assessment) {
-                setActiveAssessmentMap(prev => ({ ...prev, [rId]: r.assessment }));
+                updates[rId] = r.assessment;
               }
             });
           }
@@ -161,24 +203,45 @@ const LandownerDashboard = () => {
         const reqId = req.id || req._id;
         if (!reqId) continue;
         if (req.assessment) {
-          setActiveAssessmentMap(prev => ({ ...prev, [reqId]: req.assessment }));
+          updates[reqId] = req.assessment;
         }
         if (req.assigned_contractor_id || req.assessment || req.status === 'ASSESSMENT_SUBMITTED' || req.status === 'OPERATION_READY' || req.total_quote) {
           try {
             const data = await harvestService.getAssessment(reqId);
             if (data && (data.assessment || data.id || data.commercial_proposal_type)) {
               const assObj = data.assessment || data;
-              setActiveAssessmentMap(prev => ({ ...prev, [reqId]: assObj }));
+              updates[reqId] = assObj;
             }
           } catch (e) {
-            // Silently fall back to request assessment
+            // Silently fall back
           }
         }
       }
+
+      if (isMounted && Object.keys(updates).length > 0) {
+        setActiveAssessmentMap(prev => {
+          let hasDiff = false;
+          for (const k in updates) {
+            if (JSON.stringify(prev[k]) !== JSON.stringify(updates[k])) {
+              hasDiff = true;
+              break;
+            }
+          }
+          return hasDiff ? { ...prev, ...updates } : prev;
+        });
+      }
     };
 
-    fetchAssessments();
-  }, [harvestRequests]);
+    if (harvestRequests && harvestRequests.length > 0) {
+      fetchAssessments();
+    } else {
+      setActiveAssessmentMap({});
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [harvestRequestIds, currentEmail]);
 
   // Handle Landowner Action on Assessment (Accept, Reject, Request Revision)
   const handleAssessmentAction = async (requestId, action, feedbackStr = '', revisionReasons = [], counterOfferAmount = null, counterOfferStartDate = null) => {
@@ -265,12 +328,14 @@ const LandownerDashboard = () => {
     }
   };
 
-  // Handle Landowner Recording Advance Mobilization Payment
+  // Handle Landowner Recording Advance or Final Payment
   const handleRecordAdvancePayment = async (requestId, paymentData) => {
     try {
       const nowIso = new Date().toISOString();
+      const isFinal = paymentData?.payment_purpose === 'FINAL_PAYMENT';
+      const payPrefix = isFinal ? 'PAY-FIN' : 'PAY-ADV';
       const newPayment = {
-        payment_id: `PAY-ADV-${Date.now()}`,
+        payment_id: `${payPrefix}-${Date.now()}`,
         harvest_request_id: String(requestId),
         amount: Number(paymentData.amount),
         payment_method: paymentData.payment_method,
@@ -278,6 +343,7 @@ const LandownerDashboard = () => {
         payment_date: paymentData.payment_date,
         receipt_url: paymentData.receipt_url || '',
         notes: paymentData.notes || '',
+        payment_purpose: isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_PAYMENT',
         status: 'VERIFICATION_PENDING',
         created_at: nowIso,
         updated_at: nowIso
@@ -290,6 +356,15 @@ const LandownerDashboard = () => {
           const updated = parsed.map(r => {
             if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
               const prevPayments = Array.isArray(r.payments) ? r.payments : [];
+              const isHarvestDone = r.is_advance_verified || r.status === 'COMPLETED';
+              if (isFinal || isHarvestDone) {
+                return {
+                  ...r,
+                  final_payment_status: 'VERIFICATION_PENDING',
+                  latest_payment: newPayment,
+                  payments: [newPayment, ...prevPayments.filter(p => p.transaction_reference !== newPayment.transaction_reference)]
+                };
+              }
               return {
                 ...r,
                 advance_payment_status: 'VERIFICATION_PENDING',
@@ -314,7 +389,9 @@ const LandownerDashboard = () => {
       await harvestService.submitAdvancePayment(requestId, paymentData);
       setAssessmentActionMsg({
         type: 'success',
-        text: 'Advance mobilization payment recorded successfully! Status: Verification Pending by contractor.'
+        text: isFinal
+          ? 'Final contract settlement recorded successfully! Status: Verification Pending by contractor.'
+          : 'Advance mobilization payment recorded successfully! Status: Verification Pending by contractor.'
       });
       if (refreshHarvestRequests) {
         refreshHarvestRequests();
@@ -817,7 +894,7 @@ const LandownerDashboard = () => {
                   { id: 'stage_4', num: 4, title: 'Scaling & Transit Prep', desc: 'Log scaling & haulage prep' }
                 ];
 
-                const stagesData = req.harvest_stages || {};
+                const stagesData = req.harvest_stages || assDoc.harvest_stages || {};
                 const getStageStatus = (sId) => {
                   const st = stagesData[sId];
                   if (!st) {
@@ -832,6 +909,8 @@ const LandownerDashboard = () => {
 
                 const verifiedCount = stagesConfig.filter(s => getStageStatus(s.id) === 'VERIFIED').length;
                 const progressPct = req.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : 15))));
+                const isCompleted = req.status === 'COMPLETED' || verifiedCount === 4;
+                const isSettlementDue = (isCompleted || verifiedCount === 4) && remainingBal > 0;
 
                 return (
                   <section key={reqId || qIdx} id="active-harvest-spotlight-section" className="active-harvest-spotlight-card">
@@ -865,6 +944,17 @@ const LandownerDashboard = () => {
                       </div>
 
                       <div className="active-spotlight-actions">
+                        {isSettlementDue && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                            className="active-spotlight-pay-btn"
+                            title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
+                          >
+                            <CreditCard size={15} />
+                            <span>Pay Balance ({formatINR(remainingBal)})</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setSelectedStageViewerModal(req)}
@@ -888,69 +978,69 @@ const LandownerDashboard = () => {
 
                     {/* Contractor Profile & Field Logistics Strip */}
                     <div className="active-spotlight-logistics-bar">
-                      <div className="active-contractor-col">
-                        <div className="active-contractor-avatar">
-                          <UserCheck size={22} />
-                        </div>
-                        <div className="active-contractor-info">
-                          <div className="active-contractor-name-row">
-                            <span className="active-contractor-name">{cName}</span>
-                            <span className="active-contractor-verified-badge">
-                              <ShieldCheck size={11} className="text-emerald-400" />
-                              Verified Contractor
-                            </span>
+                      <div className="active-contractor-top-row">
+                        <div className="active-contractor-col">
+                          <div className="active-contractor-avatar">
+                            <UserCheck size={24} />
                           </div>
-                          <p className="active-contractor-role-desc">
-                            Assigned certified contractor crew executing tree felling, processing, and log extraction operations.
-                          </p>
+                          <div className="active-contractor-info">
+                            <div className="active-contractor-name-row">
+                              <span className="active-contractor-name">{cName}</span>
+                              <span className="active-contractor-verified-badge">
+                                <ShieldCheck size={11} className="text-emerald-400" />
+                                Verified Contractor
+                              </span>
+                            </div>
+                            <p className="active-contractor-role-desc">
+                              Assigned certified contractor crew executing tree felling, processing, and log extraction operations.
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                         <div className="active-contractor-contact-group">
                           {cPhone && (
                             <a href={`tel:${cPhone}`} className="active-contact-pill-tel" title="Call assigned contractor">
-                              <Phone size={12} />
+                              <Phone size={13} />
                               <span>+91 {cPhone}</span>
                             </a>
                           )}
                           {cEmail && (
                             <a href={`mailto:${cEmail}`} className="active-contact-pill-mail" title="Send email to contractor">
-                              <Mail size={12} />
-                              <span>Email</span>
+                              <Mail size={13} />
+                              <span>Email Contractor</span>
                             </a>
                           )}
                         </div>
+                      </div>
 
-                        <div className="active-logistics-specs-grid">
-                          <div className="active-logistics-chip">
-                            <span className="active-chip-label">Assigned Crew</span>
-                            <span className="active-chip-value">
-                              <Users size={13} className="text-emerald-400 shrink-0" />
-                              {crewSize} Workers
-                            </span>
-                          </div>
-                          <div className="active-logistics-chip" title={fleetEquip}>
-                            <span className="active-chip-label">Machinery Deployed</span>
-                            <span className="active-chip-value truncate max-w-[130px]">
-                              <Truck size={13} className="text-emerald-400 shrink-0" />
-                              {fleetEquip}
-                            </span>
-                          </div>
-                          <div className="active-logistics-chip">
-                            <span className="active-chip-label">Start Schedule</span>
-                            <span className="active-chip-value text-emerald-300">
-                              <Calendar size={13} className="text-emerald-400 shrink-0" />
-                              {formatDateDMY(opStartDate)}
-                            </span>
-                          </div>
-                          <div className="active-logistics-chip">
-                            <span className="active-chip-label">Est. Volume / Scope</span>
-                            <span className="active-chip-value">
-                              <Trees size={13} className="text-emerald-400 shrink-0" />
-                              {scopeVolume} m³
-                            </span>
-                          </div>
+                      <div className="active-logistics-specs-grid">
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Assigned Crew</span>
+                          <span className="active-chip-value">
+                            <Users size={14} className="text-emerald-400 shrink-0" />
+                            <span>{crewSize} Workers</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip" title={fleetEquip}>
+                          <span className="active-chip-label">Machinery Deployed</span>
+                          <span className="active-chip-value" title={fleetEquip}>
+                            <Truck size={14} className="text-emerald-400 shrink-0" />
+                            <span className="truncate">{fleetEquip}</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Start Schedule</span>
+                          <span className="active-chip-value text-emerald-300">
+                            <Calendar size={14} className="text-emerald-400 shrink-0" />
+                            <span>{formatDateDMY(opStartDate)}</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Harvest Scope</span>
+                          <span className="active-chip-value">
+                            <Trees size={14} className="text-emerald-400 shrink-0" />
+                            <span>{scopeVolume} m³ • {jobDuration}</span>
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -974,12 +1064,36 @@ const LandownerDashboard = () => {
                         <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
                       </div>
 
-                      <div className="active-spotlight-stat">
-                        <span className="active-stat-label">Remaining Balance</span>
-                        <div className="active-stat-value text-slate-200">
+                      <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="active-stat-label">Remaining Balance</span>
+                          {isSettlementDue && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                              DUE
+                            </span>
+                          )}
+                        </div>
+                        <div className={`active-stat-value ${isSettlementDue ? 'text-amber-400 font-black' : 'text-slate-200'}`}>
                           {formatINR(remainingBal)}
                         </div>
-                        <span className="active-stat-hint">Due upon harvest progress / completion</span>
+                        {isSettlementDue ? (
+                          <div className="mt-2 space-y-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                              className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer transition-all"
+                            >
+                              <CreditCard size={12} /> Pay ₹ {remainingBal.toLocaleString('en-IN')} &rarr;
+                            </button>
+                            <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                              <AlertTriangle size={11} className="shrink-0" /> Post-Harvest Settlement Due
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="active-stat-hint">
+                            {remainingBal <= 0 ? '✓ All dues cleared' : 'Due upon harvest progress / completion'}
+                          </span>
+                        )}
                       </div>
 
                       <div className="active-spotlight-stat">
@@ -990,6 +1104,50 @@ const LandownerDashboard = () => {
                         <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
                       </div>
                     </div>
+
+                    {/* POST-HARVEST SETTLEMENT DUE FULL-WIDTH BANNER */}
+                    {isSettlementDue && (
+                      <div className="active-spotlight-settlement-banner">
+                        <div className="flex items-start gap-3.5">
+                          <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                            <CreditCard size={22} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                                Post-Harvest Settlement Due
+                              </span>
+                              <span className="text-xs text-slate-300 font-medium">
+                                Operations 100% Complete • All 4 Milestones Certified
+                              </span>
+                            </div>
+                            <h4 className="text-white text-base sm:text-lg font-bold mt-1">
+                              Pending Balance Payable to Contractor: <span className="text-amber-400 font-black">{formatINR(remainingBal)}</span>
+                            </h4>
+                            <p className="text-slate-300 text-xs mt-0.5 max-w-2xl leading-relaxed">
+                              All 4 harvesting milestones by <strong className="text-emerald-300 font-semibold">{cName}</strong> are certified and verified. Settle the pending balance of {formatINR(remainingBal)} to finalize the contract ledger.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/30 cursor-pointer transition-all hover:scale-[1.02]"
+                          >
+                            <CreditCard size={15} />
+                            <span>Pay with Razorpay ({formatINR(remainingBal)})</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'manual' })}
+                            className="px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-600 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                          >
+                            <span>Manual Bank Transfer</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Milestone Completion Progress & 4-Stage Interactive Stepper */}
                     <div className="active-milestones-section">
@@ -1145,6 +1303,17 @@ const LandownerDashboard = () => {
                           <FileText size={14} />
                           <span>Assessment Certificate</span>
                         </button>
+                        {(isCompleted || verifiedCount === 4) && remainingBal > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal })}
+                            className="active-spotlight-link-btn !bg-emerald-500 !text-slate-950 font-black hover:!bg-emerald-400 shadow-md shadow-emerald-500/20"
+                            title="Pay final contract settlement"
+                          >
+                            <CreditCard size={14} />
+                            <span>Pay Settlement ({formatINR(remainingBal)})</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => navigate(`/landowner/harvest-requests?requestId=${reqId}`)}
@@ -2257,6 +2426,8 @@ const LandownerDashboard = () => {
 
             const verifiedCount = stagesConfig.filter(s => getStageStatus(s.id) === 'VERIFIED').length;
             const progressPct = activeSpotlight.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : 15))));
+            const isCompleted = activeSpotlight.status === 'COMPLETED' || verifiedCount === 4;
+            const isSettlementDue = (isCompleted || verifiedCount === 4) && remainingBal > 0;
 
             return (
               <section id="active-harvest-spotlight-section-fallback" className="active-harvest-spotlight-card">
@@ -2290,6 +2461,17 @@ const LandownerDashboard = () => {
                   </div>
 
                   <div className="active-spotlight-actions">
+                    {isSettlementDue && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                        className="active-spotlight-pay-btn"
+                        title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
+                      >
+                        <CreditCard size={15} />
+                        <span>Pay Balance ({formatINR(remainingBal)})</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setSelectedStageViewerModal(activeSpotlight)}
@@ -2313,69 +2495,69 @@ const LandownerDashboard = () => {
 
                 {/* Contractor Profile & Field Logistics Strip */}
                 <div className="active-spotlight-logistics-bar">
-                  <div className="active-contractor-col">
-                    <div className="active-contractor-avatar">
-                      <UserCheck size={22} />
-                    </div>
-                    <div className="active-contractor-info">
-                      <div className="active-contractor-name-row">
-                        <span className="active-contractor-name">{cName}</span>
-                        <span className="active-contractor-verified-badge">
-                          <ShieldCheck size={11} className="text-emerald-400" />
-                          Verified Contractor
-                        </span>
+                  <div className="active-contractor-top-row">
+                    <div className="active-contractor-col">
+                      <div className="active-contractor-avatar">
+                        <UserCheck size={24} />
                       </div>
-                      <p className="active-contractor-role-desc">
-                        Assigned certified contractor crew executing tree felling, processing, and log extraction operations.
-                      </p>
+                      <div className="active-contractor-info">
+                        <div className="active-contractor-name-row">
+                          <span className="active-contractor-name">{cName}</span>
+                          <span className="active-contractor-verified-badge">
+                            <ShieldCheck size={11} className="text-emerald-400" />
+                            Verified Contractor
+                          </span>
+                        </div>
+                        <p className="active-contractor-role-desc">
+                          Assigned certified contractor crew executing tree felling, processing, and log extraction operations.
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <div className="active-contractor-contact-group">
                       {cPhone && (
                         <a href={`tel:${cPhone}`} className="active-contact-pill-tel" title="Call assigned contractor">
-                          <Phone size={12} />
+                          <Phone size={13} />
                           <span>+91 {cPhone}</span>
                         </a>
                       )}
                       {cEmail && (
                         <a href={`mailto:${cEmail}`} className="active-contact-pill-mail" title="Send email to contractor">
-                          <Mail size={12} />
-                          <span>Email</span>
+                          <Mail size={13} />
+                          <span>Email Contractor</span>
                         </a>
                       )}
                     </div>
+                  </div>
 
-                    <div className="active-logistics-specs-grid">
-                      <div className="active-logistics-chip">
-                        <span className="active-chip-label">Assigned Crew</span>
-                        <span className="active-chip-value">
-                          <Users size={13} className="text-emerald-400 shrink-0" />
-                          {crewSize} Workers
-                        </span>
-                      </div>
-                      <div className="active-logistics-chip" title={fleetEquip}>
-                        <span className="active-chip-label">Machinery Deployed</span>
-                        <span className="active-chip-value truncate max-w-[130px]">
-                          <Truck size={13} className="text-emerald-400 shrink-0" />
-                          {fleetEquip}
-                        </span>
-                      </div>
-                      <div className="active-logistics-chip">
-                        <span className="active-chip-label">Start Schedule</span>
-                        <span className="active-chip-value text-emerald-300">
-                          <Calendar size={13} className="text-emerald-400 shrink-0" />
-                          {formatDateDMY(opStartDate)}
-                        </span>
-                      </div>
-                      <div className="active-logistics-chip">
-                        <span className="active-chip-label">Est. Volume / Scope</span>
-                        <span className="active-chip-value">
-                          <Trees size={13} className="text-emerald-400 shrink-0" />
-                          {scopeVolume} m³
-                        </span>
-                      </div>
+                  <div className="active-logistics-specs-grid">
+                    <div className="active-logistics-chip">
+                      <span className="active-chip-label">Assigned Crew</span>
+                      <span className="active-chip-value">
+                        <Users size={14} className="text-emerald-400 shrink-0" />
+                        <span>{crewSize} Workers</span>
+                      </span>
+                    </div>
+                    <div className="active-logistics-chip" title={fleetEquip}>
+                      <span className="active-chip-label">Machinery Deployed</span>
+                      <span className="active-chip-value" title={fleetEquip}>
+                        <Truck size={14} className="text-emerald-400 shrink-0" />
+                        <span className="truncate">{fleetEquip}</span>
+                      </span>
+                    </div>
+                    <div className="active-logistics-chip">
+                      <span className="active-chip-label">Start Schedule</span>
+                      <span className="active-chip-value text-emerald-300">
+                        <Calendar size={14} className="text-emerald-400 shrink-0" />
+                        <span>{formatDateDMY(opStartDate)}</span>
+                      </span>
+                    </div>
+                    <div className="active-logistics-chip">
+                      <span className="active-chip-label">Harvest Scope</span>
+                      <span className="active-chip-value">
+                        <Trees size={14} className="text-emerald-400 shrink-0" />
+                        <span>{scopeVolume} m³ • {jobDuration}</span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -2399,12 +2581,36 @@ const LandownerDashboard = () => {
                     <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
                   </div>
 
-                  <div className="active-spotlight-stat">
-                    <span className="active-stat-label">Remaining Balance</span>
-                    <div className="active-stat-value text-slate-200">
+                  <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="active-stat-label">Remaining Balance</span>
+                      {isSettlementDue && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                          DUE
+                        </span>
+                      )}
+                    </div>
+                    <div className={`active-stat-value ${isSettlementDue ? 'text-amber-400 font-black' : 'text-slate-200'}`}>
                       {formatINR(remainingBal)}
                     </div>
-                    <span className="active-stat-hint">Due upon harvest progress / completion</span>
+                    {isSettlementDue ? (
+                      <div className="mt-2 space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                          className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer transition-all"
+                        >
+                          <CreditCard size={12} /> Pay ₹ {remainingBal.toLocaleString('en-IN')} &rarr;
+                        </button>
+                        <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                          <AlertTriangle size={11} className="shrink-0" /> Post-Harvest Settlement Due
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="active-stat-hint">
+                        {remainingBal <= 0 ? '✓ All dues cleared' : 'Due upon harvest progress / completion'}
+                      </span>
+                    )}
                   </div>
 
                   <div className="active-spotlight-stat">
@@ -2415,6 +2621,50 @@ const LandownerDashboard = () => {
                     <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
                   </div>
                 </div>
+
+                {/* POST-HARVEST SETTLEMENT DUE FULL-WIDTH BANNER */}
+                {isSettlementDue && (
+                  <div className="active-spotlight-settlement-banner">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                        <CreditCard size={22} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                            Post-Harvest Settlement Due
+                          </span>
+                          <span className="text-xs text-slate-300 font-medium">
+                            Operations 100% Complete • All 4 Milestones Certified
+                          </span>
+                        </div>
+                        <h4 className="text-white text-base sm:text-lg font-bold mt-1">
+                          Pending Balance Payable to Contractor: <span className="text-amber-400 font-black">{formatINR(remainingBal)}</span>
+                        </h4>
+                        <p className="text-slate-300 text-xs mt-0.5 max-w-2xl leading-relaxed">
+                          All 4 harvesting milestones by <strong className="text-emerald-300 font-semibold">{cName}</strong> are certified and verified. Settle the pending balance of {formatINR(remainingBal)} to finalize the contract ledger.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/30 cursor-pointer transition-all hover:scale-[1.02]"
+                      >
+                        <CreditCard size={15} />
+                        <span>Pay with Razorpay ({formatINR(remainingBal)})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'manual' })}
+                        className="px-3.5 py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-600 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                      >
+                        <span>Manual Bank Transfer</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Milestone Completion Progress & 4-Stage Interactive Stepper */}
                 <div className="active-milestones-section">
@@ -3557,14 +3807,17 @@ const LandownerDashboard = () => {
       {/* RECORD ADVANCE PAYMENT MODAL */}
       {selectedRecordPaymentModal && (
         <RecordAdvancePaymentModal
-          request={selectedRecordPaymentModal}
+          request={selectedRecordPaymentModal.req || selectedRecordPaymentModal}
+          mode={selectedRecordPaymentModal.mode}
+          defaultAmount={selectedRecordPaymentModal.defaultAmount}
+          initialTab={selectedRecordPaymentModal.initialTab || 'razorpay'}
           onClose={() => setSelectedRecordPaymentModal(null)}
-          onSubmit={(data) => handleRecordAdvancePayment(selectedRecordPaymentModal.id || selectedRecordPaymentModal._id, data)}
+          onSubmit={(data) => handleRecordAdvancePayment((selectedRecordPaymentModal.req || selectedRecordPaymentModal).id || (selectedRecordPaymentModal.req || selectedRecordPaymentModal)._id, data)}
           onPaymentSuccess={() => {
             if (refreshHarvestRequests) refreshHarvestRequests();
             setAssessmentActionMsg({
               type: 'success',
-              text: 'Advance payment verified successfully via Razorpay! Work is now authorized to begin.'
+              text: 'Payment verified successfully via Razorpay! Contract updated.'
             });
             setTimeout(() => setAssessmentActionMsg({ type: '', text: '' }), 5000);
           }}

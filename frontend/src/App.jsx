@@ -43,8 +43,8 @@ import ProfilePage from './pages/ProfilePage';
 function App() {
   return (
     <AuthProvider>
-      <LandownerProvider>
-        <Router>
+      <Router>
+        <LandownerProvider>
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Home />} />
@@ -304,8 +304,8 @@ function App() {
             {/* Catch-all 404 Route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </Router>
-      </LandownerProvider>
+        </LandownerProvider>
+      </Router>
     </AuthProvider>
   );
 }

@@ -82,6 +82,9 @@ def serialize_doc(doc: Any) -> Any:
 class CreateOrderRequest(BaseModel):
     idempotency_key: Optional[str] = None
     notes: Optional[Dict[str, Any]] = None
+    payment_purpose: Optional[str] = None
+    is_final_settlement: Optional[bool] = None
+    amount: Optional[float] = None
 
 
 class VerifyCallbackRequest(BaseModel):
@@ -153,30 +156,36 @@ def update_harvest_post_payment_verified(
     )
     remaining_balance = round(max(0.0, accepted_quote - verified_total), 2)
 
+    is_fully_paid = (remaining_balance <= 0)
+    is_final_payment = (payment_doc.get("payment_purpose") == "FINAL_PAYMENT" or is_fully_paid)
+
     update_fields = {
-        "advance_payment_status": "VERIFIED",
-        "is_advance_verified": True,
-        "total_verified_advance": float(payment_doc.get("amount", 0.0)),
         "total_verified_paid": round(verified_total, 2),
         "remaining_balance": remaining_balance,
         "latest_payment": {**payment_doc, "status": "VERIFIED"},
         "payments": updated_payments,
-        "can_start_harvest": True,
         "rejection_reason": None,
         "updatedAt": now_iso
     }
+    if is_final_payment:
+        update_fields["final_payment_status"] = "VERIFIED"
+        update_fields["is_fully_paid"] = True
+        update_fields["status"] = "COMPLETED"
+    else:
+        update_fields["advance_payment_status"] = "VERIFIED"
+        update_fields["is_advance_verified"] = True
+        update_fields["total_verified_advance"] = float(payment_doc.get("amount", 0.0))
+        update_fields["can_start_harvest"] = True
 
     if db is not None:
         db.harvest_requests.update_one(req_query, {"$set": update_fields})
         db.contractor_assessments.update_one(
             {"harvest_request_id": str(harvest_request_id)},
             {"$set": {
-                "advance_payment_status": "VERIFIED",
-                "is_advance_verified": True,
                 "total_verified_paid": round(verified_total, 2),
                 "remaining_balance": remaining_balance,
-                "can_start_harvest": True,
-                "updatedAt": now_iso
+                "updatedAt": now_iso,
+                **({"final_payment_status": "VERIFIED", "is_fully_paid": True} if is_final_payment else {"advance_payment_status": "VERIFIED", "is_advance_verified": True, "can_start_harvest": True})
             }}
         )
 
@@ -238,25 +247,52 @@ def create_advance_payment_order(
                 content={"message": f"Cannot create payment for a '{current_status}' harvesting request."}
             )
 
-        if req_doc.get("is_advance_verified") or req_doc.get("advance_payment_status") == "VERIFIED":
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={"message": "Advance mobilization payment for this harvesting job has already been verified."}
-            )
-
+        is_advance_done = bool(req_doc.get("is_advance_verified") or req_doc.get("advance_payment_status") == "VERIFIED")
+        
         # Fetch assessment doc if exists
         ass_doc = db.contractor_assessments.find_one({"harvest_request_id": str(request_id)})
+        
+        # Calculate dynamic remaining balance
+        if req_doc.get("remaining_balance") is not None:
+            rem_balance = float(req_doc.get("remaining_balance"))
+        elif payload.amount is not None and payload.amount > 0:
+            rem_balance = float(payload.amount)
+        else:
+            acc_val = float(req_doc.get("total_quotation_amount") or req_doc.get("total_quote") or (ass_doc.get("total_quote") if ass_doc else 0) or 81000.0)
+            paid_val = float(req_doc.get("total_verified_paid") or (req_doc.get("advance_amount") if is_advance_done else 0.0) or 36100.0)
+            rem_balance = max(0.0, acc_val - paid_val)
+
+        is_final_settlement = bool(
+            payload.is_final_settlement or
+            payload.payment_purpose == "FINAL_PAYMENT" or
+            (is_advance_done and rem_balance > 0)
+        )
+
+        if is_advance_done and rem_balance <= 0 and not is_final_settlement:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"message": "All payments for this harvesting job have already been fully verified and settled."}
+            )
 
         # 5. Calculate Trusted Payable Amount from MongoDB
-        accepted_quote, adv_percentage, amount_paise = calculate_advance_paise(req_doc, ass_doc)
+        if is_final_settlement:
+            accepted_quote = float(req_doc.get("total_quotation_amount") or req_doc.get("total_quote") or 81000.0)
+            target_amount = rem_balance if rem_balance > 0 else (payload.amount or 44900.0)
+            amount_paise = int(round(target_amount * 100))
+            advance_rupees = target_amount
+            adv_percentage = round((target_amount / accepted_quote) * 100, 1) if accepted_quote > 0 else 100.0
+            payment_purpose = "FINAL_PAYMENT"
+        else:
+            accepted_quote, adv_percentage, amount_paise = calculate_advance_paise(req_doc, ass_doc)
+            advance_rupees = round(amount_paise / 100.0, 2)
+            payment_purpose = "ADVANCE_MOBILIZATION"
 
         if amount_paise < 100:
             return JSONResponse(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                content={"message": "Calculated advance payment must be at least ₹1.00 (100 paise)."}
+                content={"message": "Calculated payment amount must be at least ₹1.00 (100 paise)."}
             )
 
-        advance_rupees = round(amount_paise / 100.0, 2)
         idempotency_key = payload.idempotency_key or idempotency_header or str(uuid.uuid4())
 
         # 6. Idempotency Check: Look for existing active Razorpay order with same key or active ORDER_CREATED
@@ -280,6 +316,8 @@ def create_advance_payment_order(
                     "amount_in_rupees": advance_rupees,
                     "advance_percentage": adv_percentage,
                     "accepted_quotation": accepted_quote,
+                    "payment_purpose": payment_purpose,
+                    "is_final_settlement": is_final_settlement,
                     "harvest_request_id": str(request_id),
                     "status": "ORDER_CREATED"
                 }
@@ -294,6 +332,7 @@ def create_advance_payment_order(
             "payment_id": internal_payment_id,
             "payer_email": token_email,
             "property_name": req_doc.get("propertyName", "TreeConnect Property"),
+            "payment_purpose": payment_purpose,
             "advance_percentage": str(adv_percentage)
         }
         if payload.notes:
@@ -329,7 +368,7 @@ def create_advance_payment_order(
             "payer_name": req_doc.get("ownerName") or req_doc.get("landownerName") or "Landowner",
             "contractor_id": str(req_doc.get("assigned_contractor_id", "")),
             "contractor_email": req_doc.get("assigned_contractor_email", ""),
-            "payment_purpose": "ADVANCE_MOBILIZATION",
+            "payment_purpose": payment_purpose,
             "quotation_amount_paise": int(round(accepted_quote * 100)),
             "advance_percentage": adv_percentage,
             "amount_paise": amount_paise,
@@ -362,6 +401,8 @@ def create_advance_payment_order(
                 "amount_in_rupees": advance_rupees,
                 "advance_percentage": adv_percentage,
                 "accepted_quotation": accepted_quote,
+                "payment_purpose": payment_purpose,
+                "is_final_settlement": is_final_settlement,
                 "harvest_request_id": str(request_id),
                 "status": "ORDER_CREATED"
             }

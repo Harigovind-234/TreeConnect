@@ -18,14 +18,50 @@ import { useAuth } from '../../context/AuthContext';
 import AdvanceMobilizationPayment from './AdvanceMobilizationPayment';
 import './DigitalAgreementModal.css';
 
-const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSuccess }) => {
+const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSuccess, mode, defaultAmount, initialTab = 'razorpay' }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('razorpay'); // 'razorpay' | 'manual'
+  const [activeTab, setActiveTab] = useState(initialTab); // 'razorpay' | 'manual'
   const [copiedField, setCopiedField] = useState(null);
 
   const advReq = request?.advance_payment_request || request?.assessment?.advance_payment_request || {};
-  const requestedAmount = Number(advReq?.advance_amount || 28215);
-  const acceptedQuotation = Number(advReq?.accepted_quotation || request?.total_quotation_amount || 104500);
+  const acceptedQuotation = Number(
+    advReq?.accepted_quotation ||
+    request?.total_quotation_amount ||
+    request?.total_quote ||
+    request?.assessment?.total_quote ||
+    104500
+  );
+
+  const advanceAmount = Number(
+    advReq?.advance_amount ||
+    request?.advance_amount ||
+    Math.round((acceptedQuotation * (advReq?.advance_percentage || 30)) / 100)
+  );
+
+  const isAdvanceVerified = Boolean(
+    request?.is_advance_verified ||
+    request?.advance_payment_status === 'VERIFIED'
+  );
+
+  const verifiedPaid = Number(
+    request?.total_verified_paid ||
+    (isAdvanceVerified ? advanceAmount : 0)
+  );
+
+  const remainingBalance = Number(
+    request?.remaining_balance !== undefined && request?.remaining_balance !== null
+      ? request.remaining_balance
+      : Math.max(0, acceptedQuotation - verifiedPaid)
+  );
+
+  const isFinal = Boolean(
+    mode === 'final' ||
+    (isAdvanceVerified && remainingBalance > 0)
+  );
+
+  const requestedAmount = isFinal
+    ? Number(defaultAmount || remainingBalance || 44900)
+    : Number(defaultAmount || advanceAmount || 28215);
 
   const upiId = advReq?.upi_id ||
     advReq?.payment_instructions?.match(/UPI\s*(?:ID)?\s*:\s*([^\n\r,;/]+)/i)?.[1]?.trim() ||
@@ -104,7 +140,8 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
           payment_date: paymentDate,
           amount: Number(amountPaid),
           receipt_url: receiptUrl || '',
-          notes: notes.trim()
+          notes: notes.trim(),
+          payment_purpose: isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_PAYMENT'
         });
       }
       onClose();
@@ -126,7 +163,8 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
         payment_date: new Date().toISOString().split('T')[0],
         amount: result.amount || requestedAmount,
         receipt_url: '',
-        notes: 'Verified via Razorpay Payment Gateway'
+        notes: isFinal ? 'Final settlement verified via Razorpay Gateway' : 'Verified via Razorpay Payment Gateway',
+        payment_purpose: isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_PAYMENT'
       }).catch(() => {});
     }
     setTimeout(() => {
@@ -145,10 +183,11 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
             </div>
             <div>
               <h3 className="text-lg font-black text-white">
-                Mobilization Advance Payment
+                {isFinal ? 'Final Contract Settlement Payment' : 'Mobilization Advance Payment'}
               </h3>
               <p className="text-xs text-slate-300">
                 Contractor: <strong className="text-white font-semibold">{request?.assigned_contractor_name || 'Assigned Contractor'}</strong>
+                {isFinal && <span className="text-emerald-400 font-bold ml-2">• Balance Due: {formatINR(remainingBalance)}</span>}
               </p>
             </div>
           </div>
@@ -198,6 +237,9 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
               <AdvanceMobilizationPayment
                 request={request}
                 user={user}
+                mode={isFinal ? 'final' : 'advance'}
+                isFinal={isFinal}
+                defaultAmount={requestedAmount}
                 onPaymentSuccess={handleOnlineSuccess}
                 onPaymentError={(err) => setErrorMsg(err.message || 'Payment failed')}
               />
@@ -225,7 +267,7 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
                   </div>
                   <div className="text-right">
                     <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
-                      Agreed Advance ({advReq?.advance_percentage || 27}%)
+                      {isFinal ? 'Remaining Balance Due' : `Agreed Advance (${advReq?.advance_percentage || 27}%)`}
                     </span>
                     <strong className="text-lg font-black text-emerald-400 font-mono">
                       {formatINR(requestedAmount)}

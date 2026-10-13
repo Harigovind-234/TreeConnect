@@ -46,6 +46,8 @@ export const useRazorpayCheckout = () => {
     requestId,
     harvestRequest,
     user,
+    payableAmount,
+    isFinal,
     onSuccess,
     onFailure,
     onCancel
@@ -67,7 +69,11 @@ export const useRazorpayCheckout = () => {
 
       // 2. Initialize Order from Backend
       setPaymentState(PAYMENT_STATES.CREATING_ORDER);
-      const orderData = await paymentService.createAdvanceOrder(requestId);
+      const orderData = await paymentService.createAdvanceOrder(requestId, {
+        is_final_settlement: Boolean(isFinal),
+        payment_purpose: isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_MOBILIZATION',
+        amount: payableAmount ? Number(payableAmount) : undefined
+      });
       setActivePayment(orderData);
 
       // 3. Prepare Checkout Modal Options
@@ -76,7 +82,9 @@ export const useRazorpayCheckout = () => {
         amount: orderData.amount, // in paise
         currency: orderData.currency || 'INR',
         name: 'TreeConnect Forestry',
-        description: `Advance Mobilization Payment (${orderData.advance_percentage || 27}%)`,
+        description: (orderData.is_final_settlement || orderData.payment_purpose === 'FINAL_PAYMENT')
+          ? 'Final Harvesting Settlement Payment'
+          : `Advance Mobilization Payment (${orderData.advance_percentage || 27}%)`,
         order_id: orderData.order_id,
         prefill: {
           name: user?.name || user?.fullName || harvestRequest?.ownerName || '',
@@ -161,7 +169,10 @@ export const useRazorpayCheckout = () => {
     } catch (err) {
       isProcessingRef.current = false;
       setPaymentState(PAYMENT_STATES.FAILED);
-      const errText = err.message || 'Failed to initialize payment checkout.';
+      let errText = err.response?.data?.message || err.message || 'Failed to initialize payment checkout.';
+      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error' || (typeof errText === 'string' && errText.toLowerCase().includes('network error'))) {
+        errText = 'Unable to connect to TreeConnect backend API (http://localhost:8000). The backend server was offline or unreachable. Please verify the server is running, or use the Manual Bank Transfer tab.';
+      }
       setErrorMessage(errText);
       if (onFailure) onFailure(err);
     }

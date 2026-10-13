@@ -4,7 +4,13 @@ from app.config import MONGODB_URL, DATABASE_NAME
 db = None
 
 try:
-    client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=15000, socketTimeoutMS=60000)
+    client = MongoClient(
+        MONGODB_URL,
+        serverSelectionTimeoutMS=10000,
+        connectTimeoutMS=8000,
+        socketTimeoutMS=10000,
+        readPreference="secondaryPreferred"
+    )
     client.admin.command("ping")
     print("[OK] MongoDB Connected Successfully")
     db = client[DATABASE_NAME]

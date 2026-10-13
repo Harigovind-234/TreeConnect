@@ -20,6 +20,9 @@ import PaymentStatus from './PaymentStatus';
 export const AdvanceMobilizationPayment = ({
   request,
   user,
+  mode,
+  isFinal: isFinalProp,
+  defaultAmount,
   onPaymentSuccess,
   onPaymentError,
   renderManualFallback
@@ -64,11 +67,32 @@ export const AdvanceMobilizationPayment = ({
     return Math.round(val);
   }
 
-  const isVerified = Boolean(
+  const isAdvanceVerified = Boolean(
     request?.is_advance_verified ||
-    request?.advance_payment_status === 'VERIFIED' ||
-    isSuccess
+    request?.advance_payment_status === 'VERIFIED'
   );
+
+  const remainingBalance = Number(
+    request?.remaining_balance !== undefined && request?.remaining_balance !== null
+      ? request.remaining_balance
+      : defaultAmount !== undefined && defaultAmount !== null
+        ? defaultAmount
+        : Math.max(0, acceptedQuotation - (request?.total_verified_paid || advanceAmount))
+  );
+
+  const isFinal = Boolean(
+    isFinalProp ||
+    mode === 'final' ||
+    (isAdvanceVerified && remainingBalance > 0)
+  );
+
+  const payableAmount = isFinal
+    ? Number(defaultAmount || remainingBalance || 44900)
+    : Number(defaultAmount || advanceAmount);
+
+  const isVerified = isFinal
+    ? Boolean(request?.is_fully_paid || request?.final_payment_status === 'VERIFIED' || (remainingBalance <= 0 && !defaultAmount) || isSuccess)
+    : Boolean(isAdvanceVerified || isSuccess);
 
   const handlePayClick = () => {
     if (isLoading || isVerified) return;
@@ -77,6 +101,8 @@ export const AdvanceMobilizationPayment = ({
       requestId: reqId,
       harvestRequest: request,
       user,
+      payableAmount,
+      isFinal,
       onSuccess: (result) => {
         if (onPaymentSuccess) onPaymentSuccess(result);
       },
@@ -110,7 +136,8 @@ export const AdvanceMobilizationPayment = ({
                 Payment Purpose
               </span>
               <span className="text-xs font-semibold text-emerald-300 flex items-center gap-1 justify-end">
-                <Sparkles size={12} className="text-emerald-400" /> Mobilization Advance ({advancePercentage}%)
+                <Sparkles size={12} className="text-emerald-400" />
+                {isFinal ? 'Final Contract Settlement' : `Mobilization Advance (${advancePercentage}%)`}
               </span>
             </div>
           </div>
@@ -119,30 +146,32 @@ export const AdvanceMobilizationPayment = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div className="p-3.5 rounded-xl bg-black/40 border border-emerald-500/20">
               <span className="text-[11px] font-medium text-slate-400 block mb-0.5">
-                Accepted Contractor Quotation
+                Accepted Total Contract Value
               </span>
               <strong className="text-base font-bold text-slate-200 font-mono">
                 {formatINR(acceptedQuotation)}
               </strong>
               <span className="text-[10.5px] text-slate-400 block mt-0.5">
-                Agreed total harvesting contract
+                {isFinal
+                  ? `Mobilization advance credited: ${formatINR(request?.total_verified_paid || advanceAmount)}`
+                  : 'Agreed total harvesting contract'}
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-gradient-to-br from-emerald-950/60 to-[#041a0c] border border-emerald-500/40">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">
-                  Advance Amount Payable
+                  {isFinal ? 'Remaining Balance Payable' : 'Advance Amount Payable'}
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
                   INR
                 </span>
               </div>
               <strong className="text-2xl font-black text-emerald-300 font-mono block my-0.5">
-                {formatINR(advanceAmount)}
+                {formatINR(payableAmount)}
               </strong>
               <span className="text-[10.5px] text-emerald-400/80 font-medium">
-                {advancePercentage}% mobilization deposit
+                {isFinal ? 'Due post-harvest completion' : `${advancePercentage}% mobilization deposit`}
               </span>
             </div>
           </div>
@@ -151,7 +180,7 @@ export const AdvanceMobilizationPayment = ({
           {paymentState !== PAYMENT_STATES.IDLE && (
             <PaymentStatus
               status={paymentState}
-              amount={advanceAmount}
+              amount={payableAmount}
               referenceId={activePayment?.razorpay_payment_id || activePayment?.order_id}
               errorMessage={errorMessage}
               onRetry={resetPaymentState}
@@ -177,7 +206,7 @@ export const AdvanceMobilizationPayment = ({
                 ) : (
                   <>
                     <CreditCard size={20} className="group-hover:scale-110 transition-transform" />
-                    <span>Pay {formatINR(advanceAmount)} with Razorpay</span>
+                    <span>Pay {formatINR(payableAmount)} with Razorpay</span>
                     <Lock size={16} className="text-slate-800 ml-1 opacity-70" />
                   </>
                 )}
@@ -201,7 +230,7 @@ export const AdvanceMobilizationPayment = ({
             <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2.5">
               <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
               <span>
-                <strong>Advance Mobilization Completed</strong> — Funds verified and credited to this harvest operation.
+                <strong>{isFinal ? 'Final Contract Settlement Completed' : 'Advance Mobilization Completed'}</strong> — Funds verified and credited to this harvest operation. {isFinal && 'Contract successfully closed and certified.'}
               </span>
             </div>
           )}

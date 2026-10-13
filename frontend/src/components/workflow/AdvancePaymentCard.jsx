@@ -24,7 +24,9 @@ import {
   Sparkles,
   Award
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { formatINR } from '../../utils/timberCalculations';
+import RecordAdvancePaymentModal from './RecordAdvancePaymentModal';
 import './AdvancePaymentCard.css';
 
 const formatDateDMY = (dateStr) => {
@@ -95,7 +97,17 @@ const AdvancePaymentCard = ({
   onOpenStages
 }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [copiedField, setCopiedField] = useState(null);
+  const [internalPaymentModal, setInternalPaymentModal] = useState(null);
+
+  const handleTriggerPayment = (opts = {}) => {
+    if (onRecordPayment) {
+      onRecordPayment(opts);
+    } else {
+      setInternalPaymentModal({ req: request, ...opts });
+    }
+  };
 
   const reqId = request?.id || request?._id;
   const ass = request?.assessment || {};
@@ -138,17 +150,69 @@ const AdvancePaymentCard = ({
       ? advReq.remaining_balance
       : request?.remaining_balance !== undefined && request?.remaining_balance !== null && request.remaining_balance !== acceptedQuotation
         ? request.remaining_balance
-        : Math.max(0, acceptedQuotation - advanceAmount - verifiedPaid)
+        : Math.max(0, acceptedQuotation - verifiedPaid)
   );
 
   const latestPayment = request?.latest_payment || request?.assessment?.latest_payment || (Array.isArray(request?.payments) && request.payments.length > 0 ? (request.payments[0] || request.payments[request.payments.length - 1]) : null);
   const paymentsList = Array.isArray(request?.payments) ? request.payments : [];
 
-  const badgeInfo = getPaymentStatusBadge(paymentStatus);
+  const isFullyPaid = Boolean(
+    request?.is_fully_paid ||
+    (remainingBalance <= 0 && isVerified) ||
+    request?.final_payment_status === 'VERIFIED'
+  );
+
+  const finalPaymentStatus = request?.final_payment_status ||
+    (paymentsList.find(p => p.payment_purpose === 'FINAL_PAYMENT')?.status) ||
+    null;
+
+  const pendingFinalPayment = paymentsList.find(
+    p => p.status === 'VERIFICATION_PENDING' && (p.payment_purpose === 'FINAL_PAYMENT' || isCompleted)
+  ) || (finalPaymentStatus === 'VERIFICATION_PENDING' ? latestPayment : null);
+
+  const isFinalPending = Boolean(
+    pendingFinalPayment ||
+    finalPaymentStatus === 'VERIFICATION_PENDING'
+  );
+
+  const isFinalRejected = Boolean(finalPaymentStatus === 'REJECTED');
+
+  let badgeInfo;
+  if (isFullyPaid) {
+    badgeInfo = {
+      label: '✓ 100% Fully Settled',
+      pillClass: 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/50 shadow-emerald-500/20',
+      cardModifier: 'apc-card-settled',
+      icon: Sparkles
+    };
+  } else if (isFinalPending) {
+    badgeInfo = {
+      label: 'Final Settlement Pending Verification',
+      pillClass: 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
+      cardModifier: 'apc-card-pending',
+      icon: Clock
+    };
+  } else if (isFinalRejected) {
+    badgeInfo = {
+      label: 'Final Settlement Rejected',
+      pillClass: 'bg-red-500/20 text-red-300 border border-red-500/40',
+      cardModifier: 'apc-card-rejected',
+      icon: XCircle
+    };
+  } else if (isCompleted && remainingBalance > 0) {
+    badgeInfo = {
+      label: `Final Settlement Due (${formatINR(remainingBalance)})`,
+      pillClass: 'bg-amber-500/25 text-amber-300 border border-amber-400/50',
+      cardModifier: 'apc-card-pending',
+      icon: CreditCard
+    };
+  } else {
+    badgeInfo = getPaymentStatusBadge(paymentStatus);
+  }
   const StatusIcon = badgeInfo.icon;
 
-  const isContractor = role === 'contractor' || role === 'admin';
-  const isLandowner = role === 'landowner';
+  const isContractor = role === 'contractor' || (role !== 'landowner' && user?.role === 'contractor') || role === 'admin';
+  const isLandowner = role === 'landowner' || (!isContractor && (user?.role === 'landowner' || user?.email === (request?.owner_email || request?.ownerEmail || 'harigovind@keralatree.in')));
 
   // Extract structured contractor payment details
   const upiId = advReq?.upi_id ||
@@ -193,7 +257,7 @@ const AdvancePaymentCard = ({
                 Advance Payment &amp; Financial Mobilization
               </h4>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-black flex items-center gap-1.5 shadow-sm ${badgeInfo.pillClass}`}>
-                <StatusIcon size={12} className={paymentStatus === 'ADVANCE_REQUESTED' ? 'animate-pulse' : ''} />
+                <StatusIcon size={12} className={paymentStatus === 'ADVANCE_REQUESTED' || isFinalPending ? 'animate-pulse' : ''} />
                 <span>{badgeInfo.label}</span>
               </span>
             </div>
@@ -225,11 +289,35 @@ const AdvancePaymentCard = ({
           {isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && (
             <button
               type="button"
-              onClick={onRecordPayment}
+              onClick={() => onRecordPayment && onRecordPayment({ mode: 'advance', defaultAmount: advanceAmount })}
               className="cd-btn-inspect-primary cursor-pointer shadow-md"
             >
               <CreditCard size={14} />
               <span>{paymentStatus === 'REJECTED' ? 'Resubmit Payment Details' : 'Record Advance Payment'}</span>
+            </button>
+          )}
+
+          {/* LANDOWNER: PAY FINAL BALANCE (WHEN HARVEST COMPLETED AND BALANCE REMAINS) */}
+          {isLandowner && isCompleted && remainingBalance > 0 && !isFullyPaid && !isFinalPending && !isFinalRejected && (
+            <button
+              type="button"
+              onClick={() => onRecordPayment && onRecordPayment({ mode: 'final', defaultAmount: remainingBalance })}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+            >
+              <CreditCard size={14} />
+              <span>Pay Final Balance ({formatINR(remainingBalance)})</span>
+            </button>
+          )}
+
+          {/* LANDOWNER: RESUBMIT FINAL PAYMENT */}
+          {isLandowner && isCompleted && isFinalRejected && (
+            <button
+              type="button"
+              onClick={() => onRecordPayment && onRecordPayment({ mode: 'final', defaultAmount: remainingBalance })}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer transition-all"
+            >
+              <RotateCcw size={14} />
+              <span>Resubmit Final Settlement</span>
             </button>
           )}
         </div>
@@ -428,7 +516,7 @@ const AdvancePaymentCard = ({
           )}
 
           {/* PROMINENT ACTION FOR LANDOWNER TO PAY ADVANCE */}
-          {isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && (
+          {isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && !isCompleted && (
             <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 via-teal-950/40 to-emerald-950/60 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
               <div>
                 <span className="text-xs text-slate-200 leading-relaxed block">
@@ -441,11 +529,51 @@ const AdvancePaymentCard = ({
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 <button
                   type="button"
-                  onClick={onRecordPayment}
+                  onClick={() => handleTriggerPayment({ mode: 'advance', defaultAmount: advanceAmount, initialTab: 'razorpay' })}
                   className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg transition-all cursor-pointer"
                 >
                   <CreditCard size={14} />
                   <span>Pay {formatINR(advanceAmount)} with Razorpay</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PROMINENT ACTION FOR LANDOWNER TO PAY POST-HARVEST FINAL SETTLEMENT */}
+          {isLandowner && (isCompleted || verifiedCount === 4) && remainingBalance > 0 && !isFinalPending && !isFullyPaid && (
+            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#031d0d] via-[#063319] to-[#031d0d] border border-emerald-400/60 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950 flex items-center gap-1 shadow-sm">
+                    <Sparkles size={11} /> Post-Harvest Settlement Due
+                  </span>
+                  <span className="text-xs text-emerald-300 font-bold flex items-center gap-1">
+                    <CheckCircle2 size={13} className="text-emerald-400" /> Operations Complete • All 4 Milestones Certified
+                  </span>
+                </div>
+                <h4 className="text-sm sm:text-base font-black text-white">
+                  Pending Balance Payable to Contractor: <span className="text-amber-300 font-mono font-black">{formatINR(remainingBalance)}</span>
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                  Harvesting operations have concluded successfully. Mobilization advance of {formatINR(verifiedPaid)} was credited. Please settle the remaining balance of {formatINR(remainingBalance)} to complete and close the contract.
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleTriggerPayment({ mode: 'final', defaultAmount: remainingBalance, initialTab: 'razorpay' })}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
+                >
+                  <CreditCard size={15} />
+                  <span>Pay {formatINR(remainingBalance)} with Razorpay</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTriggerPayment({ mode: 'final', defaultAmount: remainingBalance, initialTab: 'manual' })}
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Building2 size={14} className="text-slate-400" />
+                  <span>Manual Transfer</span>
                 </button>
               </div>
             </div>
@@ -710,6 +838,168 @@ const AdvancePaymentCard = ({
         </div>
       )}
 
+      {/* POST-HARVEST FINAL CONTRACT SETTLEMENT */}
+      {isCompleted && (
+        <div className="space-y-3">
+          {isFullyPaid ? (
+            <div className="apc-alert-box apc-alert-verified bg-gradient-to-r from-[#03200f] via-[#063318] to-[#03200f] border border-emerald-400 shadow-xl flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300 shrink-0 shadow-lg shadow-emerald-500/20">
+                  <Sparkles size={24} className="text-emerald-400 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 flex items-center gap-1 shadow-sm">
+                      <CheckCircle2 size={12} /> 100% Contract Cleared
+                    </span>
+                    <span className="text-xs text-emerald-300 font-bold">
+                      Zero Balance Outstanding (₹ 0)
+                    </span>
+                  </div>
+                  <h4 className="text-sm sm:text-base font-black text-white mt-1">
+                    Contract 100% Fully Settled &amp; Closed
+                  </h4>
+                  <p className="text-xs text-emerald-200/90 mt-0.5 leading-relaxed">
+                    All 4 harvesting milestones and the complete contract value of <strong className="text-white font-mono">{formatINR(acceptedQuotation)}</strong> have been certified and settled with contractor <strong className="text-white">{request?.assigned_contractor_name || 'Rohith Kumar'}</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 hidden sm:block">
+                <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs">
+                  ✓ Closed &amp; Archived
+                </span>
+              </div>
+            </div>
+          ) : remainingBalance > 0 && (
+            <div>
+              {/* PENDING VERIFICATION STATE */}
+              {isFinalPending && (
+                <div className="apc-alert-box apc-alert-pending border border-amber-500/50 bg-[#140e02] shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <Clock size={22} className="text-amber-400 shrink-0 mt-0.5 animate-pulse" />
+                    <div className="min-w-0">
+                      <strong className="text-xs sm:text-sm font-black text-amber-300 block">
+                        Final Settlement Payment Submitted — Verification Pending
+                      </strong>
+                      <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                        Amount: <strong className="text-white font-mono">{formatINR(pendingFinalPayment?.amount || remainingBalance)}</strong> {pendingFinalPayment?.payment_method ? `via ${pendingFinalPayment.payment_method}` : ''} • Ref ID / UTR: <strong className="text-amber-200 font-mono">{pendingFinalPayment?.transaction_reference || 'Recorded by Landowner'}</strong>.
+                      </p>
+                      <p className="text-[11.5px] text-slate-400 mt-0.5">
+                        {isContractor
+                          ? 'Please reconcile this transaction with your bank statement to close the contract.'
+                          : 'Awaiting contractor verification. Once approved, your harvesting contract will be closed as 100% fully settled.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {isContractor && (
+                    <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => onRejectPayment(pendingFinalPayment || {})}
+                        className="cd-btn-inspect-secondary text-red-300 border-red-500/35 hover:border-red-500/60 hover:bg-red-950/60 cursor-pointer text-xs"
+                      >
+                        <XCircle size={13} />
+                        <span>Reject</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onVerifyPayment(pendingFinalPayment || {})}
+                        className="cd-btn-inspect-primary cursor-pointer shadow-md text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold"
+                      >
+                        <CheckCircle2 size={13} />
+                        <span>Verify &amp; Close Contract</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* REJECTED STATE */}
+              {isFinalRejected && (
+                <div className="apc-alert-box apc-alert-rejected flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <XCircle size={20} className="text-red-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <strong className="text-xs sm:text-sm font-black text-red-300 block">
+                        Final Settlement Payment Verification Rejected by Contractor
+                      </strong>
+                      <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                        Reason: <em className="text-red-200 font-semibold">"{request?.rejection_reason || pendingFinalPayment?.rejection_reason || 'Transaction could not be reconciled with bank statement.'}"</em>
+                      </p>
+                    </div>
+                  </div>
+
+                  {isLandowner && (
+                    <button
+                      type="button"
+                      onClick={() => onRecordPayment && onRecordPayment({ mode: 'final', defaultAmount: remainingBalance })}
+                      className="cd-btn-inspect-primary shrink-0 cursor-pointer text-xs"
+                    >
+                      <RotateCcw size={13} />
+                      <span>Resubmit Final Settlement</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* AWAITING SETTLEMENT (LANDOWNER NEEDS TO PAY REMAINING BALANCE) */}
+              {!isFinalPending && !isFinalRejected && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#031d0d] via-[#052914] to-[#031d0d] border border-emerald-500/60 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
+                        Post-Harvest Settlement Due
+                      </span>
+                      <span className="text-xs text-emerald-300 font-semibold">
+                        Operations Complete • Final Clearance
+                      </span>
+                    </div>
+                    <h4 className="text-base font-black text-white">
+                      Pending Balance Payable to Contractor: <span className="text-amber-300 font-mono font-black">{formatINR(remainingBalance)}</span>
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-0.5 leading-relaxed max-w-2xl">
+                      {isLandowner
+                        ? `Harvesting operations have concluded successfully. Mobilization advance of ${formatINR(verifiedPaid)} was credited. Please settle the remaining balance of ${formatINR(remainingBalance)} to complete and close the contract.`
+                        : `All 4 milestones certified. Remaining balance of ${formatINR(remainingBalance)} is payable post-harvest by landowner ${request?.ownerName || request?.landownerName || 'Landowner'}.`}
+                    </p>
+                  </div>
+
+                  {isLandowner && (
+                    <div className="shrink-0 flex items-center gap-2.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerPayment({ mode: 'final', defaultAmount: remainingBalance, initialTab: 'razorpay' })}
+                        className="px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2.5 shadow-lg shadow-emerald-500/20 cursor-pointer transition-all"
+                      >
+                        <CreditCard size={16} />
+                        <span>Pay {formatINR(remainingBalance)} with Razorpay</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleTriggerPayment({ mode: 'final', defaultAmount: remainingBalance, initialTab: 'manual' })}
+                        className="px-4 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 font-bold text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer"
+                      >
+                        <Building2 size={15} className="text-slate-400" />
+                        <span>Manual Transfer</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {!isLandowner && (
+                    <div className="shrink-0 flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                      <Clock size={15} className="text-amber-400 shrink-0" />
+                      <span>Awaiting Landowner Harigovind D Nair to settle {formatINR(remainingBalance)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* PAYMENT HISTORY ACCORDION/LOG */}
       {paymentsList.length > 0 && (
         <div className="pt-2 border-t border-emerald-500/15">
@@ -742,6 +1032,25 @@ const AdvancePaymentCard = ({
             ))}
           </div>
         </div>
+      )}
+
+      {/* INTERNAL RECORD PAYMENT MODAL (FALLBACK WHEN ONRECORDPAYMENT NOT PASSED EXTERNALLY) */}
+      {internalPaymentModal && (
+        <RecordAdvancePaymentModal
+          request={internalPaymentModal.req || request}
+          mode={internalPaymentModal.mode}
+          defaultAmount={internalPaymentModal.defaultAmount}
+          initialTab={internalPaymentModal.initialTab || 'razorpay'}
+          onClose={() => setInternalPaymentModal(null)}
+          onSubmit={async (data) => {
+            setInternalPaymentModal(null);
+            window.location.reload();
+          }}
+          onPaymentSuccess={() => {
+            setInternalPaymentModal(null);
+            window.location.reload();
+          }}
+        />
       )}
     </div>
   );

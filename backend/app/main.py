@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from app.database import db
 from app.routers import auth, admin, property, harvest, payment
 
@@ -22,6 +23,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1000
 )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

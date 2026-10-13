@@ -476,32 +476,35 @@ def get_approved_users():
         emails_seen.add(admin_email)
 
         if db is not None:
-            db_users = list(db.users.find({
-                "$or": [
-                    {"status": "Active"},
-                    {"role": "admin"}
-                ]
-            }))
-            for u in db_users:
-                email = u.get("email", "").strip().lower()
-                if not email or email in emails_seen:
-                    continue
-                role = u.get("role", "landowner")
-                status_val = u.get("status", "Pending")
-                is_verified = u.get("isVerified", False)
+            try:
+                db_users = list(db.users.find({
+                    "$or": [
+                        {"status": "Active"},
+                        {"role": "admin"}
+                    ]
+                }).max_time_ms(4000))
+                for u in db_users:
+                    email = u.get("email", "").strip().lower()
+                    if not email or email in emails_seen:
+                        continue
+                    role = u.get("role", "landowner")
+                    status_val = u.get("status", "Pending")
+                    is_verified = u.get("isVerified", False)
 
-                # Include platform admin or accounts approved by admin
-                if role == "admin" or (status_val == "Active" and is_verified):
-                    name = u.get("fullName") or u.get("companyName") or u.get("contactPerson") or u.get("name") or email.split("@")[0]
-                    approved_users.append({
-                        "id": str(u.get("_id", "")),
-                        "name": name,
-                        "email": email,
-                        "role": role,
-                        "status": status_val,
-                        "isVerified": is_verified
-                    })
-                    emails_seen.add(email)
+                    # Include platform admin or accounts approved by admin
+                    if role == "admin" or (status_val == "Active" and is_verified):
+                        name = u.get("fullName") or u.get("companyName") or u.get("contactPerson") or u.get("name") or email.split("@")[0]
+                        approved_users.append({
+                            "id": str(u.get("_id", "")),
+                            "name": name,
+                            "email": email,
+                            "role": role,
+                            "status": status_val,
+                            "isVerified": is_verified
+                        })
+                        emails_seen.add(email)
+            except Exception as query_err:
+                print(f"[WARN] db.users query in get_approved_users timed out or failed: {query_err}")
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -509,8 +512,8 @@ def get_approved_users():
         )
     except Exception as e:
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"message": f"Failed to fetch approved users: {str(e)}"}
+            status_code=status.HTTP_200_OK,
+            content={"users": approved_users}
         )
 
 @router.put("/user-profile/fleet")

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import propertyService from '../services/propertyService';
 import harvestService from '../services/harvestService';
 import { useAuth } from './AuthContext';
@@ -37,23 +38,59 @@ const cleanPropertyImages = (list) => {
     });
 };
 
+const filterByCurrentUser = (list, email) => {
+    if (!Array.isArray(list) || !email) return [];
+    const cleanEmail = email.toLowerCase().trim();
+    return list.filter(item => {
+        if (!item) return false;
+        const itemEmail = String(
+            item.userEmail ||
+            item.owner_email ||
+            item.landowner_email ||
+            item.ownerEmail ||
+            ''
+        ).toLowerCase().trim();
+        return itemEmail === cleanEmail;
+    });
+};
+
 const DEFAULT_PROPERTIES = [];
 
 const DEFAULT_TREE_INVENTORIES = [];
 
 export const LandownerProvider = ({ children }) => {
     const auth = useAuth();
-    const user = auth?.user;
+    let location = { pathname: '/' };
+    try {
+        location = useLocation();
+    } catch (e) {
+        // Fallback if rendered outside router in tests
+    }
+    const storedUser = (() => {
+        try {
+            const raw = localStorage.getItem('treeconnect_user');
+            return raw ? JSON.parse(raw) : null;
+        } catch { return null; }
+    })();
+    const user = auth?.user || storedUser;
+    const currentEmail = (user?.email || '').toLowerCase().trim();
 
     const [loadingProperties, setLoadingProperties] = useState(false);
 
     // 1. Initial Properties State
     const [properties, setProperties] = useState(() => {
         try {
-            const stored = localStorage.getItem('treeconnect_properties');
-            if (stored !== null) {
-                const parsed = JSON.parse(stored);
-                return cleanPropertyImages(filterOutMockData(parsed));
+            if (currentEmail) {
+                const userKey = `treeconnect_properties_${currentEmail}`;
+                const userStored = localStorage.getItem(userKey);
+                if (userStored) {
+                    return filterByCurrentUser(cleanPropertyImages(filterOutMockData(JSON.parse(userStored))), currentEmail);
+                }
+                const stored = localStorage.getItem('treeconnect_properties');
+                if (stored !== null) {
+                    const parsed = JSON.parse(stored);
+                    return filterByCurrentUser(cleanPropertyImages(filterOutMockData(parsed)), currentEmail);
+                }
             }
         } catch (e) {
             console.warn("Could not load properties from localStorage:", e);
@@ -64,18 +101,34 @@ export const LandownerProvider = ({ children }) => {
     // 2. Initial Tree Inventories State
     const [inventories, setInventories] = useState(() => {
         try {
-            const stored = localStorage.getItem('treeconnect_inventories');
-            if (stored !== null) {
-                const parsed = JSON.parse(stored);
-                const cleaned = filterOutMockData(parsed);
-                return cleaned.map(inv => {
-                    const cleanPhotos = (inv.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'));
-                    const cleanSpeciesList = (inv.speciesList || []).map(sp => ({
-                        ...sp,
-                        photos: (sp.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'))
-                    }));
-                    return { ...inv, photos: cleanPhotos, speciesList: cleanSpeciesList };
-                });
+            if (currentEmail) {
+                const userKey = `treeconnect_inventories_${currentEmail}`;
+                const userStored = localStorage.getItem(userKey);
+                if (userStored) {
+                    const parsed = JSON.parse(userStored);
+                    const cleaned = filterByCurrentUser(filterOutMockData(parsed), currentEmail);
+                    return cleaned.map(inv => {
+                        const cleanPhotos = (inv.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'));
+                        const cleanSpeciesList = (inv.speciesList || []).map(sp => ({
+                            ...sp,
+                            photos: (sp.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'))
+                        }));
+                        return { ...inv, photos: cleanPhotos, speciesList: cleanSpeciesList };
+                    });
+                }
+                const stored = localStorage.getItem('treeconnect_inventories');
+                if (stored !== null) {
+                    const parsed = JSON.parse(stored);
+                    const cleaned = filterByCurrentUser(filterOutMockData(parsed), currentEmail);
+                    return cleaned.map(inv => {
+                        const cleanPhotos = (inv.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'));
+                        const cleanSpeciesList = (inv.speciesList || []).map(sp => ({
+                            ...sp,
+                            photos: (sp.photos || []).filter(p => typeof p === 'string' && !p.includes('unsplash.com'))
+                        }));
+                        return { ...inv, photos: cleanPhotos, speciesList: cleanSpeciesList };
+                    });
+                }
             }
         } catch (e) {
             console.warn("Could not load tree inventories from localStorage:", e);
@@ -86,10 +139,17 @@ export const LandownerProvider = ({ children }) => {
     // 3. Initial Completed Harvesting Operations State
     const [completedHarvests, setCompletedHarvests] = useState(() => {
         try {
-            const stored = localStorage.getItem('treeconnect_completed_harvests');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                return filterOutMockData(parsed);
+            if (currentEmail) {
+                const userKey = `treeconnect_completed_harvests_${currentEmail}`;
+                const userStored = localStorage.getItem(userKey);
+                if (userStored) {
+                    return filterByCurrentUser(filterOutMockData(JSON.parse(userStored)), currentEmail);
+                }
+                const stored = localStorage.getItem('treeconnect_completed_harvests');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    return filterByCurrentUser(filterOutMockData(parsed), currentEmail);
+                }
             }
         } catch (e) {
             console.warn("Could not load completed harvests from localStorage:", e);
@@ -100,10 +160,17 @@ export const LandownerProvider = ({ children }) => {
     // 4. Initial Harvest Requests State
     const [harvestRequests, setHarvestRequests] = useState(() => {
         try {
-            const stored = localStorage.getItem('treeconnect_harvest_requests');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                return filterOutMockData(parsed);
+            if (currentEmail) {
+                const userKey = `treeconnect_harvest_requests_${currentEmail}`;
+                const userStored = localStorage.getItem(userKey);
+                if (userStored) {
+                    return filterByCurrentUser(filterOutMockData(JSON.parse(userStored)), currentEmail);
+                }
+                const stored = localStorage.getItem('treeconnect_harvest_requests');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    return filterByCurrentUser(filterOutMockData(parsed), currentEmail);
+                }
             }
         } catch (e) {
             console.warn("Could not load harvest requests from localStorage:", e);
@@ -114,10 +181,17 @@ export const LandownerProvider = ({ children }) => {
     // 5. Initial Timber Listings State
     const [timberListings, setTimberListings] = useState(() => {
         try {
-            const stored = localStorage.getItem('treeconnect_timber_listings');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                return filterOutMockData(parsed);
+            if (currentEmail) {
+                const userKey = `treeconnect_timber_listings_${currentEmail}`;
+                const userStored = localStorage.getItem(userKey);
+                if (userStored) {
+                    return filterByCurrentUser(filterOutMockData(JSON.parse(userStored)), currentEmail);
+                }
+                const stored = localStorage.getItem('treeconnect_timber_listings');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    return filterByCurrentUser(filterOutMockData(parsed), currentEmail);
+                }
             }
         } catch (e) {
             console.warn("Could not load timber listings from localStorage:", e);
@@ -127,109 +201,197 @@ export const LandownerProvider = ({ children }) => {
 
     // Sync properties with backend database whenever user auth state or email changes
     const fetchDBProperties = useCallback(async () => {
+        if (!currentEmail) {
+            setProperties([]);
+            return;
+        }
         setLoadingProperties(true);
         try {
-            const storedUserStr = localStorage.getItem('treeconnect_user');
-            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
-            const userEmail = user?.email || storedUser?.email || '';
-
-            const data = await propertyService.getProperties(userEmail ? { userEmail } : {});
+            const data = await propertyService.getProperties({ userEmail: currentEmail });
             if (data && Array.isArray(data.properties)) {
-                const cleanDBProps = cleanPropertyImages(filterOutMockData(data.properties));
+                const cleanDBProps = filterByCurrentUser(cleanPropertyImages(filterOutMockData(data.properties)), currentEmail);
                 setProperties(cleanDBProps);
                 try {
-                    localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
+                    localStorage.setItem(`treeconnect_properties_${currentEmail}`, JSON.stringify(cleanDBProps));
+                    if (cleanDBProps.length > 0) {
+                        localStorage.setItem('treeconnect_properties', JSON.stringify(cleanDBProps));
+                    }
                 } catch (e) {
                     console.warn("Could not cache properties to localStorage due to size limit, using React state.", e);
                 }
+            } else {
+                setProperties([]);
             }
         } catch (err) {
             console.warn("Could not load properties from backend database:", err);
+            try {
+                const storedProps = localStorage.getItem(`treeconnect_properties_${currentEmail}`) || localStorage.getItem('treeconnect_properties');
+                if (storedProps) {
+                    const cachedProps = filterByCurrentUser(cleanPropertyImages(filterOutMockData(JSON.parse(storedProps))), currentEmail);
+                    if (cachedProps.length > 0) setProperties(cachedProps);
+                }
+            } catch (e) {}
         } finally {
             setLoadingProperties(false);
         }
-    }, [user?.email]);
+    }, [currentEmail]);
 
     // Sync harvest requests with backend database
     const fetchDBHarvestRequests = useCallback(async () => {
+        if (!currentEmail) {
+            setHarvestRequests([]);
+            return;
+        }
         try {
-            const storedUserStr = localStorage.getItem('treeconnect_user');
-            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
-            const userEmail = user?.email || storedUser?.email || '';
-
-            const data = await harvestService.getHarvestRequests(userEmail ? { userEmail } : {});
+            const data = await harvestService.getHarvestRequests({ userEmail: currentEmail });
             if (data && Array.isArray(data.harvest_requests)) {
-                const cleanRequests = filterOutMockData(data.harvest_requests);
+                const cleanRequests = filterByCurrentUser(filterOutMockData(data.harvest_requests), currentEmail);
                 setHarvestRequests(cleanRequests);
                 try {
-                    localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(cleanRequests));
+                    localStorage.setItem(`treeconnect_harvest_requests_${currentEmail}`, JSON.stringify(cleanRequests));
+                    if (cleanRequests.length > 0) {
+                        localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(cleanRequests));
+                    }
                 } catch (e) { }
+            } else {
+                setHarvestRequests([]);
             }
         } catch (err) {
             console.warn("Could not load harvest requests from backend database:", err);
+            try {
+                const storedReqs = localStorage.getItem(`treeconnect_harvest_requests_${currentEmail}`) || localStorage.getItem('treeconnect_harvest_requests');
+                if (storedReqs) {
+                    const cachedReqs = filterByCurrentUser(filterOutMockData(JSON.parse(storedReqs)), currentEmail);
+                    if (cachedReqs.length > 0) setHarvestRequests(cachedReqs);
+                }
+            } catch (e) {}
         }
-    }, [user?.email]);
+    }, [currentEmail]);
 
     // Sync tree inventories with backend database
     const fetchDBInventories = useCallback(async () => {
+        if (!currentEmail) {
+            setInventories([]);
+            return;
+        }
         try {
-            const storedUserStr = localStorage.getItem('treeconnect_user');
-            const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
-            const userEmail = user?.email || storedUser?.email || '';
-
-            const data = await propertyService.getTreeInventories(userEmail ? { userEmail } : {});
+            const data = await propertyService.getTreeInventories({ userEmail: currentEmail });
             if (data && Array.isArray(data.inventories)) {
-                const cleanDBInvs = filterOutMockData(data.inventories);
+                const cleanDBInvs = filterByCurrentUser(filterOutMockData(data.inventories), currentEmail);
                 setInventories(cleanDBInvs);
                 try {
-                    localStorage.setItem('treeconnect_inventories', JSON.stringify(cleanDBInvs));
+                    localStorage.setItem(`treeconnect_inventories_${currentEmail}`, JSON.stringify(cleanDBInvs));
+                    if (cleanDBInvs.length > 0) {
+                        localStorage.setItem('treeconnect_inventories', JSON.stringify(cleanDBInvs));
+                    }
                 } catch (e) { }
+            } else {
+                setInventories([]);
             }
         } catch (err) {
             console.warn("Could not load tree inventories from backend database:", err);
+            try {
+                const storedInvs = localStorage.getItem(`treeconnect_inventories_${currentEmail}`) || localStorage.getItem('treeconnect_inventories');
+                if (storedInvs) {
+                    const cachedInvs = filterByCurrentUser(filterOutMockData(JSON.parse(storedInvs)), currentEmail);
+                    if (cachedInvs.length > 0) setInventories(cachedInvs);
+                }
+            } catch (e) {}
         }
-    }, [user?.email]);
+    }, [currentEmail]);
 
+    // Immediate cleanup & refresh when logged-in landowner account changes
     useEffect(() => {
-        fetchDBProperties();
-        fetchDBHarvestRequests();
-        fetchDBInventories();
-    }, [fetchDBProperties, fetchDBHarvestRequests, fetchDBInventories, user?.email]);
+        if (!currentEmail) {
+            setProperties([]);
+            setHarvestRequests([]);
+            setInventories([]);
+            setCompletedHarvests([]);
+            setTimberListings([]);
+            return;
+        }
+
+        // Restore any existing cached items for the current user immediately
+        try {
+            const storedProps = localStorage.getItem(`treeconnect_properties_${currentEmail}`) || localStorage.getItem('treeconnect_properties');
+            if (storedProps) {
+                const cachedProps = filterByCurrentUser(cleanPropertyImages(filterOutMockData(JSON.parse(storedProps))), currentEmail);
+                setProperties(cachedProps);
+            }
+        } catch (e) {}
+
+        try {
+            const storedInvs = localStorage.getItem(`treeconnect_inventories_${currentEmail}`) || localStorage.getItem('treeconnect_inventories');
+            if (storedInvs) {
+                const cachedInvs = filterByCurrentUser(filterOutMockData(JSON.parse(storedInvs)), currentEmail);
+                setInventories(cachedInvs);
+            }
+        } catch (e) {}
+
+        // Only query remote database if user is on a route requiring landowner data.
+        // Public pages like Home ('/'), Login ('/login'), etc. load INSTANTLY with 0 network latency.
+        const isLandownerRoute = Boolean(location?.pathname?.startsWith('/landowner'));
+        if (isLandownerRoute) {
+            fetchDBProperties();
+            fetchDBHarvestRequests();
+            fetchDBInventories();
+        }
+    }, [currentEmail, Boolean(location?.pathname?.startsWith('/landowner')), fetchDBProperties, fetchDBHarvestRequests, fetchDBInventories]);
 
     // Persist properties to localStorage whenever updated
     useEffect(() => {
+        if (!currentEmail) return;
         try {
-            localStorage.setItem('treeconnect_properties', JSON.stringify(properties));
+            localStorage.setItem(`treeconnect_properties_${currentEmail}`, JSON.stringify(properties));
+            if (properties.length > 0) {
+                localStorage.setItem('treeconnect_properties', JSON.stringify(properties));
+            }
         } catch (e) { }
-    }, [properties]);
+    }, [properties, currentEmail]);
 
     // Persist inventories to localStorage whenever updated
     useEffect(() => {
+        if (!currentEmail) return;
         try {
-            localStorage.setItem('treeconnect_inventories', JSON.stringify(inventories));
+            localStorage.setItem(`treeconnect_inventories_${currentEmail}`, JSON.stringify(inventories));
+            if (inventories.length > 0) {
+                localStorage.setItem('treeconnect_inventories', JSON.stringify(inventories));
+            }
         } catch (e) { }
-    }, [inventories]);
+    }, [inventories, currentEmail]);
 
     // Persist completed harvest operations
     useEffect(() => {
+        if (!currentEmail) return;
         try {
-            localStorage.setItem('treeconnect_completed_harvests', JSON.stringify(completedHarvests));
+            localStorage.setItem(`treeconnect_completed_harvests_${currentEmail}`, JSON.stringify(completedHarvests));
+            if (completedHarvests.length > 0) {
+                localStorage.setItem('treeconnect_completed_harvests', JSON.stringify(completedHarvests));
+            }
         } catch (e) { }
-    }, [completedHarvests]);
+    }, [completedHarvests, currentEmail]);
 
     // Persist harvest requests
     useEffect(() => {
+        if (!currentEmail) return;
         try {
-            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(harvestRequests));
+            localStorage.setItem(`treeconnect_harvest_requests_${currentEmail}`, JSON.stringify(harvestRequests));
+            if (harvestRequests.length > 0) {
+                localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(harvestRequests));
+            }
         } catch (e) { }
-    }, [harvestRequests]);
+    }, [harvestRequests, currentEmail]);
 
     // Persist timber listings
     useEffect(() => {
+        if (!currentEmail) return;
         try {
-            localStorage.setItem('treeconnect_timber_listings', JSON.stringify(timberListings));
+            localStorage.setItem(`treeconnect_timber_listings_${currentEmail}`, JSON.stringify(timberListings));
+            if (timberListings.length > 0) {
+                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(timberListings));
+            }
         } catch (e) { }
-    }, [timberListings]);
+    }, [timberListings, currentEmail]);
 
     // Handlers
     const addProperty = async (newProp) => {

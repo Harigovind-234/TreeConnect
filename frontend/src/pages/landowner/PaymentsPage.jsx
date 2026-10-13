@@ -321,6 +321,14 @@ const PaymentsPage = () => {
 
                       {/* Bottom action row */}
                       <div className="flex flex-col sm:flex-row justify-end gap-3 pt-1">
+                         {payment.totalPendingForJob > 0 && (
+                           <button 
+                             onClick={() => navigate(`/landowner/harvest-requests?requestId=${payment.reqId}`)}
+                             className="select-none flex-1 sm:flex-none px-4 py-2.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-sm font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                           >
+                             <CreditCard size={16} /> Pay Pending Balance ({formatINR(payment.totalPendingForJob)})
+                           </button>
+                         )}
                          <button 
                            onClick={() => handleDownloadReceipt(payment)}
                            className="select-none flex-1 sm:flex-none px-4 py-2.5 rounded-lg border border-[#263B2E] bg-[#101C14] hover:border-[#43C58A]/50 hover:bg-[#43C58A]/10 text-[#F5F7F5] hover:text-[#43C58A] text-sm font-semibold flex items-center justify-center gap-2 transition-colors"

@@ -730,16 +730,21 @@ const AssignedHarvestJobsPage = () => {
 
   const handleVerifyPayment = async (req, payment) => {
     const reqId = req.id || req._id;
-    const payId = payment.payment_id;
-    if (!confirm(`Are you sure you want to verify receipt of advance payment (${payId}) for INR ${payment.amount}?`)) return;
+    const payId = payment?.payment_id;
+    const isFinal = payment?.payment_purpose === 'FINAL_PAYMENT' || req.is_advance_verified || req.status === 'COMPLETED';
+    const amountStr = payment?.amount ? `₹${Number(payment.amount).toLocaleString('en-IN')}` : 'full settlement';
+    const confirmMsg = isFinal
+      ? `Are you sure you want to verify receipt of the final settlement payment (${payId || 'Ref: ' + (payment?.transaction_reference || 'N/A')}) for ${amountStr}? This will mark the contract as 100% fully paid and closed.`
+      : `Are you sure you want to verify receipt of advance payment (${payId || 'N/A'}) for ${amountStr}?`;
+    if (!confirm(confirmMsg)) return;
     try {
       setActionLoading(true);
       await harvestService.verifyAdvancePayment(reqId, {
         payment_id: payId,
         action: 'VERIFY',
-        verification_notes: 'Verified and reconciled by contractor'
+        verification_notes: isFinal ? 'Final settlement verified and full contract closed by contractor' : 'Verified and reconciled by contractor'
       });
-      showToast('Payment verified successfully. Operational readiness updated.');
+      showToast(isFinal ? 'Final payment verified! Harvesting contract is now 100% fully settled and closed.' : 'Payment verified successfully. Operational readiness updated.');
       await fetchAssignedRequests();
     } catch (err) {
       alert('Failed to verify payment: ' + (err.response?.data?.detail || err.message));

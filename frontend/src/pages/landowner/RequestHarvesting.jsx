@@ -28,7 +28,9 @@ import {
   RefreshCw,
   X,
   ExternalLink,
-  DollarSign
+  DollarSign,
+  UploadCloud,
+  Trash2
 } from 'lucide-react';
 import {
   getTimberReferenceRate,
@@ -454,36 +456,90 @@ const RequestHarvesting = () => {
   };
 
   const [additionalNotes, setAdditionalNotes] = useState('');
-  const [sitePhotos, setSitePhotos] = useState(null);
+  const [sitePhotos, setSitePhotos] = useState([]); // Array of uploaded site photos
+  const [isPhotoDragging, setIsPhotoDragging] = useState(false);
+  const sitePhotoInputRef = React.useRef(null);
 
-  // Background compression handler when user selects/drops site photo
-  const handleSitePhotoChange = async (fileData) => {
-    if (!fileData) {
-      setSitePhotos(null);
-      return;
-    }
-    // Set immediate preview
-    setSitePhotos(fileData);
+  // Background compression handler when user selects/drops site photo(s)
+  const handleSitePhotoAdd = async (incomingFiles) => {
+    if (!incomingFiles) return;
+    const fileList = Array.isArray(incomingFiles)
+      ? incomingFiles
+      : (incomingFiles instanceof FileList ? Array.from(incomingFiles) : [incomingFiles]);
 
-    // Compress in background for ultra-fast payload submit
-    try {
-      const rawSrc = fileData.dataUrl || fileData.previewUrl || fileData.rawFile || fileData;
-      const compressed = await compressImageForUpload(rawSrc);
-      if (compressed) {
-        setSitePhotos((prev) => {
-          if (!prev) return null;
-          return {
-            ...(typeof prev === 'object' ? prev : {}),
-            name: prev.name || (typeof fileData === 'object' && fileData.name) || 'harvest_site.jpg',
-            previewUrl: compressed,
-            dataUrl: compressed,
+    if (fileList.length === 0) return;
+
+    for (const fileItem of fileList) {
+      if (!fileItem) continue;
+
+      // If fileItem is already a processed object with dataUrl/previewUrl:
+      if (typeof fileItem === 'object' && (fileItem.dataUrl || fileItem.previewUrl)) {
+        const rawSrc = fileItem.dataUrl || fileItem.previewUrl;
+        const compressed = await compressImageForUpload(rawSrc);
+        const newPhoto = {
+          id: fileItem.id || `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: fileItem.name || 'harvest_site.jpg',
+          size: fileItem.size || null,
+          type: fileItem.type || 'image/jpeg',
+          previewUrl: compressed || rawSrc,
+          dataUrl: compressed || rawSrc,
+          isImage: true
+        };
+        setSitePhotos((prev) => [...(Array.isArray(prev) ? prev : (prev ? [prev] : [])), newPhoto]);
+        continue;
+      }
+
+      // If fileItem is a File object:
+      if (typeof File !== 'undefined' && fileItem instanceof File) {
+        const reader = new FileReader();
+        const fileName = fileItem.name;
+        const fileSize = fileItem.size;
+        const fileType = fileItem.type;
+        const photoId = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+        reader.onload = async (e) => {
+          const rawResult = e.target.result;
+          const compressed = await compressImageForUpload(rawResult);
+          const newPhoto = {
+            id: photoId,
+            name: fileName,
+            size: fileSize,
+            type: fileType,
+            previewUrl: compressed || rawResult,
+            dataUrl: compressed || rawResult,
             isImage: true
           };
-        });
+          setSitePhotos((prev) => [...(Array.isArray(prev) ? prev : (prev ? [prev] : [])), newPhoto]);
+        };
+        reader.readAsDataURL(fileItem);
+      } else if (typeof fileItem === 'string') {
+        const compressed = await compressImageForUpload(fileItem);
+        const newPhoto = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          name: 'harvest_site.jpg',
+          size: null,
+          type: 'image/jpeg',
+          previewUrl: compressed || fileItem,
+          dataUrl: compressed || fileItem,
+          isImage: true
+        };
+        setSitePhotos((prev) => [...(Array.isArray(prev) ? prev : (prev ? [prev] : [])), newPhoto]);
       }
-    } catch (err) {
-      console.warn('Background site photo compression error:', err);
     }
+  };
+
+  const handleRemoveSitePhoto = (photoIdOrIndex) => {
+    setSitePhotos((prev) => {
+      const arr = Array.isArray(prev) ? prev : (prev ? [prev] : []);
+      return arr.filter((p, idx) => (p.id ? p.id !== photoIdOrIndex : idx !== photoIdOrIndex));
+    });
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes || isNaN(bytes)) return null;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
   // Step 5: Contractor Assignment (Optional)
@@ -582,12 +638,18 @@ const RequestHarvesting = () => {
       const totalEstPrice = selectedGroups.reduce((acc, curr) => acc + getStandApproxValue(curr), 0);
       const totalEstVol = selectedGroups.reduce((acc, curr) => acc + parseVolumeNumber(curr.estimatedVolume), 0);
 
-      // 2. Compress site photo so payload is lean (<150KB) and finishes instantly
-      let finalPhotoUrl = null;
-      if (sitePhotos) {
-        const rawPhoto = sitePhotos.dataUrl || sitePhotos.previewUrl || (typeof sitePhotos === 'string' ? sitePhotos : null) || sitePhotos.rawFile;
+      // 2. Compress all site photos so payload is lean (<150KB per photo) and finishes instantly
+      const finalPhotoUrls = [];
+      const photosArray = Array.isArray(sitePhotos) ? sitePhotos : (sitePhotos ? [sitePhotos] : []);
+      for (const sp of photosArray) {
+        const rawPhoto = sp.dataUrl || sp.previewUrl || (typeof sp === 'string' ? sp : null) || sp.rawFile;
         if (rawPhoto) {
-          finalPhotoUrl = await compressImageForUpload(rawPhoto);
+          const compressed = await compressImageForUpload(rawPhoto);
+          if (compressed) {
+            finalPhotoUrls.push(compressed);
+          } else {
+            finalPhotoUrls.push(rawPhoto);
+          }
         }
       }
 
@@ -621,7 +683,7 @@ const RequestHarvesting = () => {
           additional_notes: additionalNotes
         },
         hazards,
-        photos: finalPhotoUrl ? [finalPhotoUrl] : [],
+        photos: finalPhotoUrls,
         instructions: additionalNotes,
         assigned_contractor_id: selectedContractor?.id || selectedContractor?._id || null,
         assigned_contractor_name: selectedContractor?.companyName || selectedContractor?.fullName || selectedContractor?.name || null,
@@ -1559,30 +1621,164 @@ const RequestHarvesting = () => {
                   />
                 </div>
 
-                {/* Photos Upload */}
+                {/* Photos Upload (Multi-Photo Support) */}
                 <div className="mt-14 pt-10 border-t border-emerald-500/30 space-y-5">
-                  <div className="mb-4">
-                    <label className="ld-label text-sm tracking-widest text-emerald-400 block">
-                      Upload Current Harvest Site Photos
-                    </label>
-                    <p className="text-xs text-slate-300 mt-1.5">
-                      Upload photos showing selected trees, access road, terrain, loading area, or hazards.
-                    </p>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <label className="ld-label text-sm tracking-widest text-emerald-400 block flex items-center gap-2">
+                        <Camera size={16} /> Upload Current Harvest Site Photos
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 uppercase">
+                          Optional • Multiple Photos
+                        </span>
+                      </label>
+                      <p className="text-xs text-slate-300 mt-1.5">
+                        Upload photos showing selected trees, access road, terrain, loading area, or hazards. You can attach multiple photos (up to 10).
+                      </p>
+                    </div>
+
+                    {Array.isArray(sitePhotos) && sitePhotos.length > 0 && (
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-950/80 px-3 py-1.5 rounded-xl border border-emerald-500/40">
+                        {sitePhotos.length} {sitePhotos.length === 1 ? 'photo' : 'photos'} attached
+                      </span>
+                    )}
                   </div>
-                  <FileUploadCard
-                    id="harvest-site-photos-uploader"
-                    label="Harvest Site & Access Road Photos"
-                    helperText="Upload clear site photos for contractor quotation inspection (JPG, PNG, WEBP, PDF up to 10MB)"
-                    acceptedFormatsText="PDF, JPG, PNG, WEBP"
-                    acceptedMimeTypes="image/jpeg,image/png,image/webp,image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
-                    maxSizeMB={10}
-                    fileData={sitePhotos}
-                    file={sitePhotos}
-                    selectedFile={sitePhotos}
-                    onFileChange={handleSitePhotoChange}
-                    onFileSelect={handleSitePhotoChange}
-                    onFileRemove={() => setSitePhotos(null)}
-                  />
+
+                  {/* Upload Dropzone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsPhotoDragging(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsPhotoDragging(false); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsPhotoDragging(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleSitePhotoAdd(e.dataTransfer.files);
+                      }
+                    }}
+                    onClick={() => sitePhotoInputRef.current?.click()}
+                    className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all cursor-pointer group flex flex-col items-center justify-center ${
+                      isPhotoDragging
+                        ? 'border-emerald-400 bg-emerald-500/15 scale-[0.99]'
+                        : 'border-emerald-500/30 hover:border-emerald-400 bg-[#07130c]/80 hover:bg-[#0a1a10]'
+                    }`}
+                  >
+                    <input
+                      ref={sitePhotoInputRef}
+                      type="file"
+                      id="harvest-site-photos-uploader"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/*,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleSitePhotoAdd(e.target.files);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="hidden"
+                    />
+
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-emerald-500/25 transition-all shadow-lg">
+                      <UploadCloud size={26} />
+                    </div>
+
+                    <p className="text-sm font-bold text-white mb-1">
+                      <span className="text-emerald-400 underline decoration-emerald-500/50 underline-offset-4 group-hover:text-emerald-300">
+                        Drag &amp; drop photos here
+                      </span>{' '}
+                      or click to browse
+                    </p>
+
+                    <p className="text-xs text-slate-300 mb-3.5 font-medium">
+                      Select <strong className="text-emerald-300 font-bold">one or more photos</strong> (JPG, PNG, WEBP, PDF up to 10MB each)
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        sitePhotoInputRef.current?.click();
+                      }}
+                      className="px-4 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 text-xs font-bold transition-all border border-emerald-500/40 shadow-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>{sitePhotos.length > 0 ? 'Add More Photos' : 'Choose Photos from Device'}</span>
+                    </button>
+                  </div>
+
+                  {/* List / Gallery of Uploaded Photos */}
+                  {Array.isArray(sitePhotos) && sitePhotos.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Attached Photos ({sitePhotos.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSitePhotos([])}
+                          className="text-[11px] text-red-400 hover:text-red-300 font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <Trash2 size={11} /> Remove All
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {sitePhotos.map((photo, pIdx) => {
+                          const pUrl = photo.previewUrl || photo.dataUrl || (typeof photo === 'string' ? photo : null);
+                          const pName = photo.name || `Photo ${pIdx + 1}`;
+                          const pSize = photo.size ? formatFileSize(photo.size) : null;
+
+                          return (
+                            <div
+                              key={photo.id || pIdx}
+                              className="relative flex items-center gap-3 p-3 rounded-xl border border-emerald-500/25 bg-[#040e07] hover:border-emerald-500/45 transition-colors group"
+                            >
+                              <div className="w-14 h-14 rounded-lg overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-black/60 shadow-inner">
+                                {pUrl ? (
+                                  <img
+                                    src={pUrl}
+                                    alt={pName}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-emerald-400">
+                                    <Camera size={20} />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="min-w-0 flex-1 pr-7">
+                                <span className="text-xs font-bold text-white truncate block" title={pName}>
+                                  {pName}
+                                </span>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {pSize && (
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                      {pSize}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5">
+                                    <Check size={10} /> Ready
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveSitePhoto(photo.id || pIdx);
+                                }}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-black/40 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-transparent hover:border-red-500/30 transition-all cursor-pointer"
+                                title="Remove this photo"
+                              >
+                                <X size={15} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1786,32 +1982,43 @@ const RequestHarvesting = () => {
                       </div>
                     )}
 
-                    {sitePhotos && (
-                      <div className="mt-3 p-3.5 rounded-xl bg-[#06140b]/90 border border-emerald-500/20 flex items-center justify-between gap-3 flex-wrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-14 h-14 rounded-xl overflow-hidden border border-emerald-500/35 flex-shrink-0 bg-[#030a05] shadow-md">
-                            {(sitePhotos.previewUrl || sitePhotos.dataUrl || (typeof sitePhotos === 'string' && sitePhotos)) ? (
-                              <img
-                                src={sitePhotos.previewUrl || sitePhotos.dataUrl || sitePhotos}
-                                alt={sitePhotos.name || 'Harvest Site Photo'}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-emerald-400">
-                                <Camera size={20} />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <strong className="text-emerald-300 block text-xs font-bold uppercase tracking-wide">Uploaded Harvest Site Photo:</strong>
-                            <span className="text-xs text-slate-300 font-medium truncate max-w-[280px] block mt-0.5">
-                              {sitePhotos.name || 'Site inspection photo attached'}
-                            </span>
-                          </div>
+                    {/* Review attached photos */}
+                    {Array.isArray(sitePhotos) && sitePhotos.length > 0 && (
+                      <div className="mt-3 p-4 rounded-xl bg-[#06140b]/90 border border-emerald-500/25 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <strong className="text-emerald-300 block text-xs font-bold uppercase tracking-wide flex items-center gap-2">
+                            <Camera size={14} className="text-emerald-400" /> Uploaded Harvest Site Photos ({sitePhotos.length}):
+                          </strong>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            Ready for Submission
+                          </span>
                         </div>
-                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                          Ready for Submission
-                        </span>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pt-1">
+                          {sitePhotos.map((photo, pIdx) => {
+                            const pUrl = photo.previewUrl || photo.dataUrl || (typeof photo === 'string' ? photo : null);
+                            const pName = photo.name || `Site Photo ${pIdx + 1}`;
+                            return (
+                              <div
+                                key={photo.id || pIdx}
+                                className="group relative rounded-lg overflow-hidden border border-emerald-500/30 bg-black/50 aspect-video flex items-center justify-center shadow-md"
+                              >
+                                {pUrl ? (
+                                  <img
+                                    src={pUrl}
+                                    alt={pName}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                ) : (
+                                  <Camera size={22} className="text-emerald-400" />
+                                )}
+                                <span className="absolute bottom-0 inset-x-0 bg-black/75 px-1.5 py-0.5 text-[9.5px] font-medium text-slate-200 truncate text-center backdrop-blur-xs">
+                                  {pName}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -463,8 +463,8 @@ def get_harvest_requests(
                     {"assigned_contractor_id": raw_email}
                 ])
                 if db is not None:
-                    u_doc = db.users.find_one({"$or": [{"email": clean_email}, {"email": raw_email}]}, {"fullName": 1, "name": 1, "companyName": 1, "_id": 1})
-                    if u_doc:
+                    u_doc = db.users.find_one({"$or": [{"email": clean_email}, {"email": raw_email}]}, {"fullName": 1, "name": 1, "companyName": 1, "role": 1, "_id": 1})
+                    if u_doc and u_doc.get("role") == "contractor":
                         u_name = u_doc.get("fullName") or u_doc.get("name") or u_doc.get("companyName")
                         u_id = str(u_doc.get("_id", ""))
                         if u_id:
@@ -475,7 +475,10 @@ def get_harvest_requests(
             if or_conditions:
                 query = {"$or": or_conditions}
             else:
-                query = {}
+                return JSONResponse(
+                    status_code=status.HTTP_200_OK,
+                    content={"harvest_requests": []}
+                )
         cursor = db.harvest_requests.find(query).sort("createdAt", -1)
         raw_requests = list(cursor)
 
@@ -2215,14 +2218,20 @@ def submit_advance_payment(
             )
 
         # Check if already verified
-        if req_doc.get("advance_payment_status") == "VERIFIED" and req_doc.get("is_advance_verified"):
+        is_advance_done = bool(req_doc.get("advance_payment_status") == "VERIFIED" and req_doc.get("is_advance_verified"))
+        rem_balance = float(req_doc.get("remaining_balance") if req_doc.get("remaining_balance") is not None else 0.0)
+        is_final_settlement = is_advance_done and rem_balance > 0
+
+        if is_advance_done and rem_balance <= 0:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                content={"message": "Advance payment for this harvesting job has already been verified."}
+                content={"message": "All payments for this harvesting job have already been fully verified and settled."}
             )
 
         now_iso = datetime.now(timezone.utc).isoformat()
-        pay_id = f"PAY-ADV-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+        pay_purpose = "FINAL_PAYMENT" if is_final_settlement else "ADVANCE_PAYMENT"
+        prefix = "PAY-FIN" if is_final_settlement else "PAY-ADV"
+        pay_id = f"{prefix}-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
 
         payment_record = {
             "payment_id": pay_id,
@@ -2232,7 +2241,7 @@ def submit_advance_payment(
             "recipient_email": req_doc.get("assigned_contractor_email", ""),
             "recipient_name": req_doc.get("assigned_contractor_name", "Contractor"),
             "amount": float(payload.amount),
-            "payment_purpose": "ADVANCE_PAYMENT",
+            "payment_purpose": pay_purpose,
             "payment_method": payload.payment_method,
             "transaction_reference": payload.transaction_reference.strip(),
             "payment_date": payload.payment_date,
@@ -2251,33 +2260,37 @@ def submit_advance_payment(
         payments_list.append(payment_record)
 
         update_fields = {
-            "advance_payment_status": "VERIFICATION_PENDING",
-            "is_advance_verified": False,
             "latest_payment": payment_record,
             "payments": payments_list,
             "rejection_reason": None,
-            "can_start_harvest": False,
             "updatedAt": now_iso
         }
+        if is_final_settlement:
+            update_fields["final_payment_status"] = "VERIFICATION_PENDING"
+        else:
+            update_fields["advance_payment_status"] = "VERIFICATION_PENDING"
+            update_fields["is_advance_verified"] = False
+            update_fields["can_start_harvest"] = False
 
         db.harvest_requests.update_one(req_query, {"$set": update_fields})
         db.contractor_assessments.update_one(
             {"harvest_request_id": str(request_id)},
             {"$set": {
-                "advance_payment_status": "VERIFICATION_PENDING",
                 "latest_payment": payment_record,
-                "can_start_harvest": False,
-                "updatedAt": now_iso
+                "updatedAt": now_iso,
+                **({"final_payment_status": "VERIFICATION_PENDING"} if is_final_settlement else {"advance_payment_status": "VERIFICATION_PENDING", "can_start_harvest": False})
             }}
         )
 
         updated_req = db.harvest_requests.find_one(req_query)
+        action_name = "Final settlement payment" if is_final_settlement else "Advance payment"
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
-                "message": "Advance payment details recorded successfully. Pending verification by the contractor.",
+                "message": f"{action_name} details recorded successfully. Pending verification by the contractor.",
                 "payment_id": pay_id,
                 "status": "VERIFICATION_PENDING",
+                "payment_purpose": pay_purpose,
                 "amount": float(payload.amount),
                 "payment": payment_record,
                 "harvest_request": serialize_doc(updated_req)
@@ -2286,7 +2299,7 @@ def submit_advance_payment(
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"message": f"Failed to record advance payment: {str(e)}"}
+            content={"message": f"Failed to record payment: {str(e)}"}
         )
 
 @router.post("/{request_id}/advance-payment/verify")
@@ -2374,7 +2387,6 @@ def verify_advance_payment(
             )
 
             # Deduplicate and compute total verified payments credited to harvesting service
-            # Timber purchases are kept separate!
             verified_total = 0.0
             seen_ids = set()
             for p in payments_list:
@@ -2382,37 +2394,44 @@ def verify_advance_payment(
                 if p_id in seen_ids:
                     continue
                 seen_ids.add(p_id)
-                if p.get("status") == "VERIFIED" and p.get("payment_purpose") in ["ADVANCE_PAYMENT", "PROGRESS_PAYMENT", "FINAL_PAYMENT", "HARVESTING_SERVICE"]:
+                if p.get("status") == "VERIFIED" and p.get("payment_purpose") in ["ADVANCE_PAYMENT", "ADVANCE_MOBILIZATION", "PROGRESS_PAYMENT", "FINAL_PAYMENT", "HARVESTING_SERVICE"]:
                     verified_total += float(p.get("amount", 0.0))
 
-            accepted_quote = float(req_doc.get("total_quotation_amount") or req_doc.get("total_quote") or (req_doc.get("advance_payment_request") or {}).get("accepted_quotation") or 99000.0)
+            accepted_quote = float(req_doc.get("total_quotation_amount") or req_doc.get("total_quote") or (req_doc.get("advance_payment_request") or {}).get("accepted_quotation") or 81000.0)
             remaining_balance = round(max(0.0, accepted_quote - verified_total), 2)
+            is_final_payment = target_payment.get("payment_purpose") == "FINAL_PAYMENT" or remaining_balance <= 0
 
             update_fields = {
-                "advance_payment_status": "VERIFIED",
-                "is_advance_verified": True,
-                "total_verified_advance": float(target_payment.get("amount", 0.0)),
                 "total_verified_paid": round(verified_total, 2),
                 "remaining_balance": remaining_balance,
                 "latest_payment": target_payment,
                 "payments": payments_list,
-                "can_start_harvest": True,
                 "rejection_reason": None,
                 "updatedAt": now_iso
             }
-            if req_doc.get("status") not in ["IN_PROGRESS", "COMPLETED"]:
-                update_fields["status"] = "OPERATION_READY"
+
+            if is_final_payment:
+                update_fields["final_payment_status"] = "VERIFIED"
+                update_fields["is_fully_paid"] = True
+                update_fields["status"] = "COMPLETED"
+                success_msg = f"Final settlement payment of ₹{target_payment.get('amount'):,.2f} verified successfully. Harvesting contract is now fully paid and closed."
+            else:
+                update_fields["advance_payment_status"] = "VERIFIED"
+                update_fields["is_advance_verified"] = True
+                update_fields["total_verified_advance"] = float(target_payment.get("amount", 0.0))
+                update_fields["can_start_harvest"] = True
+                if req_doc.get("status") not in ["IN_PROGRESS", "COMPLETED"]:
+                    update_fields["status"] = "OPERATION_READY"
+                success_msg = f"Advance payment of ₹{target_payment.get('amount'):,.2f} verified successfully. Harvesting work is now eligible to start."
 
             db.harvest_requests.update_one(req_query, {"$set": update_fields})
             db.contractor_assessments.update_one(
                 {"harvest_request_id": str(request_id)},
                 {"$set": {
-                    "advance_payment_status": "VERIFIED",
-                    "is_advance_verified": True,
                     "total_verified_paid": round(verified_total, 2),
                     "remaining_balance": remaining_balance,
-                    "can_start_harvest": True,
-                    "updatedAt": now_iso
+                    "updatedAt": now_iso,
+                    **({"final_payment_status": "VERIFIED", "is_fully_paid": True} if is_final_payment else {"advance_payment_status": "VERIFIED", "is_advance_verified": True, "can_start_harvest": True})
                 }}
             )
 
@@ -2420,8 +2439,10 @@ def verify_advance_payment(
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
-                    "message": f"Advance payment of ₹{target_payment.get('amount'):,.2f} verified successfully. Harvesting work is now eligible to start.",
-                    "advance_payment_status": "VERIFIED",
+                    "message": success_msg,
+                    "advance_payment_status": update_fields.get("advance_payment_status", "VERIFIED"),
+                    "final_payment_status": update_fields.get("final_payment_status"),
+                    "is_fully_paid": update_fields.get("is_fully_paid", False),
                     "payment_id": target_payment.get("payment_id"),
                     "payment": target_payment,
                     "remaining_balance": remaining_balance,
@@ -2440,6 +2461,29 @@ def verify_advance_payment(
             rej_reason = payload.rejection_reason.strip()
             target_payment["status"] = "REJECTED"
             target_payment["rejection_reason"] = rej_reason
+            target_payment["updated_at"] = now_iso
+
+            db.harvest_payments.update_one(
+                {"payment_id": target_payment.get("payment_id")},
+                {"$set": {
+                    "status": "REJECTED",
+                    "rejection_reason": rej_reason,
+                    "updated_at": now_iso
+                }}
+            )
+
+            rej_fields = {
+                "latest_payment": target_payment,
+                "payments": payments_list,
+                "rejection_reason": rej_reason,
+                "updatedAt": now_iso
+            }
+            if target_payment.get("payment_purpose") == "FINAL_PAYMENT":
+                rej_fields["final_payment_status"] = "REJECTED"
+            else:
+                rej_fields["advance_payment_status"] = "REJECTED"
+
+            db.harvest_requests.update_one(req_query, {"$set": rej_fields})
             target_payment["rejected_at"] = now_iso
             target_payment["rejected_by"] = token_email or "Contractor"
             target_payment["updated_at"] = now_iso

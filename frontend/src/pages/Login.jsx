@@ -54,7 +54,7 @@ const Login = () => {
       try {
         let list = [];
         try {
-          const res = await api.get('/auth/approved-users');
+          const res = await api.get('/auth/approved-users', { timeout: 4000 });
           if (res.data && Array.isArray(res.data.users)) {
             list = res.data.users;
           }

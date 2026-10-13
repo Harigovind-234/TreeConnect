@@ -537,8 +537,13 @@ def get_properties(
 
         target_email = userEmail or get_current_user_email(authorization)
 
-        if all_records or not target_email:
+        if all_records:
             query = {}
+        elif not target_email:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"properties": []}
+            )
         else:
             clean_email = target_email.strip().lower()
             import re
@@ -546,9 +551,8 @@ def get_properties(
                 "$or": [
                     {"userEmail": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
                     {"userEmail": clean_email},
-                    {"userEmail": "h4hari2003@gmail.com"},
-                    {"userEmail": "owner_email"},
-                    {"ownerName": {"$regex": "Harigovind", "$options": "i"}}
+                    {"owner_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                    {"owner_email": clean_email}
                 ]
             }
 
@@ -559,6 +563,10 @@ def get_properties(
             p_id = str(p["_id"])
             p["id"] = p_id
             p["_id"] = p_id
+            # Deduplicate image if already provided in photos to avoid sending 170KB+ twice
+            if p.get("photos") and isinstance(p["photos"], list) and len(p["photos"]) > 0:
+                if p.get("image") == p["photos"][0]:
+                    p["image"] = None  # Frontend cleanPropertyImages automatically falls back to photos[0]
             properties_list.append(p)
 
         return JSONResponse(
