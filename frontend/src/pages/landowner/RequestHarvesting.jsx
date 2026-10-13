@@ -136,6 +136,77 @@ const getGoogleMapsUrl = (p) => {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locQuery)}`;
 };
 
+// Fast canvas-based image downscaler to guarantee instant uploads (<150KB) and prevent timeouts
+const compressImageForUpload = (source, maxDim = 1024, quality = 0.72) => {
+  return new Promise((resolve) => {
+    if (!source) return resolve(null);
+
+    if (typeof source === 'string' && (source.startsWith('http://') || source.startsWith('https://'))) {
+      return resolve(source);
+    }
+
+    const processDataUrl = (dataUrl) => {
+      if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+        return resolve(dataUrl);
+      }
+      if (dataUrl.length < 150000) {
+        return resolve(dataUrl);
+      }
+
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    };
+
+    if (typeof source === 'string') {
+      processDataUrl(source);
+    } else if (typeof File !== 'undefined' && (source instanceof File || source instanceof Blob)) {
+      const reader = new FileReader();
+      reader.onload = (e) => processDataUrl(e.target?.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(source);
+    } else if (source && typeof source === 'object') {
+      const candidate = source.dataUrl || source.previewUrl || source.rawFile;
+      if (typeof File !== 'undefined' && candidate instanceof File) {
+        const reader = new FileReader();
+        reader.onload = (e) => processDataUrl(e.target?.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(candidate);
+      } else if (typeof candidate === 'string') {
+        processDataUrl(candidate);
+      } else {
+        resolve(null);
+      }
+    } else {
+      resolve(null);
+    }
+  });
+};
+
 const RequestHarvesting = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -385,6 +456,36 @@ const RequestHarvesting = () => {
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [sitePhotos, setSitePhotos] = useState(null);
 
+  // Background compression handler when user selects/drops site photo
+  const handleSitePhotoChange = async (fileData) => {
+    if (!fileData) {
+      setSitePhotos(null);
+      return;
+    }
+    // Set immediate preview
+    setSitePhotos(fileData);
+
+    // Compress in background for ultra-fast payload submit
+    try {
+      const rawSrc = fileData.dataUrl || fileData.previewUrl || fileData.rawFile || fileData;
+      const compressed = await compressImageForUpload(rawSrc);
+      if (compressed) {
+        setSitePhotos((prev) => {
+          if (!prev) return null;
+          return {
+            ...(typeof prev === 'object' ? prev : {}),
+            name: prev.name || (typeof fileData === 'object' && fileData.name) || 'harvest_site.jpg',
+            previewUrl: compressed,
+            dataUrl: compressed,
+            isImage: true
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Background site photo compression error:', err);
+    }
+  };
+
   // Step 5: Contractor Assignment (Optional)
   const [selectedContractor, setSelectedContractor] = useState(null);
   const [showContractorModal, setShowContractorModal] = useState(false);
@@ -450,18 +551,45 @@ const RequestHarvesting = () => {
     setErrorMessage('');
 
     try {
-      const selectedGroups = availableTreeGroups
-        .filter((g) => selectedTreeGroupIds.includes(g.id))
-        .map((g) => ({
-          ...g,
-          girth: getStandGirth(g),
-          estimatedVolume: getStandVolume(g),
-          estimatedPrice: getStandApproxValue(g),
-          approximate_timber_value: getStandApproxValue(g)
-        }));
+      // 1. Sanitize & compress tree groups - preserve landowner's tree inventory photos in lean compressed form
+      const rawSelected = availableTreeGroups.filter((g) => selectedTreeGroupIds.includes(g.id));
+      const selectedGroups = await Promise.all(
+        rawSelected.map(async (g) => {
+          let rawImg = g.image || (Array.isArray(g.photos) ? g.photos[0] : null);
+          let safeImg = null;
+          if (rawImg) {
+            safeImg = await compressImageForUpload(rawImg, 800, 0.7);
+          }
+
+          return {
+            id: g.id,
+            groupName: g.groupName || 'Tree Stand',
+            species: g.species || 'Teak',
+            numberOfTrees: Number(g.numberOfTrees || 1),
+            approxAge: g.approxAge || '15 years',
+            condition: g.condition || 'Healthy',
+            location: g.location || 'Kottayam',
+            girth: getStandGirth(g),
+            estimatedVolume: getStandVolume(g),
+            estimatedPrice: getStandApproxValue(g),
+            approximate_timber_value: getStandApproxValue(g),
+            image: safeImg,
+            photos: safeImg ? [safeImg] : []
+          };
+        })
+      );
 
       const totalEstPrice = selectedGroups.reduce((acc, curr) => acc + getStandApproxValue(curr), 0);
       const totalEstVol = selectedGroups.reduce((acc, curr) => acc + parseVolumeNumber(curr.estimatedVolume), 0);
+
+      // 2. Compress site photo so payload is lean (<150KB) and finishes instantly
+      let finalPhotoUrl = null;
+      if (sitePhotos) {
+        const rawPhoto = sitePhotos.dataUrl || sitePhotos.previewUrl || (typeof sitePhotos === 'string' ? sitePhotos : null) || sitePhotos.rawFile;
+        if (rawPhoto) {
+          finalPhotoUrl = await compressImageForUpload(rawPhoto);
+        }
+      }
 
       const payload = {
         property_id: activeProperty.id || activeProperty._id,
@@ -493,9 +621,7 @@ const RequestHarvesting = () => {
           additional_notes: additionalNotes
         },
         hazards,
-        photos: sitePhotos
-          ? [sitePhotos.dataUrl || sitePhotos.previewUrl || (typeof sitePhotos === 'string' ? sitePhotos : null)].filter(Boolean)
-          : [],
+        photos: finalPhotoUrl ? [finalPhotoUrl] : [],
         instructions: additionalNotes,
         assigned_contractor_id: selectedContractor?.id || selectedContractor?._id || null,
         assigned_contractor_name: selectedContractor?.companyName || selectedContractor?.fullName || selectedContractor?.name || null,
@@ -1453,8 +1579,8 @@ const RequestHarvesting = () => {
                     fileData={sitePhotos}
                     file={sitePhotos}
                     selectedFile={sitePhotos}
-                    onFileChange={(fileData) => setSitePhotos(fileData)}
-                    onFileSelect={(fileData) => setSitePhotos(fileData)}
+                    onFileChange={handleSitePhotoChange}
+                    onFileSelect={handleSitePhotoChange}
                     onFileRemove={() => setSitePhotos(null)}
                   />
                 </div>

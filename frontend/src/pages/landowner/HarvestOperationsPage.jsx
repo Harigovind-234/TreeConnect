@@ -81,11 +81,15 @@ const HarvestOperationsPage = () => {
       }
 
       let apiList = [];
+      let apiFetched = false;
       try {
         const res = await harvestService.getHarvestRequests({ all_records: true });
-        apiList = Array.isArray(res?.harvest_requests)
-          ? res.harvest_requests
-          : (Array.isArray(res) ? res : (res?.requests || []));
+        if (res && (Array.isArray(res?.harvest_requests) || Array.isArray(res) || Array.isArray(res?.requests))) {
+          apiList = Array.isArray(res?.harvest_requests)
+            ? res.harvest_requests
+            : (Array.isArray(res) ? res : (res?.requests || []));
+          apiFetched = true;
+        }
       } catch (err) {
         console.warn('API getHarvestRequests fallback:', err);
       }
@@ -109,6 +113,10 @@ const HarvestOperationsPage = () => {
         if (!cKey) return;
         const existing = mergedMap.get(cKey);
         if (!existing) {
+          // If API was successfully fetched, any request not present in DB was deleted!
+          if (apiFetched && !String(item.id || '').startsWith('draft_') && !String(item.id || '').startsWith('local_')) {
+            return;
+          }
           mergedMap.set(cKey, item);
         } else {
           const exStages = existing.harvest_stages || {};

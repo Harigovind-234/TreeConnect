@@ -511,10 +511,20 @@ export const LandownerProvider = ({ children }) => {
             console.error("Error deleting harvest request from DB:", err);
         }
 
+        const idStr = String(id || '');
+        const idCanon = idStr.length >= 8 ? idStr.substring(0, 8).toLowerCase() : idStr.toLowerCase();
+
         setHarvestRequests(prev => {
-            const updated = prev.filter(r => r.id !== id && r._id !== id);
+            const updated = prev.filter(r => {
+                const rId = String(r.id || r._id || '');
+                const rCanon = rId.length >= 8 ? rId.substring(0, 8).toLowerCase() : rId.toLowerCase();
+                return rId !== idStr && rCanon !== idCanon;
+            });
             try {
                 localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+            } catch (e) { }
+            try {
+                window.dispatchEvent(new Event('treeconnect_harvest_requests_updated'));
             } catch (e) { }
             return updated;
         });

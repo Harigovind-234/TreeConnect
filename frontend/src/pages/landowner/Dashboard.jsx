@@ -787,7 +787,7 @@ const LandownerDashboard = () => {
               const isRevision = isRevisionActive;
               const isRevisionRequested = isRevisionActive;
 
-              // MINIMIZED SPOTLIGHT CARD FOR ACTIVE / ACCEPTED HARVEST OPERATIONS
+              // UNIFIED MASTER SPOTLIGHT CARD FOR ACTIVE / ACCEPTED HARVEST OPERATIONS
               if (isAccepted) {
                 const advReq = req.advance_payment_request || assDoc.advance_payment_request;
                 const advanceAmount = Number(
@@ -802,30 +802,64 @@ const LandownerDashboard = () => {
                       : Math.max(0, totalQuoteVal - advanceAmount)
                 );
 
+                const cName = req.assigned_contractor_name || assDoc.contractor_name || 'Rohith kumar';
+                const cPhone = req.site_inspection?.inspector_phone || req.assigned_contractor_phone || assDoc.contractor_phone || '9746512243';
+                const cEmail = req.assigned_contractor_email || assDoc.contractor_email || 'contact@treeconnect.in';
+                const crewSize = assDoc.assigned_workers_count || req.assigned_workers_count || workersCount || 10;
+                const fleetEquip = assDoc.equipment_needed || req.equipment_needed || 'Hydraulic Log Loader, Heavy Hauler, Chainsaw';
+                const opStartDate = proposedStartDate || assDoc.proposed_start_date || req.proposed_start_date || '2026-10-20';
+                const scopeVolume = assessedVolume || '1.80';
+
+                const stagesConfig = [
+                  { id: 'stage_1', num: 1, title: 'Mobilization & Safety', desc: 'Site prep & boundary safety' },
+                  { id: 'stage_2', num: 2, title: 'Felling Operations', desc: 'Directional felling & clearance' },
+                  { id: 'stage_3', num: 3, title: 'De-branching & Bucking', desc: 'Delimbing & log cross-cutting' },
+                  { id: 'stage_4', num: 4, title: 'Scaling & Transit Prep', desc: 'Log scaling & haulage prep' }
+                ];
+
+                const stagesData = req.harvest_stages || {};
+                const getStageStatus = (sId) => {
+                  const st = stagesData[sId];
+                  if (!st) {
+                    return sId === (req.current_harvest_stage || 'stage_1') ? 'IN_PROGRESS' : 'PENDING';
+                  }
+                  const raw = String(st.status || '').toUpperCase().trim();
+                  if (raw === 'VERIFIED' || raw === 'COMPLETED') return 'VERIFIED';
+                  if (raw === 'SUBMITTED' || raw === 'SUBMITTED_FOR_VERIFICATION') return 'SUBMITTED';
+                  if (raw === 'IN_PROGRESS' || raw === 'ACTIVE') return 'IN_PROGRESS';
+                  return 'PENDING';
+                };
+
+                const verifiedCount = stagesConfig.filter(s => getStageStatus(s.id) === 'VERIFIED').length;
+                const progressPct = req.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : 15))));
+
                 return (
                   <section key={reqId || qIdx} id="active-harvest-spotlight-section" className="active-harvest-spotlight-card">
-                    {/* Header: Title, Contractor, Badges, and Primary CTA */}
+                    {/* Header: Title, Contractor, Badges, and Primary CTAs */}
                     <div className="active-spotlight-header">
                       <div className="active-spotlight-title-group">
                         <div className="active-spotlight-icon-wrap">
-                          <Trees size={26} className="text-emerald-400" />
+                          <Truck size={26} className="text-emerald-400" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1.5">
                             <span className="active-spotlight-status-pill">
                               <span className="live-pulse-dot" />
-                              Harvesting Operations In Progress
+                              {req.status === 'COMPLETED' ? '100% Completed' : req.status === 'IN_PROGRESS' ? 'Harvesting Operations In Progress' : 'Operation Ready'}
                             </span>
                             <span className="active-spotlight-sub-pill">
                               <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
                               Agreement Signed &amp; Mobilization Advance Verified
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                              Job #{String(reqId).substring(0, 8).toUpperCase()}
                             </span>
                           </div>
                           <h2 className="active-spotlight-heading">
                             {req.propertyName || 'TreeConnect Property'} — Active Harvest Operations
                           </h2>
                           <p className="active-spotlight-subtitle">
-                            Assigned Contractor: <strong className="text-emerald-400 font-bold">{contractorName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(proposedStartDate)}</strong>
+                            Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span>
                           </p>
                         </div>
                       </div>
@@ -833,17 +867,95 @@ const LandownerDashboard = () => {
                       <div className="active-spotlight-actions">
                         <button
                           type="button"
-                          onClick={() => navigate(`/landowner/harvest-requests?requestId=${reqId}`)}
-                          className="active-spotlight-primary-btn"
-                          title="View all assessment certificates, itemized quotes, agreements, and transaction ledgers"
+                          onClick={() => setSelectedStageViewerModal(req)}
+                          className="active-spotlight-evidence-btn"
+                          title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
                         >
-                          <span>View Complete Work &amp; Payment Details</span>
-                          <ArrowRight size={16} />
+                          <Camera size={15} />
+                          <span>View Work Status &amp; Evidence</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/landowner/harvest-operations?requestId=${reqId}`)}
+                          className="active-spotlight-operations-btn"
+                          title="Go to full Harvest Operations management page"
+                        >
+                          <span>Operations Hub</span>
+                          <ChevronRight size={14} />
                         </button>
                       </div>
                     </div>
 
-                    {/* 4-Item Essential Highlights Grid */}
+                    {/* Contractor Profile & Field Logistics Strip */}
+                    <div className="active-spotlight-logistics-bar">
+                      <div className="active-contractor-col">
+                        <div className="active-contractor-avatar">
+                          <UserCheck size={22} />
+                        </div>
+                        <div className="active-contractor-info">
+                          <div className="active-contractor-name-row">
+                            <span className="active-contractor-name">{cName}</span>
+                            <span className="active-contractor-verified-badge">
+                              <ShieldCheck size={11} className="text-emerald-400" />
+                              Verified Contractor
+                            </span>
+                          </div>
+                          <p className="active-contractor-role-desc">
+                            Assigned certified contractor crew executing tree felling, processing, and log extraction operations.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                        <div className="active-contractor-contact-group">
+                          {cPhone && (
+                            <a href={`tel:${cPhone}`} className="active-contact-pill-tel" title="Call assigned contractor">
+                              <Phone size={12} />
+                              <span>+91 {cPhone}</span>
+                            </a>
+                          )}
+                          {cEmail && (
+                            <a href={`mailto:${cEmail}`} className="active-contact-pill-mail" title="Send email to contractor">
+                              <Mail size={12} />
+                              <span>Email</span>
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="active-logistics-specs-grid">
+                          <div className="active-logistics-chip">
+                            <span className="active-chip-label">Assigned Crew</span>
+                            <span className="active-chip-value">
+                              <Users size={13} className="text-emerald-400 shrink-0" />
+                              {crewSize} Workers
+                            </span>
+                          </div>
+                          <div className="active-logistics-chip" title={fleetEquip}>
+                            <span className="active-chip-label">Machinery Deployed</span>
+                            <span className="active-chip-value truncate max-w-[130px]">
+                              <Truck size={13} className="text-emerald-400 shrink-0" />
+                              {fleetEquip}
+                            </span>
+                          </div>
+                          <div className="active-logistics-chip">
+                            <span className="active-chip-label">Start Schedule</span>
+                            <span className="active-chip-value text-emerald-300">
+                              <Calendar size={13} className="text-emerald-400 shrink-0" />
+                              {formatDateDMY(opStartDate)}
+                            </span>
+                          </div>
+                          <div className="active-logistics-chip">
+                            <span className="active-chip-label">Est. Volume / Scope</span>
+                            <span className="active-chip-value">
+                              <Trees size={13} className="text-emerald-400 shrink-0" />
+                              {scopeVolume} m³
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4-Item Financial Highlights Grid */}
                     <div className="active-spotlight-grid">
                       <div className="active-spotlight-stat">
                         <span className="active-stat-label">Total Agreed Quotation</span>
@@ -859,7 +971,7 @@ const LandownerDashboard = () => {
                           <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
                           <span>{formatINR(advanceAmount)}</span>
                         </div>
-                        <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {contractorName}</span>
+                        <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
                       </div>
 
                       <div className="active-spotlight-stat">
@@ -873,9 +985,125 @@ const LandownerDashboard = () => {
                       <div className="active-spotlight-stat">
                         <span className="active-stat-label">Harvest Scope &amp; Crew</span>
                         <div className="active-stat-value text-white text-base font-bold">
-                          {assessedVolume} m³ • {workersCount} Crew
+                          {scopeVolume} m³ • {crewSize} Crew
                         </div>
-                        <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(proposedStartDate)}</span>
+                        <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
+                      </div>
+                    </div>
+
+                    {/* Milestone Completion Progress & 4-Stage Interactive Stepper */}
+                    <div className="active-milestones-section">
+                      <div className="active-milestones-header">
+                        <span className="active-milestones-title">
+                          <Layers size={15} className="text-emerald-400" />
+                          Milestone Completion Progress
+                        </span>
+                        <span className="active-milestones-count-pill">
+                          {verifiedCount} of 4 Stages Verified ({progressPct}%)
+                        </span>
+                      </div>
+
+                      <div className="active-progress-track">
+                        <div className="active-progress-fill" style={{ width: `${progressPct}%` }} />
+                      </div>
+
+                      <div className="active-milestones-grid">
+                        {stagesConfig.map((stage) => {
+                          const stStatus = getStageStatus(stage.id);
+                          const isVerified = stStatus === 'VERIFIED';
+                          const isSubmitted = stStatus === 'SUBMITTED';
+                          const isInProg = stStatus === 'IN_PROGRESS';
+                          const stData = stagesData[stage.id] || {};
+                          const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
+
+                          const cardStatusClass = isVerified
+                            ? 'status-verified'
+                            : isInProg
+                              ? 'status-in-progress'
+                              : isSubmitted
+                                ? 'status-submitted'
+                                : 'status-pending';
+
+                          const badgeStatusClass = isVerified
+                            ? 'badge-verified'
+                            : isInProg
+                              ? 'badge-in-progress'
+                              : isSubmitted
+                                ? 'badge-submitted'
+                                : 'badge-pending';
+
+                          const badgeLabel = isVerified
+                            ? '✓ Verified'
+                            : isSubmitted
+                              ? 'Under Review'
+                              : isInProg
+                                ? 'In Progress'
+                                : 'Pending';
+
+                          return (
+                            <div
+                              key={stage.id}
+                              onClick={() => setSelectedStageViewerModal(req)}
+                              className={`active-milestone-card ${cardStatusClass}`}
+                              title="Click to inspect stage evidence & logs"
+                            >
+                              <div className="active-stage-top">
+                                <span className="active-stage-num">Stage {stage.num}</span>
+                                <span className={`active-stage-status-badge ${badgeStatusClass}`}>
+                                  {badgeLabel}
+                                </span>
+                              </div>
+                              <div>
+                                <h5 className="active-stage-title">{stage.title}</h5>
+                                <p className="active-stage-desc">{stage.desc}</p>
+                              </div>
+                              <div className="active-stage-bottom">
+                                <span className={`active-stage-evidence ${mediaCount > 0 ? 'has-media' : ''}`}>
+                                  <Camera size={11} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
+                                  <span>{mediaCount > 0 ? `${mediaCount} Evidence Files` : 'Awaiting upload'}</span>
+                                </span>
+                                <span className="active-stage-inspect-cta">
+                                  Inspect &rarr;
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Live Work Evidence Inspection Callout */}
+                    <div className="active-evidence-banner">
+                      <div className="active-evidence-info">
+                        <div className="active-evidence-icon-wrap">
+                          <Camera size={20} />
+                        </div>
+                        <div>
+                          <span className="active-evidence-title">
+                            View Live Work Status &amp; Field Evidence Uploaded by Contractor
+                          </span>
+                          <span className="active-evidence-subtitle">
+                            Inspect real-time site photos, equipment checklist, safety compliance logs, and cut logs uploaded directly from your parcel.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="active-evidence-actions">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStageViewerModal(req)}
+                          className="active-spotlight-evidence-btn"
+                        >
+                          <Camera size={14} />
+                          <span>View Work Status</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/landowner/harvest-operations?requestId=${reqId}`)}
+                          className="active-spotlight-operations-btn"
+                        >
+                          <span>Operations Page</span>
+                          <ChevronRight size={14} />
+                        </button>
                       </div>
                     </div>
 
@@ -916,6 +1144,15 @@ const LandownerDashboard = () => {
                         >
                           <FileText size={14} />
                           <span>Assessment Certificate</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/landowner/harvest-requests?requestId=${reqId}`)}
+                          className="active-spotlight-link-btn active-spotlight-link-accent"
+                          title="View Complete Work & Payment Details"
+                        >
+                          <ArrowRight size={14} />
+                          <span>Payment Details</span>
                         </button>
                       </div>
                     </div>
@@ -1955,19 +2192,54 @@ const LandownerDashboard = () => {
           {/* 5. ACTIVE HARVEST OPERATION SPOTLIGHT */}
           {activeSpotlight && (() => {
             const spotlightId = activeSpotlight.id || activeSpotlight._id;
+
+            // Suppress duplicate: Check if this spotlight is already rendered by the top spotlight section
+            const isAlreadyRenderedAbove = (harvestRequests || []).some(r => {
+              const rId = r.id || r._id;
+              if (rId !== spotlightId) return false;
+              const ass = activeAssessmentMap[rId] || r.assessment || {};
+              const isUnderReview = (r.status === 'ASSESSMENT_SUBMITTED' || ass.status === 'SUBMITTED') && r.status !== 'OPERATION_READY' && r.status !== 'IN_PROGRESS' && r.status !== 'COMPLETED';
+              const isRevisionActive = r.status === 'REVISION_REQUESTED' || ass.status === 'REVISION_REQUESTED';
+              return !isUnderReview && !isRevisionActive && Boolean(
+                r.status === 'OPERATION_READY' ||
+                r.status === 'IN_PROGRESS' ||
+                r.status === 'COMPLETED' ||
+                (r.status === 'ACCEPTED' && r.digital_agreement) ||
+                (ass.status === 'ACCEPTED' && r.digital_agreement)
+              );
+            });
+            if (isAlreadyRenderedAbove) return null;
+
             const assDoc = activeAssessmentMap[spotlightId] || activeSpotlight.assessment || {};
             const cName = activeSpotlight.assigned_contractor_name || activeSpotlight.contractor || 'Rohith kumar';
             const cPhone = activeSpotlight.site_inspection?.inspector_phone || activeSpotlight.assigned_contractor_phone || '9746512243';
             const cEmail = activeSpotlight.assigned_contractor_email || 'contact@treeconnect.in';
             const crewSize = assDoc.assigned_workers_count || activeSpotlight.assigned_workers_count || 10;
-            const fleetEquip = assDoc.equipment_needed || activeSpotlight.equipment_needed || 'Hydraulic Log Loader, Heavy Hauler, Chainsaw Rigs';
+            const fleetEquip = assDoc.equipment_needed || activeSpotlight.equipment_needed || 'Hydraulic Log Loader, Heavy Hauler, Chainsaw';
             const opStartDate = assDoc.proposed_start_date || activeSpotlight.proposed_start_date || activeSpotlight.preferredStartDate || activeSpotlight.created_at;
+            const scopeVolume = assDoc.estimated_harvestable_volume || activeSpotlight.estimated_harvestable_volume || activeSpotlight.estimatedVolume || '1.80';
+            const totalQuoteVal = assDoc.total_quote ?? activeSpotlight.total_quote ?? 110000;
+            const propType = assDoc.commercial_proposal_type || activeSpotlight.commercial_proposal_type || 'Harvesting Service Quotation';
+            const jobDuration = assDoc.estimated_duration || activeSpotlight.estimated_duration || '1 Working Day';
+
+            const advReq = activeSpotlight.advance_payment_request || assDoc.advance_payment_request;
+            const advanceAmount = Number(
+              advReq?.advance_amount ||
+              (activeSpotlight.total_verified_paid ? activeSpotlight.total_verified_paid : 38500)
+            );
+            const remainingBal = Number(
+              advReq?.remaining_balance !== undefined && advReq?.remaining_balance !== null
+                ? advReq.remaining_balance
+                : activeSpotlight.remaining_balance !== undefined && activeSpotlight.remaining_balance !== null
+                  ? activeSpotlight.remaining_balance
+                  : Math.max(0, totalQuoteVal - advanceAmount)
+            );
 
             const stagesConfig = [
-              { id: 'stage_1', num: 1, title: 'Mobilization & Safety' },
-              { id: 'stage_2', num: 2, title: 'Felling Operations' },
-              { id: 'stage_3', num: 3, title: 'De-branching & Bucking' },
-              { id: 'stage_4', num: 4, title: 'Scaling & Transit Prep' }
+              { id: 'stage_1', num: 1, title: 'Mobilization & Safety', desc: 'Site prep & boundary safety' },
+              { id: 'stage_2', num: 2, title: 'Felling Operations', desc: 'Directional felling & clearance' },
+              { id: 'stage_3', num: 3, title: 'De-branching & Bucking', desc: 'Delimbing & log cross-cutting' },
+              { id: 'stage_4', num: 4, title: 'Scaling & Transit Prep', desc: 'Log scaling & haulage prep' }
             ];
 
             const stagesData = activeSpotlight.harvest_stages || {};
@@ -1987,205 +2259,326 @@ const LandownerDashboard = () => {
             const progressPct = activeSpotlight.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : 15))));
 
             return (
-              <section className="ld-spotlight-card space-y-4">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-500/20">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                    <div>
-                      <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                        <Truck size={20} className="text-emerald-400" /> Active Harvest Operation &amp; Work Status
+              <section id="active-harvest-spotlight-section-fallback" className="active-harvest-spotlight-card">
+                {/* Header: Title, Contractor, Badges, and Primary CTAs */}
+                <div className="active-spotlight-header">
+                  <div className="active-spotlight-title-group">
+                    <div className="active-spotlight-icon-wrap">
+                      <Truck size={26} className="text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <span className="active-spotlight-status-pill">
+                          <span className="live-pulse-dot" />
+                          {activeSpotlight.status === 'COMPLETED' ? '100% Completed' : activeSpotlight.status === 'IN_PROGRESS' ? 'Harvesting Operations In Progress' : 'Operation Ready'}
+                        </span>
+                        <span className="active-spotlight-sub-pill">
+                          <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                          Agreement Signed &amp; Mobilization Advance Verified
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                          Job #{String(spotlightId).substring(0, 8).toUpperCase()}
+                        </span>
+                      </div>
+                      <h2 className="active-spotlight-heading">
+                        {activeSpotlight.propertyName || activeSpotlight.property_name || 'Timber Harvest Operation'} — Active Harvest Operations
                       </h2>
-                      <p className="text-xs text-slate-400">
-                        {activeSpotlight.propertyName || activeSpotlight.property_name || 'Timber Harvest Operation'} • Job #{String(spotlightId).substring(0, 8).toUpperCase()}
+                      <p className="active-spotlight-subtitle">
+                        Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span>
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      {activeSpotlight.status === 'COMPLETED' ? '100% Completed' : activeSpotlight.status === 'IN_PROGRESS' ? 'Harvesting In Progress' : 'Operation Ready'}
-                    </span>
+
+                  <div className="active-spotlight-actions">
                     <button
                       type="button"
                       onClick={() => setSelectedStageViewerModal(activeSpotlight)}
-                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                      className="active-spotlight-evidence-btn"
+                      title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
                     >
-                      <Camera size={14} />
+                      <Camera size={15} />
                       <span>View Work Status &amp; Evidence</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
+                      className="active-spotlight-operations-btn"
+                      title="Go to full Harvest Operations management page"
+                    >
+                      <span>Operations Hub</span>
+                      <ChevronRight size={14} />
                     </button>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  {/* 1. CONTRACTOR DETAILS (SHOWN FIRST) */}
-                  <div className="rounded-xl bg-[#030d07] border border-emerald-500/25 p-4 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-500/15 pb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 shrink-0">
-                          <UserCheck size={20} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm sm:text-base font-black text-white">
-                              {cName}
-                            </h4>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 flex items-center gap-1">
-                              <ShieldCheck size={11} className="text-emerald-400" /> Verified Contractor
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400">
-                            Assigned contractor crew executing tree felling, processing, and log extraction operations.
-                          </p>
-                        </div>
+                {/* Contractor Profile & Field Logistics Strip */}
+                <div className="active-spotlight-logistics-bar">
+                  <div className="active-contractor-col">
+                    <div className="active-contractor-avatar">
+                      <UserCheck size={22} />
+                    </div>
+                    <div className="active-contractor-info">
+                      <div className="active-contractor-name-row">
+                        <span className="active-contractor-name">{cName}</span>
+                        <span className="active-contractor-verified-badge">
+                          <ShieldCheck size={11} className="text-emerald-400" />
+                          Verified Contractor
+                        </span>
                       </div>
+                      <p className="active-contractor-role-desc">
+                        Assigned certified contractor crew executing tree felling, processing, and log extraction operations.
+                      </p>
+                    </div>
+                  </div>
 
-                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                        {cPhone && (
-                          <a
-                            href={`tel:${cPhone}`}
-                            className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Phone size={12} />
-                            <span>+91 {cPhone}</span>
-                          </a>
-                        )}
-                        {cEmail && (
-                          <a
-                            href={`mailto:${cEmail}`}
-                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Mail size={12} />
-                            <span>Email</span>
-                          </a>
-                        )}
-                      </div>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div className="active-contractor-contact-group">
+                      {cPhone && (
+                        <a href={`tel:${cPhone}`} className="active-contact-pill-tel" title="Call assigned contractor">
+                          <Phone size={12} />
+                          <span>+91 {cPhone}</span>
+                        </a>
+                      )}
+                      {cEmail && (
+                        <a href={`mailto:${cEmail}`} className="active-contact-pill-mail" title="Send email to contractor">
+                          <Mail size={12} />
+                          <span>Email</span>
+                        </a>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Assigned Crew</span>
-                        <span className="font-extrabold text-white mt-0.5 block flex items-center gap-1">
-                          <Users size={13} className="text-emerald-400" /> {crewSize} Workers
+                    <div className="active-logistics-specs-grid">
+                      <div className="active-logistics-chip">
+                        <span className="active-chip-label">Assigned Crew</span>
+                        <span className="active-chip-value">
+                          <Users size={13} className="text-emerald-400 shrink-0" />
+                          {crewSize} Workers
                         </span>
                       </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Machinery Deployed</span>
-                        <span className="font-bold text-slate-200 mt-0.5 block truncate flex items-center gap-1" title={fleetEquip}>
-                          <Truck size={13} className="text-emerald-400" /> {fleetEquip}
+                      <div className="active-logistics-chip" title={fleetEquip}>
+                        <span className="active-chip-label">Machinery Deployed</span>
+                        <span className="active-chip-value truncate max-w-[130px]">
+                          <Truck size={13} className="text-emerald-400 shrink-0" />
+                          {fleetEquip}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Start Schedule</span>
-                        <span className="font-bold text-emerald-300 mt-0.5 block flex items-center gap-1">
-                          <Calendar size={13} className="text-emerald-400" /> {formatDateDMY(opStartDate)}
+                      <div className="active-logistics-chip">
+                        <span className="active-chip-label">Start Schedule</span>
+                        <span className="active-chip-value text-emerald-300">
+                          <Calendar size={13} className="text-emerald-400 shrink-0" />
+                          {formatDateDMY(opStartDate)}
                         </span>
                       </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-bold">Est. Volume / Rate</span>
-                        <span className="font-bold text-white mt-0.5 block flex items-center gap-1">
-                          <Trees size={13} className="text-emerald-400" /> {activeSpotlight.estimatedVolume || activeSpotlight.estimated_volume || '1.80 m³'}
+                      <div className="active-logistics-chip">
+                        <span className="active-chip-label">Est. Volume / Scope</span>
+                        <span className="active-chip-value">
+                          <Trees size={13} className="text-emerald-400 shrink-0" />
+                          {scopeVolume} m³
                         </span>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* 2. FOUR STAGES OF WORK PROGRESS BAR & MINI STEPPER */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className="text-slate-300 font-bold flex items-center gap-1.5">
-                        <Layers size={14} className="text-emerald-400" /> Milestone Completion Progress
-                      </span>
-                      <span className="text-emerald-300 font-bold">
-                        {verifiedCount} of 4 Stages Verified ({progressPct}%)
-                      </span>
+                {/* 4-Item Financial Highlights Grid */}
+                <div className="active-spotlight-grid">
+                  <div className="active-spotlight-stat">
+                    <span className="active-stat-label">Total Agreed Quotation</span>
+                    <div className="active-stat-value text-emerald-300">
+                      {formatINR(totalQuoteVal)}
                     </div>
-
-                    <div className="w-full h-2 rounded-full bg-slate-900 border border-emerald-500/25 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500 rounded-full"
-                        style={{ width: `${progressPct}%` }}
-                      ></div>
-                    </div>
-
-                    {/* 4 STAGES MINI BADGES */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                      {stagesConfig.map((stage) => {
-                        const stStatus = getStageStatus(stage.id);
-                        const isVerified = stStatus === 'VERIFIED';
-                        const isSubmitted = stStatus === 'SUBMITTED';
-                        const isInProg = stStatus === 'IN_PROGRESS';
-                        const stData = stagesData[stage.id] || {};
-                        const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
-
-                        return (
-                          <div
-                            key={stage.id}
-                            className={`p-2.5 rounded-xl border text-xs transition-all ${
-                              isVerified
-                                ? 'bg-[#081e11] border-emerald-500/40 text-slate-200'
-                                : isSubmitted
-                                  ? 'bg-[#0b1d1f] border-teal-500/40 text-slate-200'
-                                  : isInProg
-                                    ? 'bg-[#091824] border-blue-500/40 text-slate-200 ring-1 ring-blue-500/30'
-                                    : 'bg-[#05110a] border-emerald-500/15 text-slate-400 opacity-70'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-1 mb-1">
-                              <span className="font-mono text-[10px] text-slate-400 font-bold">Stage {stage.num}</span>
-                              <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${
-                                isVerified
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : isSubmitted
-                                    ? 'bg-teal-500/20 text-teal-300'
-                                    : isInProg
-                                      ? 'bg-blue-500/20 text-blue-300'
-                                      : 'bg-slate-800 text-slate-400'
-                              }`}>
-                                {isVerified ? '✓ Verified' : isSubmitted ? 'Under Review' : isInProg ? 'In Progress' : 'Pending'}
-                              </span>
-                            </div>
-                            <h5 className="font-bold text-white text-[11px] truncate">{stage.title}</h5>
-                            <span className="text-[10px] text-slate-400 mt-1 block flex items-center gap-1">
-                              <Camera size={10} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
-                              {mediaCount > 0 ? `${mediaCount} Media Uploaded` : 'Awaiting upload'}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <span className="active-stat-hint">{propType}</span>
                   </div>
 
-                  {/* 3. VIEW OPTION BUTTON TO SEE CURRENT WORK STATUS */}
-                  <div className="p-3.5 rounded-xl bg-[#041208] border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <Camera size={18} className="text-emerald-400 shrink-0" />
-                      <div>
-                        <strong className="text-white text-xs block font-bold">
-                          View Live Work Status &amp; Field Evidence Uploaded by Contractor
-                        </strong>
-                        <span className="text-[11px] text-slate-400">
-                          Inspect photos, safety logs, cut logs, and measurements uploaded from your parcel.
-                        </span>
-                      </div>
+                  <div className="active-spotlight-stat active-stat-advance">
+                    <span className="active-stat-label">Mobilization Advance Verified</span>
+                    <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                      <span>{formatINR(advanceAmount)}</span>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedStageViewerModal(activeSpotlight)}
-                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
-                      >
-                        <Camera size={13} />
-                        <span>View Work Status</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
-                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1 border border-slate-700 transition-all cursor-pointer"
-                      >
-                        <span>Operations Page</span>
-                        <ChevronRight size={13} />
-                      </button>
+                    <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
+                  </div>
+
+                  <div className="active-spotlight-stat">
+                    <span className="active-stat-label">Remaining Balance</span>
+                    <div className="active-stat-value text-slate-200">
+                      {formatINR(remainingBal)}
                     </div>
+                    <span className="active-stat-hint">Due upon harvest progress / completion</span>
+                  </div>
+
+                  <div className="active-spotlight-stat">
+                    <span className="active-stat-label">Harvest Scope &amp; Crew</span>
+                    <div className="active-stat-value text-white text-base font-bold">
+                      {scopeVolume} m³ • {crewSize} Crew
+                    </div>
+                    <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
+                  </div>
+                </div>
+
+                {/* Milestone Completion Progress & 4-Stage Interactive Stepper */}
+                <div className="active-milestones-section">
+                  <div className="active-milestones-header">
+                    <span className="active-milestones-title">
+                      <Layers size={15} className="text-emerald-400" />
+                      Milestone Completion Progress
+                    </span>
+                    <span className="active-milestones-count-pill">
+                      {verifiedCount} of 4 Stages Verified ({progressPct}%)
+                    </span>
+                  </div>
+
+                  <div className="active-progress-track">
+                    <div className="active-progress-fill" style={{ width: `${progressPct}%` }} />
+                  </div>
+
+                  <div className="active-milestones-grid">
+                    {stagesConfig.map((stage) => {
+                      const stStatus = getStageStatus(stage.id);
+                      const isVerified = stStatus === 'VERIFIED';
+                      const isSubmitted = stStatus === 'SUBMITTED';
+                      const isInProg = stStatus === 'IN_PROGRESS';
+                      const stData = stagesData[stage.id] || {};
+                      const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
+
+                      const cardStatusClass = isVerified
+                        ? 'status-verified'
+                        : isInProg
+                          ? 'status-in-progress'
+                          : isSubmitted
+                            ? 'status-submitted'
+                            : 'status-pending';
+
+                      const badgeStatusClass = isVerified
+                        ? 'badge-verified'
+                        : isInProg
+                          ? 'badge-in-progress'
+                          : isSubmitted
+                            ? 'badge-submitted'
+                            : 'badge-pending';
+
+                      const badgeLabel = isVerified
+                        ? '✓ Verified'
+                        : isSubmitted
+                          ? 'Under Review'
+                          : isInProg
+                            ? 'In Progress'
+                            : 'Pending';
+
+                      return (
+                        <div
+                          key={stage.id}
+                          onClick={() => setSelectedStageViewerModal(activeSpotlight)}
+                          className={`active-milestone-card ${cardStatusClass}`}
+                          title="Click to inspect stage evidence & logs"
+                        >
+                          <div className="active-stage-top">
+                            <span className="active-stage-num">Stage {stage.num}</span>
+                            <span className={`active-stage-status-badge ${badgeStatusClass}`}>
+                              {badgeLabel}
+                            </span>
+                          </div>
+                          <div>
+                            <h5 className="active-stage-title">{stage.title}</h5>
+                            <p className="active-stage-desc">{stage.desc}</p>
+                          </div>
+                          <div className="active-stage-bottom">
+                            <span className={`active-stage-evidence ${mediaCount > 0 ? 'has-media' : ''}`}>
+                              <Camera size={11} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
+                              <span>{mediaCount > 0 ? `${mediaCount} Evidence Files` : 'Awaiting upload'}</span>
+                            </span>
+                            <span className="active-stage-inspect-cta">
+                              Inspect &rarr;
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Live Work Evidence Inspection Callout */}
+                <div className="active-evidence-banner">
+                  <div className="active-evidence-info">
+                    <div className="active-evidence-icon-wrap">
+                      <Camera size={20} />
+                    </div>
+                    <div>
+                      <span className="active-evidence-title">
+                        View Live Work Status &amp; Field Evidence Uploaded by Contractor
+                      </span>
+                      <span className="active-evidence-subtitle">
+                        Inspect real-time site photos, equipment checklist, safety compliance logs, and cut logs uploaded directly from your parcel.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="active-evidence-actions">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStageViewerModal(activeSpotlight)}
+                      className="active-spotlight-evidence-btn"
+                    >
+                      <Camera size={14} />
+                      <span>View Work Status</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
+                      className="active-spotlight-operations-btn"
+                    >
+                      <span>Operations Page</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Pre-conditions Verified & Quick Access Bar */}
+                <div className="active-spotlight-footer">
+                  <div className="active-spotlight-checklist">
+                    <span className="active-check-item">
+                      <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                      <span>Field Assessment Verified</span>
+                    </span>
+                    <span className="active-check-divider">•</span>
+                    <span className="active-check-item">
+                      <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                      <span>Digital Harvest Agreement Signed</span>
+                    </span>
+                    <span className="active-check-divider">•</span>
+                    <span className="active-check-item">
+                      <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                      <span>₹ {advanceAmount.toLocaleString('en-IN')} Advance Verified</span>
+                    </span>
+                  </div>
+
+                  <div className="active-spotlight-links">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAgreementModal({ req: activeSpotlight, assessment: assDoc })}
+                      className="active-spotlight-link-btn"
+                      title="Open executed digital agreement"
+                    >
+                      <FileCheck size={14} />
+                      <span>Digital Agreement</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVisitModal(activeSpotlight)}
+                      className="active-spotlight-link-btn"
+                      title="Open field assessment audit certificate"
+                    >
+                      <FileText size={14} />
+                      <span>Assessment Certificate</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/landowner/harvest-requests?requestId=${spotlightId}`)}
+                      className="active-spotlight-link-btn active-spotlight-link-accent"
+                      title="View Complete Work & Payment Details"
+                    >
+                      <ArrowRight size={14} />
+                      <span>Payment Details</span>
+                    </button>
                   </div>
                 </div>
               </section>

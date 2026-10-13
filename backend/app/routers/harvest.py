@@ -283,7 +283,7 @@ def create_harvest_request(
         existing_active_request = db.harvest_requests.find_one({
             "property_id": {"$in": or_prop_ids},
             "status": {"$nin": ["CANCELLED", "DELETED", "COMPLETED"]}
-        })
+        }, {"_id": 1, "status": 1, "assigned_contractor_name": 1, "assigned_contractor_email": 1})
 
         if existing_active_request:
             contractor_name = existing_active_request.get("assigned_contractor_name") or existing_active_request.get("assigned_contractor_email")
@@ -306,7 +306,7 @@ def create_harvest_request(
 
         prop_query = {"$or": or_clauses}
 
-        property_doc = db.properties.find_one(prop_query)
+        property_doc = db.properties.find_one(prop_query, {"photos": 0, "images": 0, "tree_inventory": 0, "tree_inventories": 0})
         prop_name = payload.propertyName or (property_doc.get("propertyName") if property_doc else None) or "TreeConnect Property"
         prop_loc = payload.propertyLocation or (f"{property_doc.get('village', 'Nagampadam')}, {property_doc.get('district', 'Kottayam')}, {property_doc.get('state', 'Kerala')}" if property_doc else None) or "Kottayam, Kerala"
         prop_area = payload.propertyArea or (f"{property_doc.get('totalArea', 11)} {property_doc.get('areaUnit', 'Cents')}" if property_doc else "11 Cents")
@@ -337,6 +337,41 @@ def create_harvest_request(
             if sum_vol > 0:
                 calc_vol = round(sum_vol, 2)
 
+        # Sanitize tree groups - retain metadata, strip any oversized base64 strings
+        clean_tree_groups = []
+        if payload.selected_tree_groups:
+            for g in payload.selected_tree_groups:
+                if isinstance(g, dict):
+                    cg = {
+                        "id": g.get("id"),
+                        "groupName": g.get("groupName") or "Tree Stand",
+                        "species": g.get("species") or "Teak",
+                        "numberOfTrees": g.get("numberOfTrees") or 1,
+                        "approxAge": g.get("approxAge") or "15 years",
+                        "condition": g.get("condition") or "Healthy",
+                        "location": g.get("location") or "Kottayam",
+                        "girth": g.get("girth") or "60 - 80cm",
+                        "estimatedVolume": g.get("estimatedVolume") or "1.8 m³",
+                        "estimatedPrice": g.get("estimatedPrice") or g.get("approximate_timber_value") or 0,
+                        "approximate_timber_value": g.get("approximate_timber_value") or g.get("estimatedPrice") or 0
+                    }
+                    img_str = g.get("image")
+                    if isinstance(img_str, str) and (img_str.startswith("http") or len(img_str) < 5000):
+                        cg["image"] = img_str
+                    clean_tree_groups.append(cg)
+                else:
+                    clean_tree_groups.append(g)
+
+        # Sanitize photos - limit to compressed photos under 600KB
+        clean_photos = []
+        if payload.photos:
+            for p in payload.photos:
+                if isinstance(p, str):
+                    if len(p) <= 800000:
+                        clean_photos.append(p)
+                    else:
+                        print(f"[WARN] Omitting oversized photo of length {len(p)}")
+
         doc = {
             "property_id": payload.property_id,
             "propertyName": prop_name,
@@ -351,7 +386,7 @@ def create_harvest_request(
             "latitude": latitude_val,
             "longitude": longitude_val,
             "selected_inventory_ids": payload.selected_inventory_ids,
-            "selected_tree_groups": payload.selected_tree_groups or [],
+            "selected_tree_groups": clean_tree_groups,
             "total_estimated_volume": calc_vol,
             "total_estimated_price": payload.total_estimated_price,
             "approx_timber_value": payload.approx_timber_value or payload.total_estimated_price,
@@ -362,7 +397,7 @@ def create_harvest_request(
             "required_services": payload.required_services,
             "site_conditions": payload.site_conditions,
             "hazards": payload.hazards,
-            "photos": payload.photos,
+            "photos": clean_photos,
             "instructions": payload.instructions or "",
             "assigned_contractor_id": payload.assigned_contractor_id or None,
             "assigned_contractor_name": payload.assigned_contractor_name or None,
@@ -428,7 +463,7 @@ def get_harvest_requests(
                     {"assigned_contractor_id": raw_email}
                 ])
                 if db is not None:
-                    u_doc = db.users.find_one({"$or": [{"email": clean_email}, {"email": raw_email}]})
+                    u_doc = db.users.find_one({"$or": [{"email": clean_email}, {"email": raw_email}]}, {"fullName": 1, "name": 1, "companyName": 1, "_id": 1})
                     if u_doc:
                         u_name = u_doc.get("fullName") or u_doc.get("name") or u_doc.get("companyName")
                         u_id = str(u_doc.get("_id", ""))
@@ -441,81 +476,94 @@ def get_harvest_requests(
                 query = {"$or": or_conditions}
             else:
                 query = {}
-
         cursor = db.harvest_requests.find(query).sort("createdAt", -1)
+        raw_requests = list(cursor)
+
+        if not raw_requests:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"harvest_requests": []}
+            )
+
+        # Collect all request IDs for batch lookup of assessments and payments
+        all_req_ids = []
+        for r in raw_requests:
+            rid = str(r.get("_id", ""))
+            if rid:
+                all_req_ids.append(rid)
+            cid = str(r.get("id", ""))
+            if cid and cid not in all_req_ids:
+                all_req_ids.append(cid)
+
+        # 1. Batch fetch assessments in ONE fast indexed query
+        assessments_map = {}
+        if all_req_ids and db is not None:
+            ass_cursor = db.contractor_assessments.find({"harvest_request_id": {"$in": all_req_ids}})
+            for ass in ass_cursor:
+                s_ass = serialize_doc(ass)
+                h_id = str(s_ass.get("harvest_request_id", ""))
+                if h_id:
+                    assessments_map[h_id] = s_ass
+
+        # 2. Batch fetch payments in ONE fast indexed query
+        payments_map = {}
+        if all_req_ids and db is not None:
+            pay_cursor = db.harvest_payments.find({"harvest_request_id": {"$in": all_req_ids}}).sort("created_at", -1)
+            for pay in pay_cursor:
+                s_pay = serialize_doc(pay)
+                h_id = str(s_pay.get("harvest_request_id", ""))
+                if h_id not in payments_map:
+                    payments_map[h_id] = []
+                payments_map[h_id].append(s_pay)
+
         requests_list = []
 
-        for req in cursor:
+        for req in raw_requests:
             req_data = serialize_doc(req)
 
             if req_data.get("status") in ["CANCELLED", "DELETED"]:
                 continue
 
-            # Hydrate property details & tree inventory if available
-            p_id = req_data.get("property_id")
-            p_doc = None
-            if p_id:
-                if ObjectId.is_valid(p_id):
-                    p_query = {"$or": [{"_id": ObjectId(p_id)}, {"_id": p_id}, {"id": p_id}]}
-                else:
-                    p_query = {"$or": [{"_id": p_id}, {"id": p_id}]}
-                p_doc = db.properties.find_one(p_query)
-                if p_doc:
-                    p_info = serialize_doc(p_doc)
-                    p_info["photos"] = []
-                    req_data["property_details"] = p_info
-                else:
-                    req_data["property_details"] = {
-                        "propertyName": req_data.get("propertyName", "Registered Property"),
-                        "district": (req_data.get("propertyLocation") or "Kottayam").split(",")[0].strip(),
-                        "state": "Kerala",
-                        "totalArea": "14.5",
-                        "areaUnit": "Acres"
-                    }
+            # Ensure property_details is self-contained without slow remote collection scans
+            if not req_data.get("property_details") or not isinstance(req_data["property_details"], dict):
+                loc_parts = (req_data.get("propertyLocation") or "Kottayam, Kerala").split(",")
+                req_data["property_details"] = {
+                    "propertyName": req_data.get("propertyName", "Registered Property"),
+                    "district": loc_parts[0].strip(),
+                    "state": loc_parts[1].strip() if len(loc_parts) > 1 else "Kerala",
+                    "totalArea": req_data.get("propertyArea") or "11 Cents",
+                    "areaUnit": "",
+                    "landType": req_data.get("landType") or "Residential Property",
+                    "ownerName": req_data.get("ownerName") or "Harigovind D Nair",
+                    "contactNumber": req_data.get("contactNumber") or "9746794654",
+                    "village": req_data.get("village") or "Nagampadam",
+                    "localBody": req_data.get("localBody") or "Meenadom Panchayat",
+                    "pinCode": req_data.get("pinCode") or "686516",
+                    "latitude": req_data.get("latitude"),
+                    "longitude": req_data.get("longitude"),
+                    "photos": []
+                }
+            else:
+                # Strip heavy raw image fields if present on legacy property_details
+                req_data["property_details"]["photos"] = []
+                if "image" in req_data["property_details"] and isinstance(req_data["property_details"]["image"], str) and len(req_data["property_details"]["image"]) > 5000:
+                    req_data["property_details"]["image"] = None
 
-            inv_list = []
-            if p_id:
-                p_id_str = str(p_id)
-                or_conds = [{"propertyId": p_id_str}, {"property_id": p_id_str}]
-                if ObjectId.is_valid(p_id_str):
-                    or_conds.extend([{"propertyId": ObjectId(p_id_str)}, {"property_id": ObjectId(p_id_str)}])
-                inv_cursor = db.tree_inventories.find({"$or": or_conds})
-                inv_list = [serialize_doc(i) for i in inv_cursor]
-
-            if not inv_list and req_data.get("owner_email"):
-                inv_cursor = db.tree_inventories.find({"userEmail": req_data["owner_email"]})
-                inv_list = [serialize_doc(i) for i in inv_cursor]
-
+            # Tree inventory: prioritize selected_tree_groups directly embedded on document
             if req_data.get("selected_tree_groups") and isinstance(req_data["selected_tree_groups"], list) and len(req_data["selected_tree_groups"]) > 0:
                 req_data["tree_inventory"] = req_data["selected_tree_groups"]
-            elif inv_list:
-                req_data["tree_inventory"] = inv_list
-            elif p_doc:
-                if p_doc.get("tree_inventory"):
-                    req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventory"]) if isinstance(p_doc["tree_inventory"], dict) else p_doc["tree_inventory"]
-                elif p_doc.get("tree_inventories"):
-                    req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventories"]) if isinstance(p_doc["tree_inventories"], dict) else p_doc["tree_inventories"]
-
-            # Hydrate photo fallbacks into tree_inventory items ONLY from tree inventories
-            fallback_photos = []
-            if inv_list:
-                for inv in inv_list:
-                    ph = inv.get("photos") or inv.get("attachedPhotos") or []
-                    if isinstance(ph, list) and len(ph) > 0:
-                        fallback_photos.extend([p for p in ph if isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p])
-                    elif isinstance(ph, str) and ph and "unsplash.com" not in ph and "photo-1473448912268" not in ph:
-                        fallback_photos.append(ph)
-
-            if req_data.get("tree_inventory") and isinstance(req_data["tree_inventory"], list):
-                for tg in req_data["tree_inventory"]:
-                    if isinstance(tg, dict):
-                        tg_img = str(tg.get("image") or "")
-                        tg_ph = tg.get("photos") or tg.get("attachedPhotos") or []
-                        has_valid_photo = (tg_img and "unsplash.com" not in tg_img and "photo-1473448912268" not in tg_img) or any(isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p for p in (tg_ph if isinstance(tg_ph, list) else [tg_ph]))
-                        if not has_valid_photo and fallback_photos:
-                            tg["photos"] = fallback_photos
-                            tg["attachedPhotos"] = fallback_photos
-                            tg["image"] = fallback_photos[0]
+            elif not req_data.get("tree_inventory"):
+                req_data["tree_inventory"] = [{
+                    "groupName": f"{req_data.get('propertyName', 'Teak')} Stand #1",
+                    "species": "Teak",
+                    "numberOfTrees": 1,
+                    "approxAge": "15 years",
+                    "condition": "Healthy",
+                    "location": req_data.get("propertyLocation") or "Kottayam",
+                    "girth": "60 - 80cm",
+                    "estimatedVolume": f"{req_data.get('total_estimated_volume', 1.8)} m³",
+                    "estimatedPrice": req_data.get("total_estimated_price", 110000)
+                }]
 
             # Ensure total_estimated_volume is present in m³
             if req_data.get("total_estimated_volume") is None:
@@ -534,23 +582,16 @@ def get_harvest_requests(
                                         pass
                 req_data["total_estimated_volume"] = round(calc_v, 2) if calc_v > 0 else 1.70
 
-            # Hydrate contractor assessment if available
-            ass_query = {"$or": [
-                {"harvest_request_id": req_data["id"]},
-                {"harvest_request_id": str(req_data.get("_id", ""))},
-                {"harvest_request_id": str(req.get("_id", ""))}
-            ]}
-            ass_doc = db.contractor_assessments.find_one(ass_query)
-            serialized_ass = None
-            if ass_doc:
-                serialized_ass = serialize_doc(ass_doc)
-                req_data["assessment"] = serialized_ass
+            # Attach contractor assessment from in-memory batch map
+            req_id_str = str(req_data.get("id") or req_data.get("_id") or "")
+            serialized_ass = assessments_map.get(req_id_str) or assessments_map.get(str(req.get("_id", "")))
 
-                # Hydrate negotiation & fair deal counter-offer fields if not already on req_data
+            if serialized_ass:
+                req_data["assessment"] = serialized_ass
                 for k in ["counter_offer_amount", "counter_offer_start_date", "landowner_feedback", "revision_reasons", "original_quote", "previous_quote", "revised_quote", "reduction", "is_revision", "revision_history", "original_costs"]:
                     if not req_data.get(k) and serialized_ass.get(k) is not None:
                         req_data[k] = serialized_ass.get(k)
-                if serialized_ass.get("status") == "REVISION_REQUESTED" and req_data.get("status") != "ACCEPTED" and req_data.get("status") != "OPERATION_READY":
+                if serialized_ass.get("status") == "REVISION_REQUESTED" and req_data.get("status") not in ["ACCEPTED", "OPERATION_READY"]:
                     req_data["status"] = "REVISION_REQUESTED"
             elif req_data.get("assessment") and isinstance(req_data.get("assessment"), dict):
                 req_data["assessment"] = serialize_doc(req_data["assessment"])
@@ -580,11 +621,11 @@ def get_harvest_requests(
             if ass_obj and ass_obj.get("advance_payment_request") and not req_data.get("advance_payment_request"):
                 req_data["advance_payment_request"] = ass_obj.get("advance_payment_request")
 
-            # Hydrate payments & advance payment details
-            p_records = list(db.harvest_payments.find({"$or": [{"harvest_request_id": str(req_data["id"])}, {"harvest_request_id": str(req.get("_id", ""))}]}).sort("created_at", -1)) if db is not None else []
+            # Attach payments from in-memory batch map
+            p_records = payments_map.get(req_id_str) or payments_map.get(str(req.get("_id", ""))) or []
             if p_records:
-                req_data["payments"] = [serialize_doc(p) for p in p_records]
-                req_data["latest_payment"] = req_data["payments"][0]
+                req_data["payments"] = p_records
+                req_data["latest_payment"] = p_records[0]
             elif req_data.get("payments"):
                 req_data["payments"] = [serialize_doc(p) if isinstance(p, dict) else p for p in req_data["payments"]]
                 if req_data["payments"]:
@@ -655,7 +696,7 @@ def get_harvest_request_by_id(request_id: str):
                 p_query = {"$or": [{"_id": ObjectId(p_id)}, {"_id": p_id}, {"id": p_id}]}
             else:
                 p_query = {"$or": [{"_id": p_id}, {"id": p_id}]}
-            p_doc = db.properties.find_one(p_query)
+            p_doc = db.properties.find_one(p_query, {"photos": 0, "images": 0, "tree_inventory": 0, "tree_inventories": 0, "documents": 0})
             if p_doc:
                 req_data["property_details"] = serialize_doc(p_doc)
             else:
@@ -673,11 +714,11 @@ def get_harvest_request_by_id(request_id: str):
             or_conds = [{"propertyId": p_id_str}, {"property_id": p_id_str}]
             if ObjectId.is_valid(p_id_str):
                 or_conds.extend([{"propertyId": ObjectId(p_id_str)}, {"property_id": ObjectId(p_id_str)}])
-            inv_cursor = db.tree_inventories.find({"$or": or_conds})
+            inv_cursor = db.tree_inventories.find({"$or": or_conds}, {"photos": 0, "attachedPhotos": 0, "speciesList.photos": 0, "speciesList.attachedPhotos": 0})
             inv_list = [serialize_doc(i) for i in inv_cursor]
 
         if not inv_list and req_data.get("owner_email"):
-            inv_cursor = db.tree_inventories.find({"userEmail": req_data["owner_email"]})
+            inv_cursor = db.tree_inventories.find({"userEmail": req_data["owner_email"]}, {"photos": 0, "attachedPhotos": 0, "speciesList.photos": 0, "speciesList.attachedPhotos": 0})
             inv_list = [serialize_doc(i) for i in inv_cursor]
 
         if req_data.get("selected_tree_groups") and isinstance(req_data["selected_tree_groups"], list) and len(req_data["selected_tree_groups"]) > 0:
@@ -690,26 +731,34 @@ def get_harvest_request_by_id(request_id: str):
             elif p_doc.get("tree_inventories"):
                 req_data["tree_inventory"] = serialize_doc(p_doc["tree_inventories"]) if isinstance(p_doc["tree_inventories"], dict) else p_doc["tree_inventories"]
 
-        # Hydrate photo fallbacks into tree_inventory items ONLY from tree inventories
-        fallback_photos = []
+        # Build map of stand photos from landowner tree inventories (by stand id and species name)
+        stand_photo_map = {}
         if inv_list:
             for inv in inv_list:
-                ph = inv.get("photos") or inv.get("attachedPhotos") or []
-                if isinstance(ph, list) and len(ph) > 0:
-                    fallback_photos.extend([p for p in ph if isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p])
-                elif isinstance(ph, str) and ph and "unsplash.com" not in ph and "photo-1473448912268" not in ph:
-                    fallback_photos.append(ph)
+                for sp in inv.get("speciesList", []):
+                    s_id = str(sp.get("id") or "")
+                    s_img = sp.get("image") or (sp.get("attachedPhotos") or [None])[0] or (sp.get("photos") or [None])[0]
+                    if s_id and s_img:
+                        stand_photo_map[s_id] = s_img
+                    s_name = (sp.get("species") or sp.get("treeSpecies") or "").lower()
+                    if s_name and s_img and s_name not in stand_photo_map:
+                        stand_photo_map[s_name] = s_img
 
-        if req_data.get("tree_inventory") and isinstance(req_data["tree_inventory"], list):
-            for tg in req_data["tree_inventory"]:
-                if isinstance(tg, dict):
-                    tg_img = str(tg.get("image") or "")
-                    tg_ph = tg.get("photos") or tg.get("attachedPhotos") or []
-                    has_valid_photo = (tg_img and "unsplash.com" not in tg_img and "photo-1473448912268" not in tg_img) or any(isinstance(p, str) and "unsplash.com" not in p and "photo-1473448912268" not in p for p in (tg_ph if isinstance(tg_ph, list) else [tg_ph]))
-                    if not has_valid_photo and fallback_photos:
-                        tg["photos"] = fallback_photos
-                        tg["attachedPhotos"] = fallback_photos
-                        tg["image"] = fallback_photos[0]
+        # Hydrate photo into selected_tree_groups and tree_inventory
+        target_stands = []
+        if isinstance(req_data.get("selected_tree_groups"), list):
+            target_stands.extend(req_data["selected_tree_groups"])
+        if isinstance(req_data.get("tree_inventory"), list):
+            target_stands.extend(req_data["tree_inventory"])
+
+        for tg in target_stands:
+            if isinstance(tg, dict):
+                tg_id = str(tg.get("id") or "")
+                tg_sp = (tg.get("species") or tg.get("treeSpecies") or "").lower()
+                matched_photo = stand_photo_map.get(tg_id) or stand_photo_map.get(tg_sp)
+                if matched_photo and not tg.get("image"):
+                    tg["image"] = matched_photo
+                    tg["photos"] = [matched_photo]
 
         # Ensure total_estimated_volume is present in m³
         if req_data.get("total_estimated_volume") is None:

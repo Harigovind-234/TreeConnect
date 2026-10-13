@@ -905,8 +905,10 @@ const AssignedHarvestJobsPage = () => {
   };
 
   // Fetch assigned harvest requests
-  const fetchAssignedRequests = async () => {
-    setLoadingRequests(true);
+  const fetchAssignedRequests = async (isSilent = false) => {
+    if (!isSilent && assignedRequests.length === 0) {
+      setLoadingRequests(true);
+    }
     try {
       const storedUserStr = localStorage.getItem('treeconnect_user');
       const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
@@ -918,10 +920,12 @@ const AssignedHarvestJobsPage = () => {
 
       // Combine backend & local storage harvest requests, deduplicating by ID
       let backendRequests = [];
+      let backendFetched = false;
       try {
         const data = await harvestService.getHarvestRequests({ all_records: true });
         if (data && Array.isArray(data.harvest_requests)) {
           backendRequests = data.harvest_requests.filter(r => !isFakeOrMockRequest(r));
+          backendFetched = true;
         }
       } catch (e) {
         console.warn("Backend harvest requests fetch failed:", e);
@@ -953,12 +957,16 @@ const AssignedHarvestJobsPage = () => {
         }
       });
 
-      // Merge localRequests
+      // Merge localRequests: if backend was fetched successfully, do NOT restore deleted backend records
       localRequests.forEach(loc => {
         const cKey = getCanonId(loc);
         if (!cKey || isFakeOrMockRequest(loc)) return;
         const existing = allMap.get(cKey);
         if (!existing) {
+          // If backend was successfully fetched, any request not present in DB was deleted!
+          if (backendFetched && !String(loc.id || '').startsWith('draft_') && !String(loc.id || '').startsWith('local_')) {
+            return;
+          }
           allMap.set(cKey, loc);
         } else {
           // Merge harvest stages
@@ -1063,19 +1071,23 @@ const AssignedHarvestJobsPage = () => {
   };
 
   useEffect(() => {
-    fetchAssignedRequests();
+    fetchAssignedRequests(false);
 
     const handleStorageChange = (e) => {
       if (!e || e.key === 'treeconnect_harvest_requests' || e.key === 'treeconnect_user') {
-        fetchAssignedRequests();
+        fetchAssignedRequests(true);
       }
     };
+    const handleFocus = () => {
+      fetchAssignedRequests(true);
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('focus', fetchAssignedRequests);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', fetchAssignedRequests);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [user]);
 

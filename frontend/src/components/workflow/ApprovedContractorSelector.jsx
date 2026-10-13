@@ -39,7 +39,12 @@ const ApprovedContractorSelector = ({
 
         // 1. Fetch from live admin users endpoint
         try {
-          const response = await api.get('/admin/users');
+          let response;
+          try {
+            response = await api.get('/admin/users?role=contractor');
+          } catch (rErr) {
+            response = await api.get('/admin/users');
+          }
           const allUsers = response.data?.users || response.data || [];
           if (Array.isArray(allUsers)) {
             realContractors = allUsers.filter(u => {

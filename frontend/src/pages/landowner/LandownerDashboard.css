@@ -5762,14 +5762,14 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
    MINIMIZED ACTIVE HARVEST OPERATIONS SPOTLIGHT CARD (LANDOWNER DASHBOARD)
    ========================================================================== */
 .active-harvest-spotlight-card {
-  background: linear-gradient(160deg, rgba(8, 28, 18, 0.96) 0%, rgba(4, 16, 11, 0.98) 100%) !important;
-  border: 1px solid rgba(16, 185, 129, 0.32) !important;
-  border-radius: 20px !important;
+  background: linear-gradient(165deg, rgba(8, 28, 18, 0.95) 0%, rgba(3, 16, 10, 0.98) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 24px !important;
   padding: 24px 28px !important;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 28px rgba(16, 185, 129, 0.08) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 35px rgba(16, 185, 129, 0.08) !important;
   display: flex !important;
   flex-direction: column !important;
-  gap: 18px !important;
+  gap: 20px !important;
   position: relative !important;
   overflow: hidden !important;
   max-width: 1220px !important;
@@ -5781,7 +5781,7 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
 
 .active-harvest-spotlight-card:hover {
   border-color: rgba(16, 185, 129, 0.45) !important;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65), 0 0 35px rgba(16, 185, 129, 0.12) !important;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.7), 0 0 45px rgba(16, 185, 129, 0.12) !important;
 }
 
 .active-harvest-spotlight-card::before {
@@ -5791,8 +5791,8 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   left: 0 !important;
   right: 0 !important;
   height: 3px !important;
-  background: linear-gradient(90deg, #10b981 0%, #059669 50%, #047857 100%) !important;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.6) !important;
+  background: linear-gradient(90deg, #10b981 0%, #34d399 50%, #059669 100%) !important;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.7) !important;
 }
 
 .active-spotlight-header {
@@ -5802,7 +5802,7 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   justify-content: space-between !important;
 }
 
-@media (min-width: 860px) {
+@media (min-width: 900px) {
   .active-spotlight-header {
     flex-direction: row !important;
     align-items: center !important;
@@ -5819,15 +5819,15 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
 .active-spotlight-icon-wrap {
   width: 52px !important;
   height: 52px !important;
-  border-radius: 14px !important;
-  background: rgba(16, 185, 129, 0.14) !important;
+  border-radius: 16px !important;
+  background: rgba(16, 185, 129, 0.15) !important;
   border: 1px solid rgba(16, 185, 129, 0.35) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   color: #34d399 !important;
   flex-shrink: 0 !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
 }
 
 .active-spotlight-status-pill {
@@ -5873,8 +5873,8 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
 }
 
 .active-spotlight-heading {
-  font-size: 1.15rem !important;
-  font-weight: 800 !important;
+  font-size: 1.25rem !important;
+  font-weight: 900 !important;
   color: #ffffff !important;
   letter-spacing: -0.01em !important;
   margin: 0 !important;
@@ -5893,39 +5893,233 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   align-items: center !important;
   gap: 10px !important;
   flex-shrink: 0 !important;
+  flex-wrap: wrap !important;
 }
 
-.active-spotlight-primary-btn {
+.active-spotlight-evidence-btn {
   display: inline-flex !important;
   align-items: center !important;
   gap: 8px !important;
   padding: 10px 18px !important;
   border-radius: 12px !important;
   background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-  color: #ffffff !important;
-  font-size: 0.83rem !important;
-  font-weight: 700 !important;
+  color: #031309 !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
   border: none !important;
   cursor: pointer !important;
-  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.35) !important;
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4) !important;
   transition: all 0.2s ease !important;
   white-space: nowrap !important;
 }
 
-.active-spotlight-primary-btn:hover {
+.active-spotlight-evidence-btn:hover {
   background: linear-gradient(135deg, #34d399 0%, #10b981 100%) !important;
-  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.55) !important;
   transform: translateY(-1px) !important;
 }
 
+.active-spotlight-operations-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  padding: 10px 16px !important;
+  border-radius: 12px !important;
+  background: rgba(15, 23, 42, 0.8) !important;
+  color: #cbd5e1 !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+}
+
+.active-spotlight-operations-btn:hover {
+  background: rgba(30, 41, 59, 0.95) !important;
+  color: #ffffff !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Contractor & Logistics strip */
+.active-spotlight-logistics-bar {
+  background: rgba(4, 18, 11, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  border-radius: 18px !important;
+  padding: 16px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+@media (min-width: 1024px) {
+  .active-spotlight-logistics-bar {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.active-contractor-col {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  min-width: 0 !important;
+}
+
+.active-contractor-avatar {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 14px !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #34d399 !important;
+  flex-shrink: 0 !important;
+}
+
+.active-contractor-info {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  min-width: 0 !important;
+}
+
+.active-contractor-name-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.active-contractor-name {
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+}
+
+.active-contractor-verified-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 8px !important;
+  border-radius: 9999px !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+.active-contractor-role-desc {
+  font-size: 0.76rem !important;
+  color: #94a3b8 !important;
+  line-height: 1.3 !important;
+}
+
+.active-contractor-contact-group {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  flex-shrink: 0 !important;
+}
+
+.active-contact-pill-tel {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 14px !important;
+  border-radius: 10px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  background: rgba(16, 185, 129, 0.14) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+  text-decoration: none !important;
+  transition: all 0.2s ease !important;
+}
+
+.active-contact-pill-tel:hover {
+  background: rgba(16, 185, 129, 0.28) !important;
+  border-color: rgba(16, 185, 129, 0.6) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.active-contact-pill-mail {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 14px !important;
+  border-radius: 10px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  background: rgba(30, 41, 59, 0.8) !important;
+  border: 1px solid rgba(71, 85, 105, 0.6) !important;
+  color: #cbd5e1 !important;
+  text-decoration: none !important;
+  transition: all 0.2s ease !important;
+}
+
+.active-contact-pill-mail:hover {
+  background: rgba(51, 65, 85, 0.95) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
+}
+
+.active-logistics-specs-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+@media (min-width: 640px) {
+  .active-logistics-specs-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+.active-logistics-chip {
+  background: rgba(8, 26, 17, 0.8) !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+  border-radius: 12px !important;
+  padding: 8px 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+.active-chip-label {
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: #64748b !important;
+}
+
+.active-chip-value {
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+/* 4 Financial Highlights Grid */
 .active-spotlight-grid {
   display: grid !important;
   grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
   gap: 12px !important;
   background: rgba(4, 15, 10, 0.55) !important;
-  border: 1px solid rgba(16, 185, 129, 0.16) !important;
-  border-radius: 14px !important;
-  padding: 14px 18px !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  border-radius: 18px !important;
+  padding: 16px 20px !important;
 }
 
 @media (min-width: 640px) {
@@ -5943,35 +6137,326 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
 .active-spotlight-stat {
   display: flex !important;
   flex-direction: column !important;
-  gap: 3px !important;
+  gap: 4px !important;
   padding: 6px 8px !important;
 }
 
 .active-stat-advance {
   border-left: 2px solid rgba(16, 185, 129, 0.45) !important;
-  padding-left: 12px !important;
+  padding-left: 14px !important;
 }
 
 .active-stat-label {
   font-size: 0.68rem !important;
-  font-weight: 700 !important;
+  font-weight: 800 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.05em !important;
   color: #64748b !important;
 }
 
 .active-stat-value {
-  font-size: 1.15rem !important;
-  font-weight: 800 !important;
+  font-size: 1.25rem !important;
+  font-weight: 900 !important;
   font-family: monospace, ui-monospace, sans-serif !important;
   line-height: 1.2 !important;
 }
 
 .active-stat-hint {
-  font-size: 0.72rem !important;
+  font-size: 0.73rem !important;
   color: #94a3b8 !important;
 }
 
+/* 4 Milestones Interactive Section */
+.active-milestones-section {
+  background: rgba(3, 14, 9, 0.75) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 18px !important;
+  padding: 18px 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+}
+
+.active-milestones-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+.active-milestones-title {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: #e2e8f0 !important;
+}
+
+.active-milestones-count-pill {
+  font-size: 0.75rem !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  padding: 3px 10px !important;
+  border-radius: 9999px !important;
+}
+
+.active-progress-track {
+  width: 100% !important;
+  height: 8px !important;
+  border-radius: 9999px !important;
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid rgba(16, 185, 129, 0.22) !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.active-progress-fill {
+  height: 100% !important;
+  border-radius: 9999px !important;
+  background: linear-gradient(90deg, #10b981 0%, #34d399 50%, #2dd4bf 100%) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.6) !important;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.active-milestones-grid {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+@media (min-width: 640px) {
+  .active-milestones-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .active-milestones-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+.active-milestone-card {
+  padding: 14px 16px !important;
+  border-radius: 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  transition: all 0.25s ease !important;
+  cursor: pointer !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+}
+
+.active-milestone-card:hover {
+  transform: translateY(-2px) !important;
+}
+
+.active-milestone-card.status-verified {
+  background: linear-gradient(145deg, rgba(8, 34, 20, 0.85) 0%, rgba(3, 20, 12, 0.95) 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3), 0 0 14px rgba(16, 185, 129, 0.1) !important;
+}
+
+.active-milestone-card.status-verified:hover {
+  border-color: rgba(16, 185, 129, 0.75) !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4), 0 0 20px rgba(16, 185, 129, 0.2) !important;
+}
+
+.active-milestone-card.status-in-progress {
+  background: linear-gradient(145deg, rgba(10, 30, 48, 0.85) 0%, rgba(4, 18, 30, 0.95) 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.45) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3), 0 0 16px rgba(56, 189, 248, 0.14) !important;
+}
+
+.active-milestone-card.status-in-progress:hover {
+  border-color: rgba(56, 189, 248, 0.75) !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.4), 0 0 22px rgba(56, 189, 248, 0.25) !important;
+}
+
+.active-milestone-card.status-submitted {
+  background: linear-gradient(145deg, rgba(8, 32, 34, 0.85) 0%, rgba(3, 18, 20, 0.95) 100%) !important;
+  border: 1px solid rgba(45, 212, 191, 0.45) !important;
+}
+
+.active-milestone-card.status-pending {
+  background: rgba(6, 18, 12, 0.6) !important;
+  border: 1px solid rgba(16, 185, 129, 0.16) !important;
+  opacity: 0.85 !important;
+}
+
+.active-milestone-card.status-pending:hover {
+  opacity: 1 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.active-stage-top {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 6px !important;
+}
+
+.active-stage-num {
+  font-family: monospace, ui-monospace, sans-serif !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+  text-transform: uppercase !important;
+}
+
+.active-stage-status-badge {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  padding: 2px 7px !important;
+  border-radius: 9999px !important;
+}
+
+.active-stage-status-badge.badge-verified {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+.active-stage-status-badge.badge-in-progress {
+  background: rgba(56, 189, 248, 0.2) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.4) !important;
+}
+
+.active-stage-status-badge.badge-submitted {
+  background: rgba(45, 212, 191, 0.2) !important;
+  color: #2dd4bf !important;
+  border: 1px solid rgba(45, 212, 191, 0.4) !important;
+}
+
+.active-stage-status-badge.badge-pending {
+  background: rgba(51, 65, 85, 0.4) !important;
+  color: #64748b !important;
+  border: 1px solid rgba(71, 85, 105, 0.3) !important;
+}
+
+.active-stage-title {
+  font-size: 0.85rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  margin: 0 !important;
+  line-height: 1.3 !important;
+}
+
+.active-stage-desc {
+  font-size: 0.72rem !important;
+  color: #94a3b8 !important;
+  margin: 0 !important;
+  line-height: 1.35 !important;
+}
+
+.active-stage-bottom {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 4px !important;
+  font-size: 10.5px !important;
+  margin-top: 4px !important;
+  padding-top: 6px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.active-stage-evidence {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  color: #64748b !important;
+  font-weight: 600 !important;
+}
+
+.active-stage-evidence.has-media {
+  color: #34d399 !important;
+  font-weight: 700 !important;
+}
+
+.active-stage-inspect-cta {
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  color: #34d399 !important;
+  opacity: 0.85 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+.active-milestone-card:hover .active-stage-inspect-cta {
+  opacity: 1 !important;
+  text-decoration: underline !important;
+}
+
+/* Live Work Status Callout Bar */
+.active-evidence-banner {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  background: rgba(4, 18, 11, 0.85) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  border-radius: 16px !important;
+  padding: 14px 18px !important;
+}
+
+@media (min-width: 768px) {
+  .active-evidence-banner {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}
+
+.active-evidence-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  min-width: 0 !important;
+}
+
+.active-evidence-icon-wrap {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 12px !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+}
+
+.active-evidence-title {
+  font-size: 0.84rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  display: block !important;
+}
+
+.active-evidence-subtitle {
+  font-size: 0.74rem !important;
+  color: #94a3b8 !important;
+  display: block !important;
+  margin-top: 2px !important;
+}
+
+.active-evidence-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+  flex-wrap: wrap !important;
+}
+
+/* Footer & Checklist */
 .active-spotlight-footer {
   display: flex !important;
   flex-direction: column !important;
@@ -5993,7 +6478,7 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   align-items: center !important;
   gap: 8px !important;
   flex-wrap: wrap !important;
-  font-size: 0.76rem !important;
+  font-size: 0.78rem !important;
   color: #cbd5e1 !important;
 }
 
@@ -6001,7 +6486,7 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   display: inline-flex !important;
   align-items: center !important;
   gap: 5px !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   color: #e2e8f0 !important;
 }
 
@@ -6014,28 +6499,44 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   align-items: center !important;
   gap: 8px !important;
   flex-shrink: 0 !important;
+  flex-wrap: wrap !important;
 }
 
 .active-spotlight-link-btn {
   display: inline-flex !important;
   align-items: center !important;
-  gap: 5px !important;
-  padding: 6px 12px !important;
-  border-radius: 8px !important;
+  gap: 6px !important;
+  padding: 7px 14px !important;
+  border-radius: 10px !important;
   background: rgba(16, 185, 129, 0.08) !important;
   border: 1px solid rgba(16, 185, 129, 0.25) !important;
   color: #6ee7b7 !important;
-  font-size: 0.75rem !important;
-  font-weight: 600 !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
   cursor: pointer !important;
   transition: all 0.2s ease !important;
+  white-space: nowrap !important;
 }
 
 .active-spotlight-link-btn:hover {
-  background: rgba(16, 185, 129, 0.18) !important;
+  background: rgba(16, 185, 129, 0.2) !important;
   border-color: rgba(16, 185, 129, 0.45) !important;
   color: #ffffff !important;
+  transform: translateY(-1px) !important;
 }
+
+.active-spotlight-link-accent {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #34d399 !important;
+}
+
+.active-spotlight-link-accent:hover {
+  background: rgba(16, 185, 129, 0.3) !important;
+  border-color: rgba(16, 185, 129, 0.6) !important;
+  color: #ffffff !important;
+}
+
 
 
 

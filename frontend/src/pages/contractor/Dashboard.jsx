@@ -78,14 +78,132 @@ const DEFAULT_PROPERTY_PHOTOS = [];
 
 const DEFAULT_TREE_INVENTORY = [];
 
+// Helper to filter out known fake/mock harvest requests
+const isFakeOrMockRequest = (r) => {
+  if (!r) return true;
+  const rId = String(r.id || r._id || '');
+  const pId = String(r.property_id || r.propertyId || '');
+  const mockIds = ['test_commercial_plot_001', 'p_1', 'p_2', 'inv_1', 'inv_2', 'hr_1', 'job_demo'];
+  if (mockIds.includes(rId) || mockIds.includes(pId)) return true;
+
+  const owner = String(r.ownerName || r.landownerName || r.userEmail || '').toLowerCase();
+  const prop = String(r.propertyName || '').toLowerCase();
+  if (owner.includes('landowner george') || prop.includes('rubber & teak estate parcel')) return true;
+  return false;
+};
+
+// Pure filter and enrichment helper for assigned contractor harvest jobs
+const filterAndEnrichAssignedRequests = (combinedRequests, currentUser) => {
+  if (!Array.isArray(combinedRequests)) return [];
+
+  const cId = currentUser?.id || currentUser?._id || '';
+  const cEmail = (currentUser?.email || '').toLowerCase().trim();
+  const cName = (currentUser?.fullName || currentUser?.name || currentUser?.companyName || currentUser?.username || '').toLowerCase().trim();
+
+  let assigned = combinedRequests.filter(r => {
+    if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+    if (isFakeOrMockRequest(r)) return false;
+
+    const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
+    const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
+    const reqCName = String(r.assigned_contractor_name || r.contractor_name || r.assignedContractorName || '').toLowerCase().trim();
+
+    // 1. Direct ID match
+    const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || (currentUser?._id && reqCId === String(currentUser._id))));
+
+    // 2. Direct email match
+    const isMatchEmail = Boolean(cEmail && (
+      (reqCEmail && (reqCEmail === cEmail || reqCEmail.includes(cEmail) || cEmail.includes(reqCEmail))) ||
+      (reqCName && reqCName === cEmail)
+    ));
+
+    // 3. Name match (exact or partial / first name match e.g. "Rohith" vs "Rohith kumar")
+    const firstName = cName ? cName.split(' ')[0] : '';
+    const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
+
+    const isMatchName = Boolean(cName && reqCName && (
+      reqCName === cName ||
+      reqCName.includes(cName) ||
+      cName.includes(reqCName) ||
+      (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
+      (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName))
+    ));
+
+    return isMatchId || isMatchEmail || isMatchName;
+  });
+
+  // Fallback matching if name format had slight discrepancy (must still match contractor name/identity)
+  if (assigned.length === 0 && combinedRequests.length > 0) {
+    const activeAssigned = combinedRequests.filter(r => {
+      if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
+      if (isFakeOrMockRequest(r)) return false;
+      const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS' || r.status === 'COMPLETED';
+      if (!statusMatch) return false;
+
+      const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
+      if (!reqCName || !cName) return false;
+
+      const firstName = cName.split(' ')[0];
+      const reqFirstName = reqCName.split(' ')[0];
+      return (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
+             (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName));
+    });
+    if (activeAssigned.length > 0) {
+      assigned = activeAssigned;
+    }
+  }
+
+  return assigned.map(req => ({
+    ...req,
+    propertyArea: req.propertyArea || (req.property_details?.totalArea ? `${req.property_details?.totalArea} ${req.property_details?.areaUnit || 'Cents'}` : ''),
+    surveyNumber: req.surveyNumber || req.property_details?.surveyNumber || '',
+    landType: req.landType || req.property_details?.propertyType || req.property_details?.landType || '',
+    propertyPhotos: (Array.isArray(req.photos) && req.photos.length > 0) ? req.photos : ((Array.isArray(req.propertyPhotos) && req.propertyPhotos.length > 0) ? req.propertyPhotos : []),
+    tree_inventory: (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
+      ? req.selected_tree_groups
+      : (Array.isArray(req.tree_inventory) && req.tree_inventory.length > 0)
+        ? req.tree_inventory
+        : (Array.isArray(req.tree_inventories) && req.tree_inventories.length > 0)
+          ? req.tree_inventories
+          : (Array.isArray(req.property_details?.tree_inventory) && req.property_details.tree_inventory.length > 0)
+            ? req.property_details.tree_inventory
+            : (Array.isArray(req.property_details?.tree_inventories) && req.property_details.tree_inventories.length > 0)
+              ? req.property_details.tree_inventories
+              : []
+  }));
+};
+
 const ContractorDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const contractorName = user?.fullName || user?.name || user?.companyName || 'Apex Harvesting Co.';
 
-  // Assigned harvest requests from backend DB
-  const [assignedRequests, setAssignedRequests] = useState([]);
-  const [loadingRequests, setLoadingRequests] = useState(true);
+  // Assigned harvest requests - cache-first for instantaneous 0ms display!
+  const [assignedRequests, setAssignedRequests] = useState(() => {
+    try {
+      const stored = localStorage.getItem('treeconnect_harvest_requests');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const storedUserStr = localStorage.getItem('treeconnect_user');
+          const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+          return filterAndEnrichAssignedRequests(parsed, storedUser);
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [loadingRequests, setLoadingRequests] = useState(() => {
+    try {
+      const stored = localStorage.getItem('treeconnect_harvest_requests');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return false;
+      }
+    } catch (e) {}
+    return true;
+  });
 
   // Compact / Expandable state for harvest requests
   const [expandedReqs, setExpandedReqs] = useState({});
@@ -172,23 +290,11 @@ const ContractorDashboard = () => {
   };
 
 
-  // Helper to filter out known fake/mock harvest requests
-  const isFakeOrMockRequest = (r) => {
-    if (!r) return true;
-    const rId = String(r.id || r._id || '');
-    const pId = String(r.property_id || r.propertyId || '');
-    const mockIds = ['test_commercial_plot_001', 'p_1', 'p_2', 'inv_1', 'inv_2', 'hr_1', 'job_demo'];
-    if (mockIds.includes(rId) || mockIds.includes(pId)) return true;
-
-    const owner = String(r.ownerName || r.landownerName || r.userEmail || '').toLowerCase();
-    const prop = String(r.propertyName || '').toLowerCase();
-    if (owner.includes('landowner george') || prop.includes('rubber & teak estate parcel')) return true;
-    return false;
-  };
-
   // Fetch assigned harvest requests
-  const fetchAssignedRequests = async () => {
-    setLoadingRequests(true);
+  const fetchAssignedRequests = async (isSilent = false) => {
+    if (!isSilent && assignedRequests.length === 0) {
+      setLoadingRequests(true);
+    }
     try {
       const storedUserStr = localStorage.getItem('treeconnect_user');
       const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
@@ -200,10 +306,12 @@ const ContractorDashboard = () => {
 
       // Combine backend & local storage harvest requests, deduplicating by ID
       let backendRequests = [];
+      let backendFetched = false;
       try {
         const data = await harvestService.getHarvestRequests({ all_records: true });
         if (data && Array.isArray(data.harvest_requests)) {
           backendRequests = data.harvest_requests.filter(r => !isFakeOrMockRequest(r));
+          backendFetched = true;
         }
       } catch (e) {
         console.warn("Backend harvest requests fetch failed:", e);
@@ -239,12 +347,16 @@ const ContractorDashboard = () => {
         }
       });
 
-      // Merge localRequests
+      // Merge localRequests: if backend was fetched successfully, do NOT restore deleted backend records
       localRequests.forEach(loc => {
         const cKey = getCanonId(loc);
         if (!cKey || isFakeOrMockRequest(loc)) return;
         const existing = allMap.get(cKey);
         if (!existing) {
+          // If backend was successfully fetched, any request not present in DB was deleted!
+          if (backendFetched && !String(loc.id || '').startsWith('draft_') && !String(loc.id || '').startsWith('local_')) {
+            return;
+          }
           allMap.set(cKey, loc);
         } else {
           const exStages = existing.harvest_stages || {};
@@ -283,83 +395,8 @@ const ContractorDashboard = () => {
         localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(combinedRequests));
       } catch (e) {}
 
-      let assigned = combinedRequests.filter(r => {
-        if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
-        if (isFakeOrMockRequest(r)) return false;
-
-        const reqCId = String(r.assigned_contractor_id || r.contractor_id || r.assignedContractorId || '');
-        const reqCEmail = String(r.assigned_contractor_email || r.contractor_email || r.assignedContractorEmail || '').toLowerCase().trim();
-        const reqCName = String(r.assigned_contractor_name || r.contractor_name || r.assignedContractorName || '').toLowerCase().trim();
-
-        // 1. Direct ID match
-        const isMatchId = Boolean(cId && reqCId && (reqCId === String(cId) || (currentUser?._id && reqCId === String(currentUser._id))));
-
-        // 2. Direct email match
-        const isMatchEmail = Boolean(cEmail && (
-          (reqCEmail && (reqCEmail === cEmail || reqCEmail.includes(cEmail) || cEmail.includes(reqCEmail))) ||
-          (reqCName && reqCName === cEmail)
-        ));
-
-        // 3. Name match (exact or partial / first name match e.g. "Rohith" vs "Rohith kumar")
-        const firstName = cName ? cName.split(' ')[0] : '';
-        const reqFirstName = reqCName ? reqCName.split(' ')[0] : '';
-
-        const isMatchName = Boolean(cName && reqCName && (
-          reqCName === cName ||
-          reqCName.includes(cName) ||
-          cName.includes(reqCName) ||
-          (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
-          (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName))
-        ));
-
-        const isDirectlyAssigned = isMatchId || isMatchEmail || isMatchName;
-        return isDirectlyAssigned;
-      });
-
-      // Fallback matching if name format had slight discrepancy (must still match contractor name/identity)
-      if (assigned.length === 0 && combinedRequests.length > 0) {
-        const activeAssigned = combinedRequests.filter(r => {
-          if (!r || r.status === 'CANCELLED' || r.status === 'DELETED') return false;
-          if (isFakeOrMockRequest(r)) return false;
-          const statusMatch = r.status === 'CONTRACTOR_ASSIGNED' || r.status === 'ASSESSMENT_SUBMITTED' || r.status === 'REVISION_REQUESTED' || r.status === 'OPERATION_READY' || r.status === 'IN_PROGRESS' || r.status === 'COMPLETED';
-          if (!statusMatch) return false;
-
-          const reqCName = String(r.assigned_contractor_name || r.contractor_name || '').toLowerCase().trim();
-          if (!reqCName || !cName) return false;
-
-          const firstName = cName.split(' ')[0];
-          const reqFirstName = reqCName.split(' ')[0];
-          return (firstName && firstName.length >= 3 && reqCName.includes(firstName)) ||
-                 (reqFirstName && reqFirstName.length >= 3 && cName.includes(reqFirstName));
-        });
-        if (activeAssigned.length > 0) {
-          assigned = activeAssigned;
-        }
-      }
-
-      if (assigned.length > 0) {
-        const enriched = assigned.map(req => ({
-          ...req,
-          propertyArea: req.propertyArea || (req.property_details?.totalArea ? `${req.property_details?.totalArea} ${req.property_details?.areaUnit || 'Cents'}` : ''),
-          surveyNumber: req.surveyNumber || req.property_details?.surveyNumber || '',
-          landType: req.landType || req.property_details?.propertyType || req.property_details?.landType || '',
-          propertyPhotos: (Array.isArray(req.photos) && req.photos.length > 0) ? req.photos : ((Array.isArray(req.propertyPhotos) && req.propertyPhotos.length > 0) ? req.propertyPhotos : []),
-          tree_inventory: (Array.isArray(req.selected_tree_groups) && req.selected_tree_groups.length > 0)
-            ? req.selected_tree_groups
-            : (Array.isArray(req.tree_inventory) && req.tree_inventory.length > 0)
-              ? req.tree_inventory
-              : (Array.isArray(req.tree_inventories) && req.tree_inventories.length > 0)
-                ? req.tree_inventories
-                : (Array.isArray(req.property_details?.tree_inventory) && req.property_details.tree_inventory.length > 0)
-                  ? req.property_details.tree_inventory
-                  : (Array.isArray(req.property_details?.tree_inventories) && req.property_details.tree_inventories.length > 0)
-                    ? req.property_details.tree_inventories
-                    : []
-        }));
-        setAssignedRequests(enriched);
-      } else {
-        setAssignedRequests([]);
-      }
+      const enriched = filterAndEnrichAssignedRequests(combinedRequests, currentUser);
+      setAssignedRequests(enriched);
 
       // 4. Build Available Timber Harvesting Job Board from real platform requests & verified Kerala listings
       const savedBids = JSON.parse(localStorage.getItem('treeconnect_contractor_bids') || '{}');
@@ -475,19 +512,23 @@ const ContractorDashboard = () => {
   };
 
   useEffect(() => {
-    fetchAssignedRequests();
+    fetchAssignedRequests(false);
 
     const handleStorageChange = (e) => {
       if (!e || e.key === 'treeconnect_harvest_requests' || e.key === 'treeconnect_user') {
-        fetchAssignedRequests();
+        fetchAssignedRequests(true);
       }
     };
+    const handleFocus = () => {
+      fetchAssignedRequests(true);
+    };
+
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('focus', fetchAssignedRequests);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', fetchAssignedRequests);
+      window.removeEventListener('focus', handleFocus);
     };
   }, [user]);
 
@@ -604,6 +645,7 @@ const ContractorDashboard = () => {
               ) : (
                 <div className="flex flex-col gap-6 pt-2">
                   {assignedRequests.map((req) => {
+                    const reqId = String(req.id || req._id || 'job_demo');
                     const verifiedCount = Object.values(req.harvest_stages || {}).filter(s => String(s?.status || '').toUpperCase() === 'VERIFIED').length;
                     const isCompleted = req.status === 'COMPLETED' || verifiedCount === 4;
                     const isInProgress = !isCompleted && (req.status === 'IN_PROGRESS' || verifiedCount > 0);
@@ -638,7 +680,7 @@ const ContractorDashboard = () => {
                       ? `${propDetails.totalArea} ${propDetails.areaUnit || 'Acres'}`
                       : (req.propertyArea || '11.93 Cents');
 
-                    const surveyNo = propDetails.surveyNumber || propDetails.survey_number || propDetails.cadastralNo || req.surveyNumber || `Sy. #${(req.property_id || reqId).substring(0, 8)}`;
+                    const surveyNo = propDetails.surveyNumber || propDetails.survey_number || propDetails.cadastralNo || req.surveyNumber || `Sy. #${String(req.property_id || reqId).substring(0, 8)}`;
 
                     const landClassification = propDetails.propertyType || propDetails.landType || req.landType || 'Residential Forestry Plot';
 
