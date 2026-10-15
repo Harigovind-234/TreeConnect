@@ -3578,8 +3578,16 @@ const LandownerDashboard = () => {
           role="landowner"
           onClose={() => setSelectedStageViewerModal(null)}
           onStageUpdated={(updatedReq) => {
+            const currentId = selectedStageViewerModal?.id || selectedStageViewerModal?._id;
             if (refreshHarvestRequests) refreshHarvestRequests();
-            setSelectedStageViewerModal(updatedReq);
+            setSelectedStageViewerModal(prev => {
+              const safeId = updatedReq?.id || updatedReq?._id || currentId || prev?.id || prev?._id;
+              return {
+                ...(prev || {}),
+                ...(updatedReq || {}),
+                ...(safeId ? { id: safeId, _id: safeId } : {})
+              };
+            });
           }}
         />
       )}

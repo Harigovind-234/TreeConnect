@@ -9,6 +9,7 @@ import RequestAdvancePaymentModal from '../../components/workflow/RequestAdvance
 import RejectPaymentModal from '../../components/workflow/RejectPaymentModal';
 import HarvestStageTrackerModal from '../../components/workflow/HarvestStageTrackerModal';
 import harvestService from '../../services/harvestService';
+import { compressImage } from '../../utils/imageCompressor';
 import './ContractorDashboard.css';
 import {
   Axe,
@@ -607,19 +608,22 @@ const AssignedHarvestJobsPage = () => {
     setAuditModalJob(req);
   };
 
-  const handleAuditPhotoUpload = (e) => {
+  const handleAuditPhotoUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setAuditForm(prev => ({
-          ...prev,
-          inspection_photos: [...(prev.inspection_photos || []), event.target.result]
-        }));
-      };
-      reader.readAsDataURL(file);
-    });
+    for (const file of files) {
+      try {
+        const compressed = await compressImage(file, 1024, 0.75);
+        if (compressed) {
+          setAuditForm(prev => ({
+            ...prev,
+            inspection_photos: [...(prev.inspection_photos || []), compressed]
+          }));
+        }
+      } catch (err) {
+        console.error('Error compressing inspection photo:', err);
+      }
+    }
   };
 
   const handleRemoveAuditPhoto = (idx) => {
@@ -4339,8 +4343,16 @@ const AssignedHarvestJobsPage = () => {
             onClose={() => setSelectedStageTrackerModal(null)}
             onStageUpdated={async (updatedReq) => {
               showToast('Harvest stage evidence updated successfully!');
+              const currentId = selectedStageTrackerModal?.id || selectedStageTrackerModal?._id;
               await fetchAssignedRequests();
-              setSelectedStageTrackerModal(updatedReq);
+              setSelectedStageTrackerModal(prev => {
+                const safeId = updatedReq?.id || updatedReq?._id || currentId || prev?.id || prev?._id;
+                return {
+                  ...(prev || {}),
+                  ...(updatedReq || {}),
+                  ...(safeId ? { id: safeId, _id: safeId } : {})
+                };
+              });
             }}
           />
         )}

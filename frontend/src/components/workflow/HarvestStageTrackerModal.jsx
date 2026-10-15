@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X,
@@ -20,6 +20,7 @@ import {
   Truck
 } from 'lucide-react';
 import harvestService from '../../services/harvestService';
+import { compressImage } from '../../utils/imageCompressor';
 import './HarvestStageTrackerModal.css';
 
 // Canonical Four Stages Definitions
@@ -112,7 +113,21 @@ const getStatusBadgeMeta = (normalizedStatus) => {
 const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onStageUpdated }) => {
   const navigate = useNavigate();
   const isContractor = role === 'contractor';
-  const reqId = request?.id || request?._id;
+
+  // Safe robust ID extraction that persists across renders
+  const getSafeId = (obj) => {
+    if (!obj) return null;
+    const val = obj.id || obj._id || obj.harvest_request_id || obj.req?.id || obj.req?._id;
+    if (!val || val === 'undefined' || val === 'null') return null;
+    return String(val);
+  };
+
+  const initialReqId = getSafeId(request);
+  const reqIdRef = useRef(initialReqId);
+  if (initialReqId && reqIdRef.current !== initialReqId) {
+    reqIdRef.current = initialReqId;
+  }
+  const reqId = initialReqId || reqIdRef.current;
   const [stagesData, setStagesData] = useState(() => request?.harvest_stages || {});
 
   useEffect(() => {
@@ -215,53 +230,32 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
     setReviewerNotesInput('');
   };
 
-  // Helper to downscale and compress images so uploads are fast (<300KB) and never time out
-  const compressImageFile = (file) => {
-    return new Promise((resolve) => {
-      if (!file.type.startsWith('image/')) {
+  // Helper to downscale and compress images so uploads are fast (<150KB) and never time out
+  const compressImageFile = async (file) => {
+    if (!file.type.startsWith('image/')) {
+      if (file.size > 8 * 1024 * 1024) {
+        setErrorMsg('Video file must be under 8MB to prevent upload errors.');
+        return null;
+      }
+      return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = (e) => resolve(e.target.result);
         reader.onerror = () => resolve(null);
         reader.readAsDataURL(file);
-        return;
-      }
-
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        img.src = e.target.result;
-      };
-      img.onload = () => {
-        try {
-          const maxDim = 1280;
-          let width = img.width;
-          let height = img.height;
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
-          resolve(compressedDataUrl);
-        } catch {
-          resolve(reader.result);
-        }
-      };
-      img.onerror = () => {
-        resolve(reader.result);
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(file);
-    });
+      });
+    }
+    try {
+      const compressed = await compressImage(file, 960, 0.70);
+      return compressed;
+    } catch (err) {
+      console.warn('Fallback to raw image reader:', err);
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+    }
   };
 
   const handleFileSelect = async (category, e) => {
@@ -298,6 +292,77 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
       ...prev,
       [category]: (prev[category] || []).filter((_, i) => i !== idx)
     }));
+  };
+
+  const handleRemoveMedia = async (category, mediaItem) => {
+    if (mediaItem.isNew) {
+      setNewMediaByCategory(prev => ({
+        ...prev,
+        [category]: (prev[category] || []).filter(item => item !== mediaItem && item.url !== mediaItem.url)
+      }));
+    } else {
+      // Guard against missing or undefined reqId
+      if (!reqId) {
+        console.warn('Cannot persist media removal: reqId is undefined');
+        return;
+      }
+
+      // Remove from existing media in active stage record
+      const updatedMedia = (activeStageRecord.media || []).filter(
+        item => item !== mediaItem && item.url !== mediaItem.url
+      );
+      const updatedStageRecord = {
+        ...activeStageRecord,
+        media: updatedMedia
+      };
+      const updatedStagesMap = {
+        ...stagesData,
+        [activeStageId]: updatedStageRecord
+      };
+      setStagesData(updatedStagesMap);
+
+      // Persist directly to MongoDB database
+      try {
+        await harvestService.updateHarvestStage(reqId, {
+          stage_id: activeStageId,
+          status: currentStatus,
+          replace_media: true,
+          media: updatedMedia,
+          stage_data: activeStageRecord.stage_data
+        });
+      } catch (err) {
+        console.warn('Could not persist media removal to backend:', err);
+      }
+
+      // Sync localStorage cache
+      try {
+        const storedStr = localStorage.getItem('treeconnect_harvest_requests');
+        if (storedStr) {
+          const list = JSON.parse(storedStr);
+          if (Array.isArray(list)) {
+            const updatedList = list.map(item => {
+              const itemId = item.id || item._id;
+              if (String(itemId).toLowerCase() === String(reqId).toLowerCase()) {
+                return {
+                  ...item,
+                  harvest_stages: {
+                    ...(item.harvest_stages || {}),
+                    [activeStageId]: updatedStageRecord
+                  }
+                };
+              }
+              return item;
+            });
+            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updatedList));
+          }
+        }
+      } catch (e) {}
+
+      // Fire real-time event for Operations page and NotificationBell
+      window.dispatchEvent(new CustomEvent('treeconnect_harvest_updated', {
+        detail: { requestId: reqId, stageId: activeStageId }
+      }));
+    }
   };
 
   const getCategoryMedia = (catKey, defaultIdx = 0) => {
@@ -385,17 +450,17 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
                       </div>
                     </div>
                   )}
-                  {isContractor && m.isNew && (
+                  {isContractor && currentStatus !== 'VERIFIED' && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleRemoveNewMedia(catKey, idx);
+                        handleRemoveMedia(catKey, m);
                       }}
                       className="hst-media-remove-btn"
-                      title="Remove file"
+                      title="Remove photo"
                     >
-                      <Trash2 size={12} />
+                      <Trash2 size={13} />
                     </button>
                   )}
                 </div>
@@ -539,6 +604,11 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
   const handleSubmitStage = async (newStatus, isSaveProgress = false) => {
     setErrorMsg('');
 
+    if (!reqId) {
+      setErrorMsg('Harvest request ID is missing. Please close and re-open the stage tracker.');
+      return;
+    }
+
     // If contractor is submitting for verification, run validations
     if (!isSaveProgress && (newStatus === 'SUBMITTED' || newStatus === 'VERIFIED')) {
       const isValid = validateActiveStage();
@@ -654,8 +724,11 @@ const HarvestStageTrackerModal = ({ request, role = 'contractor', onClose, onSta
         }
       }));
 
+      const safeId = reqId || getSafeId(request) || getSafeId(updatedReq);
       const mergedReq = {
+        ...(request || {}),
         ...(updatedReq || {}),
+        ...(safeId ? { id: safeId, _id: safeId } : {}),
         current_harvest_stage: nextStageId,
         harvest_stages: newStagesMap
       };

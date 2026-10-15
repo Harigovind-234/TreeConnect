@@ -327,8 +327,14 @@ export const harvestService = {
 
   // Update harvest operational stage with photos/videos evidence
   updateHarvestStage: async (requestId, stageData) => {
+    if (!requestId || requestId === 'undefined' || requestId === 'null') {
+      console.error(`updateHarvestStage aborted: invalid requestId '${requestId}'`);
+      throw new Error(`Invalid request ID: ${requestId}`);
+    }
     try {
-      const response = await api.post(`/harvest-requests/${requestId}/stage-update`, stageData);
+      const response = await api.post(`/harvest-requests/${requestId}/stage-update`, stageData, {
+        timeout: 60000 // 60s timeout for cloud persistence and media uploads
+      });
       return response.data;
     } catch (error) {
       console.error(`Error in harvestService.updateHarvestStage (${requestId}):`, error);

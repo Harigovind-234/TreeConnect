@@ -1,25 +1,33 @@
 import React, { useState } from 'react';
 import { Camera, Video, Upload, Trash2, Image as ImageIcon, Film, Play } from 'lucide-react';
+import { compressImage } from '../../utils/imageCompressor';
 
 const PropertyMediaUploader = ({ photos = [], videos = [], onChange, compact = false }) => {
   const [activeTab, setActiveTab] = useState('photos'); // 'photos' | 'videos'
 
   // Handle Photo File Upload
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const newPhotoUrl = event.target.result;
-        onChange({
-          photos: [...photos, newPhotoUrl],
-          videos
-        });
-      };
-      reader.readAsDataURL(file);
-    });
+    const compressedPhotos = [];
+    for (const file of files) {
+      try {
+        const compressed = await compressImage(file, 1024, 0.75);
+        if (compressed) {
+          compressedPhotos.push(compressed);
+        }
+      } catch (err) {
+        console.error('Error compressing property photo:', err);
+      }
+    }
+
+    if (compressedPhotos.length > 0) {
+      onChange({
+        photos: [...photos, ...compressedPhotos],
+        videos
+      });
+    }
     e.target.value = '';
   };
 

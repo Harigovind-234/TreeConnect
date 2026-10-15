@@ -133,16 +133,18 @@ const HarvestOperationsPage = () => {
                   ? 'SUBMITTED'
                   : (exS?.status || locS?.status);
 
-              const allMedia = [
-                ...(exS?.media || []),
-                ...(locS?.media || [])
-              ].filter((m, idx, arr) => m && m.url && arr.findIndex(x => x.url === m.url) === idx);
+              const allMedia = (apiFetched && exS)
+                ? (Array.isArray(exS?.media) ? exS.media : [])
+                : [
+                    ...(exS?.media || []),
+                    ...(locS?.media || [])
+                  ].filter((m, idx, arr) => m && m.url && arr.findIndex(x => x.url === m.url) === idx);
 
               mergedStages[sKey] = {
                 ...(locS || {}),
                 ...(exS || {}),
                 status,
-                media: allMedia.length > 0 ? allMedia : (exS?.media || locS?.media || []),
+                media: allMedia,
                 stage_data: {
                   ...(locS?.stage_data || {}),
                   ...(exS?.stage_data || {})
@@ -888,6 +890,7 @@ const HarvestOperationsPage = () => {
           role={isContractor ? 'contractor' : 'landowner'}
           onClose={() => setSelectedStageViewerModal(null)}
           onStageUpdated={(updatedReq) => {
+            const currentId = selectedStageViewerModal?.id || selectedStageViewerModal?._id;
             if (isContractor) {
               fetchContractorRequests();
               setApprovalToast('✓ Progress saved and synced with Harvest Operations.');
@@ -895,7 +898,14 @@ const HarvestOperationsPage = () => {
               refreshHarvestRequests();
               setApprovalToast('✓ Harvest stage verified and recorded on audit record.');
             }
-            setSelectedStageViewerModal(updatedReq);
+            setSelectedStageViewerModal(prev => {
+              const safeId = updatedReq?.id || updatedReq?._id || currentId || prev?.id || prev?._id;
+              return {
+                ...(prev || {}),
+                ...(updatedReq || {}),
+                ...(safeId ? { id: safeId, _id: safeId } : {})
+              };
+            });
             setTimeout(() => setApprovalToast(null), 5000);
           }}
         />

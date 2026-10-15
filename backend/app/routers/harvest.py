@@ -2643,10 +2643,14 @@ def update_harvest_stage(request_id: str, payload: dict = Body(...)):
     Contractor updates a harvest milestone stage and uploads photos/videos evidence.
     """
     try:
+        clean_id = (request_id or "").strip()
+        if not clean_id or clean_id.lower() in ["undefined", "null", "none"]:
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": "Invalid or missing harvest request ID"})
+
         if db is None:
             return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"message": "Database connection error"})
 
-        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_query = {"_id": ObjectId(clean_id)} if ObjectId.is_valid(clean_id) else {"_id": clean_id}
         req_doc = db.harvest_requests.find_one(req_query)
         if not req_doc:
             return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"message": "Harvest request not found"})
@@ -2661,30 +2665,106 @@ def update_harvest_stage(request_id: str, payload: dict = Body(...)):
         stage_data = payload.get("stage_data") or {}
 
         updated_at = datetime.now(timezone.utc).isoformat()
-        stages = req_doc.get("harvest_stages") or {}
+        DEFAULT_STAGES = {
+            "stage_1": {
+                "id": "stage_1",
+                "title": "Site Mobilization & Safety Setup",
+                "status": "IN_PROGRESS",
+                "description": "Equipment on-site, safety perimeters established, and marked trees verified.",
+                "media": [],
+                "updated_at": updated_at
+            },
+            "stage_2": {
+                "id": "stage_2",
+                "title": "Tree Felling Operations",
+                "status": "PENDING",
+                "description": "Directional felling of authorized trees according to safety audit.",
+                "media": [],
+                "updated_at": None
+            },
+            "stage_3": {
+                "id": "stage_3",
+                "title": "De-branching & Bucking (Log Sectioning)",
+                "status": "PENDING",
+                "description": "Delimbing, sectioning into merchantable log lengths, and stacking at landing bay.",
+                "media": [],
+                "updated_at": None
+            },
+            "stage_4": {
+                "id": "stage_4",
+                "title": "Log Scaling, Sizing & Haul Load Prep",
+                "status": "PENDING",
+                "description": "Measurement of log diameters, grade classification, and loading for transit.",
+                "media": [],
+                "updated_at": None
+            }
+        }
 
-        if stage_id in stages:
-            existing_media = stages[stage_id].get("media", [])
-            # If payload passes full replace_media flag, replace; otherwise append or use supplied media
-            if payload.get("replace_media"):
-                new_media = media_items or []
+        raw_stages = req_doc.get("harvest_stages")
+        if not raw_stages or not isinstance(raw_stages, dict) or not any(k in raw_stages for k in ["stage_1", "stage_2", "stage_3", "stage_4"]):
+            import copy
+            stages = copy.deepcopy(DEFAULT_STAGES)
+            if isinstance(raw_stages, dict):
+                stages.update(raw_stages)
+        else:
+            stages = dict(raw_stages)
+
+        if stage_id not in stages:
+            stages[stage_id] = {
+                "id": stage_id,
+                "title": stage_id.replace("_", " ").title(),
+                "status": stage_status,
+                "media": [],
+                "updated_at": updated_at
+            }
+
+        # Compress any large base64 images in media to maintain fast response times
+        compressed_media = []
+        for m in (media_items or []):
+            if isinstance(m, dict):
+                c_m = dict(m)
+                url = c_m.get("url")
+                if url and isinstance(url, str) and url.startswith("data:image/") and len(url) > 150000:
+                    try:
+                        import io, base64
+                        from PIL import Image
+                        raw_data = base64.b64decode(url.split(",")[-1])
+                        img = Image.open(io.BytesIO(raw_data))
+                        img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                        if img.mode in ("RGBA", "P"):
+                            img = img.convert("RGB")
+                        buf = io.BytesIO()
+                        img.save(buf, format="JPEG", quality=75, optimize=True)
+                        c_m["url"] = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+                    except Exception as comp_err:
+                        pass
+                compressed_media.append(c_m)
             else:
-                new_media = existing_media + (media_items or [])
-            stages[stage_id]["status"] = stage_status
-            stages[stage_id]["notes"] = notes
-            stages[stage_id]["media"] = new_media
-            stages[stage_id]["updated_at"] = updated_at
-            if reviewer_comments is not None:
-                stages[stage_id]["reviewer_comments"] = reviewer_comments
-            if stage_data:
-                stages[stage_id]["stage_data"] = {
-                    **(stages[stage_id].get("stage_data") or {}),
-                    **stage_data
-                }
-            if trees_logged is not None:
-                stages[stage_id]["trees_logged"] = trees_logged
-            if measured_volume is not None:
-                stages[stage_id]["measured_volume"] = measured_volume
+                compressed_media.append(m)
+
+        existing_media = stages[stage_id].get("media", []) or []
+        if payload.get("replace_media"):
+            new_media = compressed_media
+        else:
+            existing_urls = {em.get("url") for em in existing_media if isinstance(em, dict) and em.get("url")}
+            deduped_new = [nm for nm in compressed_media if not (isinstance(nm, dict) and nm.get("url") in existing_urls)]
+            new_media = existing_media + deduped_new
+
+        stages[stage_id]["status"] = stage_status
+        stages[stage_id]["notes"] = notes
+        stages[stage_id]["media"] = new_media
+        stages[stage_id]["updated_at"] = updated_at
+        if reviewer_comments is not None:
+            stages[stage_id]["reviewer_comments"] = reviewer_comments
+        if stage_data:
+            stages[stage_id]["stage_data"] = {
+                **(stages[stage_id].get("stage_data") or {}),
+                **stage_data
+            }
+        if trees_logged is not None:
+            stages[stage_id]["trees_logged"] = trees_logged
+        if measured_volume is not None:
+            stages[stage_id]["measured_volume"] = measured_volume
 
         # Auto-advance current stage if verified or completed
         stage_order = ["stage_1", "stage_2", "stage_3", "stage_4"]
@@ -2706,6 +2786,18 @@ def update_harvest_stage(request_id: str, payload: dict = Body(...)):
             "current_harvest_stage": current_stage,
             "updatedAt": updated_at
         }
+
+        # Auto-advance request status to IN_PROGRESS or COMPLETED
+        req_status = req_doc.get("status")
+        if req_status in ["OPERATION_READY", "ACCEPTED"]:
+            update_data["status"] = "IN_PROGRESS"
+
+        all_verified = all(
+            stages.get(sid, {}).get("status") in ["VERIFIED", "COMPLETED"]
+            for sid in ["stage_1", "stage_2", "stage_3", "stage_4"]
+        )
+        if all_verified:
+            update_data["status"] = "COMPLETED"
 
         db.harvest_requests.update_one(req_query, {"$set": update_data})
         updated_req = db.harvest_requests.find_one(req_query)

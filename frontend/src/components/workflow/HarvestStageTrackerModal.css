@@ -980,6 +980,31 @@
   align-items: center;
   gap: 6px;
 }
+/* Media Item Remove Trash Button */
+.hst-media-remove-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 25;
+}
+
+.hst-media-remove-btn:hover {
+  background: #ef4444;
+  transform: scale(1.12);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.5);
+}
 
 @media (max-width: 640px) {
   .hst-overlay {
