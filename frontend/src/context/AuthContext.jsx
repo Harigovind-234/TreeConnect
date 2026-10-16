@@ -85,7 +85,37 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    // Resilient fallback: read active session from authService/localStorage so app never crashes during HMR or edge renders
+    try {
+      const storedUser = authService.getCurrentUser();
+      const token = authService.getToken();
+      const activeUser = (storedUser && token) ? storedUser : null;
+      return {
+        user: activeUser,
+        setUser: () => {},
+        updateUser: () => {},
+        role: activeUser?.role || null,
+        isAuthenticated: !!activeUser,
+        loading: false,
+        login: async () => {},
+        register: async () => {},
+        logout: () => {
+          authService.logout();
+        },
+      };
+    } catch {
+      return {
+        user: null,
+        setUser: () => {},
+        updateUser: () => {},
+        role: null,
+        isAuthenticated: false,
+        loading: false,
+        login: async () => {},
+        register: async () => {},
+        logout: () => {},
+      };
+    }
   }
   return context;
 };

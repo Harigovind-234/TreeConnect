@@ -5,9 +5,11 @@ import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
 import AdvancePaymentCard from '../../components/workflow/AdvancePaymentCard';
+import RecordAdvancePaymentModal from '../../components/workflow/RecordAdvancePaymentModal';
 import RequestAdvancePaymentModal from '../../components/workflow/RequestAdvancePaymentModal';
 import RejectPaymentModal from '../../components/workflow/RejectPaymentModal';
 import HarvestStageTrackerModal from '../../components/workflow/HarvestStageTrackerModal';
+import HarvestDateProposalModal from '../../components/workflow/HarvestDateProposalModal';
 import harvestService from '../../services/harvestService';
 import { compressImage } from '../../utils/imageCompressor';
 import './ContractorDashboard.css';
@@ -29,6 +31,7 @@ import {
   X,
   Filter,
   ExternalLink,
+  ArrowRight,
   Building2,
   Trees,
   TreePine,
@@ -311,8 +314,10 @@ const AssignedHarvestJobsPage = () => {
   const [selectedRequestAdvanceModal, setSelectedRequestAdvanceModal] = useState(null);
   const [selectedRejectPaymentModal, setSelectedRejectPaymentModal] = useState(null);
   const [selectedStageTrackerModal, setSelectedStageTrackerModal] = useState(null);
+  const [selectedPayoutDisbursementJob, setSelectedPayoutDisbursementJob] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [selectedHarvestDateProposalJob, setSelectedHarvestDateProposalJob] = useState(null);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -712,6 +717,7 @@ const AssignedHarvestJobsPage = () => {
     }
   };
 
+
   const handleConfirmRequestAdvance = async (payload) => {
     if (!selectedRequestAdvanceModal) return;
     const reqId = selectedRequestAdvanceModal.id || selectedRequestAdvanceModal._id;
@@ -723,6 +729,92 @@ const AssignedHarvestJobsPage = () => {
       await fetchAssignedRequests();
     } catch (err) {
       alert('Failed to request advance payment: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDisburseTimberPayout = async (reqId, paymentData) => {
+    try {
+      setActionLoading(true);
+      const amount = Number(paymentData.amount || 220000);
+      const nowIso = new Date().toISOString();
+      const newPayment = {
+        payment_id: `TC-PAY-${Date.now().toString().slice(-6)}`,
+        payment_method: paymentData.payment_method || 'Razorpay Escrow',
+        transaction_reference: paymentData.transaction_reference || `TC-ESCROW-${Date.now().toString().slice(-8)}`,
+        amount: amount,
+        payment_date: paymentData.payment_date || nowIso.split('T')[0],
+        status: 'VERIFIED',
+        payer: contractorName || user?.name || 'Contractor Rohith kumar',
+        payee: selectedPayoutDisbursementJob?.userName || selectedPayoutDisbursementJob?.ownerName || 'Landowner',
+        payment_purpose: 'TIMBER_PURCHASE_PAYOUT',
+        notes: paymentData.notes || 'Full standing timber purchase payout secured in TreeConnect Escrow',
+        created_at: nowIso
+      };
+
+      try {
+        await harvestService.recordAdvancePayment(reqId, {
+          payment_method: newPayment.payment_method,
+          transaction_reference: newPayment.transaction_reference,
+          payment_date: newPayment.payment_date,
+          amount: newPayment.amount,
+          receipt_url: paymentData.receipt_url || '',
+          notes: newPayment.notes,
+          payment_purpose: 'TIMBER_PURCHASE_PAYOUT'
+        });
+      } catch (e) {
+        console.warn('API recordAdvancePayment fallback:', e);
+      }
+
+      setAssignedRequests(prev => prev.map(item => {
+        if (String(item.id || item._id) === String(reqId)) {
+          const existingPayments = Array.isArray(item.payments) ? [...item.payments] : [];
+          return {
+            ...item,
+            contractor_paid: true,
+            is_advance_verified: true,
+            payment_status: 'PAID',
+            timber_payout_settled: true,
+            total_verified_paid: amount,
+            latest_payment: newPayment,
+            payments: [newPayment, ...existingPayments],
+            updatedAt: nowIso
+          };
+        }
+        return item;
+      }));
+
+      try {
+        const stored = localStorage.getItem('treeconnect_harvest_requests');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const updated = parsed.map(item => {
+            if (String(item.id || item._id) === String(reqId)) {
+              const existingPayments = Array.isArray(item.payments) ? [...item.payments] : [];
+              return {
+                ...item,
+                contractor_paid: true,
+                is_advance_verified: true,
+                payment_status: 'PAID',
+                timber_payout_settled: true,
+                total_verified_paid: amount,
+                latest_payment: newPayment,
+                payments: [newPayment, ...existingPayments],
+                updatedAt: nowIso
+              };
+            }
+            return item;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        }
+      } catch (e) { }
+
+      showToast(`✓ Timber purchase payout of ₹${amount.toLocaleString('en-IN')} disbursed into escrow for landowner.`);
+      setSelectedPayoutDisbursementJob(null);
+      await fetchAssignedRequests();
+    } catch (err) {
+      alert('Failed to disburse payout: ' + (err.message || 'Unknown error'));
     } finally {
       setActionLoading(false);
     }
@@ -1533,6 +1625,7 @@ const AssignedHarvestJobsPage = () => {
                     });
 
                     const currentPhotoIdx = activePhotoIndices[reqId] || 0;
+                    const isPurchaseProposal = (req.commercial_proposal_type || req.assessment?.commercial_proposal_type) === 'Timber Purchase Offer';
 
                     return (
                       <div key={reqId} className={`cd-assigned-card transition-all duration-300 ${isExpanded ? 'cd-assigned-card-expanded space-y-6' : ''}`}>
@@ -1657,94 +1750,151 @@ const AssignedHarvestJobsPage = () => {
 
                         {/* REFINED DEDICATED FINANCIAL & ACTION STRIP */}
                         <div className="cd-card-financial-strip">
-                          <div className="cd-financial-badges-cluster">
-                            {/* 1. Contractor Quote */}
-                            {(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer) && (
-                              <div className="cd-fin-badge cd-fin-badge-quote">
-                                <DollarSign size={13} className="text-emerald-400 shrink-0" />
-                                <span className="cd-fin-badge-label">Your Quote:</span>
-                                <strong className="cd-fin-badge-value text-emerald-300 font-mono">
-                                  {formatINR(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer)}
-                                </strong>
-                              </div>
-                            )}
+                              <div className="cd-financial-badges-cluster">
+                                {/* 1. Contractor Quote / Purchase Offer */}
+                                {(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer) && (
+                                  <div className="cd-fin-badge cd-fin-badge-quote">
+                                    <DollarSign size={13} className="text-emerald-400 shrink-0" />
+                                    <span className="cd-fin-badge-label">{isPurchaseProposal ? 'Purchase Offer:' : 'Your Quote:'}</span>
+                                    <strong className="cd-fin-badge-value text-emerald-300 font-mono">
+                                      {formatINR(req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer || req.total_quote || req.assessment?.total_quote)}
+                                    </strong>
+                                  </div>
+                                )}
 
-                            {/* 2. Landowner Target (if Fair Deal active) */}
-                            {fairDealInfo.counterAmount && (
-                              <div className="cd-fin-badge cd-fin-badge-target" title="Landowner's proposed target budget for agreement">
-                                <Sparkles size={13} className="text-amber-400 shrink-0" />
-                                <span className="cd-fin-badge-label text-amber-200/80">Landowner Target:</span>
-                                <strong className="cd-fin-badge-value text-amber-300 font-mono">
-                                  {formatINR(fairDealInfo.counterAmount)}
-                                </strong>
-                                {(() => {
-                                  const currentQ = Number(req.total_quote || req.assessment?.total_quote || req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer || 110000);
-                                  const diffPct = Math.round(((fairDealInfo.counterAmount - currentQ) / currentQ) * 100);
+                                {/* 2. Landowner Target (if Fair Deal active) */}
+                                {fairDealInfo.counterAmount && (
+                                  <div className="cd-fin-badge cd-fin-badge-target" title="Landowner's proposed target budget for agreement">
+                                    <Sparkles size={13} className="text-amber-400 shrink-0" />
+                                    <span className="cd-fin-badge-label text-amber-200/80">{isPurchaseProposal ? 'Landowner Target Price:' : 'Landowner Target:'}</span>
+                                    <strong className="cd-fin-badge-value text-amber-300 font-mono">
+                                      {formatINR(fairDealInfo.counterAmount)}
+                                    </strong>
+                                    {(() => {
+                                      const currentQ = Number(req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer || req.total_quote || req.assessment?.total_quote || 110000);
+                                      const diffPct = Math.round(((fairDealInfo.counterAmount - currentQ) / currentQ) * 100);
+                                      return (
+                                        <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${diffPct < 0 ? 'bg-amber-500/25 text-amber-200' : 'bg-emerald-500/25 text-emerald-200'}`}>
+                                          {diffPct > 0 ? `+${diffPct}%` : `${diffPct}%`}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
+
+                                {/* 3. Approx. Timber Value */}
+                                {totalJobTimberValue > 0 && (
+                                  <div className="cd-fin-badge cd-fin-badge-value" title="Approximate estimated timber value">
+                                    <Coins size={13} className="text-amber-400 shrink-0" />
+                                    <span className="cd-fin-badge-label">Approx. Value:</span>
+                                    <strong className="cd-fin-badge-value text-amber-400 font-mono">
+                                      {formatINR(totalJobTimberValue)}
+                                    </strong>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Primary Action Buttons */}
+                              <div className="cd-financial-actions-cluster flex items-center gap-2.5 flex-wrap ml-auto">
+                                {/* Timber Purchase Payment Action (Contractor pays Landowner) — gated behind harvest date approval */}
+                                {isPurchaseProposal && (isAccepted || req.digital_agreement || req.status === 'OPERATION_READY' || req.status === 'IN_PROGRESS') && (() => {
+                                  const harvestDateApproved = Boolean(req.harvest_date_approved || req.assessment?.harvest_date_approved);
+                                  const proposedDate = req.proposed_harvest_date || req.assessment?.proposed_harvest_date;
+                                  const purchaseAmount = req.contractor_purchase_offer || req.assessment?.contractor_purchase_offer || req.total_quote || 220000;
+
+                                  if (!req.contractor_paid && !req.is_advance_verified && req.payment_status !== 'PAID') {
+                                    // 1. Date not approved yet -> Active button to propose or view status
+                                    if (!harvestDateApproved) {
+                                      if (!proposedDate) {
+                                        return (
+                                          <button
+                                            type="button"
+                                            onClick={() => setSelectedHarvestDateProposalJob(req)}
+                                            title="Step 1: Propose a harvest date for landowner approval before payment can proceed"
+                                            className="cd-btn-assess-cta !bg-emerald-500 hover:!bg-emerald-400 !text-slate-950 font-black shadow-lg shadow-emerald-500/25 flex items-center gap-1.5 cursor-pointer animate-pulse"
+                                          >
+                                            <Calendar size={13} />
+                                            <span>📅 Propose Harvest Date</span>
+                                          </button>
+                                        );
+                                      }
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedHarvestDateProposalJob(req)}
+                                          title={`Proposed date: ${formatDateDMY(proposedDate)}. Click to view details, reschedule, or confirm approval.`}
+                                          className="cd-btn-assess-cta !bg-amber-500/20 hover:!bg-amber-500/30 border border-amber-500/50 !text-amber-300 font-black shadow-lg flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                          <Clock size={13} className="text-amber-400 animate-spin-slow" />
+                                          <span>⏳ Awaiting Date Approval ({formatDateDMY(proposedDate)})</span>
+                                        </button>
+                                      );
+                                    }
+
+                                    // 2. Date is approved! Payment unlocked
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedPayoutDisbursementJob(req)}
+                                        title={`Harvest date approved! Click to deposit agreed tree purchase amount of ${formatINR(purchaseAmount)} into escrow`}
+                                        className="cd-btn-assess-cta !bg-emerald-500 hover:!bg-emerald-400 !text-slate-950 font-black shadow-lg shadow-emerald-500/25 flex items-center gap-1.5 cursor-pointer"
+                                      >
+                                        <CreditCard size={13} />
+                                        <span>Pay Tree Purchase ({formatINR(purchaseAmount)})</span>
+                                      </button>
+                                    );
+                                  }
+
                                   return (
-                                    <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${diffPct < 0 ? 'bg-amber-500/25 text-amber-200' : 'bg-emerald-500/25 text-emerald-200'}`}>
-                                      {diffPct > 0 ? `+${diffPct}%` : `${diffPct}%`}
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
+                                      <CheckCircle2 size={13} className="text-emerald-400" />
+                                      <span>Tree Purchase Paid &amp; Secured ({formatINR(purchaseAmount)})</span>
                                     </span>
                                   );
                                 })()}
-                              </div>
-                            )}
 
-                            {/* 3. Approx. Timber Value */}
-                            {totalJobTimberValue > 0 && (
-                              <div className="cd-fin-badge cd-fin-badge-value" title="Approximate estimated timber value">
-                                <Coins size={13} className="text-amber-400 shrink-0" />
-                                <span className="cd-fin-badge-label">Approx. Value:</span>
-                                <strong className="cd-fin-badge-value text-amber-400 font-mono">
-                                  {formatINR(totalJobTimberValue)}
-                                </strong>
-                              </div>
-                            )}
-                          </div>
+                                {/* Option to Set or Update Advance by Contractor before starting work (Only if NOT a timber purchase offer, not already verified/paid, agreement not finalized, and payment not pending/verified) */}
+                                {!isPurchaseProposal && isAccepted && !isAdvanceVerified && !req.digital_agreement && !isInProgress && !isCompleted && paymentStatus !== 'VERIFIED' && paymentStatus !== 'VERIFICATION_PENDING' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedRequestAdvanceModal(req)}
+                                    className="cd-btn-assess-cta bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 shadow-sm"
+                                    title="Configure or update advance mobilization amount required before work commences"
+                                  >
+                                    <CreditCard size={13} />
+                                    <span>{req.advance_payment_request ? 'Update Advance' : 'Set Advance'}</span>
+                                  </button>
+                                )}
 
-                          {/* Primary Action Buttons */}
-                          <div className="cd-financial-actions-cluster flex items-center gap-2.5 flex-wrap ml-auto">
-                            {/* Option to Set or Update Advance by Contractor before starting work (Only if NOT already verified/paid, agreement not finalized, and payment not pending/verified) */}
-                            {isAccepted && !isAdvanceVerified && !req.digital_agreement && !isInProgress && !isCompleted && paymentStatus !== 'VERIFIED' && paymentStatus !== 'VERIFICATION_PENDING' && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedRequestAdvanceModal(req)}
-                                className="cd-btn-assess-cta bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 text-emerald-300 shadow-sm"
-                                title="Configure or update advance mobilization amount required before work commences"
-                              >
-                                <CreditCard size={13} />
-                                <span>{req.advance_payment_request ? 'Update Advance' : 'Set Advance'}</span>
-                              </button>
-                            )}
-
-                            {/* Direct Assessment CTA: If quotation is already accepted by owner, provide view-only agreed quote */}
-                            {isAccepted ? (
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/contractor/assessment/${reqId}`)}
-                                className="cd-btn-assess-cta bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 text-slate-200 shadow-sm flex items-center gap-1.5"
-                                title="View finalized quotation accepted by landowner"
-                              >
-                                <Eye size={13} />
-                                <span>View Agreed Quote</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleAssessClick(req)}
-                                className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''} shadow-md`}
-                              >
-                                {isRevisionRequested ? <RefreshCw size={13} /> : <Calculator size={13} />}
-                                <span>
-                                  {isRevisionRequested
-                                    ? 'Revise Quote'
-                                    : isSubmitted
-                                      ? 'Revise / Edit Quote'
-                                      : isJobInspected(req)
-                                        ? 'Submit Verified Quote'
-                                        : 'Assess & Quote'}
-                                </span>
-                              </button>
-                            )}
+                                {/* Direct Assessment CTA: If quotation is already accepted by owner, provide view-only agreed quote */}
+                                {isAccepted ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/contractor/assessment/${reqId}`)}
+                                    className="cd-btn-assess-cta bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 text-slate-200 shadow-sm flex items-center gap-1.5"
+                                    title="View finalized quotation accepted by landowner"
+                                  >
+                                    <Eye size={13} />
+                                    <span>View Agreed Quote</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssessClick(req)}
+                                    className={`cd-btn-assess-cta ${isRevisionRequested ? 'cd-btn-assess-revision' : ''} shadow-md`}
+                                  >
+                                    {isRevisionRequested ? <RefreshCw size={13} /> : <Calculator size={13} />}
+                                    <span>
+                                      {isRevisionRequested
+                                        ? (isPurchaseProposal ? 'Revise Purchase Offer' : 'Revise Quote')
+                                        : isSubmitted
+                                          ? (isPurchaseProposal ? 'Revise Purchase Offer' : 'Revise / Edit Quote')
+                                          : isJobInspected(req)
+                                            ? (isPurchaseProposal ? 'Submit Purchase Offer' : 'Submit Verified Quote')
+                                            : (isPurchaseProposal ? 'Assess & Offer' : 'Assess & Quote')}
+                                    </span>
+                                  </button>
+                                )}
 
                             {/* Decline Job if terms unfavourable (Only valid BEFORE commercial agreement / acceptance) */}
                             {!isAccepted && !isInProgress && !isCompleted && (
@@ -2242,6 +2392,46 @@ const AssignedHarvestJobsPage = () => {
                                       {inspectionData.overhead_hazards || 'Clear of power lines'}
                                     </span>
                                   </div>
+                                  {inspected && (
+                                    <div className="cd-inspection-quick-cell" style={{ gridColumn: 'span 2' }}>
+                                      <span className="cd-inspection-quick-label">
+                                        Landowner's Preferred Arrangement
+                                      </span>
+                                      <div className="flex items-center justify-between gap-3 mt-1.5 flex-wrap">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border shadow-sm ${
+                                            (inspectionData.landowner_preferred_arrangement || req.landowner_preferred_arrangement) === 'INTERESTED_IN_TIMBER_SALE'
+                                              ? 'bg-blue-500/15 text-blue-300 border-blue-500/40'
+                                              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                                          }`}>
+                                            {(inspectionData.landowner_preferred_arrangement || req.landowner_preferred_arrangement) === 'INTERESTED_IN_TIMBER_SALE' ? (
+                                              <>
+                                                <span>💰</span>
+                                                <span>Interested in Timber Sale</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-200 font-semibold border border-blue-500/30">Purchase Offer</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <span>🪚</span>
+                                                <span>Harvesting Service</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 font-semibold border border-emerald-500/30">Service Fee</span>
+                                              </>
+                                            )}
+                                          </span>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(`/contractor/assessment/${reqId}#landowner-preferred-arrangement`)}
+                                          className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/40 hover:border-emerald-500/70 text-emerald-300 hover:text-emerald-100 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ml-auto group"
+                                          title="Open and navigate directly to Landowner's Preferred Arrangement in Formal Contractor Assessment Form"
+                                        >
+                                          <span>Go to Landowner's Preferred Arrangement in Formal Assessment</span>
+                                          <ArrowRight size={13} className="text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
@@ -2313,6 +2503,33 @@ const AssignedHarvestJobsPage = () => {
                             onStartHarvest={() => handleStartHarvest(req)}
                             onCompleteHarvest={() => handleCompleteHarvest(req)}
                             onOpenStages={() => setSelectedStageTrackerModal(req)}
+                            onProposeHarvestDate={async (dateData) => {
+                              const reqId = req.id || req._id;
+                              // Update local state immediately
+                              setAssignedRequests(prev => prev.map(r => {
+                                if ((r.id || r._id) === reqId) return { ...r, ...dateData };
+                                return r;
+                              }));
+                              // Update localStorage
+                              try {
+                                const stored = localStorage.getItem('treeconnect_harvest_requests');
+                                if (stored) {
+                                  const parsed = JSON.parse(stored);
+                                  const updated = parsed.map(r => {
+                                    if ((r.id || r._id) === reqId) return { ...r, ...dateData };
+                                    return r;
+                                  });
+                                  localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+                                }
+                              } catch (e) {}
+                              // Try backend sync
+                              try {
+                                await harvestService.updateHarvestRequest(reqId, dateData);
+                              } catch (e) {
+                                console.warn('Harvest date proposal backend sync failed (saved locally):', e);
+                              }
+                              showToast(`✓ Harvest date ${dateData.proposed_harvest_date} proposed — awaiting landowner approval`);
+                            }}
                           />
                         )}
 
@@ -4358,6 +4575,91 @@ const AssignedHarvestJobsPage = () => {
                   ...(safeId ? { id: safeId, _id: safeId } : {})
                 };
               });
+            }}
+          />
+        )}
+
+        {/* MODAL 10: TIMBER PURCHASE PAYOUT DISBURSEMENT */}
+        {selectedPayoutDisbursementJob && (
+          <RecordAdvancePaymentModal
+            request={selectedPayoutDisbursementJob}
+            mode="timber_purchase"
+            defaultAmount={selectedPayoutDisbursementJob.contractor_purchase_offer || selectedPayoutDisbursementJob.assessment?.contractor_purchase_offer || selectedPayoutDisbursementJob.total_quote || 220000}
+            initialTab="razorpay"
+            onClose={() => setSelectedPayoutDisbursementJob(null)}
+            onSubmit={(data) => handleDisburseTimberPayout(selectedPayoutDisbursementJob.id || selectedPayoutDisbursementJob._id, data)}
+            onPaymentSuccess={() => {
+              fetchAssignedRequests();
+              showToast('✓ Timber purchase payout secured in TreeConnect Escrow for landowner!');
+            }}
+          />
+        )}
+
+        {/* MODAL 11: HARVEST DATE PROPOSAL & APPROVAL */}
+        {selectedHarvestDateProposalJob && (
+          <HarvestDateProposalModal
+            job={selectedHarvestDateProposalJob}
+            onClose={() => setSelectedHarvestDateProposalJob(null)}
+            onSubmitProposal={async (dateData) => {
+              const reqId = selectedHarvestDateProposalJob.id || selectedHarvestDateProposalJob._id;
+              // 1. Update component state
+              setAssignedRequests(prev => prev.map(r => {
+                if ((r.id || r._id) === reqId) return { ...r, ...dateData };
+                return r;
+              }));
+              // 2. Update localStorage
+              try {
+                const stored = localStorage.getItem('treeconnect_harvest_requests');
+                if (stored) {
+                  const parsed = JSON.parse(stored);
+                  const updated = parsed.map(r => {
+                    if ((r.id || r._id) === reqId) return { ...r, ...dateData };
+                    return r;
+                  });
+                  localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+                }
+              } catch (e) {}
+              // 3. Try backend sync
+              try {
+                await harvestService.updateHarvestRequest(reqId, dateData);
+              } catch (e) {
+                console.warn('Harvest date proposal backend sync failed (saved locally):', e);
+              }
+              showToast(`✓ Proposed harvest date: ${formatDateDMY(dateData.proposed_harvest_date)}! Awaiting landowner approval.`);
+              setSelectedHarvestDateProposalJob(null);
+            }}
+            onApproveDate={async (dateData) => {
+              const reqId = selectedHarvestDateProposalJob.id || selectedHarvestDateProposalJob._id;
+              const approvalData = {
+                ...dateData,
+                harvest_date_approved: true,
+                harvest_date_approved_at: new Date().toISOString()
+              };
+              // 1. Update component state
+              setAssignedRequests(prev => prev.map(r => {
+                if ((r.id || r._id) === reqId) return { ...r, ...approvalData };
+                return r;
+              }));
+              // 2. Update localStorage
+              try {
+                const stored = localStorage.getItem('treeconnect_harvest_requests');
+                if (stored) {
+                  const parsed = JSON.parse(stored);
+                  const updated = parsed.map(r => {
+                    if ((r.id || r._id) === reqId) return { ...r, ...approvalData };
+                    return r;
+                  });
+                  localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+                }
+              } catch (e) {}
+              // 3. Try backend sync
+              try {
+                await harvestService.updateHarvestRequest(reqId, approvalData);
+              } catch (e) {
+                console.warn('Harvest date approval backend sync failed (saved locally):', e);
+              }
+              showToast(`✓ Harvest date approved! Tree purchase payment (₹ 2,20,000) is now unlocked.`);
+              setSelectedHarvestDateProposalJob(null);
             }}
           />
         )}

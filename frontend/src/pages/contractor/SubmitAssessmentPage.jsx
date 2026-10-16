@@ -485,9 +485,13 @@ const extractLandownerValue = (req, vol) => {
 
               const cleanValidUntil = assData.offer_valid_until ? String(assData.offer_valid_until).substring(0, 10) : '';
 
+              const siteInspPref = (combinedData.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE')
+                ? 'Timber Purchase Offer'
+                : 'Harvesting Service Quotation';
+
               setAssessmentForm(prev => ({
                 ...prev,
-                commercial_proposal_type: assData.commercial_proposal_type || prev.commercial_proposal_type,
+                commercial_proposal_type: assData.commercial_proposal_type || siteInspPref,
                 estimated_harvestable_volume: assessedVol,
                 estimated_timber_value: assessedVal,
                 harvesting_cost: assData.harvesting_cost ?? assData.felling_cost ?? prev.harvesting_cost,
@@ -551,8 +555,13 @@ const extractLandownerValue = (req, vol) => {
               setExistingAssessmentData(null);
               const siteInsp = combinedData.site_inspection || {};
               const inspVol = siteInsp.estimated_volume ? Number(siteInsp.estimated_volume) : loVol;
+              // Auto-select proposal type based on landowner's preferred arrangement recorded at site inspection
+              const defaultProposalType = siteInsp.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE'
+                ? 'Timber Purchase Offer'
+                : 'Harvesting Service Quotation';
               setAssessmentForm(prev => ({
                 ...prev,
+                commercial_proposal_type: defaultProposalType,
                 estimated_harvestable_volume: Number(inspVol.toFixed(2)),
                 estimated_timber_value: loVal > 0 ? loVal : calculateApproxTimberValue('Teak', inspVol),
                 proposed_start_date: (inspDate && inspDate > prev.proposed_start_date) ? inspDate : prev.proposed_start_date
@@ -599,6 +608,32 @@ const extractLandownerValue = (req, vol) => {
     fetchRequestData();
     fetchFleet();
   }, [requestId]);
+
+  // Smooth scroll to Landowner's Preferred Arrangement section if requested via hash
+  useEffect(() => {
+    if (!loading && requestDetails) {
+      const checkAndScroll = () => {
+        const hash = window.location.hash;
+        if (hash === '#landowner-preferred-arrangement' || hash === '#preferred-arrangement') {
+          const el = document.getElementById('landowner-preferred-arrangement');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            el.classList.add('arrangement-highlight-pulse');
+            setTimeout(() => {
+              el.classList.remove('arrangement-highlight-pulse');
+            }, 3000);
+          }
+        }
+      };
+
+      const timer = setTimeout(checkAndScroll, 250);
+      window.addEventListener('hashchange', checkAndScroll);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('hashchange', checkAndScroll);
+      };
+    }
+  }, [loading, requestDetails]);
 
   // Switch Proposal Type and Clean Obsolete Fields
   const handleProposalTypeChange = (type) => {
@@ -730,13 +765,28 @@ const extractLandownerValue = (req, vol) => {
     }));
   };
 
+  const isTimberPurchaseProposal = Boolean(
+    assessmentForm?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    existingAssessmentData?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    requestDetails?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+    requestDetails?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE'
+  );
+
   const originalContractorQuote = Number(
-    existingAssessmentData?.original_quote ||
-    requestDetails?.original_quote ||
-    existingAssessmentData?.total_quote ||
-    requestDetails?.total_quote ||
-    assessmentForm?.total_quote ||
-    0
+    isTimberPurchaseProposal
+      ? (existingAssessmentData?.contractor_purchase_offer ||
+         requestDetails?.contractor_purchase_offer ||
+         assessmentForm?.contractor_purchase_offer ||
+         existingAssessmentData?.original_quote ||
+         requestDetails?.original_quote ||
+         220000)
+      : (existingAssessmentData?.original_quote ||
+         requestDetails?.original_quote ||
+         existingAssessmentData?.total_quote ||
+         requestDetails?.total_quote ||
+         assessmentForm?.total_quote ||
+         0)
   );
 
   const landownerTargetBudget = Number(
@@ -761,9 +811,14 @@ const extractLandownerValue = (req, vol) => {
   );
 
   const latestOfficialQuote = Number(
-    existingAssessmentData?.total_quote ||
-    requestDetails?.total_quote ||
-    originalContractorQuote
+    isTimberPurchaseProposal
+      ? (existingAssessmentData?.contractor_purchase_offer ||
+         requestDetails?.contractor_purchase_offer ||
+         assessmentForm?.contractor_purchase_offer ||
+         originalContractorQuote)
+      : (existingAssessmentData?.total_quote ||
+         requestDetails?.total_quote ||
+         originalContractorQuote)
   );
 
   const officialReduction = Number(
@@ -1265,65 +1320,88 @@ const extractLandownerValue = (req, vol) => {
       }
       setRevisionDraft(null);
 
-      // Keep local storage in sync
+      // Keep local storage in sync across all request storage keys
       try {
-        const stored = localStorage.getItem('treeconnect_harvest_requests');
-        if (stored) {
-          const reqs = JSON.parse(stored);
-          if (Array.isArray(reqs)) {
-            const currentTotal = payload.total_quote ?? payload.contractor_purchase_offer ?? payload.timber_purchase_price;
-            const reductionAmt = Math.round(originalContractorQuote - (currentTotal || originalContractorQuote));
-            const updated = reqs.map(r => {
-              if (r && (String(r.id) === String(targetId) || String(r._id) === String(targetId))) {
-                return {
-                  ...r,
-                  status: 'ASSESSMENT_SUBMITTED',
-                  assessment: {
-                    ...payload,
-                    original_quote: originalContractorQuote,
-                    previous_quote: latestOfficialQuote,
-                    revised_quote: currentTotal,
-                    reduction: reductionAmt,
-                    is_revision: isRevisionSubmission
-                  },
-                  commercial_proposal_type: pType,
-                  estimated_harvestable_volume: assessedVolNum,
-                  estimated_timber_value: payload.estimated_timber_value,
-                  total_quote: payload.total_quote,
-                  contractor_purchase_offer: payload.contractor_purchase_offer,
-                  timber_purchase_price: payload.timber_purchase_price,
-                  original_quote: originalContractorQuote,
-                  previous_quote: latestOfficialQuote,
-                  revised_quote: currentTotal,
-                  reduction: reductionAmt,
-                  is_revision: isRevisionSubmission,
-                  assigned_workers_count: workersNum,
-                  workers_assigned: workersNum,
-                  is_reassessed_after_inspection: payload.is_reassessed_after_inspection,
-                  reassessed_at: payload.reassessed_at,
-                  advance_payment_request: assessmentForm.require_advance ? {
-                    accepted_quotation: currentTotal,
-                    advance_percentage: Number(assessmentForm.advance_percentage),
-                    advance_amount: Number(assessmentForm.advance_amount),
-                    due_date: assessmentForm.advance_due_date,
-                    upi_id: assessmentForm.advance_upi_id,
-                    bank_name: assessmentForm.advance_bank_name,
-                    bank_account_number: assessmentForm.advance_bank_account_number,
-                    ifsc_code: assessmentForm.advance_ifsc_code,
-                    account_holder_name: assessmentForm.advance_account_holder,
-                    payment_instructions: `UPI: ${assessmentForm.advance_upi_id} / Bank: ${assessmentForm.advance_bank_name} / A/C: ${assessmentForm.advance_bank_account_number} / IFSC: ${assessmentForm.advance_ifsc_code}`,
-                    remarks: assessmentForm.advance_remarks,
-                    requested_at: new Date().toISOString()
-                  } : r.advance_payment_request,
-                  advance_payment_status: assessmentForm.require_advance ? 'ADVANCE_REQUESTED' : (r.advance_payment_status || 'NOT_REQUESTED'),
-                  total_quotation_amount: currentTotal,
-                  remaining_balance: assessmentForm.require_advance ? Math.max(0, currentTotal - Number(assessmentForm.advance_amount)) : (currentTotal),
-                  updatedAt: new Date().toISOString()
-                };
+        const currentTotal = payload.total_quote ?? payload.contractor_purchase_offer ?? payload.timber_purchase_price;
+        const reductionAmt = Math.round(originalContractorQuote - (currentTotal || originalContractorQuote));
+        
+        const syncItem = (r) => {
+          if (r && (String(r.id) === String(targetId) || String(r._id) === String(targetId))) {
+            return {
+              ...r,
+              status: 'ASSESSMENT_SUBMITTED',
+              revision_requested: false,
+              is_revision_requested: false,
+              counter_offer_amount: null,
+              counter_offer_start_date: null,
+              counter_offer_responded: true,
+              assessment: {
+                ...payload,
+                status: 'SUBMITTED',
+                original_quote: originalContractorQuote,
+                previous_quote: latestOfficialQuote,
+                revised_quote: currentTotal,
+                reduction: reductionAmt,
+                is_revision: isRevisionSubmission
+              },
+              commercial_proposal_type: pType,
+              estimated_harvestable_volume: assessedVolNum,
+              estimated_timber_value: payload.estimated_timber_value,
+              total_quote: payload.total_quote,
+              contractor_purchase_offer: payload.contractor_purchase_offer,
+              timber_purchase_price: payload.timber_purchase_price,
+              payment_terms: payload.payment_terms,
+              offer_valid_until: payload.offer_valid_until,
+              estimated_duration: payload.estimated_duration,
+              proposed_start_date: payload.proposed_start_date,
+              assigned_fleet_equipment: payload.assigned_fleet_equipment,
+              notes: payload.notes,
+              original_quote: originalContractorQuote,
+              previous_quote: latestOfficialQuote,
+              revised_quote: currentTotal,
+              reduction: reductionAmt,
+              is_revision: isRevisionSubmission,
+              assigned_workers_count: workersNum,
+              workers_assigned: workersNum,
+              is_reassessed_after_inspection: payload.is_reassessed_after_inspection,
+              reassessed_at: payload.reassessed_at,
+              advance_payment_request: assessmentForm.require_advance ? {
+                accepted_quotation: currentTotal,
+                advance_percentage: Number(assessmentForm.advance_percentage),
+                advance_amount: Number(assessmentForm.advance_amount),
+                due_date: assessmentForm.advance_due_date,
+                upi_id: assessmentForm.advance_upi_id,
+                bank_name: assessmentForm.advance_bank_name,
+                bank_account_number: assessmentForm.advance_bank_account_number,
+                ifsc_code: assessmentForm.advance_ifsc_code,
+                account_holder_name: assessmentForm.advance_account_holder,
+                payment_instructions: `UPI: ${assessmentForm.advance_upi_id} / Bank: ${assessmentForm.advance_bank_name} / A/C: ${assessmentForm.advance_bank_account_number} / IFSC: ${assessmentForm.advance_ifsc_code}`,
+                remarks: assessmentForm.advance_remarks,
+                requested_at: new Date().toISOString()
+              } : r.advance_payment_request,
+              advance_payment_status: assessmentForm.require_advance ? 'ADVANCE_REQUESTED' : (r.advance_payment_status || 'NOT_REQUESTED'),
+              total_quotation_amount: currentTotal,
+              remaining_balance: assessmentForm.require_advance ? Math.max(0, currentTotal - Number(assessmentForm.advance_amount)) : (currentTotal),
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return r;
+        };
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k === 'treeconnect_harvest_requests' || (k && k.startsWith('treeconnect_harvest_requests_'))) {
+            try {
+              const stored = localStorage.getItem(k);
+              if (stored) {
+                const reqs = JSON.parse(stored);
+                if (Array.isArray(reqs)) {
+                  localStorage.setItem(k, JSON.stringify(reqs.map(syncItem)));
+                }
               }
-              return r;
-            });
-            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+            } catch (innerErr) {
+              console.warn(`Could not sync ${k}:`, innerErr);
+            }
           }
         }
       } catch (e) {
@@ -1727,6 +1805,83 @@ const extractLandownerValue = (req, vol) => {
                             </div>
                             <strong className="cd-context-box-value text-emerald-400">Lat: {gpsLat}°, Lng: {gpsLng}°</strong>
                           </div>
+                        </div>
+
+                        {/* LANDOWNER PREFERRED REQUIREMENTS & SPECIFICATIONS BANNER */}
+                        <div className="p-4 rounded-2xl bg-[#07190f] border border-emerald-500/30 flex flex-col gap-3 mt-4 shadow-md">
+                          <div className="flex items-center justify-between gap-3 flex-wrap pb-2 border-b border-emerald-500/20">
+                            <div className="flex items-center gap-2">
+                              <Briefcase size={16} className="text-emerald-400" />
+                              <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                                Landowner Preferred Requirement Details
+                              </span>
+                            </div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                              (requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || requestDetails?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || assessmentForm.commercial_proposal_type === 'Timber Purchase Offer')
+                                ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            }`}>
+                              {(requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || requestDetails?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || assessmentForm.commercial_proposal_type === 'Timber Purchase Offer')
+                                ? '💰 Preference: Interested in Timber Sale'
+                                : '🪚 Preference: Harvesting Service Fee'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div className="bg-[#040e08] p-3 rounded-xl border border-emerald-500/20 space-y-1">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Preferred Commercial Model</span>
+                              <strong className="text-white font-extrabold text-sm block">
+                                {(requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || requestDetails?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || assessmentForm.commercial_proposal_type === 'Timber Purchase Offer')
+                                  ? 'Interested in Timber Sale'
+                                  : 'Harvesting Service Only'}
+                              </strong>
+                              <span className="text-[10.5px] text-emerald-400">
+                                {(requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || requestDetails?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || assessmentForm.commercial_proposal_type === 'Timber Purchase Offer')
+                                  ? 'Contractor buys timber directly'
+                                  : 'Landowner hires service crew'}
+                              </span>
+                            </div>
+
+                            <div className="bg-[#040e08] p-3 rounded-xl border border-emerald-500/20 space-y-1">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Preferred Schedule</span>
+                              <strong className="text-white font-extrabold text-sm block">
+                                {requestDetails?.preferred_start_date ? formatDateDMY(requestDetails.preferred_start_date) : 'Flexible Timeline'}
+                              </strong>
+                              <span className="text-[10.5px] text-slate-400">
+                                {requestDetails?.preferred_end_date ? `Completion by ${formatDateDMY(requestDetails.preferred_end_date)}` : 'As per contractor schedule'}
+                              </span>
+                            </div>
+
+                            <div className="bg-[#040e08] p-3 rounded-xl border border-emerald-500/20 space-y-1">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Requested Services</span>
+                              <strong className="text-emerald-300 font-extrabold text-xs block truncate" title={(requestDetails?.required_services || ['Tree felling', 'Timber extraction', 'Transportation']).join(', ')}>
+                                {(requestDetails?.required_services && requestDetails.required_services.length > 0)
+                                  ? requestDetails.required_services.join(', ')
+                                  : 'Felling, Extraction & Haulage'}
+                              </strong>
+                              <span className="text-[10.5px] text-slate-400">Landowner scope</span>
+                            </div>
+
+                            <div className="bg-[#040e08] p-3 rounded-xl border border-emerald-500/20 space-y-1">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 block">Initial Est. Timber Value</span>
+                              <strong className="text-emerald-400 font-extrabold text-sm block font-mono">
+                                {formatRupees(requestDetails?.total_estimated_price || requestDetails?.approx_timber_value || landownerReferenceTimberValue || 251082)}
+                              </strong>
+                              <span className="text-[10.5px] text-slate-400">Volume: {formatVolume(landownerEstimatedVolume || 1.8)}</span>
+                            </div>
+                          </div>
+
+                          {/* Landowner special instructions / notes if present */}
+                          {(requestDetails?.instructions || requestDetails?.special_instructions || requestDetails?.notes) && (
+                            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block mb-1">
+                                Landowner Special Instructions / Requirements:
+                              </span>
+                              <p className="text-slate-200 italic m-0">
+                                "{requestDetails?.instructions || requestDetails?.special_instructions || requestDetails?.notes}"
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </>
                     );
@@ -2220,11 +2375,17 @@ const extractLandownerValue = (req, vol) => {
                           <FileText size={22} className="text-emerald-400 shrink-0" /> Formal Contractor Assessment Form
                         </h2>
                         <p className="assessment-header-subtitle">
-                          Fill in evaluated volumes and itemized quotation costs for the landowner.
+                          {isTimberPurchaseProposal
+                            ? 'Fill in evaluated volumes, reference timber value, and contractor purchase offer for the landowner.'
+                            : 'Fill in evaluated volumes and itemized quotation costs for the landowner.'}
                         </p>
                       </div>
-                      <span className="cd-status-badge-compact">
-                        ● Quotation Submitted · Under Review
+                      <span className={`cd-status-badge-compact ${isTimberPurchaseProposal ? 'border-blue-500/40 text-blue-300 bg-blue-500/10' : ''}`}>
+                        {requestDetails?.status === 'OPERATION_READY'
+                          ? '✓ Accepted by Landowner'
+                          : isAlreadyRevised
+                            ? (isTimberPurchaseProposal ? '● Revised Offer Submitted · Under Review' : '● Revised Quotation Submitted · Under Review')
+                            : (isTimberPurchaseProposal ? '● Purchase Offer Submitted · Under Review' : '● Quotation Submitted · Under Review')}
                       </span>
                     </div>
                   </div>
@@ -2245,137 +2406,263 @@ const extractLandownerValue = (req, vol) => {
                   )}
 
                   {/* ACTIVE SUBMITTED QUOTATION OVERVIEW BANNER (CURRENT ASSESSMENT) */}
-                  {/* ACTIVE SUBMITTED QUOTATION OVERVIEW BANNER (CURRENT ASSESSMENT) */}
-                  {(existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED' || requestDetails?.total_quote || assessmentForm.total_quote) && (
-                    <div className="cd-assessment-summary-panel">
-                      <div className="cd-summary-top-row">
-                        <div className="flex items-center gap-3">
-                          <div className="cd-summary-icon-box">
-                            <ClipboardCheck size={20} className="text-emerald-400" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="cd-summary-title">
-                                {isAlreadyRevised ? 'Current Assessment (Revised)' : 'Current Assessment'}
-                              </h3>
-                              <span className="cd-status-badge-compact">
-                                {requestDetails?.status === 'OPERATION_READY'
-                                  ? '✓ Accepted by Landowner'
-                                  : isAlreadyRevised
-                                    ? '● Revised Quotation on Record · Under Review'
-                                    : '● Quotation Submitted · Under Review'}
-                              </span>
+                  {(existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED' || requestDetails?.total_quote || requestDetails?.contractor_purchase_offer || assessmentForm.contractor_purchase_offer || assessmentForm.total_quote) && (() => {
+                    const activePurchaseOffer = Number(
+                      existingAssessmentData?.contractor_purchase_offer ||
+                      requestDetails?.contractor_purchase_offer ||
+                      assessmentForm?.contractor_purchase_offer ||
+                      (isTimberPurchaseProposal ? originalContractorQuote : 220000)
+                    );
+                    const activeReferenceValue = Number(
+                      assessmentForm?.estimated_timber_value ||
+                      existingAssessmentData?.estimated_timber_value ||
+                      requestDetails?.estimated_timber_value ||
+                      landownerReferenceTimberValue ||
+                      251082
+                    );
+                    const activeOfferValidUntil = assessmentForm?.offer_valid_until ||
+                      existingAssessmentData?.offer_valid_until ||
+                      requestDetails?.offer_valid_until ||
+                      '2026-10-20';
+                    const activePaymentTerms = assessmentForm?.payment_terms ||
+                      existingAssessmentData?.payment_terms ||
+                      requestDetails?.payment_terms ||
+                      'full payment for timber';
+
+                    return (
+                      <div className="cd-assessment-summary-panel">
+                        <div className="cd-summary-top-row">
+                          <div className="flex items-center gap-3">
+                            <div className="cd-summary-icon-box">
+                              {isTimberPurchaseProposal ? (
+                                <DollarSign size={20} className="text-blue-400" />
+                              ) : (
+                                <ClipboardCheck size={20} className="text-emerald-400" />
+                              )}
                             </div>
-                            <p className="cd-summary-subtitle">
-                              {isAlreadyRevised
-                                ? `Active negotiated quotation of ${formatRupees(latestOfficialQuote)} on record (Original contractor quote: ${formatRupees(originalContractorQuote)}).`
-                                : `Active commercial quotation of ${formatRupees(originalContractorQuote)} on record for this parcel. You can adjust and resubmit below.`}
-                            </p>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="cd-summary-title">
+                                  {isTimberPurchaseProposal
+                                    ? (isAlreadyRevised ? 'Current Assessment (Revised Purchase Offer)' : 'Current Assessment · Timber Purchase Offer')
+                                    : (isAlreadyRevised ? 'Current Assessment (Revised Quotation)' : 'Current Assessment')}
+                                </h3>
+                                <span className={`cd-status-badge-compact ${isTimberPurchaseProposal ? 'border-blue-500/40 text-blue-300 bg-blue-500/10' : ''}`}>
+                                  {requestDetails?.status === 'OPERATION_READY'
+                                    ? '✓ Accepted by Landowner'
+                                    : isAlreadyRevised
+                                      ? (isTimberPurchaseProposal ? '● Revised Offer on Record · Under Review' : '● Revised Quotation on Record · Under Review')
+                                      : (isTimberPurchaseProposal ? '● Purchase Offer Submitted · Under Review' : '● Quotation Submitted · Under Review')}
+                                </span>
+                                {isTimberPurchaseProposal && (
+                                  <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/35">
+                                    💰 Landowner Preference: Interested in Timber Sale
+                                  </span>
+                                )}
+                              </div>
+                              <p className="cd-summary-subtitle">
+                                {isTimberPurchaseProposal ? (
+                                  isAlreadyRevised
+                                    ? `Active negotiated timber purchase offer of ${formatRupees(latestOfficialQuote || activePurchaseOffer)} on record (Original purchase offer: ${formatRupees(originalContractorQuote || activePurchaseOffer)}).`
+                                    : `Active timber purchase offer of ${formatRupees(activePurchaseOffer)} on record for this parcel (Payable to Landowner). You can adjust and resubmit below.`
+                                ) : (
+                                  isAlreadyRevised
+                                    ? `Active negotiated quotation of ${formatRupees(latestOfficialQuote)} on record (Original contractor quote: ${formatRupees(originalContractorQuote)}).`
+                                    : `Active commercial quotation of ${formatRupees(originalContractorQuote)} on record for this parcel. You can adjust and resubmit below.`
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Top-Right Prominent Total Quotation / Purchase Offer */}
+                          <div className={`cd-summary-total-callout ${isTimberPurchaseProposal ? 'border-blue-500/30 bg-blue-950/20' : ''}`}>
+                            <span className="cd-summary-total-label">
+                              {isTimberPurchaseProposal
+                                ? (isAlreadyRevised ? 'LATEST REVISED PURCHASE OFFER' : 'TOTAL PURCHASE OFFER')
+                                : (isAlreadyRevised ? 'LATEST REVISED QUOTATION' : 'TOTAL CONTRACTOR QUOTATION')}
+                            </span>
+                            <strong className={`cd-summary-total-amount ${isTimberPurchaseProposal ? 'text-blue-300' : ''}`}>
+                              {formatRupees(
+                                isTimberPurchaseProposal
+                                  ? (isAlreadyRevised ? (latestOfficialQuote || activePurchaseOffer) : activePurchaseOffer)
+                                  : (isAlreadyRevised ? latestOfficialQuote : originalContractorQuote)
+                              )}
+                            </strong>
+                            {isTimberPurchaseProposal ? (
+                              <span className="text-[11px] text-blue-300/90 mt-0.5 font-medium flex items-center justify-end gap-1">
+                                <span>💸 Payable directly to Landowner</span>
+                              </span>
+                            ) : isAlreadyRevised ? (
+                              <span className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5 font-medium flex-wrap justify-end">
+                                <span>Previous Quote: <strong className="text-slate-200">{formatRupees(previousOfficialQuote || originalContractorQuote)}</strong></span>
+                                <span>•</span>
+                                <span className="text-emerald-400 font-bold">Reduction: {formatRupees(officialReduction)}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 mt-0.5">
+                                Original contractor rate on record
+                              </span>
+                            )}
                           </div>
                         </div>
 
-                        {/* Top-Right Prominent Total Quotation */}
-                        <div className="cd-summary-total-callout">
-                          <span className="cd-summary-total-label">
-                            {isAlreadyRevised ? 'LATEST REVISED QUOTATION' : 'TOTAL CONTRACTOR QUOTATION'}
-                          </span>
-                          <strong className="cd-summary-total-amount">
-                            {formatRupees(isAlreadyRevised ? latestOfficialQuote : originalContractorQuote)}
-                          </strong>
-                          {isAlreadyRevised ? (
-                            <span className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5 font-medium flex-wrap justify-end">
-                              <span>Previous Quote: <strong className="text-slate-200">{formatRupees(previousOfficialQuote || originalContractorQuote)}</strong></span>
-                              <span>•</span>
-                              <span className="text-emerald-400 font-bold">Reduction: {formatRupees(officialReduction)}</span>
-                            </span>
+                        {/* Revision Draft banner if active */}
+                        {revisionDraft && (
+                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs flex-wrap">
+                            <div className="flex items-center gap-2 text-amber-300">
+                              <Sparkles size={16} className="text-amber-400 shrink-0" />
+                              <span>
+                                <strong>Revision Draft in Progress:</strong> Proposed {isTimberPurchaseProposal ? 'offer' : 'quote'} is <strong>{formatRupees(revisionDraft.revised_contractor_quote)}</strong> ({revisionDraft.difference < 0 ? '-' : '+'}{formatRupees(Math.abs(revisionDraft.difference))}). Official terms on record remain <strong>{formatRupees(originalContractorQuote)}</strong> until you review below and click <strong>"Submit Revised Quote"</strong>.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleResetToOriginalQuote}
+                              className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-[11px] shrink-0 transition-colors cursor-pointer"
+                            >
+                              Discard Draft
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Cost Grid: Purchase Offer Terms (4 cards) OR Harvesting Service Cost Breakdown (4 cards) */}
+                        {isTimberPurchaseProposal ? (
+                          <div className="cd-summary-cost-grid">
+                            <div className="cd-summary-cost-card border-blue-500/30 bg-blue-950/20">
+                              <span className="cd-summary-cost-label text-blue-300 font-bold">Contractor Purchase Offer</span>
+                              <span className="cd-summary-cost-value text-blue-200">
+                                {formatRupees(activePurchaseOffer)}
+                              </span>
+                              <span className="text-[10.5px] text-blue-300/80 font-semibold mt-0.5">
+                                Payable to Landowner
+                              </span>
+                            </div>
+                            <div className="cd-summary-cost-card border-emerald-500/20">
+                              <span className="cd-summary-cost-label">Indicative Timber Value</span>
+                              <span className="cd-summary-cost-value text-emerald-300">
+                                {formatRupees(activeReferenceValue)}
+                              </span>
+                              <span className="text-[10.5px] text-slate-400 mt-0.5">
+                                Market Benchmark
+                              </span>
+                            </div>
+                            <div className="cd-summary-cost-card border-emerald-500/20">
+                              <span className="cd-summary-cost-label">Offer Valid Until</span>
+                              <span className="cd-summary-cost-value text-amber-300">
+                                {formatDateDMY(activeOfferValidUntil)}
+                              </span>
+                              <span className="text-[10.5px] text-slate-400 mt-0.5">
+                                Binding Expiry Date
+                              </span>
+                            </div>
+                            <div className="cd-summary-cost-card border-emerald-500/20">
+                              <span className="cd-summary-cost-label">Payment Terms</span>
+                              <span className="cd-summary-cost-value text-slate-200 text-xs font-semibold truncate" title={activePaymentTerms}>
+                                {activePaymentTerms}
+                              </span>
+                              <span className="text-[10.5px] text-slate-400 mt-0.5">
+                                Commercial Settlement
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="cd-summary-cost-grid">
+                            <div className="cd-summary-cost-card">
+                              <span className="cd-summary-cost-label">Felling &amp; Logging</span>
+                              <span className="cd-summary-cost-value">
+                                {formatRupees(isAlreadyRevised ? (existingAssessmentData?.harvesting_cost ?? 37400) : originalCosts.harvesting_cost)}
+                              </span>
+                            </div>
+                            <div className="cd-summary-cost-card">
+                              <span className="cd-summary-cost-label">Extraction</span>
+                              <span className="cd-summary-cost-value">
+                                {formatRupees(isAlreadyRevised ? (existingAssessmentData?.extraction_cost ?? 26180) : originalCosts.extraction_cost)}
+                              </span>
+                            </div>
+                            <div className="cd-summary-cost-card">
+                              <span className="cd-summary-cost-label">Transportation</span>
+                              <span className="cd-summary-cost-value">
+                                {formatRupees(isAlreadyRevised ? (existingAssessmentData?.transportation_cost ?? 20570) : originalCosts.transportation_cost)}
+                              </span>
+                            </div>
+                            <div className="cd-summary-cost-card">
+                              <span className="cd-summary-cost-label">Other / Clearing</span>
+                              <span className="cd-summary-cost-value">
+                                {formatRupees(isAlreadyRevised ? (existingAssessmentData?.other_cost ?? 9350) : originalCosts.other_cost)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Separate metadata row */}
+                        <div className="cd-summary-meta-grid">
+                          {isTimberPurchaseProposal ? (
+                            <>
+                              <div className="cd-summary-meta-item">
+                                <Layers size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Assessed Volume</span>
+                                  <span className="cd-summary-meta-val text-emerald-300">{formatVolume(assessmentForm.estimated_harvestable_volume || 1.80)}</span>
+                                </div>
+                              </div>
+                              <div className="cd-summary-meta-item">
+                                <Coins size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Purchase Offer</span>
+                                  <span className="cd-summary-meta-val text-emerald-300 font-mono font-bold">{formatRupees(activePurchaseOffer)}</span>
+                                </div>
+                              </div>
+                              <div className="cd-summary-meta-item">
+                                <Handshake size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Commercial Flow</span>
+                                  <span className="cd-summary-meta-val text-emerald-300 font-semibold text-xs">Contractor &rarr; Landowner</span>
+                                </div>
+                              </div>
+                              <div className="cd-summary-meta-item">
+                                <Calendar size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Offer Valid Until</span>
+                                  <span className="cd-summary-meta-val">{formatDateDMY(activeOfferValidUntil)}</span>
+                                </div>
+                              </div>
+                            </>
                           ) : (
-                            <span className="text-[11px] text-slate-400 mt-0.5">
-                              Original contractor rate on record
-                            </span>
+                            <>
+                              <div className="cd-summary-meta-item">
+                                <Users size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Crew</span>
+                                  <span className="cd-summary-meta-val">{assessmentForm.assigned_workers_count || 10} Workers</span>
+                                </div>
+                              </div>
+                              <div className="cd-summary-meta-item">
+                                <Clock size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Duration</span>
+                                  <span className="cd-summary-meta-val">{assessmentForm.estimated_duration || '1 Working Day'}</span>
+                                </div>
+                              </div>
+                              <div className="cd-summary-meta-item">
+                                <Calendar size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Start Date</span>
+                                  <span className="cd-summary-meta-val">{formatDateDMY(assessmentForm.proposed_start_date || '2026-10-14')}</span>
+                                </div>
+                              </div>
+                              <div className="cd-summary-meta-item">
+                                <Layers size={16} className="text-emerald-400 shrink-0" />
+                                <div>
+                                  <span className="cd-summary-meta-label">Assessed Volume</span>
+                                  <span className="cd-summary-meta-val text-emerald-300">{formatVolume(assessmentForm.estimated_harvestable_volume || 1.80)}</span>
+                                </div>
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
-
-                      {/* Revision Draft banner if active */}
-                      {revisionDraft && (
-                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs flex-wrap">
-                          <div className="flex items-center gap-2 text-amber-300">
-                            <Sparkles size={16} className="text-amber-400 shrink-0" />
-                            <span>
-                              <strong>Revision Draft in Progress:</strong> Proposed quote is <strong>{formatRupees(revisionDraft.revised_contractor_quote)}</strong> ({revisionDraft.difference < 0 ? '-' : '+'}{formatRupees(Math.abs(revisionDraft.difference))}). Official quotation on record remains <strong>{formatRupees(originalContractorQuote)}</strong> until you review below and click <strong>"Submit Revised Quote"</strong>.
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleResetToOriginalQuote}
-                            className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-bold text-[11px] shrink-0 transition-colors cursor-pointer"
-                          >
-                            Discard Draft
-                          </button>
-                        </div>
-                      )}
-
-                      {/* 4-column itemized cost grid showing official costs on record */}
-                      <div className="cd-summary-cost-grid">
-                        <div className="cd-summary-cost-card">
-                          <span className="cd-summary-cost-label">Felling &amp; Logging</span>
-                          <span className="cd-summary-cost-value">
-                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.harvesting_cost ?? 37400) : originalCosts.harvesting_cost)}
-                          </span>
-                        </div>
-                        <div className="cd-summary-cost-card">
-                          <span className="cd-summary-cost-label">Extraction</span>
-                          <span className="cd-summary-cost-value">
-                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.extraction_cost ?? 26180) : originalCosts.extraction_cost)}
-                          </span>
-                        </div>
-                        <div className="cd-summary-cost-card">
-                          <span className="cd-summary-cost-label">Transportation</span>
-                          <span className="cd-summary-cost-value">
-                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.transportation_cost ?? 20570) : originalCosts.transportation_cost)}
-                          </span>
-                        </div>
-                        <div className="cd-summary-cost-card">
-                          <span className="cd-summary-cost-label">Other / Clearing</span>
-                          <span className="cd-summary-cost-value">
-                            {formatRupees(isAlreadyRevised ? (existingAssessmentData?.other_cost ?? 9350) : originalCosts.other_cost)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Separate metadata row */}
-                      <div className="cd-summary-meta-grid">
-                        <div className="cd-summary-meta-item">
-                          <Users size={16} className="text-emerald-400 shrink-0" />
-                          <div>
-                            <span className="cd-summary-meta-label">Crew</span>
-                            <span className="cd-summary-meta-val">{assessmentForm.assigned_workers_count || 10} Workers</span>
-                          </div>
-                        </div>
-                        <div className="cd-summary-meta-item">
-                          <Clock size={16} className="text-emerald-400 shrink-0" />
-                          <div>
-                            <span className="cd-summary-meta-label">Duration</span>
-                            <span className="cd-summary-meta-val">{assessmentForm.estimated_duration || '1 Working Day'}</span>
-                          </div>
-                        </div>
-                        <div className="cd-summary-meta-item">
-                          <Calendar size={16} className="text-emerald-400 shrink-0" />
-                          <div>
-                            <span className="cd-summary-meta-label">Start Date</span>
-                            <span className="cd-summary-meta-val">{formatDateDMY(assessmentForm.proposed_start_date || '2026-10-10')}</span>
-                          </div>
-                        </div>
-                        <div className="cd-summary-meta-item">
-                          <Layers size={16} className="text-emerald-400 shrink-0" />
-                          <div>
-                            <span className="cd-summary-meta-label">Assessed Volume</span>
-                            <span className="cd-summary-meta-val text-emerald-300">{formatVolume(assessmentForm.estimated_harvestable_volume || 1.80)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* ACTIVE LANDOWNER COUNTER-PROPOSAL & REVISION SPECIFICATIONS */}
                   {hasFairDeal && (() => {
@@ -3240,11 +3527,11 @@ const extractLandownerValue = (req, vol) => {
                             {requestDetails?.site_inspection?.road_access_verification || 'Medium 6-wheeler truck only'}
                           </strong>
                         </div>
-                        {requestDetails?.site_inspection?.landowner_preferred_arrangement && (
+                        {Boolean(requestDetails?.site_inspection?.landowner_preferred_arrangement || requestDetails?.landowner_preferred_arrangement) && (
                           <div className="assessment-verified-card">
                             <span className="assessment-verified-card-label">Landowner Preference</span>
-                            <strong className="assessment-verified-card-val truncate" title={requestDetails.site_inspection.landowner_preferred_arrangement}>
-                              {requestDetails.site_inspection.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ? 'Interested in Timber Sale' : 'Harvesting Service Only'}
+                            <strong className="assessment-verified-card-val truncate" title={requestDetails?.site_inspection?.landowner_preferred_arrangement || requestDetails?.landowner_preferred_arrangement}>
+                              {(requestDetails?.site_inspection?.landowner_preferred_arrangement || requestDetails?.landowner_preferred_arrangement) === 'INTERESTED_IN_TIMBER_SALE' ? 'Interested in Timber Sale' : 'Harvesting Service Only'}
                             </strong>
                           </div>
                         )}
@@ -3521,25 +3808,35 @@ const extractLandownerValue = (req, vol) => {
                   <form onSubmit={handleSubmit} className="cd-form flex flex-col gap-6">
 
                     {/* ADVISORY BANNERS FOR PREFERRED ARRANGEMENT */}
-                    {requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' && (
-                      <div className="-mb-2 p-4 rounded-xl bg-blue-900/20 border border-blue-500/30 text-blue-200 text-[13px] leading-relaxed flex items-start gap-3 shadow-sm">
-                        <Info size={18} className="text-blue-400 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="block text-blue-300 font-bold mb-1 text-[13px]">Landowner Preference Advisory</strong>
-                          During the site visit, the landowner expressed interest in selling the standing timber. You are submitting a standard Harvesting Service quotation. You may want to discuss timber buyers with them directly or adapt your service rates accordingly.
+                    {/* ADVISORY BANNERS FOR PREFERRED ARRANGEMENT */}
+                    {(requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || requestDetails?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE') && (
+                      assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? (
+                        <div className="-mb-2 p-3.5 rounded-xl bg-blue-900/20 border border-blue-500/30 text-blue-200 text-[13px] font-medium flex items-center gap-2.5 shadow-sm">
+                          <CheckCircle2 size={16} className="text-blue-400 shrink-0" />
+                          <span>
+                            <strong>Landowner Preferred Arrangement Matched:</strong> The landowner wants to sell their standing timber. You are submitting a direct Timber Purchase Offer to buy the timber directly from them. Normal harvesting service fees do not apply.
+                          </span>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="-mb-2 p-4 rounded-xl bg-amber-900/20 border border-amber-500/30 text-amber-200 text-[13px] leading-relaxed flex items-start gap-3 shadow-sm">
+                          <AlertTriangle size={18} className="text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="block text-amber-300 font-bold mb-1 text-[13px]">Landowner Preference Notice</strong>
+                            During the site visit, the landowner expressed preference for selling standing timber (Purchase Offer). You are currently drafting a standard Harvesting Service fee quotation.
+                          </div>
+                        </div>
+                      )
                     )}
                     
-                    {requestDetails?.site_inspection?.landowner_preferred_arrangement === 'HARVESTING_SERVICE' && (
+                    {(requestDetails?.site_inspection?.landowner_preferred_arrangement === 'HARVESTING_SERVICE' || requestDetails?.landowner_preferred_arrangement === 'HARVESTING_SERVICE') && (
                       <div className="-mb-2 p-3.5 rounded-xl bg-emerald-900/20 border border-emerald-500/30 text-emerald-200 text-[13px] font-medium flex items-center gap-2.5 shadow-sm">
                         <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-                        This standard harvesting quotation perfectly matches the landowner's requested arrangement.
+                        This standard harvesting quotation matches the landowner's requested arrangement.
                       </div>
                     )}
 
                     {/* 1. LANDOWNER PREFERENCE / PROPOSAL TYPE */}
-                    <div className="assessment-proposal-section">
+                    <div id="landowner-preferred-arrangement" className="assessment-proposal-section scroll-mt-24">
                       <div className="assessment-section-title-row">
                         <label className="assessment-section-title">
                           <Briefcase size={16} className="text-emerald-400" />
@@ -3551,7 +3848,7 @@ const extractLandownerValue = (req, vol) => {
                       </div>
 
                       <div className="commercial-type-grid">
-                        {requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ? (
+                        {(requestDetails?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || requestDetails?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' || assessmentForm.commercial_proposal_type === 'Timber Purchase Offer') ? (
                           <div className="commercial-type-card selected cursor-default border-blue-500/40 bg-blue-900/10">
                             <div className="commercial-type-header">
                               <span className="commercial-type-title">
@@ -4744,44 +5041,120 @@ const extractLandownerValue = (req, vol) => {
                           </span>
                         </div>
 
-                        <div className="cd-final-review-item">
-                          <span className="cd-final-review-label">Total Quotation</span>
-                          <span className="cd-final-review-val text-emerald-400 font-mono">
-                            {formatRupees(assessmentForm.total_quote || 93500)}
-                          </span>
-                        </div>
+                        {/* Timber Purchase Offer Details */}
+                        {assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' && (
+                          <>
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Reference Timber Valuation</span>
+                              <span className="cd-final-review-val text-emerald-300 font-mono">
+                                {formatRupees(assessmentForm.estimated_timber_value || 251082)}
+                              </span>
+                            </div>
 
-                        <div className="cd-final-review-item">
-                          <span className="cd-final-review-label">Crew</span>
-                          <span className="cd-final-review-val text-white">
-                            {assessmentForm.assigned_workers_count || 10} Workers
-                          </span>
-                        </div>
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Purchase Offer to Landowner</span>
+                              <span className="cd-final-review-val text-amber-400 font-mono font-bold">
+                                {formatRupees(assessmentForm.contractor_purchase_offer || assessmentForm.total_quote || 220000)}
+                              </span>
+                            </div>
 
-                        <div className="cd-final-review-item">
-                          <span className="cd-final-review-label">Duration</span>
-                          <span className="cd-final-review-val text-white">
-                            {assessmentForm.estimated_duration || '1 Working Day'}
-                          </span>
-                        </div>
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Offer Valid Until</span>
+                              <span className="cd-final-review-val text-white">
+                                {formatDateDMY(assessmentForm.offer_valid_until || '2026-10-20')}
+                              </span>
+                            </div>
 
-                        <div className="cd-final-review-item">
-                          <span className="cd-final-review-label">Start Date</span>
-                          <span className="cd-final-review-val text-white">
-                            {formatDateDMY(assessmentForm.proposed_start_date || '2026-10-10')}
-                          </span>
-                        </div>
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Financial Settlement Flow</span>
+                              <span className="cd-final-review-val text-emerald-300 text-xs font-semibold">
+                                Contractor &rarr; Landowner (Direct Payout)
+                              </span>
+                            </div>
 
-                        <div className="cd-final-review-item col-span-full">
-                          <span className="cd-final-review-label">Machinery &amp; Fleet Allocated</span>
-                          <span className="cd-final-review-val text-emerald-300">
-                            {(() => {
-                              const activeAllocated = Object.values(selectedEquipment).filter(e => e && e.count > 0);
-                              if (activeAllocated.length === 0) return 'Standard Equipment Package';
-                              return activeAllocated.map(e => `${e.count}x ${e.name} (of ${e.total} available)`).join(', ');
-                            })()}
-                          </span>
-                        </div>
+                            <div className="cd-final-review-item col-span-full">
+                              <span className="cd-final-review-label">Commercial Payment Terms</span>
+                              <span className="cd-final-review-val text-slate-200 text-xs font-medium">
+                                {assessmentForm.payment_terms || '100% full payment for timber prior to dispatch'}
+                              </span>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Harvesting Service Quotation Details */}
+                        {assessmentForm.commercial_proposal_type === 'Harvesting Service Quotation' && (
+                          <>
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Total Quotation</span>
+                              <span className="cd-final-review-val text-emerald-400 font-mono">
+                                {formatRupees(assessmentForm.total_quote || 110000)}
+                              </span>
+                            </div>
+
+                            <div className="cd-final-review-item col-span-full">
+                              <span className="cd-final-review-label">Service Fee Breakdown</span>
+                              <span className="cd-final-review-val text-slate-300 text-xs">
+                                Felling: {formatRupees(assessmentForm.harvesting_cost || 45000)} • Extraction: {formatRupees(assessmentForm.extraction_cost || 30000)} • Transport: {formatRupees(assessmentForm.transportation_cost || 25000)} • Overheads: {formatRupees(assessmentForm.other_cost || 10000)}
+                              </span>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Purchase + Harvesting Details */}
+                        {assessmentForm.commercial_proposal_type === 'Purchase + Harvesting' && (
+                          <>
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Timber Purchase Price</span>
+                              <span className="cd-final-review-val text-emerald-400 font-mono">
+                                {formatRupees(assessmentForm.timber_purchase_price || 0)}
+                              </span>
+                            </div>
+
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Harvesting Arrangement Cost</span>
+                              <span className="cd-final-review-val text-amber-300 font-mono">
+                                {formatRupees(assessmentForm.harvesting_arrangement_cost || 0)}
+                              </span>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Operational parameters ONLY applicable for Harvesting Service Quotation & Hybrid */}
+                        {assessmentForm.commercial_proposal_type !== 'Timber Purchase Offer' && (
+                          <>
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Crew</span>
+                              <span className="cd-final-review-val text-white">
+                                {assessmentForm.assigned_workers_count || 10} Workers
+                              </span>
+                            </div>
+
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Duration</span>
+                              <span className="cd-final-review-val text-white">
+                                {assessmentForm.estimated_duration || '1 Working Day'}
+                              </span>
+                            </div>
+
+                            <div className="cd-final-review-item">
+                              <span className="cd-final-review-label">Start Date</span>
+                              <span className="cd-final-review-val text-white">
+                                {formatDateDMY(assessmentForm.proposed_start_date || '2026-10-14')}
+                              </span>
+                            </div>
+
+                            <div className="cd-final-review-item col-span-full">
+                              <span className="cd-final-review-label">Machinery &amp; Fleet Allocated</span>
+                              <span className="cd-final-review-val text-emerald-300">
+                                {(() => {
+                                  const activeAllocated = Object.values(selectedEquipment).filter(e => e && e.count > 0);
+                                  if (activeAllocated.length === 0) return 'Standard Equipment Package';
+                                  return activeAllocated.map(e => `${e.count}x ${e.name} (of ${e.total} available)`).join(', ');
+                                })()}
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -4839,23 +5212,23 @@ const extractLandownerValue = (req, vol) => {
                             >
                               {isSubmitting ? (
                                 <>
-                                  <Loader2 size={16} className="animate-spin" /> Submitting Official Quotation...
-                                </>
-                              ) : (isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? (
-                                <>
-                                  <RefreshCw size={16} /> Submit Revised Quote ({formatRupees(assessmentForm.total_quote || assessmentForm.contractor_purchase_offer || assessmentForm.timber_purchase_price || 93500)})
+                                  <Loader2 size={16} className="animate-spin" /> Submitting {assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? 'Timber Purchase Offer' : 'Official Quotation'}...
                                 </>
                               ) : assessmentForm.commercial_proposal_type === 'Timber Purchase Offer' ? (
                                 <>
-                                  <Coins size={16} /> Submit Timber Purchase Offer
+                                  <Coins size={16} /> {(isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? 'Submit Revised Timber Purchase Offer' : 'Submit Timber Purchase Offer'} ({formatRupees(assessmentForm.contractor_purchase_offer || activePurchaseOffer || 220000)})
+                                </>
+                              ) : (isRevisionRequested || revisionDraft || isAlreadyRevised || existingAssessmentData || requestDetails?.status === 'ASSESSMENT_SUBMITTED') ? (
+                                <>
+                                  <RefreshCw size={16} /> Submit Revised Quote ({formatRupees(assessmentForm.total_quote || 93500)})
                                 </>
                               ) : assessmentForm.commercial_proposal_type === 'Purchase + Harvesting' ? (
                                 <>
-                                  <Handshake size={16} /> Submit Purchase + Harvesting Proposal
+                                  <Handshake size={16} /> Submit Purchase + Harvesting Proposal ({formatRupees(assessmentForm.timber_purchase_price || 0)})
                                 </>
                               ) : (
                                 <>
-                                  <Calculator size={16} /> Submit Assessment
+                                  <Calculator size={16} /> Submit Assessment ({formatRupees(assessmentForm.total_quote || 93500)})
                                 </>
                               )}
                             </button>

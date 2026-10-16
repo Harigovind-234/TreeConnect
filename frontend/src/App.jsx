@@ -37,6 +37,7 @@ import TreeInventoryPage from './pages/landowner/TreeInventoryPage';
 import HarvestRequestsPage from './pages/landowner/HarvestRequestsPage';
 import HarvestOperationsPage from './pages/landowner/HarvestOperationsPage';
 import TimberMarketplacePage from './pages/landowner/TimberMarketplacePage';
+import ContractorTimberMarketplacePage from './pages/contractor/ContractorTimberMarketplacePage';
 import FleetEquipmentPage from './pages/contractor/FleetEquipmentPage';
 import ProfilePage from './pages/ProfilePage';
 
@@ -284,7 +285,56 @@ function App() {
             />
 
             <Route
+              path="/contractor/marketplace"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <ContractorTimberMarketplacePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/contractor/create-timber-listing"
+              element={
+                <ProtectedRoute allowedRoles={['contractor']}>
+                  <CreateTimberListing />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/buyer/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['buyer']}>
+                  <BuyerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/buyer/marketplace"
+              element={
+                <ProtectedRoute allowedRoles={['buyer']}>
+                  <BuyerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/buyer/negotiations"
+              element={
+                <ProtectedRoute allowedRoles={['buyer']}>
+                  <BuyerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/buyer/orders"
+              element={
+                <ProtectedRoute allowedRoles={['buyer']}>
+                  <BuyerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/buyer/analytics"
               element={
                 <ProtectedRoute allowedRoles={['buyer']}>
                   <BuyerDashboard />

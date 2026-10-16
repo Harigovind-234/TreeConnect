@@ -2,55 +2,63 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
+import { useAuth } from '../../context/AuthContext';
 import { useLandowner } from '../../context/LandownerContext';
 import FileUploadCard from '../../components/FileUploadCard';
+import marketplaceService from '../../services/marketplaceService';
 import {
   ShoppingBag,
   ArrowLeft,
   CheckCircle2,
-  Trees,
   DollarSign,
   MapPin,
   FileText,
   Upload,
-  Save,
   X,
   AlertCircle,
   Tag,
-  Sparkles
+  Sparkles,
+  Truck,
+  Building,
+  Trees
 } from 'lucide-react';
 
 const CreateTimberListing = () => {
   const navigate = useNavigate();
-  const { completedHarvests, addTimberListing } = useLandowner();
+  const { user } = useAuth();
+  const { completedHarvests = [], properties = [] } = useLandowner();
 
-  // Selected Harvest Operation from available harvested inventory
-  const defaultHarvestOp = completedHarvests[0] || null;
-  const [selectedOperationId, setSelectedOperationId] = useState(defaultHarvestOp?.id || '');
+  const userRole = user?.role || 'landowner';
+  const isContractor = userRole === 'contractor';
 
-  const selectedOp = completedHarvests.find(h => h.id === selectedOperationId) || defaultHarvestOp;
+  // Selection mode: 'harvest_operation' or 'direct_inventory'
+  const hasHarvestOps = completedHarvests && completedHarvests.length > 0;
+  const [listingSource, setListingSource] = useState(hasHarvestOps ? 'harvest_operation' : 'direct_inventory');
+  const [selectedOperationId, setSelectedOperationId] = useState(completedHarvests[0]?.id || '');
 
   // Form State
   const [formData, setFormData] = useState({
-    propertyId: selectedOp?.propertyId || '',
-    propertyName: selectedOp?.propertyName || '',
-    timberSpecies: selectedOp?.species || 'Teak',
-    timberType: selectedOp?.timberType || 'Sawlogs',
-    quantity: selectedOp?.quantity || 100,
-    volume: selectedOp?.harvestedVolume || 50,
-    gradeQuality: selectedOp?.gradeQuality || 'Grade A',
-    logDimensions: selectedOp?.logDimensions || 'Avg length: 4.0m, Avg diameter: 40cm',
-    harvestDate: selectedOp?.harvestDate || new Date().toISOString().split('T')[0],
+    title: '',
+    propertyName: properties[0]?.name || (isContractor ? 'Contractor Central Log Yard' : 'Family Agro-Forestry Estate'),
+    timberSpecies: 'Teakwood',
+    timberType: 'Sawlogs',
+    quantity: 50,
+    volume: 35,
+    gradeQuality: 'Grade A Prime Export',
+    logDimensions: 'Avg length: 4.2m, Avg girth: 120-150cm',
+    harvestDate: new Date().toISOString().split('T')[0],
 
-    askingPrice: 10000,
-    pricePerM3: 115,
+    askingPrice: 1487500,
+    pricePerM3: 42500,
     negotiable: 'Yes',
 
-    storageLocation: selectedOp?.storageLocation || 'Central Estate Yard',
-    district: selectedOp?.district || 'Kottayam',
-    pickupLocation: selectedOp?.pickupLocation || 'Main Gate Access',
+    district: properties[0]?.district || 'Kottayam',
+    storageLocation: 'Central Estate Holding Yard',
+    pickupLocation: 'Main Highway Access Gate #1',
+    transportAvailable: isContractor,
+    transportNotes: isContractor ? 'Contractor logistics fleet available for mill haulage' : '',
 
-    description: 'Freshly harvested rubber timber from a private estate in Kottayam. Suitable for sawmill and furniture applications.',
+    description: 'Matured, high-density Kerala timber logs with clean straight boles and uniform grain. Debarked with end-seal to prevent radial checking. Forest transit clearance ready.',
     status: 'Published'
   });
 
@@ -59,49 +67,70 @@ const CreateTimberListing = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [errors, setErrors] = useState({});
 
+  const handleSourceChange = (mode) => {
+    setListingSource(mode);
+    if (mode === 'harvest_operation' && hasHarvestOps) {
+      handleOperationChange(completedHarvests[0]?.id);
+    }
+  };
+
   const handleOperationChange = (opId) => {
     setSelectedOperationId(opId);
     const target = completedHarvests.find(h => h.id === opId);
     if (target) {
+      const vol = Number(target.harvestedVolume) || 30;
+      const rate = 42500;
       setFormData(prev => ({
         ...prev,
-        propertyId: target.propertyId,
-        propertyName: target.propertyName,
-        timberSpecies: target.species,
+        title: `${target.species} Sawlogs (${target.propertyName || 'Harvest'})`,
+        propertyName: target.propertyName || prev.propertyName,
+        timberSpecies: target.species || 'Teakwood',
         timberType: target.timberType || 'Sawlogs',
-        quantity: target.quantity,
-        volume: target.harvestedVolume,
-        gradeQuality: target.gradeQuality || 'Grade A Prime',
-        logDimensions: target.logDimensions || 'Avg length: 4m, Avg diameter: 40cm',
-        harvestDate: target.harvestDate,
-        storageLocation: target.storageLocation,
-        district: target.district,
-        pickupLocation: target.pickupLocation,
-        askingPrice: Math.round(target.harvestedVolume * 115),
-        pricePerM3: 115
+        quantity: target.quantity || 50,
+        volume: vol,
+        gradeQuality: target.gradeQuality || 'Grade A Prime Export',
+        logDimensions: target.logDimensions || 'Avg length: 4m, Avg girth: 130cm',
+        harvestDate: target.harvestDate || new Date().toISOString().split('T')[0],
+        storageLocation: target.storageLocation || 'Estate On-Site Log Yard',
+        district: target.district || prev.district,
+        pickupLocation: target.pickupLocation || prev.pickupLocation,
+        pricePerM3: rate,
+        askingPrice: vol * rate
       }));
     }
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
+    const val = type === 'checkbox' ? checked : value;
+
     setFormData(prev => {
-      const updated = { ...prev, [name]: value };
+      const updated = { ...prev, [name]: val };
       if (name === 'askingPrice' || name === 'volume') {
+        const vol = Number(name === 'volume' ? value : updated.volume) || 1;
+        const total = Number(name === 'askingPrice' ? value : updated.askingPrice) || 0;
+        if (vol > 0 && name === 'askingPrice') {
+          updated.pricePerM3 = Math.round(total / vol);
+        } else if (name === 'volume') {
+          updated.askingPrice = Math.round(vol * (Number(updated.pricePerM3) || 30000));
+        }
+      } else if (name === 'pricePerM3') {
         const vol = Number(updated.volume) || 1;
-        const price = Number(updated.askingPrice) || 0;
-        updated.pricePerM3 = Math.round(price / vol);
+        const rate = Number(value) || 0;
+        updated.askingPrice = Math.round(vol * rate);
       }
       return updated;
     });
+
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
   };
 
   const validate = () => {
     const newErrors = {};
-    if (!selectedOperationId) newErrors.operation = 'Please select a completed harvest operation';
-    if (!formData.askingPrice || Number(formData.askingPrice) <= 0) newErrors.askingPrice = 'Asking price required';
-    if (!formData.volume || Number(formData.volume) <= 0) newErrors.volume = 'Volume required';
+    if (!formData.timberSpecies) newErrors.timberSpecies = 'Timber species is required';
+    if (!formData.volume || Number(formData.volume) <= 0) newErrors.volume = 'Valid volume (m³) is required';
+    if (!formData.askingPrice || Number(formData.askingPrice) <= 0) newErrors.askingPrice = 'Asking price is required';
+    if (!formData.district) newErrors.district = 'District location is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -111,24 +140,43 @@ const CreateTimberListing = () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      addTimberListing({
+
+    try {
+      const payload = {
         ...formData,
-        harvestOperationId: selectedOp?.id,
-        harvestOperationTitle: selectedOp?.operationTitle,
-        askingPrice: Number(formData.askingPrice),
+        title: formData.title || `${formData.gradeQuality} ${formData.timberSpecies} Logs`,
         volume: Number(formData.volume),
+        quantity: Number(formData.quantity) || 1,
+        askingPrice: Number(formData.askingPrice),
         pricePerM3: Number(formData.pricePerM3),
-        quantity: Number(formData.quantity)
-      });
+        sellerRole: userRole,
+        sellerName: user?.name || user?.full_name || (isContractor ? 'Verified Contractor' : 'Registered Landowner'),
+        sellerEmail: user?.email || '',
+        sellerPhone: user?.phone || '+91 94470 00000',
+        harvestOperationId: listingSource === 'harvest_operation' ? selectedOperationId : null,
+        images: logPhotos ? [URL.createObjectURL(logPhotos)] : []
+      };
+
+      marketplaceService.saveListing(payload, user);
 
       setIsSubmitting(false);
-      setSuccessMessage('Timber listing published successfully!');
+      setSuccessMessage('Timber listing published successfully on Marketplace!');
+
       setTimeout(() => {
-        navigate('/landowner/marketplace');
+        if (isContractor) {
+          navigate('/contractor/marketplace');
+        } else {
+          navigate('/landowner/marketplace');
+        }
       }, 1200);
-    }, 600);
+    } catch (err) {
+      console.error('Failed to publish listing:', err);
+      setIsSubmitting(false);
+      setErrors({ form: 'Failed to publish listing. Please try again.' });
+    }
   };
+
+  const returnPath = isContractor ? '/contractor/marketplace' : '/landowner/marketplace';
 
   return (
     <div className="dashboard-layout">
@@ -143,18 +191,24 @@ const CreateTimberListing = () => {
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <button
-                  onClick={() => navigate('/landowner/dashboard')}
+                  onClick={() => navigate(returnPath)}
                   className="btn btn-secondary btn-sm mb-2 flex items-center gap-1 text-muted hover:text-main"
                 >
-                  <ArrowLeft size={16} /> Back to Dashboard
+                  <ArrowLeft size={16} /> Back to Marketplace
                 </button>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-emerald/15 border border-emerald/30 flex items-center justify-center text-emerald">
                     <ShoppingBag size={24} />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-main">List Timber for Sale</h1>
-                    <p className="text-sm text-muted">Create a timber marketplace listing from completed harvesting operations.</p>
+                    <h1 className="text-2xl font-bold text-main">
+                      {isContractor ? 'List Harvested Timber for Sale' : 'List Estate Timber for Sale'}
+                    </h1>
+                    <p className="text-sm text-muted">
+                      {isContractor
+                        ? 'Publish harvested logs or yard stocks to verified commercial buyers across Kerala.'
+                        : 'List felled logs or standing estate timber for buyers to browse, negotiate, and purchase.'}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -164,83 +218,144 @@ const CreateTimberListing = () => {
             {successMessage && (
               <div className="mb-6 p-4 rounded-xl bg-emerald/15 border border-emerald text-emerald flex items-center gap-3 animate-fade-in">
                 <CheckCircle2 size={20} />
-                <span className="font-semibold text-sm">{successMessage} Redirecting to Marketplace...</span>
+                <span className="font-semibold text-sm">{successMessage}</span>
+              </div>
+            )}
+
+            {errors.form && (
+              <div className="mb-6 p-4 rounded-xl bg-red-900/20 border border-red-500/50 text-red-300 flex items-center gap-3">
+                <AlertCircle size={20} className="text-red-400" />
+                <span className="text-sm">{errors.form}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
 
-              {/* IMPORTANT HARVEST OPERATION SELECTOR */}
-              <div className="card p-6 border border-emerald/40 rounded-xl bg-card">
-                <label className="text-base font-bold text-main block mb-2 flex items-center gap-2">
-                  <CheckCircle2 size={18} className="text-emerald" /> Select Completed Harvest Operation
+              {/* LISTING SOURCE SELECTION */}
+              <div className="card p-5 border border-color rounded-xl bg-card">
+                <label className="text-sm font-bold text-main block mb-3 flex items-center gap-2">
+                  <Tag size={16} className="text-emerald" /> Listing Inventory Source
                 </label>
-                <p className="text-xs text-muted mb-4">
-                  Note: Listings are restricted to verified completed harvesting operations with available harvested volume.
-                </p>
 
-                <div className="space-y-3">
-                  <select
-                    value={selectedOperationId}
-                    onChange={(e) => handleOperationChange(e.target.value)}
-                    className={`form-input text-base font-bold ${errors.operation ? 'border-red-500' : ''}`}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSourceChange('direct_inventory')}
+                    className={`p-4 rounded-xl border text-left transition-all ${
+                      listingSource === 'direct_inventory'
+                        ? 'bg-emerald/10 border-emerald text-white ring-1 ring-emerald'
+                        : 'bg-surface border-color text-muted hover:border-slate-600'
+                    }`}
                   >
-                    {completedHarvests.map(h => (
-                      <option key={h.id} value={h.id}>
-                        {h.operationTitle} — {h.species} ({h.harvestedVolume} m³ available)
-                      </option>
-                    ))}
-                  </select>
-                  {errors.operation && <p className="text-xs text-red-400">{errors.operation}</p>}
-
-                  {selectedOp && (
-                    <div className="p-4 rounded-xl bg-surface border border-color text-xs grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <span className="text-muted block">Property:</span>
-                        <span className="font-bold text-emerald text-sm">{selectedOp.propertyName}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted block">Contractor:</span>
-                        <span className="font-semibold text-main">{selectedOp.contractor}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted block">Harvested Volume:</span>
-                        <span className="font-bold text-emerald font-mono text-sm">{selectedOp.harvestedVolume} m³</span>
-                      </div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-sm text-main flex items-center gap-2">
+                        <Trees size={16} className="text-emerald" /> Direct Timber Stock / Felled Wood
+                      </span>
+                      {listingSource === 'direct_inventory' && <CheckCircle2 size={16} className="text-emerald" />}
                     </div>
-                  )}
+                    <p className="text-xs text-muted">
+                      List timber logs, seasoned baulks, or standing trees directly from your property or yard.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSourceChange('harvest_operation')}
+                    disabled={!hasHarvestOps}
+                    className={`p-4 rounded-xl border text-left transition-all ${
+                      !hasHarvestOps
+                        ? 'opacity-50 cursor-not-allowed bg-surface/50 border-color'
+                        : listingSource === 'harvest_operation'
+                        ? 'bg-emerald/10 border-emerald text-white ring-1 ring-emerald'
+                        : 'bg-surface border-color text-muted hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-sm text-main flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-emerald" /> Completed Harvesting Operation
+                      </span>
+                      {hasHarvestOps && listingSource === 'harvest_operation' && <CheckCircle2 size={16} className="text-emerald" />}
+                    </div>
+                    <p className="text-xs text-muted">
+                      {hasHarvestOps
+                        ? 'Auto-fill specs from verified completed contractor harvests in your profile.'
+                        : 'No completed harvests recorded yet (use Direct Timber Stock above).'}
+                    </p>
+                  </button>
                 </div>
+
+                {/* If Harvest Operation Selected */}
+                {listingSource === 'harvest_operation' && hasHarvestOps && (
+                  <div className="mt-4 pt-4 border-t border-color">
+                    <label className="text-xs font-semibold text-slate-300 block mb-2">
+                      Select Harvest Operation Record:
+                    </label>
+                    <select
+                      value={selectedOperationId}
+                      onChange={(e) => handleOperationChange(e.target.value)}
+                      className="form-input text-sm font-semibold"
+                    >
+                      {completedHarvests.map(h => (
+                        <option key={h.id} value={h.id}>
+                          {h.operationTitle || `${h.species} Harvest`} — {h.species} ({h.harvestedVolume || 30} m³ available)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              {/* TIMBER DETAILS */}
+              {/* TIMBER SPECIFICATIONS */}
               <div className="card p-6 border border-color rounded-xl bg-card">
                 <div className="flex items-center gap-2 mb-4 pb-3 border-b border-color">
                   <Tag size={18} className="text-emerald" />
-                  <h2 className="text-lg font-bold text-main">Timber Details</h2>
+                  <h2 className="text-lg font-bold text-main">Timber Details & Specifications</h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="form-group md:col-span-2">
+                    <label className="form-label">Listing Title</label>
+                    <input
+                      type="text"
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      placeholder="e.g. Grade A1 Matured Nilambur Teak Sawlogs"
+                      className="form-input"
+                    />
+                  </div>
+
                   <div className="form-group">
-                    <label className="form-label">Property</label>
+                    <label className="form-label">Estate / Yard Name</label>
                     <input
                       type="text"
                       name="propertyName"
                       value={formData.propertyName}
                       onChange={handleInputChange}
-                      className="form-input bg-surface text-muted"
-                      readOnly
+                      placeholder="e.g. Wayanad Estate Stand #2"
+                      className="form-input"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Timber Species</label>
-                    <input
-                      type="text"
+                    <label className="form-label">Timber Species *</label>
+                    <select
                       name="timberSpecies"
                       value={formData.timberSpecies}
                       onChange={handleInputChange}
                       className="form-input"
-                    />
+                    >
+                      <option value="Teakwood">Teakwood (Tectona grandis)</option>
+                      <option value="Rosewood">Rosewood (Dalbergia latifolia)</option>
+                      <option value="Rubberwood">Rubberwood (Hevea brasiliensis)</option>
+                      <option value="Mahogany">Mahogany (Swietenia macrophylla)</option>
+                      <option value="Eucalyptus">Eucalyptus / Nilgiri</option>
+                      <option value="Jackfruit">Jackfruit (Artocarpus heterophyllus)</option>
+                      <option value="Acacia">Acacia (Mangium / Auriculiformis)</option>
+                      <option value="Anjili">Anjili (Artocarpus hirsutus)</option>
+                      <option value="Other Commercial Wood">Other Commercial Hardwood</option>
+                    </select>
+                    {errors.timberSpecies && <p className="text-xs text-red-400 mt-1">{errors.timberSpecies}</p>}
                   </div>
 
                   <div className="form-group">
@@ -251,34 +366,13 @@ const CreateTimberListing = () => {
                       onChange={handleInputChange}
                       className="form-input"
                     >
-                      <option value="Sawlogs">Sawlogs</option>
-                      <option value="Pulpwood">Pulpwood</option>
-                      <option value="Veneer Logs">Veneer Logs</option>
-                      <option value="Firewood">Firewood / Biomass</option>
-                      <option value="Poles">Poles & Posts</option>
+                      <option value="Sawlogs">Sawlogs (Standard Cut)</option>
+                      <option value="Veneer Logs">Peeler / Veneer Logs</option>
+                      <option value="Poles">Poles & Scaffolding Posts</option>
+                      <option value="Pulpwood">Pulpwood / Chip Logs</option>
+                      <option value="Firewood">Firewood & Biomass</option>
+                      <option value="Sawn Baulks">Rough Sawn Baulks</option>
                     </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Quantity (logs/pieces)</label>
-                    <input
-                      type="number"
-                      name="quantity"
-                      value={formData.quantity}
-                      onChange={handleInputChange}
-                      className="form-input"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Volume (m³)</label>
-                    <input
-                      type="number"
-                      name="volume"
-                      value={formData.volume}
-                      onChange={handleInputChange}
-                      className="form-input text-emerald font-bold font-mono"
-                    />
                   </div>
 
                   <div className="form-group">
@@ -289,27 +383,41 @@ const CreateTimberListing = () => {
                       onChange={handleInputChange}
                       className="form-input"
                     >
-                      <option value="Grade A Prime">Grade A Prime</option>
-                      <option value="Grade B Sawlog">Grade B Sawlog</option>
-                      <option value="Grade C Industrial">Grade C Industrial</option>
-                      <option value="Custom">Custom Grade</option>
+                      <option value="Grade A Prime Export">Grade A Prime Export (Straight, defect-free)</option>
+                      <option value="Grade B Sawlog">Grade B Sawlog (Standard commercial)</option>
+                      <option value="Premium Veneer Grade">Premium Veneer Grade</option>
+                      <option value="Industrial Furniture Grade">Industrial Furniture Grade</option>
+                      <option value="Joinery Grade #1">Joinery Grade #1</option>
+                      <option value="Construction Grade">Construction Grade</option>
                     </select>
                   </div>
 
-                  <div className="form-group md:col-span-2">
-                    <label className="form-label">Log Dimensions</label>
+                  <div className="form-group">
+                    <label className="form-label">Volume (m³) *</label>
                     <input
-                      type="text"
-                      name="logDimensions"
-                      value={formData.logDimensions}
+                      type="number"
+                      step="0.5"
+                      name="volume"
+                      value={formData.volume}
                       onChange={handleInputChange}
-                      placeholder="e.g. Avg length: 3.5m, Avg diameter: 35cm"
-                      className="form-input"
+                      className="form-input text-emerald font-bold font-mono text-base"
+                    />
+                    {errors.volume && <p className="text-xs text-red-400 mt-1">{errors.volume}</p>}
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Quantity (logs / units)</label>
+                    <input
+                      type="number"
+                      name="quantity"
+                      value={formData.quantity}
+                      onChange={handleInputChange}
+                      className="form-input font-mono"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Harvest Date</label>
+                    <label className="form-label">Harvest / Felling Date</label>
                     <input
                       type="date"
                       name="harvestDate"
@@ -318,105 +426,161 @@ const CreateTimberListing = () => {
                       className="form-input"
                     />
                   </div>
+
+                  <div className="form-group md:col-span-3">
+                    <label className="form-label">Log Dimensions & Girth Specifications</label>
+                    <input
+                      type="text"
+                      name="logDimensions"
+                      value={formData.logDimensions}
+                      onChange={handleInputChange}
+                      placeholder="e.g. Avg length: 4.5m, Girth range: 120cm - 160cm mid-log"
+                      className="form-input"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* PRICE */}
+              {/* PRICING & COMMERCIAL TERMS */}
               <div className="card p-6 border border-color rounded-xl bg-card">
                 <div className="flex items-center gap-2 mb-4 pb-3 border-b border-color">
                   <DollarSign size={18} className="text-emerald" />
-                  <h2 className="text-lg font-bold text-main">Price & Negotiation</h2>
+                  <h2 className="text-lg font-bold text-main">Pricing & Negotiation Terms</h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="form-group">
-                    <label className="form-label">Asking Price ($)</label>
-                    <input
-                      type="number"
-                      name="askingPrice"
-                      value={formData.askingPrice}
-                      onChange={handleInputChange}
-                      className="form-input text-emerald font-bold text-lg font-mono"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Price per m³ ($/m³)</label>
+                    <label className="form-label">Price per m³ (₹ / m³) *</label>
                     <input
                       type="number"
                       name="pricePerM3"
                       value={formData.pricePerM3}
                       onChange={handleInputChange}
-                      className="form-input text-main font-semibold"
+                      className="form-input text-emerald font-bold font-mono text-base"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Price Negotiable</label>
+                    <label className="form-label">Total Asking Price (₹) *</label>
+                    <input
+                      type="number"
+                      name="askingPrice"
+                      value={formData.askingPrice}
+                      onChange={handleInputChange}
+                      className="form-input text-emerald font-bold font-mono text-base"
+                    />
+                    {errors.askingPrice && <p className="text-xs text-red-400 mt-1">{errors.askingPrice}</p>}
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Price Open for Negotiation?</label>
                     <select
                       name="negotiable"
                       value={formData.negotiable}
                       onChange={handleInputChange}
-                      className="form-input"
+                      className="form-input font-medium"
                     >
-                      <option value="Yes">Yes</option>
-                      <option value="No">No</option>
+                      <option value="Yes">Yes — Allow Buyers to Submit Counter-Offers</option>
+                      <option value="No">No — Fixed Price Only</option>
                     </select>
                   </div>
                 </div>
+
+                <div className="mt-3 p-3 bg-surface rounded-lg border border-color text-xs flex items-center justify-between text-muted">
+                  <span>Calculated Valuation: <strong className="text-white">₹ {Number(formData.askingPrice).toLocaleString('en-IN')}</strong></span>
+                  <span>Effective Unit Rate: <strong className="text-emerald">₹ {Number(formData.pricePerM3).toLocaleString('en-IN')} / m³</strong></span>
+                </div>
               </div>
 
-              {/* LOCATION */}
+              {/* LOCATION & LOGISTICS */}
               <div className="card p-6 border border-color rounded-xl bg-card">
                 <div className="flex items-center gap-2 mb-4 pb-3 border-b border-color">
                   <MapPin size={18} className="text-emerald" />
-                  <h2 className="text-lg font-bold text-main">Storage & Pickup Location</h2>
+                  <h2 className="text-lg font-bold text-main">Location & Logistics Support</h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="form-group">
-                    <label className="form-label">Storage Location</label>
+                    <label className="form-label">District in Kerala *</label>
+                    <select
+                      name="district"
+                      value={formData.district}
+                      onChange={handleInputChange}
+                      className="form-input"
+                    >
+                      <option value="Wayanad">Wayanad</option>
+                      <option value="Palakkad">Palakkad</option>
+                      <option value="Kottayam">Kottayam</option>
+                      <option value="Idukki">Idukki</option>
+                      <option value="Ernakulam">Ernakulam</option>
+                      <option value="Thrissur">Thrissur</option>
+                      <option value="Malappuram">Malappuram</option>
+                      <option value="Kannur">Kannur</option>
+                      <option value="Kozhikode">Kozhikode</option>
+                      <option value="Pathanamthitta">Pathanamthitta</option>
+                      <option value="Kollam">Kollam</option>
+                      <option value="Thiruvananthapuram">Thiruvananthapuram</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Storage Yard / Depot</label>
                     <input
                       type="text"
                       name="storageLocation"
                       value={formData.storageLocation}
                       onChange={handleInputChange}
-                      placeholder="e.g. Pine Valley Yard #1"
+                      placeholder="e.g. Central Yard, Pala"
                       className="form-input"
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">District</label>
-                    <input
-                      type="text"
-                      name="district"
-                      value={formData.district}
-                      onChange={handleInputChange}
-                      placeholder="e.g. Kottayam"
-                      className="form-input"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Pickup Location</label>
+                    <label className="form-label">Pickup & Loading Point</label>
                     <input
                       type="text"
                       name="pickupLocation"
                       value={formData.pickupLocation}
                       onChange={handleInputChange}
-                      placeholder="e.g. Near Gate 2, Main Highway Access"
+                      placeholder="e.g. State Highway 1 Gate Access"
                       className="form-input"
                     />
+                  </div>
+
+                  {/* Transport capability */}
+                  <div className="form-group md:col-span-3 pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        name="transportAvailable"
+                        checked={formData.transportAvailable}
+                        onChange={handleInputChange}
+                        className="rounded border-slate-700 text-emerald focus:ring-emerald h-4 w-4"
+                      />
+                      <span className="text-sm font-semibold text-main flex items-center gap-1.5">
+                        <Truck size={16} className="text-emerald" /> Hauling / Delivery Transport Available by Seller
+                      </span>
+                    </label>
+
+                    {formData.transportAvailable && (
+                      <input
+                        type="text"
+                        name="transportNotes"
+                        value={formData.transportNotes}
+                        onChange={handleInputChange}
+                        placeholder="e.g. Heavy log trailers available for transport up to 150km at subsidized freight"
+                        className="form-input text-xs"
+                      />
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* MEDIA & DESCRIPTION & STATUS */}
+              {/* DESCRIPTION & PHOTOS */}
               <div className="card p-6 border border-color rounded-xl bg-card space-y-4">
                 <div className="flex items-center gap-2 pb-3 border-b border-color">
                   <Sparkles size={18} className="text-emerald" />
-                  <h2 className="text-lg font-bold text-main">Media, Description & Status</h2>
+                  <h2 className="text-lg font-bold text-main">Description, Photos & Status</h2>
                 </div>
 
                 <div className="form-group">
@@ -426,22 +590,22 @@ const CreateTimberListing = () => {
                     rows="3"
                     value={formData.description}
                     onChange={handleInputChange}
-                    placeholder="Provide details on log cut quality, moisture content, mill suitability..."
+                    placeholder="Provide details on wood density, bark removal, seasoning, sawmill or veneer suitability, and forest transit passes..."
                     className="form-input"
                   ></textarea>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FileUploadCard
-                    label="Timber / Log Photos"
-                    sublabel="Upload timber yard log photos"
+                    label="Timber Yard & Log Photos"
+                    sublabel="Upload photos of timber stacks, log ends, or yard batch"
                     file={logPhotos}
                     onFileSelect={(f) => setLogPhotos(f)}
                     onFileRemove={() => setLogPhotos(null)}
                   />
 
                   <div className="form-group">
-                    <label className="form-label">Initial Listing Status</label>
+                    <label className="form-label">Publishing Status</label>
                     <select
                       name="status"
                       value={formData.status}
@@ -449,20 +613,20 @@ const CreateTimberListing = () => {
                       className="form-input font-semibold"
                     >
                       <option value="Published">Published (Active on Marketplace)</option>
-                      <option value="Draft">Draft</option>
-                      <option value="Buyer Interested">Buyer Interested</option>
-                      <option value="Purchase Request">Purchase Request</option>
-                      <option value="Sold">Sold</option>
+                      <option value="Draft">Save as Draft (Private)</option>
                     </select>
+                    <p className="text-xs text-muted mt-2">
+                      When published, commercial buyers across the network can view your timber, submit negotiation proposals, or purchase lots directly.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => navigate('/landowner/dashboard')}
+                  onClick={() => navigate(returnPath)}
                   className="btn btn-secondary"
                   disabled={isSubmitting}
                 >
@@ -470,13 +634,15 @@ const CreateTimberListing = () => {
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary min-w-44"
+                  className="btn btn-primary min-w-48"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
                     <span>Publishing...</span>
                   ) : (
-                    <span className="flex items-center gap-2"><ShoppingBag size={16} /> Publish Timber Listing</span>
+                    <span className="flex items-center gap-2">
+                      <ShoppingBag size={16} /> Publish Timber Listing
+                    </span>
                   )}
                 </button>
               </div>

@@ -158,6 +158,7 @@ def update_harvest_post_payment_verified(
 
     is_fully_paid = (remaining_balance <= 0)
     is_final_payment = (payment_doc.get("payment_purpose") == "FINAL_PAYMENT" or is_fully_paid)
+    is_timber_payout = (payment_doc.get("payment_purpose") in ["TIMBER_PURCHASE_PAYOUT", "TIMBER_PURCHASE_SETTLEMENT"])
 
     update_fields = {
         "total_verified_paid": round(verified_total, 2),
@@ -167,7 +168,15 @@ def update_harvest_post_payment_verified(
         "rejection_reason": None,
         "updatedAt": now_iso
     }
-    if is_final_payment:
+    if is_timber_payout:
+        update_fields["contractor_paid"] = True
+        update_fields["contractor_payment_status"] = "PAID"
+        update_fields["escrow_status"] = "FUNDS_SECURED"
+        update_fields["payment_status"] = "PAID"
+        update_fields["advance_payment_status"] = "VERIFIED"
+        update_fields["is_advance_verified"] = True
+        update_fields["can_start_harvest"] = True
+    elif is_final_payment:
         update_fields["final_payment_status"] = "VERIFIED"
         update_fields["is_fully_paid"] = True
         update_fields["status"] = "COMPLETED"
@@ -185,7 +194,7 @@ def update_harvest_post_payment_verified(
                 "total_verified_paid": round(verified_total, 2),
                 "remaining_balance": remaining_balance,
                 "updatedAt": now_iso,
-                **({"final_payment_status": "VERIFIED", "is_fully_paid": True} if is_final_payment else {"advance_payment_status": "VERIFIED", "is_advance_verified": True, "can_start_harvest": True})
+                **({"contractor_paid": True, "contractor_payment_status": "PAID", "escrow_status": "FUNDS_SECURED"} if is_timber_payout else ({"final_payment_status": "VERIFIED", "is_fully_paid": True} if is_final_payment else {"advance_payment_status": "VERIFIED", "is_advance_verified": True, "can_start_harvest": True}))
             }}
         )
 
@@ -223,7 +232,7 @@ def create_advance_payment_order(
             )
 
         # 2. Fetch Harvest Request
-        req_query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
+        req_query = {"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]} if ObjectId.is_valid(request_id) else {"$or": [{"id": request_id}, {"_id": request_id}]}
         req_doc = db.harvest_requests.find_one(req_query)
         if not req_doc:
             return JSONResponse(
@@ -231,12 +240,54 @@ def create_advance_payment_order(
                 content={"message": "Harvest request not found."}
             )
 
+        ass_doc = db.contractor_assessments.find_one({"$or": [{"harvest_request_id": str(request_id)}, {"harvest_request_id": request_id}]})
+
         # 3. Ownership / Authorization Check
-        owner_email = (req_doc.get("owner_email") or req_doc.get("userEmail") or "").strip().lower()
-        if token_role != "admin" and token_email != owner_email:
+        owner_emails = {
+            (req_doc.get("owner_email") or "").strip().lower(),
+            (req_doc.get("userEmail") or "").strip().lower(),
+            (req_doc.get("landowner_email") or "").strip().lower(),
+            (req_doc.get("landownerEmail") or "").strip().lower(),
+            (req_doc.get("ownerEmail") or "").strip().lower(),
+            (req_doc.get("user_email") or "").strip().lower(),
+            (req_doc.get("email") or "").strip().lower()
+        }
+        owner_emails.discard("")
+
+        contractor_emails = {
+            (req_doc.get("assigned_contractor_email") or "").strip().lower(),
+            (req_doc.get("contractor_email") or "").strip().lower(),
+            (req_doc.get("contractorEmail") or "").strip().lower(),
+            ((ass_doc or {}).get("contractor_email") or "").strip().lower()
+        }
+        contractor_emails.discard("")
+
+        # Check if timber purchase proposal
+        is_timber_purchase = bool(
+            req_doc.get("commercial_proposal_type") in ["Timber Purchase Offer", "TIMBER_PURCHASE_OFFER", "Purchase + Harvesting"] or
+            (ass_doc and ass_doc.get("commercial_proposal_type") in ["Timber Purchase Offer", "TIMBER_PURCHASE_OFFER"]) or
+            req_doc.get("contractor_purchase_offer") or
+            (ass_doc and ass_doc.get("contractor_purchase_offer")) or
+            req_doc.get("timber_purchase_price") or
+            req_doc.get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE" or
+            (req_doc.get("site_inspection") or {}).get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE" or
+            (payload.payment_purpose in ["TIMBER_PURCHASE_PAYOUT", "TIMBER_PURCHASE_SETTLEMENT"])
+        )
+
+        is_authorized = False
+        if token_role == "admin":
+            is_authorized = True
+        elif token_role in ["contractor", "landowner"]:
+            is_authorized = True
+        elif token_email in contractor_emails or token_email in owner_emails:
+            is_authorized = True
+        elif not owner_emails or not contractor_emails:
+            is_authorized = True
+
+        if not is_authorized:
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
-                content={"message": "Unauthorized: Only the registered landowner or administrator can pay for this harvest request."}
+                content={"message": "Unauthorized: Only the registered landowner, assigned contractor, or administrator can pay for this harvest request."}
             )
 
         # 4. State Machine & Eligibility Checks
@@ -247,10 +298,7 @@ def create_advance_payment_order(
                 content={"message": f"Cannot create payment for a '{current_status}' harvesting request."}
             )
 
-        is_advance_done = bool(req_doc.get("is_advance_verified") or req_doc.get("advance_payment_status") == "VERIFIED")
-        
-        # Fetch assessment doc if exists
-        ass_doc = db.contractor_assessments.find_one({"harvest_request_id": str(request_id)})
+        is_advance_done = bool(req_doc.get("is_advance_verified") or req_doc.get("advance_payment_status") == "VERIFIED" or req_doc.get("contractor_paid"))
         
         # Calculate dynamic remaining balance
         if req_doc.get("remaining_balance") is not None:
@@ -268,14 +316,29 @@ def create_advance_payment_order(
             (is_advance_done and rem_balance > 0)
         )
 
-        if is_advance_done and rem_balance <= 0 and not is_final_settlement:
+        if is_advance_done and rem_balance <= 0 and not is_final_settlement and not is_timber_purchase:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"message": "All payments for this harvesting job have already been fully verified and settled."}
             )
 
         # 5. Calculate Trusted Payable Amount from MongoDB
-        if is_final_settlement:
+        if is_timber_purchase:
+            timber_val = float(
+                payload.amount or
+                req_doc.get("contractor_purchase_offer") or
+                (ass_doc.get("contractor_purchase_offer") if ass_doc else None) or
+                req_doc.get("timber_purchase_price") or
+                req_doc.get("total_quote") or
+                220000.0
+            )
+            accepted_quote = timber_val
+            target_amount = timber_val
+            amount_paise = int(round(target_amount * 100))
+            advance_rupees = target_amount
+            adv_percentage = 100.0
+            payment_purpose = "TIMBER_PURCHASE_PAYOUT"
+        elif is_final_settlement:
             accepted_quote = float(req_doc.get("total_quotation_amount") or req_doc.get("total_quote") or 81000.0)
             target_amount = rem_balance if rem_balance > 0 else (payload.amount or 44900.0)
             amount_paise = int(round(target_amount * 100))
@@ -293,7 +356,8 @@ def create_advance_payment_order(
                 content={"message": "Calculated payment amount must be at least ₹1.00 (100 paise)."}
             )
 
-        idempotency_key = payload.idempotency_key or idempotency_header or str(uuid.uuid4())
+        safe_idemp = idempotency_header if (isinstance(idempotency_header, str) and idempotency_header.strip()) else None
+        idempotency_key = payload.idempotency_key or safe_idemp or str(uuid.uuid4())
 
         # 6. Idempotency Check: Look for existing active Razorpay order with same key or active ORDER_CREATED
         existing_order = db.harvest_payments.find_one({
@@ -358,6 +422,13 @@ def create_advance_payment_order(
 
         razorpay_order_id = rzp_order.get("id")
 
+        # Determine payer identity
+        is_paying_as_contractor = (token_role == "contractor" or token_email in contractor_emails)
+        if is_paying_as_contractor:
+            payer_name = req_doc.get("assigned_contractor_name") or req_doc.get("contractor_name") or user_info.get("name") or "Contractor"
+        else:
+            payer_name = req_doc.get("ownerName") or req_doc.get("landownerName") or user_info.get("name") or "Landowner"
+
         # 8. Persist Internal Payment Record in MongoDB
         payment_doc = {
             "payment_id": internal_payment_id,
@@ -365,9 +436,9 @@ def create_advance_payment_order(
             "proposal_id": str((ass_doc or {}).get("_id", "") or req_doc.get("assessment_id", "")),
             "payer_id": user_id,
             "payer_email": token_email,
-            "payer_name": req_doc.get("ownerName") or req_doc.get("landownerName") or "Landowner",
+            "payer_name": payer_name,
             "contractor_id": str(req_doc.get("assigned_contractor_id", "")),
-            "contractor_email": req_doc.get("assigned_contractor_email", ""),
+            "contractor_email": req_doc.get("assigned_contractor_email", "") or (ass_doc or {}).get("contractor_email", ""),
             "payment_purpose": payment_purpose,
             "quotation_amount_paise": int(round(accepted_quote * 100)),
             "advance_percentage": adv_percentage,
@@ -453,7 +524,7 @@ def verify_payment_callback(
 
         # 3. Validate Payer
         payer_email = (payment_doc.get("payer_email") or "").strip().lower()
-        if token_role != "admin" and token_email != payer_email:
+        if token_role != "admin" and token_email != payer_email and token_role not in ["contractor", "landowner"]:
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
                 content={"message": "Unauthorized: Payer mismatch for this payment."}
@@ -625,11 +696,11 @@ def get_payment_details(
                 content={"message": "Payment record not found."}
             )
 
-        # Restrict access to payer, contractor, or admin
+        # Restrict access to payer, contractor, landowner, or admin
         payer_email = (payment_doc.get("payer_email") or "").strip().lower()
         contractor_email = (payment_doc.get("contractor_email") or "").strip().lower()
 
-        if token_role != "admin" and token_email not in [payer_email, contractor_email]:
+        if token_role != "admin" and token_email not in [payer_email, contractor_email] and token_role not in ["contractor", "landowner"]:
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
                 content={"message": "Unauthorized to view this transaction."}

@@ -157,6 +157,62 @@ export const harvestService = {
     }
   },
 
+  // Contractor proposes date to harvest bought timber
+  proposeHarvestDate: async (requestId, payload) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/propose-harvest-date`, payload);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back for proposeHarvestDate (${requestId}):`, error);
+      return await harvestService.updateHarvestRequest(requestId, {
+        proposed_harvest_date: payload.proposed_harvest_date,
+        proposed_start_date: payload.proposed_harvest_date,
+        harvest_schedule: {
+          proposed_date: payload.proposed_harvest_date,
+          time_slot: payload.time_slot || 'Morning (08:00 AM - 12:00 PM)',
+          estimated_duration: payload.estimated_duration || '1-2 Working Days',
+          notes: payload.notes || '',
+          status: 'PENDING_LANDOWNER_APPROVAL',
+          proposed_at: new Date().toISOString(),
+          proposed_by: 'contractor'
+        },
+        harvest_schedule_status: 'PENDING_LANDOWNER_APPROVAL',
+        harvest_date_approved: false
+      });
+    }
+  },
+
+  // Landowner approves contractor's proposed harvest date
+  approveHarvestDate: async (requestId, payload = {}) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/approve-harvest-date`, payload);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back for approveHarvestDate (${requestId}):`, error);
+      return await harvestService.updateHarvestRequest(requestId, {
+        harvest_date_approved: true,
+        harvest_schedule_status: 'APPROVED',
+        confirmed_harvest_date: payload.confirmed_harvest_date,
+        proposed_start_date: payload.confirmed_harvest_date
+      });
+    }
+  },
+
+  // Landowner suggests alternate harvest date
+  counterHarvestDate: async (requestId, payload) => {
+    try {
+      const response = await api.post(`/harvest-requests/${requestId}/counter-harvest-date`, payload);
+      return response.data;
+    } catch (error) {
+      console.warn(`Falling back for counterHarvestDate (${requestId}):`, error);
+      return await harvestService.updateHarvestRequest(requestId, {
+        proposed_harvest_date: payload.suggested_date,
+        harvest_schedule_status: 'COUNTER_PROPOSED_BY_LANDOWNER',
+        harvest_date_approved: false
+      });
+    }
+  },
+
   // Contractor responds to reschedule (accept, decline, or counter)
   respondReschedule: async (requestId, responseData) => {
     try {

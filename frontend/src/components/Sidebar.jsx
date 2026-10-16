@@ -20,7 +20,8 @@ import {
   FileText,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  Handshake
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -146,12 +147,14 @@ const Sidebar = () => {
       { path: '/contractor/dashboard', label: 'Contractor Hub', icon: LayoutDashboard },
       { path: '/contractor/assigned-jobs', label: 'Assigned Jobs', icon: Axe },
       { path: '/contractor/harvest-operations', label: 'Harvest Operations', icon: Truck },
+      { path: '/contractor/marketplace', label: 'Timber Marketplace', icon: ShoppingBag },
       { path: '/contractor/equipment', label: 'Fleet & Equipment', icon: Truck },
       { path: '/contractor/payments', label: 'Payment Details', icon: CreditCard },
     ],
     buyer: [
-      { path: '/buyer/dashboard', label: 'Procurement Hub', icon: ShoppingBag },
+      { path: '/buyer/dashboard', label: 'Procurement Hub', icon: LayoutDashboard },
       { path: '/buyer/marketplace', label: 'Timber Marketplace', icon: ShoppingBag },
+      { path: '/buyer/negotiations', label: 'My Negotiations', icon: Handshake },
       { path: '/buyer/orders', label: 'Purchase Orders', icon: FileText },
       { path: '/buyer/analytics', label: 'Market Trends', icon: TrendingUp },
     ]

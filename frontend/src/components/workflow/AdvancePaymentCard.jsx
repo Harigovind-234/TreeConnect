@@ -22,7 +22,11 @@ import {
   Camera,
   Truck,
   Sparkles,
-  Award
+  Award,
+  CalendarCheck,
+  CalendarClock,
+  TreePine,
+  Send
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatINR } from '../../utils/timberCalculations';
@@ -94,12 +98,16 @@ const AdvancePaymentCard = ({
   onRejectPayment,
   onStartHarvest,
   onCompleteHarvest,
-  onOpenStages
+  onOpenStages,
+  onProposeHarvestDate
 }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [copiedField, setCopiedField] = useState(null);
   const [internalPaymentModal, setInternalPaymentModal] = useState(null);
+  const [showHarvestDateModal, setShowHarvestDateModal] = useState(false);
+  const [harvestDateInput, setHarvestDateInput] = useState('');
+  const [harvestDateNote, setHarvestDateNote] = useState('');
 
   const handleTriggerPayment = (opts = {}) => {
     if (onRecordPayment) {
@@ -155,6 +163,27 @@ const AdvancePaymentCard = ({
 
   const latestPayment = request?.latest_payment || request?.assessment?.latest_payment || (Array.isArray(request?.payments) && request.payments.length > 0 ? (request.payments[0] || request.payments[request.payments.length - 1]) : null);
   const paymentsList = Array.isArray(request?.payments) ? request.payments : [];
+
+  const isTimberPurchase = Boolean(
+    request?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    ass?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    Boolean(request?.contractor_purchase_offer) ||
+    Boolean(ass?.contractor_purchase_offer) ||
+    request?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE'
+  );
+  const timberPurchaseAmount = Number(
+    request?.contractor_purchase_offer ||
+    ass?.contractor_purchase_offer ||
+    acceptedQuotation ||
+    220000
+  );
+  const isTimberPaid = Boolean(
+    request?.contractor_paid ||
+    request?.timber_payout_settled ||
+    request?.is_advance_verified ||
+    paymentStatus === 'VERIFIED' ||
+    paymentStatus === 'PAID'
+  );
 
   const isFullyPaid = Boolean(
     request?.is_fully_paid ||
@@ -243,18 +272,58 @@ const AdvancePaymentCard = ({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  // Harvest date proposal state from request
+  const proposedHarvestDate = request?.proposed_harvest_date || request?.assessment?.proposed_harvest_date;
+  const harvestDateApproved = Boolean(request?.harvest_date_approved || request?.assessment?.harvest_date_approved);
+  const harvestDateApprovedDate = request?.harvest_date_approved_at || request?.assessment?.harvest_date_approved_at;
+  const harvestDateProposedAt = request?.harvest_date_proposed_at || request?.assessment?.harvest_date_proposed_at;
+
+  // For timber purchase: payment is gated behind harvest date approval
+  const needsHarvestDateApproval = isTimberPurchase && !harvestDateApproved;
+  const canProceedToPayment = !isTimberPurchase || harvestDateApproved;
+
+  const handleProposeDateSubmit = (e) => {
+    e.preventDefault();
+    if (!harvestDateInput) return;
+    const dateData = {
+      proposed_harvest_date: harvestDateInput,
+      harvest_date_note: harvestDateNote,
+      harvest_date_proposed_at: new Date().toISOString()
+    };
+    if (onProposeHarvestDate) {
+      onProposeHarvestDate(dateData);
+    } else {
+      // Local update fallback
+      const stored = localStorage.getItem('treeconnect_harvest_requests');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          const reqId = request?.id || request?._id;
+          const updated = parsed.map(r => {
+            if ((r.id || r._id) === reqId) return { ...r, ...dateData };
+            return r;
+          });
+          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+        } catch (e) {}
+      }
+    }
+    setShowHarvestDateModal(false);
+  };
+
   return (
     <div className={`apc-card ${badgeInfo.cardModifier}`}>
       {/* SECTION HEADER */}
       <div className="apc-header">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className="apc-icon-badge">
-            <CreditCard size={20} />
+            {isTimberPurchase ? <TreePine size={20} /> : <CreditCard size={20} />}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
               <h4 className="apc-title">
-                Advance Payment &amp; Financial Mobilization
+                {isTimberPurchase
+                  ? 'Tree Purchase & Timber Payment'
+                  : 'Advance Payment & Financial Mobilization'}
               </h4>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-black flex items-center gap-1.5 shadow-sm ${badgeInfo.pillClass}`}>
                 <StatusIcon size={12} className={paymentStatus === 'ADVANCE_REQUESTED' || isFinalPending ? 'animate-pulse' : ''} />
@@ -262,7 +331,9 @@ const AdvancePaymentCard = ({
               </span>
             </div>
             <p className="apc-subtitle">
-              Pre-operation mobilization fund required before tree felling and logistics commence.
+              {isTimberPurchase
+                ? 'Contractor purchases standing timber from the landowner — full payment must be deposited before felling begins.'
+                : 'Pre-operation mobilization fund required before tree felling and logistics commence.'}
             </p>
           </div>
         </div>
@@ -337,53 +408,107 @@ const AdvancePaymentCard = ({
           </span>
         </div>
 
-        <div className="apc-metric-cell">
-          <span className="apc-metric-label">
-            Advance Ratio
-          </span>
-          <span className="apc-metric-val text-emerald-400">
-            {advReq ? `${advancePercentage}%` : '30%'}
-          </span>
-          <span className="apc-metric-hint">
-            Mobilization Share
-          </span>
-        </div>
+        {isTimberPurchase ? (
+          <>
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Standing Timber Value
+              </span>
+              <span className="apc-metric-val text-white">
+                {formatINR(timberPurchaseAmount)}
+              </span>
+              <span className="apc-metric-hint">
+                Commercial Assessment
+              </span>
+            </div>
 
-        <div className="apc-metric-cell">
-          <span className="apc-metric-label">
-            Advance Amount
-          </span>
-          <span className="apc-metric-val text-emerald-300">
-            {advReq ? formatINR(advanceAmount) : '—'}
-          </span>
-          <span className="apc-metric-hint">
-            Upfront Payable
-          </span>
-        </div>
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Disbursement Ratio
+              </span>
+              <span className="apc-metric-val text-emerald-400">
+                100%
+              </span>
+              <span className="apc-metric-hint">
+                Escrow Direct Payout
+              </span>
+            </div>
 
-        <div className="apc-metric-cell">
-          <span className="apc-metric-label">
-            Verified Paid
-          </span>
-          <span className="apc-metric-val text-teal-300">
-            {formatINR(verifiedPaid)}
-          </span>
-          <span className="apc-metric-hint">
-            Credited Amount
-          </span>
-        </div>
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Payout to Landowner
+              </span>
+              <span className="apc-metric-val text-emerald-300">
+                {formatINR(timberPurchaseAmount)}
+              </span>
+              <span className="apc-metric-hint">
+                Guaranteed by Escrow
+              </span>
+            </div>
 
-        <div className="apc-metric-cell">
-          <span className="apc-metric-label">
-            Remaining Balance
-          </span>
-          <span className="apc-metric-val text-amber-300">
-            {formatINR(remainingBalance)}
-          </span>
-          <span className="apc-metric-hint">
-            Due Post-Harvest
-          </span>
-        </div>
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Settlement Status
+              </span>
+              <span className={`apc-metric-val ${isTimberPaid ? 'text-teal-300' : 'text-amber-300'}`}>
+                {isTimberPaid ? '✓ Disbursed' : '⏳ Awaiting Deposit'}
+              </span>
+              <span className="apc-metric-hint">
+                {isTimberPaid ? 'Secured in Escrow' : 'Contractor Action'}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Advance Ratio
+              </span>
+              <span className="apc-metric-val text-emerald-400">
+                {advReq ? `${advancePercentage}%` : '30%'}
+              </span>
+              <span className="apc-metric-hint">
+                Mobilization Share
+              </span>
+            </div>
+
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Advance Amount
+              </span>
+              <span className="apc-metric-val text-emerald-300">
+                {advReq ? formatINR(advanceAmount) : '—'}
+              </span>
+              <span className="apc-metric-hint">
+                Upfront Payable
+              </span>
+            </div>
+
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Verified Paid
+              </span>
+              <span className="apc-metric-val text-teal-300">
+                {formatINR(verifiedPaid)}
+              </span>
+              <span className="apc-metric-hint">
+                Credited Amount
+              </span>
+            </div>
+
+            <div className="apc-metric-cell">
+              <span className="apc-metric-label">
+                Remaining Balance
+              </span>
+              <span className="apc-metric-val text-amber-300">
+                {formatINR(remainingBalance)}
+              </span>
+              <span className="apc-metric-hint">
+                Due Post-Harvest
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* CONTRACTOR SETTLEMENT ACCOUNT & TRANSFER CHANNELS */}
@@ -515,8 +640,8 @@ const AdvancePaymentCard = ({
             </div>
           )}
 
-          {/* PROMINENT ACTION FOR LANDOWNER TO PAY ADVANCE */}
-          {isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && !isCompleted && (
+          {/* PROMINENT ACTION FOR LANDOWNER TO PAY ADVANCE (ONLY FOR HARVEST SERVICE) */}
+          {!isTimberPurchase && isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && !isCompleted && (
             <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 via-teal-950/40 to-emerald-950/60 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
               <div>
                 <span className="text-xs text-slate-200 leading-relaxed block">
@@ -535,6 +660,281 @@ const AdvancePaymentCard = ({
                   <CreditCard size={14} />
                   <span>Pay {formatINR(advanceAmount)} with Razorpay</span>
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* HARVEST DATE PROPOSAL GATE (TIMBER PURCHASE ONLY) */}
+          {isTimberPurchase && !isCompleted && (
+            <div className={`p-4 rounded-xl border flex flex-col gap-3 shadow-lg ${
+              harvestDateApproved
+                ? 'bg-emerald-950/50 border-emerald-500/50'
+                : proposedHarvestDate
+                  ? 'bg-amber-950/40 border-amber-500/40'
+                  : 'bg-slate-900/60 border-slate-600/50'
+            }`}>
+              <div className="flex items-center gap-3 flex-wrap justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    harvestDateApproved ? 'bg-emerald-500/20 border border-emerald-500/40' : proposedHarvestDate ? 'bg-amber-500/20 border border-amber-500/40' : 'bg-slate-700/50 border border-slate-600/40'
+                  }`}>
+                    {harvestDateApproved
+                      ? <CalendarCheck size={16} className="text-emerald-400" />
+                      : proposedHarvestDate
+                        ? <CalendarClock size={16} className="text-amber-400 animate-pulse" />
+                        : <Calendar size={16} className="text-slate-400" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black text-white">
+                        Step 1: Agree Harvest Date
+                      </span>
+                      {harvestDateApproved && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                          <CheckCircle2 size={10} /> Landowner Approved
+                        </span>
+                      )}
+                      {proposedHarvestDate && !harvestDateApproved && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse">
+                          <Clock size={10} /> Awaiting Landowner Approval
+                        </span>
+                      )}
+                      {!proposedHarvestDate && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-700/50 text-slate-400 border border-slate-600/40">
+                          Required Before Payment
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {harvestDateApproved
+                        ? `Confirmed harvest date: ${formatDateDMY(proposedHarvestDate)}${harvestDateApprovedDate ? ` — Approved by landowner` : ''}`
+                        : proposedHarvestDate
+                          ? `Proposed: ${formatDateDMY(proposedHarvestDate)} — Payment unlocks once landowner approves this date`
+                          : 'Contractor must propose a harvest date for landowner approval before payment can proceed.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Contractor: propose or update date */}
+                {isContractor && !isTimberPaid && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHarvestDateInput(proposedHarvestDate || '');
+                      setHarvestDateNote('');
+                      setShowHarvestDateModal(true);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                  >
+                    <Calendar size={13} />
+                    <span>{proposedHarvestDate ? 'Change Proposed Date' : 'Propose Harvest Date'}</span>
+                  </button>
+                )}
+
+                {/* Landowner: approve or decline proposed date */}
+                {isLandowner && proposedHarvestDate && !harvestDateApproved && !isTimberPaid && (
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span className="text-xs text-amber-200 font-semibold">
+                      Proposed: <strong className="text-white font-mono">{formatDateDMY(proposedHarvestDate)}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Approve harvest date
+                        const approvalData = {
+                          harvest_date_approved: true,
+                          harvest_date_approved_at: new Date().toISOString()
+                        };
+                        const stored = localStorage.getItem('treeconnect_harvest_requests');
+                        if (stored) {
+                          try {
+                            const parsed = JSON.parse(stored);
+                            const reqId = request?.id || request?._id;
+                            const updated = parsed.map(r => {
+                              if ((r.id || r._id) === reqId) return { ...r, ...approvalData };
+                              return r;
+                            });
+                            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+                            window.location.reload();
+                          } catch (e) {}
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                    >
+                      <CheckCircle2 size={13} />
+                      <span>Approve Date</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const stored = localStorage.getItem('treeconnect_harvest_requests');
+                        if (stored) {
+                          try {
+                            const parsed = JSON.parse(stored);
+                            const reqId = request?.id || request?._id;
+                            const updated = parsed.map(r => {
+                              if ((r.id || r._id) === reqId) return { ...r, proposed_harvest_date: null, harvest_date_proposed_at: null };
+                              return r;
+                            });
+                            localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+                            window.location.reload();
+                          } catch (e) {}
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900/70 border border-red-500/40 text-red-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <XCircle size={13} />
+                      <span>Suggest Another</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Lock message if date not approved */}
+              {!harvestDateApproved && !isTimberPaid && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/30 border border-slate-700/50 text-xs text-slate-400">
+                  <AlertCircle size={13} className="text-amber-400 shrink-0" />
+                  <span>
+                    <strong className="text-amber-300">Payment locked</strong> — The timber purchase payment can only proceed after the landowner approves the proposed harvest date above.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TIMBER PURCHASE: CONTRACTOR OBLIGATION TO PAY LANDOWNER */}
+          {isTimberPurchase && !isCompleted && (
+            <div className={`p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 via-teal-950/40 to-emerald-950/60 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg transition-all ${
+              canProceedToPayment ? 'border-emerald-500/40' : 'border-slate-700/40 opacity-60 pointer-events-none'
+            }`}>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-black text-white">Step 2: Pay Purchase Amount</span>
+                  {!canProceedToPayment && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700/60 text-slate-400 border border-slate-600/40 flex items-center gap-1">
+                      🔒 Locked
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-slate-200 leading-relaxed block">
+                  Full Tree Purchase Amount: <strong className="text-emerald-300 font-mono text-base font-black">{formatINR(timberPurchaseAmount)}</strong>
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {isLandowner
+                    ? (isTimberPaid
+                      ? '✓ Payout secured in TreeConnect Escrow. Authorized for felling operations.'
+                      : `Awaiting contractor ${request?.assigned_contractor_name || 'buyer'} to deposit full purchase amount before timber extraction.`)
+                    : (isTimberPaid
+                      ? '✓ Full timber purchase amount deposited and secured in Escrow.'
+                      : `You must pay ${formatINR(timberPurchaseAmount)} to landowner's escrow before starting harvest. This is the agreed tree purchase price, not an advance.`)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                {isContractor && !isTimberPaid && (
+                  <button
+                    type="button"
+                    disabled={!canProceedToPayment}
+                    onClick={() => canProceedToPayment && handleTriggerPayment({ mode: 'timber_purchase', defaultAmount: timberPurchaseAmount, initialTab: 'razorpay' })}
+                    title={!canProceedToPayment ? 'Harvest date must be approved by landowner first' : `Pay ${formatINR(timberPurchaseAmount)} to landowner escrow`}
+                    className={`px-4 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg transition-all ${
+                      canProceedToPayment
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 cursor-pointer'
+                        : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <CreditCard size={14} />
+                    <span>Pay Tree Purchase ({formatINR(timberPurchaseAmount)})</span>
+                  </button>
+                )}
+                {isTimberPaid && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
+                    <CheckCircle2 size={14} className="text-emerald-400" />
+                    <span>Purchase Payment Secured in Escrow</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* HARVEST DATE PROPOSAL MODAL */}
+          {showHarvestDateModal && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className="bg-[#0a1a0f] border border-emerald-500/40 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+                <div className="flex items-center gap-3 border-b border-emerald-500/20 pb-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Calendar size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">Propose Harvest Date</h3>
+                    <p className="text-xs text-slate-400">Landowner will approve or suggest another date before payment unlocks</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHarvestDateModal(false)}
+                    className="ml-auto p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
+                  >
+                    <XCircle size={18} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleProposeDateSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Proposed Harvest Date <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={harvestDateInput}
+                      onChange={e => setHarvestDateInput(e.target.value)}
+                      min={new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                      required
+                      className="w-full px-3 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-sm focus:outline-none focus:border-emerald-500/70 focus:ring-1 focus:ring-emerald-500/30 transition-all"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">Select the date you plan to begin harvesting operations on the landowner's property</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                      Note to Landowner <span className="text-slate-500">(optional)</span>
+                    </label>
+                    <textarea
+                      value={harvestDateNote}
+                      onChange={e => setHarvestDateNote(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. Crew will arrive by 8 AM. Please ensure property gate is accessible."
+                      className="w-full px-3 py-2.5 rounded-xl bg-slate-900/80 border border-slate-700/80 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-emerald-500/70 focus:ring-1 focus:ring-emerald-500/30 transition-all resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-950/30 border border-amber-500/30">
+                    <AlertCircle size={14} className="text-amber-400 shrink-0" />
+                    <p className="text-[11px] text-amber-200 leading-relaxed">
+                      After you submit this date, the landowner must approve it before the tree purchase payment is unlocked.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-emerald-500/15">
+                    <button
+                      type="button"
+                      onClick={() => setShowHarvestDateModal(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 text-xs font-semibold hover:bg-slate-800 cursor-pointer transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!harvestDateInput}
+                      className={`px-5 py-2 rounded-xl font-black text-xs flex items-center gap-2 transition-all shadow-lg ${
+                        harvestDateInput
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 cursor-pointer'
+                          : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <Send size={13} />
+                      <span>Send to Landowner for Approval</span>
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
@@ -966,7 +1366,7 @@ const AdvancePaymentCard = ({
                     </p>
                   </div>
 
-                  {isLandowner && (
+                  {!isTimberPurchase && isLandowner && (
                     <div className="shrink-0 flex items-center gap-2.5 flex-wrap">
                       <button
                         type="button"

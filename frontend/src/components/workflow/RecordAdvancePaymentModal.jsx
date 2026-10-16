@@ -16,6 +16,7 @@ import {
 import { formatINR } from '../../utils/timberCalculations';
 import { useAuth } from '../../context/AuthContext';
 import AdvanceMobilizationPayment from './AdvanceMobilizationPayment';
+import './RecordAdvancePaymentModal.css';
 import './DigitalAgreementModal.css';
 
 const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSuccess, mode, defaultAmount, initialTab = 'razorpay' }) => {
@@ -54,14 +55,32 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
       : Math.max(0, acceptedQuotation - verifiedPaid)
   );
 
+  const isTimberPurchase = Boolean(
+    mode === 'timber_purchase' ||
+    request?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    request?.assessment?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    Boolean(request?.contractor_purchase_offer) ||
+    Boolean(request?.assessment?.contractor_purchase_offer) ||
+    request?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE'
+  );
+
+  const purchaseOffer = Number(
+    request?.contractor_purchase_offer ||
+    request?.assessment?.contractor_purchase_offer ||
+    defaultAmount ||
+    220000
+  );
+
   const isFinal = Boolean(
     mode === 'final' ||
     (isAdvanceVerified && remainingBalance > 0)
   );
 
-  const requestedAmount = isFinal
-    ? Number(defaultAmount || remainingBalance || 44900)
-    : Number(defaultAmount || advanceAmount || 28215);
+  const requestedAmount = isTimberPurchase
+    ? Number(defaultAmount || purchaseOffer || 220000)
+    : isFinal
+      ? Number(defaultAmount || remainingBalance || 44900)
+      : Number(defaultAmount || advanceAmount || 28215);
 
   const upiId = advReq?.upi_id ||
     advReq?.payment_instructions?.match(/UPI\s*(?:ID)?\s*:\s*([^\n\r,;/]+)/i)?.[1]?.trim() ||
@@ -173,80 +192,82 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
   };
 
   return (
-    <div className="digital-agr-overlay">
-      <div className="digital-agr-modal max-w-2xl">
+    <div className="rapm-overlay" onClick={onClose}>
+      <div className="rapm-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="digital-agr-header">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-              <CreditCard size={20} />
+        <div className="rapm-header">
+          <div className="rapm-header-left">
+            <div className="rapm-icon-badge">
+              <CreditCard size={22} />
             </div>
             <div>
-              <h3 className="text-lg font-black text-white">
-                {isFinal ? 'Final Contract Settlement Payment' : 'Mobilization Advance Payment'}
+              <h3 className="rapm-title">
+                {isTimberPurchase
+                  ? 'Timber Purchase Settlement & Payout'
+                  : (isFinal ? 'Final Contract Settlement Payment' : 'Mobilization Advance Payment')}
               </h3>
-              <p className="text-xs text-slate-300">
-                Contractor: <strong className="text-white font-semibold">{request?.assigned_contractor_name || 'Assigned Contractor'}</strong>
-                {isFinal && <span className="text-emerald-400 font-bold ml-2">• Balance Due: {formatINR(remainingBalance)}</span>}
+              <p className="rapm-subtitle">
+                {isTimberPurchase ? (
+                  <>
+                    Payee (Landowner): <strong className="text-white font-semibold">{request?.userName || request?.ownerName || request?.landowner_name || request?.landownerName || 'Registered Landowner'}</strong>
+                    <span className="text-emerald-400 font-bold ml-2">• Agreed Purchase Price: {formatINR(requestedAmount)}</span>
+                  </>
+                ) : (
+                  <>
+                    Contractor: <strong className="text-white font-semibold">{request?.assigned_contractor_name || 'Assigned Contractor'}</strong>
+                    {isFinal && <span className="text-emerald-400 font-bold ml-2">• Balance Due: {formatINR(remainingBalance)}</span>}
+                  </>
+                )}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="rapm-close-btn"
+            title="Close modal"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
         {/* Tab Switcher */}
-        <div className="px-6 pt-4 pb-2 border-b border-emerald-500/20 flex items-center gap-2">
+        <div className="rapm-tabs-bar">
           <button
             type="button"
             onClick={() => setActiveTab('razorpay')}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'razorpay'
-                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
-                : 'bg-black/40 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
+            className={`rapm-tab-btn ${activeTab === 'razorpay' ? 'rapm-tab-btn-active' : 'rapm-tab-btn-inactive'}`}
           >
             <Zap size={14} />
-            <span>Pay with Razorpay (Instant)</span>
+            <span>{isTimberPurchase ? 'Razorpay Escrow & Digital Payout' : 'Pay with Razorpay (Instant)'}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('manual')}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'manual'
-                ? 'bg-slate-800 text-white border border-slate-700'
-                : 'bg-black/40 text-slate-400 hover:text-slate-200 border border-slate-800'
-            }`}
+            className={`rapm-tab-btn ${activeTab === 'manual' ? 'rapm-tab-btn-active' : 'rapm-tab-btn-inactive'}`}
           >
             <Building2 size={14} />
-            <span>Manual Transfer (Fallback)</span>
+            <span>{isTimberPurchase ? 'Direct Bank Transfer / Record Receipt' : 'Manual Transfer (Fallback)'}</span>
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="rapm-body">
           {activeTab === 'razorpay' ? (
             /* ================= RAZORPAY ONLINE CHECKOUT FLOW ================= */
-            <div className="space-y-4">
-              <AdvanceMobilizationPayment
-                request={request}
-                user={user}
-                mode={isFinal ? 'final' : 'advance'}
-                isFinal={isFinal}
-                defaultAmount={requestedAmount}
-                onPaymentSuccess={handleOnlineSuccess}
-                onPaymentError={(err) => setErrorMsg(err.message || 'Payment failed')}
-              />
-            </div>
+            <AdvanceMobilizationPayment
+              request={request}
+              user={user}
+              mode={isTimberPurchase ? 'timber_purchase' : (isFinal ? 'final' : 'advance')}
+              isFinal={isFinal}
+              defaultAmount={requestedAmount}
+              onPaymentSuccess={handleOnlineSuccess}
+              onPaymentError={(err) => setErrorMsg(err.message || 'Payment failed')}
+            />
           ) : (
-            /* ================= MANUAL TRANSFER LEGACY FALLBACK FLOW ================= */
-            <form onSubmit={handleManualSubmit} className="space-y-5">
+            /* ================= MANUAL TRANSFER / DIRECT WIRE FLOW ================= */
+            <form onSubmit={handleManualSubmit} className="rapm-form">
               {errorMsg && (
                 <div className="p-3.5 rounded-xl bg-red-950/80 border border-red-500/40 text-red-200 text-xs flex items-center gap-2.5">
                   <AlertCircle size={16} className="text-red-400 shrink-0" />
@@ -255,48 +276,48 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
               )}
 
               {/* Payment Request Context Card */}
-              <div className="p-4 rounded-2xl bg-[#030e06] border border-emerald-500/30 space-y-3">
-                <div className="flex items-center justify-between pb-2.5 border-b border-emerald-500/20">
+              <div className="rapm-summary-card">
+                <div className="rapm-ref-row">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Accepted Job Quotation
+                    <span className="rapm-ref-label">
+                      {isTimberPurchase ? 'Agreed Timber Valuation' : 'Accepted Job Quotation'}
                     </span>
-                    <strong className="text-sm font-bold text-slate-200 font-mono">
-                      {formatINR(acceptedQuotation)}
+                    <strong className="rapm-ref-val">
+                      {formatINR(isTimberPurchase ? requestedAmount : acceptedQuotation)}
                     </strong>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
-                      {isFinal ? 'Remaining Balance Due' : `Agreed Advance (${advReq?.advance_percentage || 27}%)`}
+                    <span className="rapm-ref-label">
+                      {isTimberPurchase ? 'Purchase Payout Due to Landowner' : (isFinal ? 'Remaining Balance Due' : `Agreed Advance (${advReq?.advance_percentage || 27}%)`)}
                     </span>
-                    <strong className="text-lg font-black text-emerald-400 font-mono">
+                    <strong className="rapm-ref-val text-emerald-400">
                       {formatINR(requestedAmount)}
                     </strong>
                   </div>
                 </div>
 
-                {/* Contractor Payment Transfer Details with Copy Buttons */}
+                {/* Account Details with Copy Buttons */}
                 <div className="space-y-2 pt-1">
-                  <span className="text-[10.5px] font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
-                    <Building2 size={13} /> Contractor Beneficiary Account Details:
+                  <span className="rapm-label text-emerald-400 flex items-center gap-1.5">
+                    <Building2 size={13} /> {isTimberPurchase ? 'Escrow Deposit / Landowner Beneficiary Transfer Details:' : 'Contractor Beneficiary Account Details:'}
                   </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="rapm-accounts-grid">
                     {/* UPI Box */}
-                    <div className="p-2.5 rounded-xl bg-[#07190d] border border-emerald-500/25 space-y-1">
-                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <div className="rapm-account-box">
+                      <div className="rapm-account-top">
                         <span className="font-bold text-emerald-300 flex items-center gap-1">
                           <QrCode size={11} /> UPI ID
                         </span>
                         <span>App Transfer</span>
                       </div>
-                      <div className="flex items-center justify-between gap-1 p-1.5 rounded bg-black/40 border border-emerald-500/20">
+                      <div className="rapm-account-value-row">
                         <span className="font-mono text-xs font-bold text-emerald-200 select-all truncate">
                           {upiId}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleCopy(upiId, 'upi')}
-                          className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 shrink-0 transition-all cursor-pointer"
+                          className="rapm-copy-btn"
                         >
                           {copiedField === 'upi' ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                           <span>{copiedField === 'upi' ? 'Copied' : 'Copy'}</span>
@@ -305,21 +326,21 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
                     </div>
 
                     {/* Bank Account Box */}
-                    <div className="p-2.5 rounded-xl bg-[#07190d] border border-emerald-500/25 space-y-1">
-                      <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <div className="rapm-account-box">
+                      <div className="rapm-account-top">
                         <span className="font-bold text-emerald-300 flex items-center gap-1">
                           <Building2 size={11} /> Bank A/C
                         </span>
                         <span className="truncate">{bankName}</span>
                       </div>
-                      <div className="flex items-center justify-between gap-1 p-1.5 rounded bg-black/40 border border-emerald-500/20 text-[11px]">
-                        <span className="font-mono text-white font-bold truncate">
+                      <div className="rapm-account-value-row">
+                        <span className="font-mono text-white text-xs font-bold truncate">
                           A/C: {acNo} • {ifscCode}
                         </span>
                         <button
                           type="button"
                           onClick={() => handleCopy(acNo, 'ac')}
-                          className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 shrink-0 transition-all cursor-pointer"
+                          className="rapm-copy-btn"
                         >
                           {copiedField === 'ac' ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
                           <span>{copiedField === 'ac' ? 'Copied' : 'Copy'}</span>
@@ -331,27 +352,27 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
               </div>
 
               {/* Form Fields */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                      Payment Method
+              <div className="rapm-form-section">
+                <div className="rapm-form-grid">
+                  <div className="rapm-field">
+                    <label className="rapm-label">
+                      Payment / Disbursement Method
                     </label>
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07190d] border border-emerald-500/30 text-white text-xs font-bold focus:outline-none focus:border-emerald-400"
+                      className="rapm-select"
                     >
                       <option value="UPI">UPI Transfer (GPay / PhonePe / Paytm / BHIM)</option>
                       <option value="Bank Transfer (NEFT/RTGS/IMPS)">Bank Transfer (NEFT / RTGS / IMPS)</option>
-                      <option value="Cash">Cash Handover</option>
                       <option value="Cheque">Bank Cheque / DD</option>
+                      <option value="Cash">Cash Settlement Handover</option>
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                      Amount Paid (₹)
+                  <div className="rapm-field">
+                    <label className="rapm-label">
+                      {isTimberPurchase ? 'Settlement Amount (₹)' : 'Amount Paid (₹)'}
                     </label>
                     <input
                       type="number"
@@ -359,49 +380,49 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
                       value={amountPaid}
                       onChange={(e) => setAmountPaid(Number(e.target.value) || 0)}
                       required
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07190d] border border-emerald-500/30 text-white font-mono text-sm font-bold focus:outline-none focus:border-emerald-400"
+                      className="rapm-input rapm-input-mono text-emerald-300 font-bold"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                <div className="rapm-form-grid">
+                  <div className="rapm-field">
+                    <label className="rapm-label">
                       Transaction / UTR Reference ID *
                     </label>
                     <input
                       type="text"
                       value={transactionRef}
                       onChange={(e) => setTransactionRef(e.target.value)}
-                      placeholder="e.g. UPI/602938472910 or UTR102948290"
+                      placeholder="e.g. UTR102948290 or UPI/602938472910"
                       required
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07190d] border border-emerald-500/30 text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                      className="rapm-input rapm-input-mono"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <div className="rapm-field">
+                    <label className="rapm-label">
                       <Calendar size={13} className="text-emerald-400" />
-                      Date of Payment
+                      Date of Settlement
                     </label>
                     <input
                       type="date"
                       value={paymentDate}
                       onChange={(e) => setPaymentDate(e.target.value)}
                       required
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#07190d] border border-emerald-500/30 text-white text-xs focus:outline-none focus:border-emerald-400"
+                      className="rapm-input"
                     />
                   </div>
                 </div>
 
                 {/* Optional Receipt Upload */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <div className="rapm-field">
+                  <label className="rapm-label">
                     <Upload size={13} className="text-emerald-400" />
                     Attach Bank / UPI Receipt Screenshot (Optional)
                   </label>
                   <div className="flex items-center gap-3">
-                    <label className="px-4 py-2.5 rounded-xl bg-[#07190d] hover:bg-[#0a2313] border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors shadow">
+                    <label className="rapm-file-upload-btn">
                       <Upload size={14} />
                       <span>Choose Receipt File</span>
                       <input
@@ -419,48 +440,64 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                    Notes for Contractor (Optional)
+                <div className="rapm-field">
+                  <label className="rapm-label">
+                    Verification Notes &amp; Remarks (Optional)
                   </label>
                   <input
                     type="text"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. Transferred via Google Pay from HDFC account."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#07190d] border border-emerald-500/30 text-white text-xs focus:outline-none focus:border-emerald-400"
+                    placeholder={isTimberPurchase ? "e.g. Payout received via NEFT from contractor's HDFC commercial account." : "e.g. Transferred via Google Pay from HDFC account."}
+                    className="rapm-input"
                   />
                 </div>
               </div>
 
-              {/* CRITICAL NOTICE: Explains manual verification */}
-              <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
-                <AlertCircle size={17} className="text-amber-400 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <strong className="block font-bold text-amber-300 mb-0.5">
-                    Manual Verification Required
-                  </strong>
-                  Manual transfer records must be manually reviewed and verified by the contractor before harvesting work can commence. For instant automated authorization, switch to <strong>Pay with Razorpay</strong>.
+              {/* Notice Box */}
+              {isTimberPurchase ? (
+                <div className="rapm-notice-box-emerald">
+                  <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed">
+                    <strong className="block font-bold text-emerald-300 mb-0.5">
+                      Direct Settlement Ledger Record
+                    </strong>
+                    Direct bank wire or UPI transfers are logged directly into the TreeConnect timber transaction ledger. Once confirmed with the bank UTR reference, harvesting clearance is officially recorded.
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="rapm-notice-box">
+                  <AlertCircle size={18} className="text-amber-400 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed">
+                    <strong className="block font-bold text-amber-300 mb-0.5">
+                      Manual Verification Required
+                    </strong>
+                    Manual transfer records are verified by the contractor before harvesting work can commence. For instant automated authorization, switch to <strong>Pay with Razorpay</strong>.
+                  </div>
+                </div>
+              )}
 
               {/* Action Buttons */}
-              <div className="pt-4 border-t border-emerald-500/20 flex items-center justify-end gap-3">
+              <div className="rapm-actions">
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={submitting}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                  className="rapm-cancel-btn"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+                  className="rapm-submit-btn"
                 >
                   <FileCheck size={15} />
-                  <span>{submitting ? 'Recording Payment...' : 'Submit Manual Transfer Details'}</span>
+                  <span>
+                    {submitting
+                      ? 'Recording Settlement...'
+                      : (isTimberPurchase ? 'Record Timber Sale Settlement' : 'Submit Manual Transfer Details')}
+                  </span>
                 </button>
               </div>
             </form>

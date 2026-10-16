@@ -48,6 +48,8 @@ export const useRazorpayCheckout = () => {
     user,
     payableAmount,
     isFinal,
+    isTimberPurchase,
+    paymentPurpose,
     onSuccess,
     onFailure,
     onCancel
@@ -69,9 +71,17 @@ export const useRazorpayCheckout = () => {
 
       // 2. Initialize Order from Backend
       setPaymentState(PAYMENT_STATES.CREATING_ORDER);
+      const isTimber = Boolean(
+        isTimberPurchase ||
+        paymentPurpose === 'TIMBER_PURCHASE_PAYOUT' ||
+        harvestRequest?.commercial_proposal_type === 'Timber Purchase Offer' ||
+        Boolean(harvestRequest?.contractor_purchase_offer)
+      );
+      const targetPurpose = paymentPurpose || (isTimber ? 'TIMBER_PURCHASE_PAYOUT' : (isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_MOBILIZATION'));
+
       const orderData = await paymentService.createAdvanceOrder(requestId, {
         is_final_settlement: Boolean(isFinal),
-        payment_purpose: isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_MOBILIZATION',
+        payment_purpose: targetPurpose,
         amount: payableAmount ? Number(payableAmount) : undefined
       });
       setActivePayment(orderData);

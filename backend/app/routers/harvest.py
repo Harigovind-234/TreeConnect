@@ -189,6 +189,21 @@ class RespondRescheduleRequest(BaseModel):
     confirmed_time_slot: Optional[str] = None
     contractor_note: Optional[str] = ""
 
+class ProposeHarvestDateRequest(BaseModel):
+    proposed_harvest_date: str
+    time_slot: Optional[str] = "Morning (08:00 AM - 12:00 PM)"
+    estimated_duration: Optional[str] = "1-2 Working Days"
+    notes: Optional[str] = ""
+
+class ApproveHarvestDateRequest(BaseModel):
+    notes: Optional[str] = ""
+    confirmed_date: Optional[str] = None
+
+class CounterHarvestDateRequest(BaseModel):
+    suggested_date: str
+    suggested_time_slot: Optional[str] = "Morning (08:00 AM - 12:00 PM)"
+    reason: Optional[str] = ""
+
 class ConfirmInspectionRequest(BaseModel):
     notes: Optional[str] = ""
     confirmed_by: Optional[str] = "LANDOWNER"
@@ -598,24 +613,33 @@ def get_harvest_requests(
                     req_data["status"] = "REVISION_REQUESTED"
             elif req_data.get("assessment") and isinstance(req_data.get("assessment"), dict):
                 req_data["assessment"] = serialize_doc(req_data["assessment"])
-            elif req_data.get("total_quote") or req_data.get("contractor_purchase_offer") or req_data.get("timber_purchase_price"):
+            elif req_data.get("total_quote") or req_data.get("contractor_purchase_offer") or req_data.get("timber_purchase_price") or (req_data.get("site_inspection") and req_data.get("site_inspection", {}).get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE") or req_data.get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE":
+                is_timber_sale = (
+                    req_data.get("commercial_proposal_type") == "Timber Purchase Offer" or
+                    (req_data.get("site_inspection") and req_data.get("site_inspection", {}).get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE") or
+                    req_data.get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE" or
+                    bool(req_data.get("contractor_purchase_offer"))
+                )
+                default_p_type = "Timber Purchase Offer" if is_timber_sale else "Harvesting Service Quotation"
                 req_data["assessment"] = {
                     "harvest_request_id": req_data["id"],
-                    "commercial_proposal_type": req_data.get("commercial_proposal_type") or "Harvesting Service Quotation",
+                    "commercial_proposal_type": req_data.get("commercial_proposal_type") or default_p_type,
                     "estimated_harvestable_volume": req_data.get("estimated_harvestable_volume") or req_data.get("total_estimated_volume") or 1.80,
                     "estimated_timber_value": req_data.get("estimated_timber_value") or req_data.get("approx_timber_value") or 251082,
-                    "harvesting_cost": req_data.get("harvesting_cost") or req_data.get("felling_cost") or 45000,
-                    "felling_cost": req_data.get("felling_cost") or req_data.get("harvesting_cost") or 45000,
-                    "extraction_cost": req_data.get("extraction_cost") or 30000,
-                    "transportation_cost": req_data.get("transportation_cost") or 25000,
-                    "other_cost": req_data.get("other_cost") or 10000,
-                    "total_quote": req_data.get("total_quote") or 110000,
-                    "contractor_purchase_offer": req_data.get("contractor_purchase_offer"),
+                    "harvesting_cost": req_data.get("harvesting_cost") or req_data.get("felling_cost") or (0 if is_timber_sale else 45000),
+                    "felling_cost": req_data.get("felling_cost") or req_data.get("harvesting_cost") or (0 if is_timber_sale else 45000),
+                    "extraction_cost": req_data.get("extraction_cost") or (0 if is_timber_sale else 30000),
+                    "transportation_cost": req_data.get("transportation_cost") or (0 if is_timber_sale else 25000),
+                    "other_cost": req_data.get("other_cost") or (0 if is_timber_sale else 10000),
+                    "total_quote": req_data.get("total_quote") if not is_timber_sale else None,
+                    "contractor_purchase_offer": req_data.get("contractor_purchase_offer") or (220000.0 if is_timber_sale else None),
+                    "payment_terms": req_data.get("payment_terms") or ("full payment for timber" if is_timber_sale else None),
+                    "offer_valid_until": req_data.get("offer_valid_until") or ("2026-10-20" if is_timber_sale else None),
                     "timber_purchase_price": req_data.get("timber_purchase_price"),
-                    "assigned_workers_count": req_data.get("assigned_workers_count") or req_data.get("workers_assigned") or 10,
-                    "workers_assigned": req_data.get("workers_assigned") or req_data.get("assigned_workers_count") or 10,
-                    "estimated_duration": req_data.get("estimated_duration") or "1 Working Day",
-                    "proposed_start_date": req_data.get("proposed_start_date") or "2026-10-14",
+                    "assigned_workers_count": req_data.get("assigned_workers_count") or req_data.get("workers_assigned") or (None if is_timber_sale else 10),
+                    "workers_assigned": req_data.get("workers_assigned") or req_data.get("assigned_workers_count") or (None if is_timber_sale else 10),
+                    "estimated_duration": req_data.get("estimated_duration") or (None if is_timber_sale else "1 Working Day"),
+                    "proposed_start_date": req_data.get("proposed_start_date") or (None if is_timber_sale else "2026-10-14"),
                     "notes": req_data.get("notes") or "Site inspection completed. Access road clear for heavy haulers.",
                     "status": req_data.get("status") or "ASSESSMENT_SUBMITTED"
                 }
@@ -1754,6 +1778,9 @@ def submit_contractor_assessment(
             "notes": payload.notes or "",
             "landowner_feedback": "",
             "revision_reasons": [],
+            "revision_requested": False,
+            "counter_offer_amount": None,
+            "counter_offer_start_date": None,
             "original_quote": original_quote,
             "previous_quote": previous_quote,
             "revised_quote": revised_quote,
@@ -1871,27 +1898,36 @@ def get_contractor_assessment(request_id: str):
             if hr_doc:
                 if hr_doc.get("assessment") and isinstance(hr_doc.get("assessment"), dict):
                     assessment = hr_doc.get("assessment")
-                elif hr_doc.get("total_quote") or hr_doc.get("contractor_purchase_offer") or hr_doc.get("timber_purchase_price") or hr_doc.get("status") == "ASSESSMENT_SUBMITTED":
+                elif hr_doc.get("total_quote") or hr_doc.get("contractor_purchase_offer") or hr_doc.get("timber_purchase_price") or hr_doc.get("status") == "ASSESSMENT_SUBMITTED" or (hr_doc.get("site_inspection") and hr_doc.get("site_inspection", {}).get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE") or hr_doc.get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE":
+                    is_timber_sale = (
+                        hr_doc.get("commercial_proposal_type") in ["Timber Purchase Offer", "TIMBER_PURCHASE_OFFER"] or
+                        (hr_doc.get("site_inspection") and hr_doc.get("site_inspection", {}).get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE") or
+                        hr_doc.get("landowner_preferred_arrangement") == "INTERESTED_IN_TIMBER_SALE" or
+                        bool(hr_doc.get("contractor_purchase_offer"))
+                    )
+                    default_p_type = "Timber Purchase Offer" if is_timber_sale else "Harvesting Service Quotation"
                     assessment = {
                         "harvest_request_id": request_id,
-                        "commercial_proposal_type": hr_doc.get("commercial_proposal_type") or "Harvesting Service Quotation",
+                        "commercial_proposal_type": hr_doc.get("commercial_proposal_type") or default_p_type,
                         "estimated_harvestable_volume": hr_doc.get("estimated_harvestable_volume") or hr_doc.get("total_estimated_volume") or 1.80,
                         "estimated_timber_value": hr_doc.get("estimated_timber_value") or hr_doc.get("approx_timber_value") or 251082,
-                        "harvesting_cost": hr_doc.get("harvesting_cost") or hr_doc.get("felling_cost") or 45000,
-                        "felling_cost": hr_doc.get("felling_cost") or hr_doc.get("harvesting_cost") or 45000,
-                        "extraction_cost": hr_doc.get("extraction_cost") or 30000,
-                        "transportation_cost": hr_doc.get("transportation_cost") or 25000,
-                        "other_cost": hr_doc.get("other_cost") or 10000,
-                        "total_quote": hr_doc.get("total_quote") or 110000,
-                        "contractor_purchase_offer": hr_doc.get("contractor_purchase_offer"),
+                        "harvesting_cost": hr_doc.get("harvesting_cost") or hr_doc.get("felling_cost") or (0 if is_timber_sale else 45000),
+                        "felling_cost": hr_doc.get("felling_cost") or hr_doc.get("harvesting_cost") or (0 if is_timber_sale else 45000),
+                        "extraction_cost": hr_doc.get("extraction_cost") or (0 if is_timber_sale else 30000),
+                        "transportation_cost": hr_doc.get("transportation_cost") or (0 if is_timber_sale else 25000),
+                        "other_cost": hr_doc.get("other_cost") or (0 if is_timber_sale else 10000),
+                        "total_quote": hr_doc.get("total_quote") if not is_timber_sale else None,
+                        "contractor_purchase_offer": hr_doc.get("contractor_purchase_offer") or (220000.0 if is_timber_sale else None),
+                        "payment_terms": hr_doc.get("payment_terms") or ("full payment for timber" if is_timber_sale else None),
+                        "offer_valid_until": hr_doc.get("offer_valid_until") or ("2026-10-20" if is_timber_sale else None),
                         "timber_purchase_price": hr_doc.get("timber_purchase_price"),
-                        "assigned_workers_count": hr_doc.get("assigned_workers_count") or hr_doc.get("workers_assigned") or 10,
-                        "workers_assigned": hr_doc.get("workers_assigned") or hr_doc.get("assigned_workers_count") or 10,
-                        "estimated_duration": hr_doc.get("estimated_duration") or "1 Working Day",
-                        "proposed_start_date": hr_doc.get("proposed_start_date") or "2026-10-14",
+                        "assigned_workers_count": hr_doc.get("assigned_workers_count") or hr_doc.get("workers_assigned") or (None if is_timber_sale else 10),
+                        "workers_assigned": hr_doc.get("workers_assigned") or hr_doc.get("assigned_workers_count") or (None if is_timber_sale else 10),
+                        "estimated_duration": hr_doc.get("estimated_duration") or (None if is_timber_sale else "1 Working Day"),
+                        "proposed_start_date": hr_doc.get("proposed_start_date") or (None if is_timber_sale else "2026-10-14"),
                         "notes": hr_doc.get("notes") or "Site inspection completed. Access road clear for heavy haulers.",
                         "status": hr_doc.get("status") or "ASSESSMENT_SUBMITTED",
-                        "original_quote": hr_doc.get("original_quote") or hr_doc.get("total_quote") or 110000,
+                        "original_quote": hr_doc.get("original_quote") or (hr_doc.get("contractor_purchase_offer") if is_timber_sale else (hr_doc.get("total_quote") or 110000)),
                         "previous_quote": hr_doc.get("previous_quote"),
                         "revised_quote": hr_doc.get("revised_quote"),
                         "original_costs": hr_doc.get("original_costs"),
@@ -2018,9 +2054,225 @@ def action_contractor_assessment(request_id: str, payload: AssessmentStatusUpdat
 def request_revision_endpoint(request_id: str, payload: Dict[str, Any] = {}):
     return action_contractor_assessment(request_id, AssessmentStatusUpdate(status="REVISION_REQUESTED", feedback=payload.get("feedback", "")))
 
-@router.post("/{request_id}/reject")
-def reject_assessment_endpoint(request_id: str, payload: Dict[str, Any] = {}):
-    return action_contractor_assessment(request_id, AssessmentStatusUpdate(status="REJECTED", feedback=payload.get("feedback", "")))
+# 8b. POST /api/harvest-requests/{id}/propose-harvest-date - Contractor proposes date to harvest bought trees
+@router.post("/{request_id}/propose-harvest-date")
+def propose_harvest_date(
+    request_id: str,
+    payload: ProposeHarvestDateRequest,
+    authorization: Optional[str] = Header(None)
+):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]} if ObjectId.is_valid(request_id) else {"$or": [{"id": request_id}, {"_id": request_id}]}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found."}
+            )
+
+        # Validate date string
+        try:
+            date_obj = datetime.strptime(str(payload.proposed_harvest_date).strip()[:10], "%Y-%m-%d").date()
+            if date_obj < datetime.now(timezone.utc).date():
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    content={"message": "Proposed harvest date cannot be in the past. Please select today or a future date."}
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"message": "Proposed harvest date must be in a valid YYYY-MM-DD format."}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        date_str = str(payload.proposed_harvest_date).strip()[:10]
+
+        schedule_obj = {
+            "proposed_date": date_str,
+            "time_slot": payload.time_slot or "Morning (08:00 AM - 12:00 PM)",
+            "estimated_duration": payload.estimated_duration or "1-2 Working Days",
+            "notes": payload.notes or "",
+            "status": "PENDING_LANDOWNER_APPROVAL",
+            "proposed_at": now_iso,
+            "proposed_by": "contractor"
+        }
+
+        hr_update = {
+            "proposed_harvest_date": date_str,
+            "proposed_start_date": date_str,
+            "harvest_schedule": schedule_obj,
+            "harvest_schedule_status": "PENDING_LANDOWNER_APPROVAL",
+            "harvest_date_approved": False,
+            "updatedAt": now_iso
+        }
+
+        db.harvest_requests.update_one(req_query, {"$set": hr_update})
+        db.contractor_assessments.update_one(
+            {"harvest_request_id": str(request_id)},
+            {"$set": {
+                "proposed_start_date": date_str,
+                "estimated_duration": payload.estimated_duration,
+                "harvest_schedule": schedule_obj,
+                "updatedAt": now_iso
+            }}
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": f"Harvest date of {date_str} proposed successfully. Awaiting landowner approval.",
+                "proposed_harvest_date": date_str,
+                "harvest_schedule": schedule_obj,
+                "harvest_date_approved": False
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to propose harvest date: {str(e)}"}
+        )
+
+
+# 8c. POST /api/harvest-requests/{id}/approve-harvest-date - Landowner approves contractor's proposed harvest date
+@router.post("/{request_id}/approve-harvest-date")
+def approve_harvest_date(
+    request_id: str,
+    payload: ApproveHarvestDateRequest = Body(default=ApproveHarvestDateRequest()),
+    authorization: Optional[str] = Header(None)
+):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]} if ObjectId.is_valid(request_id) else {"$or": [{"id": request_id}, {"_id": request_id}]}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found."}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        confirmed_date = (
+            payload.confirmed_date or
+            req_doc.get("proposed_harvest_date") or
+            (req_doc.get("harvest_schedule") or {}).get("proposed_date") or
+            req_doc.get("proposed_start_date") or
+            datetime.now().strftime("%Y-%m-%d")
+        )
+
+        schedule_obj = req_doc.get("harvest_schedule") or {}
+        schedule_obj.update({
+            "status": "APPROVED",
+            "confirmed_date": confirmed_date,
+            "approved_at": now_iso,
+            "landowner_notes": payload.notes or "Harvest date approved by landowner."
+        })
+
+        hr_update = {
+            "harvest_date_approved": True,
+            "confirmed_harvest_date": confirmed_date,
+            "proposed_harvest_date": confirmed_date,
+            "proposed_start_date": confirmed_date,
+            "harvest_schedule": schedule_obj,
+            "harvest_schedule_status": "APPROVED",
+            "updatedAt": now_iso
+        }
+
+        db.harvest_requests.update_one(req_query, {"$set": hr_update})
+        db.contractor_assessments.update_one(
+            {"harvest_request_id": str(request_id)},
+            {"$set": {
+                "proposed_start_date": confirmed_date,
+                "harvest_schedule": schedule_obj,
+                "harvest_date_approved": True,
+                "updatedAt": now_iso
+            }}
+        )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": f"Harvest date {confirmed_date} approved successfully! Contractor may now disburse timber payout.",
+                "confirmed_harvest_date": confirmed_date,
+                "harvest_date_approved": True,
+                "harvest_schedule_status": "APPROVED"
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to approve harvest date: {str(e)}"}
+        )
+
+
+# 8d. POST /api/harvest-requests/{id}/counter-harvest-date - Landowner suggests alternative harvest date
+@router.post("/{request_id}/counter-harvest-date")
+def counter_harvest_date(
+    request_id: str,
+    payload: CounterHarvestDateRequest,
+    authorization: Optional[str] = Header(None)
+):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        req_query = {"$or": [{"_id": ObjectId(request_id)}, {"id": request_id}, {"_id": request_id}]} if ObjectId.is_valid(request_id) else {"$or": [{"id": request_id}, {"_id": request_id}]}
+        req_doc = db.harvest_requests.find_one(req_query)
+        if not req_doc:
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"message": "Harvest request not found."}
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        date_str = str(payload.suggested_date).strip()[:10]
+
+        schedule_obj = req_doc.get("harvest_schedule") or {}
+        schedule_obj.update({
+            "status": "COUNTER_PROPOSED_BY_LANDOWNER",
+            "counter_date": date_str,
+            "counter_time_slot": payload.suggested_time_slot,
+            "counter_reason": payload.reason or "",
+            "counter_at": now_iso
+        })
+
+        hr_update = {
+            "proposed_harvest_date": date_str,
+            "harvest_schedule": schedule_obj,
+            "harvest_schedule_status": "COUNTER_PROPOSED_BY_LANDOWNER",
+            "harvest_date_approved": False,
+            "updatedAt": now_iso
+        }
+
+        db.harvest_requests.update_one(req_query, {"$set": hr_update})
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "message": f"Alternative harvest date {date_str} suggested to contractor.",
+                "harvest_schedule": schedule_obj,
+                "harvest_date_approved": False
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to submit counter harvest date: {str(e)}"}
+        )
+
 
 # 9. Advance Payment Management Endpoints
 @router.post("/{request_id}/advance-payment/request")

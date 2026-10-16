@@ -51,7 +51,9 @@ import {
   Users,
   Camera,
   Mail,
-  CreditCard
+  CreditCard,
+  Zap,
+  Building2
 } from 'lucide-react';
 import RevisionRequestModal from '../../components/workflow/RevisionRequestModal';
 import DigitalAgreementModal from '../../components/workflow/DigitalAgreementModal';
@@ -205,7 +207,7 @@ const LandownerDashboard = () => {
         if (req.assessment) {
           updates[reqId] = req.assessment;
         }
-        if (req.assigned_contractor_id || req.assessment || req.status === 'ASSESSMENT_SUBMITTED' || req.status === 'OPERATION_READY' || req.total_quote) {
+        if (req.assigned_contractor_id || req.assessment || req.status === 'ASSESSMENT_SUBMITTED' || req.status === 'REVISION_REQUESTED' || req.status === 'OPERATION_READY' || req.total_quote || req.contractor_purchase_offer || req.timber_purchase_price) {
           try {
             const data = await harvestService.getAssessment(reqId);
             if (data && (data.assessment || data.id || data.commercial_proposal_type)) {
@@ -823,20 +825,40 @@ const LandownerDashboard = () => {
             return targetQuotations.map((req, qIdx) => {
               const reqId = req.id || req._id;
               const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
-              const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
+              const isTimberSale = (
+                assDoc.commercial_proposal_type === 'Timber Purchase Offer' ||
+                req.commercial_proposal_type === 'Timber Purchase Offer' ||
+                req.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+                req.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+                Boolean(req.contractor_purchase_offer) ||
+                Boolean(assDoc.contractor_purchase_offer)
+              );
+              const propType = isTimberSale
+                ? 'Timber Purchase Offer'
+                : (assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation');
               const isService = propType === 'Harvesting Service Quotation';
-              const isPurchase = propType === 'Timber Purchase Offer';
+              const isPurchase = isTimberSale || propType === 'Timber Purchase Offer';
               const isHybrid = propType === 'Purchase + Harvesting';
 
               const assessedVolume = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume || req.site_inspection?.estimated_volume || 1.80;
-              const totalQuoteVal = assDoc.total_quote ?? req.total_quote ?? 110000;
-              const fellingCost = assDoc.harvesting_cost ?? assDoc.felling_cost ?? req.harvesting_cost ?? req.felling_cost ?? 45000;
-              const extractionCost = assDoc.extraction_cost ?? req.extraction_cost ?? 30000;
-              const transportCost = assDoc.transportation_cost ?? req.transportation_cost ?? 25000;
-              const otherCost = assDoc.other_cost ?? req.other_cost ?? 10000;
-              const workersCount = assDoc.assigned_workers_count ?? assDoc.workers_assigned ?? req.assigned_workers_count ?? req.workers_assigned ?? 10;
-              const jobDuration = assDoc.estimated_duration || req.estimated_duration || '1 Working Day';
-              const proposedStartDate = assDoc.proposed_start_date || req.proposed_start_date || '2026-10-14';
+              const purchaseOfferVal = assDoc.contractor_purchase_offer ?? req.contractor_purchase_offer;
+              const purchasePriceVal = assDoc.timber_purchase_price ?? req.timber_purchase_price;
+              const totalQuoteVal = isPurchase
+                ? (purchaseOfferVal ?? (isTimberSale ? 220000 : null) ?? req.total_quote ?? assDoc.total_quote ?? 220000)
+                : isHybrid
+                  ? (purchasePriceVal ?? req.total_quote ?? assDoc.total_quote ?? 110000)
+                  : (assDoc.total_quote ?? req.total_quote ?? 110000);
+              const fellingCost = assDoc.harvesting_cost ?? assDoc.felling_cost ?? req.harvesting_cost ?? req.felling_cost ?? (isPurchase ? 0 : 45000);
+              const extractionCost = assDoc.extraction_cost ?? req.extraction_cost ?? (isPurchase ? 0 : 30000);
+              const transportCost = assDoc.transportation_cost ?? req.transportation_cost ?? (isPurchase ? 0 : 25000);
+              const otherCost = assDoc.other_cost ?? req.other_cost ?? (isPurchase ? 0 : 10000);
+              const workersCount = assDoc.assigned_workers_count ?? assDoc.workers_assigned ?? req.assigned_workers_count ?? req.workers_assigned ?? (isPurchase ? 12 : 10);
+              const jobDuration = assDoc.estimated_duration || req.estimated_duration || (isPurchase ? '10 Working Days' : '1 Working Day');
+              const proposedStartDate = (assDoc.proposed_start_date && assDoc.proposed_start_date !== 'Upcoming')
+                ? assDoc.proposed_start_date
+                : (req.proposed_start_date && req.proposed_start_date !== 'Upcoming'
+                  ? req.proposed_start_date
+                  : (isPurchase ? '2026-10-21' : '2026-10-14'));
 
               const contractorName = req.assigned_contractor_name || 'Rohith kumar';
               const contractorPhone = req.assigned_contractor_phone || '9746512243';
@@ -857,7 +879,10 @@ const LandownerDashboard = () => {
                 req.is_revision ||
                 (previousQuoteVal && previousQuoteVal !== totalQuoteVal) ||
                 (assDoc.reduction && assDoc.reduction > 0) ||
-                (req.reduction && req.reduction > 0)
+                (req.reduction && req.reduction > 0) ||
+                isRevisionActive ||
+                req.counter_offer_amount ||
+                assDoc.counter_offer_amount
               );
               const reductionAmt = assDoc.reduction ?? req.reduction ?? (previousQuoteVal && totalQuoteVal < previousQuoteVal ? previousQuoteVal - totalQuoteVal : 0);
               const reductionPct = (previousQuoteVal && reductionAmt > 0) ? Math.round((reductionAmt / previousQuoteVal) * 100) : 0;
@@ -869,22 +894,26 @@ const LandownerDashboard = () => {
                 const advReq = req.advance_payment_request || assDoc.advance_payment_request;
                 const advanceAmount = Number(
                   advReq?.advance_amount ||
-                  (req.total_verified_paid ? req.total_verified_paid : 38500)
+                  (req.total_verified_paid ? req.total_verified_paid : (isPurchase ? 0 : 38500))
                 );
                 const remainingBal = Number(
                   advReq?.remaining_balance !== undefined && advReq?.remaining_balance !== null
                     ? advReq.remaining_balance
                     : req.remaining_balance !== undefined && req.remaining_balance !== null
                       ? req.remaining_balance
-                      : Math.max(0, totalQuoteVal - advanceAmount)
+                      : (isPurchase ? totalQuoteVal : Math.max(0, totalQuoteVal - advanceAmount))
                 );
 
                 const cName = req.assigned_contractor_name || assDoc.contractor_name || 'Rohith kumar';
                 const cPhone = req.site_inspection?.inspector_phone || req.assigned_contractor_phone || assDoc.contractor_phone || '9746512243';
                 const cEmail = req.assigned_contractor_email || assDoc.contractor_email || 'contact@treeconnect.in';
-                const crewSize = assDoc.assigned_workers_count || req.assigned_workers_count || workersCount || 10;
+                const crewSize = assDoc.assigned_workers_count || req.assigned_workers_count || workersCount || (isPurchase ? 12 : 10);
                 const fleetEquip = assDoc.equipment_needed || req.equipment_needed || 'Hydraulic Log Loader, Heavy Hauler, Chainsaw';
-                const opStartDate = proposedStartDate || assDoc.proposed_start_date || req.proposed_start_date || '2026-10-20';
+                const opStartDate = (assDoc.proposed_start_date && assDoc.proposed_start_date !== 'Upcoming')
+                  ? assDoc.proposed_start_date
+                  : (req.proposed_start_date && req.proposed_start_date !== 'Upcoming'
+                    ? req.proposed_start_date
+                    : proposedStartDate);
                 const scopeVolume = assessedVolume || '1.80';
 
                 const stagesConfig = [
@@ -928,32 +957,52 @@ const LandownerDashboard = () => {
                             </span>
                             <span className="active-spotlight-sub-pill">
                               <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-                              Agreement Signed &amp; Mobilization Advance Verified
+                              {isPurchase
+                                ? 'Timber Purchase Agreement Executed'
+                                : 'Agreement Signed & Mobilization Advance Verified'}
                             </span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shrink-0">
                               Job #{String(reqId).substring(0, 8).toUpperCase()}
                             </span>
                           </div>
                           <h2 className="active-spotlight-heading">
-                            {req.propertyName || 'TreeConnect Property'} — Active Harvest Operations
+                            {req.propertyName || 'TreeConnect Property'} — {isPurchase ? 'Active Timber Purchase & Operations' : 'Active Harvest Operations'}
                           </h2>
                           <p className="active-spotlight-subtitle">
-                            Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span>
+                            {isPurchase
+                              ? <>Assigned Timber Buyer: <strong className="text-emerald-400 font-bold">{cName}</strong> • Timber Purchase Agreement Executed • Direct Landowner Payout: <strong className="text-emerald-300 font-mono">{formatINR(totalQuoteVal)}</strong></>
+                              : <>Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span></>}
                           </p>
                         </div>
                       </div>
 
                       <div className="active-spotlight-actions">
-                        {isSettlementDue && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
-                            className="active-spotlight-pay-btn"
-                            title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
-                          >
-                            <CreditCard size={15} />
-                            <span>Pay Balance ({formatINR(remainingBal)})</span>
-                          </button>
+                        {isPurchase ? (
+                          <div className="flex items-center gap-2">
+                            {Boolean(req.contractor_paid || req.is_advance_verified || req.payment_status === 'PAID') ? (
+                              <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
+                                <CheckCircle2 size={15} className="text-emerald-400" />
+                                <span>Timber Payout Secured in Escrow ({formatINR(totalQuoteVal)})</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold shadow-sm" title="Contractor will deposit timber purchase amount into escrow before cutting commences">
+                                <Clock size={15} className="text-amber-400 animate-pulse" />
+                                <span>Awaiting Contractor Escrow Deposit ({formatINR(totalQuoteVal)})</span>
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          isSettlementDue && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                              className="active-spotlight-pay-btn"
+                              title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
+                            >
+                              <CreditCard size={15} />
+                              <span>Pay Balance ({formatINR(remainingBal)})</span>
+                            </button>
+                          )
                         )}
                         <button
                           type="button"
@@ -962,7 +1011,7 @@ const LandownerDashboard = () => {
                           title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
                         >
                           <Camera size={15} />
-                          <span>View Work Status &amp; Evidence</span>
+                          <span>View Evidence</span>
                         </button>
                         <button
                           type="button"
@@ -1014,95 +1063,178 @@ const LandownerDashboard = () => {
                       </div>
 
                       <div className="active-logistics-specs-grid">
-                        <div className="active-logistics-chip">
-                          <span className="active-chip-label">Assigned Crew</span>
-                          <span className="active-chip-value">
-                            <Users size={14} className="text-emerald-400 shrink-0" />
-                            <span>{crewSize} Workers</span>
-                          </span>
-                        </div>
-                        <div className="active-logistics-chip" title={fleetEquip}>
-                          <span className="active-chip-label">Machinery Deployed</span>
-                          <span className="active-chip-value" title={fleetEquip}>
-                            <Truck size={14} className="text-emerald-400 shrink-0" />
-                            <span className="truncate">{fleetEquip}</span>
-                          </span>
-                        </div>
-                        <div className="active-logistics-chip">
-                          <span className="active-chip-label">Start Schedule</span>
-                          <span className="active-chip-value text-emerald-300">
-                            <Calendar size={14} className="text-emerald-400 shrink-0" />
-                            <span>{formatDateDMY(opStartDate)}</span>
-                          </span>
-                        </div>
-                        <div className="active-logistics-chip">
-                          <span className="active-chip-label">Harvest Scope</span>
-                          <span className="active-chip-value">
-                            <Trees size={14} className="text-emerald-400 shrink-0" />
-                            <span>{scopeVolume} m³ • {jobDuration}</span>
-                          </span>
-                        </div>
+                        {isPurchase ? (
+                          <>
+                            <div className="active-logistics-chip">
+                              <span className="active-chip-label">Commercial Model</span>
+                              <span className="active-chip-value">
+                                <Handshake size={14} className="text-emerald-400 shrink-0" />
+                                <span>Direct Timber Purchase</span>
+                              </span>
+                            </div>
+                            <div className="active-logistics-chip">
+                              <span className="active-chip-label">Purchased Volume</span>
+                              <span className="active-chip-value">
+                                <Trees size={14} className="text-emerald-400 shrink-0" />
+                                <span>{scopeVolume} m³ Standing Timber</span>
+                              </span>
+                            </div>
+                            <div className="active-logistics-chip">
+                              <span className="active-chip-label">Purchase Price</span>
+                              <span className="active-chip-value text-emerald-300">
+                                <Coins size={14} className="text-emerald-400 shrink-0" />
+                                <span>{formatINR(totalQuoteVal)}</span>
+                              </span>
+                            </div>
+                            <div className="active-logistics-chip">
+                              <span className="active-chip-label">Settlement Mode</span>
+                              <span className="active-chip-value">
+                                <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                                <span>Direct Payout</span>
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="active-logistics-chip">
+                              <span className="active-chip-label">Assigned Crew</span>
+                              <span className="active-chip-value">
+                                <Users size={14} className="text-emerald-400 shrink-0" />
+                                <span>{crewSize} Workers</span>
+                              </span>
+                            </div>
+                            <div className="active-logistics-chip" title={fleetEquip}>
+                              <span className="active-chip-label">Machinery Deployed</span>
+                              <span className="active-chip-value" title={fleetEquip}>
+                                <Truck size={14} className="text-emerald-400 shrink-0" />
+                                <span className="truncate">{fleetEquip}</span>
+                              </span>
+                            </div>
+                            <div className="active-logistics-chip">
+                              <span className="active-chip-label">Start Schedule</span>
+                              <span className="active-chip-value text-emerald-300">
+                                <Calendar size={14} className="text-emerald-400 shrink-0" />
+                                <span>{formatDateDMY(opStartDate)}</span>
+                              </span>
+                            </div>
+                            <div className="active-logistics-chip">
+                              <span className="active-chip-label">Harvest Scope</span>
+                              <span className="active-chip-value">
+                                <Trees size={14} className="text-emerald-400 shrink-0" />
+                                <span>{scopeVolume} m³ • {jobDuration}</span>
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
 
                     {/* 4-Item Financial Highlights Grid */}
                     <div className="active-spotlight-grid">
-                      <div className="active-spotlight-stat">
-                        <span className="active-stat-label">Total Agreed Quotation</span>
-                        <div className="active-stat-value text-emerald-300">
-                          {formatINR(totalQuoteVal)}
-                        </div>
-                        <span className="active-stat-hint">{propType}</span>
-                      </div>
+                      {isPurchase ? (
+                        <>
+                          <div className="active-spotlight-stat">
+                            <span className="active-stat-label">Total Agreed Purchase Offer</span>
+                            <div className="active-stat-value text-emerald-300">
+                              {formatINR(totalQuoteVal)}
+                            </div>
+                            <span className="active-stat-hint">Timber Purchase Offer • Contractor &rarr; Landowner</span>
+                          </div>
 
-                      <div className="active-spotlight-stat active-stat-advance">
-                        <span className="active-stat-label">Mobilization Advance Verified</span>
-                        <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
-                          <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
-                          <span>{formatINR(advanceAmount)}</span>
-                        </div>
-                        <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
-                      </div>
-
-                      <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
-                        <div className="flex items-center justify-between">
-                          <span className="active-stat-label">Remaining Balance</span>
-                          {isSettlementDue && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
-                              DUE
-                            </span>
-                          )}
-                        </div>
-                        <div className={`active-stat-value ${isSettlementDue ? 'text-amber-400 font-black' : 'text-slate-200'}`}>
-                          {formatINR(remainingBal)}
-                        </div>
-                        {isSettlementDue ? (
-                          <div className="mt-2 space-y-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
-                              className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer transition-all"
-                            >
-                              <CreditCard size={12} /> Pay ₹ {remainingBal.toLocaleString('en-IN')} &rarr;
-                            </button>
-                            <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
-                              <AlertTriangle size={11} className="shrink-0" /> Post-Harvest Settlement Due
+                          <div className="active-spotlight-stat active-stat-advance">
+                            <span className="active-stat-label">Timber Purchase Terms</span>
+                            <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                              <span>Payable to Landowner</span>
+                            </div>
+                            <span className="active-stat-hint text-emerald-300/90 font-medium">
+                              {assDoc.payment_terms || req.payment_terms || '100% full payment prior to timber dispatch'}
                             </span>
                           </div>
-                        ) : (
-                          <span className="active-stat-hint">
-                            {remainingBal <= 0 ? '✓ All dues cleared' : 'Due upon harvest progress / completion'}
-                          </span>
-                        )}
-                      </div>
 
-                      <div className="active-spotlight-stat">
-                        <span className="active-stat-label">Harvest Scope &amp; Crew</span>
-                        <div className="active-stat-value text-white text-base font-bold">
-                          {scopeVolume} m³ • {crewSize} Crew
-                        </div>
-                        <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
-                      </div>
+                          <div className="active-spotlight-stat">
+                            <div className="flex items-center justify-between">
+                              <span className="active-stat-label">Net Purchase Settlement</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                DIRECT PAYOUT
+                              </span>
+                            </div>
+                            <div className="active-stat-value text-emerald-300 font-black">
+                              {formatINR(totalQuoteVal)}
+                            </div>
+                            <span className="active-stat-hint">
+                              Direct credit to Landowner bank account
+                            </span>
+                          </div>
+
+                          <div className="active-spotlight-stat">
+                            <span className="active-stat-label">Purchased Timber Volume</span>
+                            <div className="active-stat-value text-white text-base font-bold">
+                              {scopeVolume} m³ Standing Timber
+                            </div>
+                            <span className="active-stat-hint">Direct Standing Timber Sale • Buyer Removal</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="active-spotlight-stat">
+                            <span className="active-stat-label">Total Agreed Quotation</span>
+                            <div className="active-stat-value text-emerald-300">
+                              {formatINR(totalQuoteVal)}
+                            </div>
+                            <span className="active-stat-hint">{propType}</span>
+                          </div>
+
+                          <div className="active-spotlight-stat active-stat-advance">
+                            <span className="active-stat-label">Mobilization Advance Verified</span>
+                            <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
+                              <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                              <span>{formatINR(advanceAmount)}</span>
+                            </div>
+                            <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
+                          </div>
+
+                          <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="active-stat-label">Remaining Balance</span>
+                              {isSettlementDue && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                                  DUE
+                                </span>
+                              )}
+                            </div>
+                            <div className={`active-stat-value ${isSettlementDue ? 'text-amber-400 font-black' : 'text-slate-200'}`}>
+                              {formatINR(remainingBal)}
+                            </div>
+                            {isSettlementDue ? (
+                              <div className="mt-2 space-y-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                                  className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer transition-all"
+                                >
+                                  <CreditCard size={12} /> Pay ₹ {remainingBal.toLocaleString('en-IN')} &rarr;
+                                </button>
+                                <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                                  <AlertTriangle size={11} className="shrink-0" /> Post-Harvest Settlement Due
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="active-stat-hint">
+                                {remainingBal <= 0 ? '✓ All dues cleared' : 'Due upon harvest progress / completion'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="active-spotlight-stat">
+                            <span className="active-stat-label">Harvest Scope &amp; Crew</span>
+                            <div className="active-stat-value text-white text-base font-bold">
+                              {scopeVolume} m³ • {crewSize} Crew
+                            </div>
+                            <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* POST-HARVEST SETTLEMENT DUE FULL-WIDTH BANNER */}
@@ -1280,7 +1412,7 @@ const LandownerDashboard = () => {
                         <span className="active-check-divider">•</span>
                         <span className="active-check-item">
                           <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
-                          <span>₹ {advanceAmount.toLocaleString('en-IN')} Advance Verified</span>
+                          <span>{isPurchase ? (req.contractor_paid || req.is_advance_verified ? `₹ ${totalQuoteVal.toLocaleString('en-IN')} Escrow Secured` : `₹ ${totalQuoteVal.toLocaleString('en-IN')} Payout Agreed`) : `₹ ${advanceAmount.toLocaleString('en-IN')} Advance Verified`}</span>
                         </span>
                       </div>
 
@@ -1303,16 +1435,32 @@ const LandownerDashboard = () => {
                           <FileText size={14} />
                           <span>Assessment Certificate</span>
                         </button>
-                        {(isCompleted || verifiedCount === 4) && remainingBal > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal })}
-                            className="active-spotlight-link-btn !bg-emerald-500 !text-slate-950 font-black hover:!bg-emerald-400 shadow-md shadow-emerald-500/20"
-                            title="Pay final contract settlement"
-                          >
-                            <CreditCard size={14} />
-                            <span>Pay Settlement ({formatINR(remainingBal)})</span>
-                          </button>
+                        {isPurchase ? (
+                          <div className="flex items-center gap-2">
+                            {Boolean(req.contractor_paid || req.is_advance_verified || req.payment_status === 'PAID') ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
+                                <CheckCircle2 size={13} className="text-emerald-400" />
+                                <span>Payout Secured ({formatINR(totalQuoteVal)})</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold shadow-sm" title="Contractor will deposit timber purchase amount into escrow before cutting commences">
+                                <Clock size={13} className="text-amber-400" />
+                                <span>Awaiting Contractor Payout ({formatINR(totalQuoteVal)})</span>
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          (isCompleted || verifiedCount === 4) && remainingBal > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal })}
+                              className="active-spotlight-link-btn !bg-emerald-500 !text-slate-950 font-black hover:!bg-emerald-400 shadow-md shadow-emerald-500/20"
+                              title="Pay final contract settlement"
+                            >
+                              <CreditCard size={14} />
+                              <span>Pay Settlement ({formatINR(remainingBal)})</span>
+                            </button>
+                          )
                         )}
                         <button
                           type="button"
@@ -1340,7 +1488,7 @@ const LandownerDashboard = () => {
                       <div className="qvc-title-block">
                         <div className="qvc-badge-row">
                           <span className="qvc-category-pill">
-                            Commercial Quotation Verification
+                            {isPurchase ? 'Timber Purchase Verification' : 'Commercial Quotation Verification'}
                           </span>
                           <span className={`qvc-status-badge ${
                             isAccepted ? 'accepted' : isRevisionActive ? 'revision' : isRevisionQuote ? 'revision' : 'action'
@@ -1358,22 +1506,26 @@ const LandownerDashboard = () => {
                             ) : isRevisionQuote ? (
                               <>
                                 <RefreshCw size={13} className="text-amber-400" />
-                                <span>Revised Quotation Received</span>
+                                <span>Revised Proposal Received</span>
                               </>
                             ) : (
                               <>
                                 <span className="qvc-status-dot"></span>
-                                <span>Action Required: Verify Quotation</span>
+                                <span>Action Required: Verify {isPurchase ? 'Purchase Offer' : 'Quotation'}</span>
                               </>
                             )}
                           </span>
                         </div>
 
                         <h2 className="qvc-title">
-                          Formal Contractor Assessment &amp; Commercial Quotation
+                          {isPurchase
+                            ? 'Formal Contractor Assessment & Timber Purchase Offer'
+                            : isHybrid
+                              ? 'Formal Contractor Assessment & Purchase Proposal'
+                              : 'Formal Contractor Assessment & Commercial Quotation'}
                         </h2>
                         <p className="qvc-subtitle">
-                          Field Assessor &amp; Contractor <strong className="highlight">{contractorName}</strong> has completed on-site assessment and submitted this official quotation for <strong className="prop-name">{req.propertyName || 'TreeConnect Property'}</strong>.
+                          Field Assessor &amp; Contractor <strong className="highlight">{contractorName}</strong> has completed on-site assessment and submitted {isPurchase ? 'an official offer to buy your standing timber' : 'this official quotation'} for <strong className="prop-name">{req.propertyName || 'TreeConnect Property'}</strong>.
                         </p>
                       </div>
                     </div>
@@ -1406,9 +1558,9 @@ const LandownerDashboard = () => {
                       ) : (
                         <>
                           <span className="qvc-quote-label">
-                            {isService ? 'Total Contractor Quotation' : isPurchase ? 'Timber Purchase Offer' : 'Purchase + Harvesting Value'}
+                            {isService ? 'Total Contractor Quotation' : isPurchase ? 'Timber Purchase Offer (Payable to You)' : 'Purchase + Harvesting Value'}
                           </span>
-                          <strong className="qvc-quote-amount">
+                          <strong className="qvc-quote-amount text-emerald-300">
                             {formatINR(totalQuoteVal)}
                           </strong>
                           <span className="qvc-quote-type">
@@ -1472,91 +1624,223 @@ const LandownerDashboard = () => {
 
                   {/* KEY METRICS GRID (MATCHING CONTRACTOR EVALUATION) */}
                   <div className="qvc-metrics-grid">
-                    <div className="qvc-metric-card">
-                      <span className="qvc-metric-label">
-                        <Layers size={13} className="text-emerald-400" /> Assessed Volume
-                      </span>
-                      <div>
-                        <strong className="qvc-metric-value emerald">
-                          {formatVolume(assessedVolume)}
-                        </strong>
-                        <span className="qvc-metric-subtext">Ground truth verified</span>
-                      </div>
-                    </div>
+                    {isPurchase ? (
+                      <>
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <Layers size={13} className="text-emerald-400" /> Assessed Volume
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value emerald">
+                              {formatVolume(assessedVolume)}
+                            </strong>
+                            <span className="qvc-metric-subtext">Ground truth verified</span>
+                          </div>
+                        </div>
 
-                    <div className="qvc-metric-card">
-                      <span className="qvc-metric-label">
-                        <Users size={13} className="text-emerald-400" /> Assigned Crew
-                      </span>
-                      <div>
-                        <strong className="qvc-metric-value">
-                          {workersCount} Workers
-                        </strong>
-                        <span className="qvc-metric-subtext">Deployed workforce</span>
-                      </div>
-                    </div>
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <Coins size={13} className="text-emerald-400" /> Standing Timber Value
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value emerald">
+                              {formatINR(assDoc.estimated_timber_value || req.estimated_timber_value || 251082)}
+                            </strong>
+                            <span className="qvc-metric-subtext">Market benchmark</span>
+                          </div>
+                        </div>
 
-                    <div className="qvc-metric-card">
-                      <span className="qvc-metric-label">
-                        <Clock size={13} className="text-emerald-400" /> Job Duration
-                      </span>
-                      <div>
-                        <strong className="qvc-metric-value">
-                          {jobDuration}
-                        </strong>
-                        <span className="qvc-metric-subtext">Operational timeline</span>
-                      </div>
-                    </div>
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <DollarSign size={13} className="text-amber-400" /> Purchase Offer to You
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value text-amber-300">
+                              {formatINR(totalQuoteVal)}
+                            </strong>
+                            <span className="qvc-metric-subtext">Payable to Landowner</span>
+                          </div>
+                        </div>
 
-                    <div className="qvc-metric-card">
-                      <span className="qvc-metric-label">
-                        <Calendar size={13} className="text-emerald-400" /> Proposed Start
-                      </span>
-                      <div>
-                        <strong className="qvc-metric-value emerald">
-                          {formatDateDMY(proposedStartDate)}
-                        </strong>
-                        <span className="qvc-metric-subtext">Post-inspection mobilization</span>
-                      </div>
-                    </div>
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <Calendar size={13} className="text-emerald-400" /> Offer Valid Until
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value emerald">
+                              {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || '2026-10-20')}
+                            </strong>
+                            <span className="qvc-metric-subtext">Binding offer expiry</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <Layers size={13} className="text-emerald-400" /> Assessed Volume
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value emerald">
+                              {formatVolume(assessedVolume)}
+                            </strong>
+                            <span className="qvc-metric-subtext">Ground truth verified</span>
+                          </div>
+                        </div>
+
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <Users size={13} className="text-emerald-400" /> Assigned Crew
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value">
+                              {workersCount} Workers
+                            </strong>
+                            <span className="qvc-metric-subtext">Deployed workforce</span>
+                          </div>
+                        </div>
+
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <Clock size={13} className="text-emerald-400" /> Job Duration
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value">
+                              {jobDuration}
+                            </strong>
+                            <span className="qvc-metric-subtext">Operational timeline</span>
+                          </div>
+                        </div>
+
+                        <div className="qvc-metric-card">
+                          <span className="qvc-metric-label">
+                            <Calendar size={13} className="text-emerald-400" /> Proposed Start
+                          </span>
+                          <div>
+                            <strong className="qvc-metric-value emerald">
+                              {formatDateDMY(proposedStartDate)}
+                            </strong>
+                            <span className="qvc-metric-subtext">Post-inspection mobilization</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
 
-                  {/* ITEMIZED SERVICE COST BREAKDOWN (MATCHING CONTRACTOR FORM SCREENSHOT) */}
-                  {isService && (
-                    <div className="qvc-breakdown-box">
-                      <div className="qvc-breakdown-header">
-                        <div className="qvc-breakdown-title">
-                          <DollarSign size={15} />
-                          <span>Itemized Service Cost Breakdown (₹)</span>
+                  {/* TIMBER PURCHASE COMMERCIAL TERMS (MATCHING TIMBER PURCHASE OFFER) */}
+                  {isPurchase && (
+                    <div className="qvc-breakdown-box border-amber-500/25 bg-[#04140b]/80">
+                      <div className="qvc-breakdown-header border-amber-500/20">
+                        <div className="qvc-breakdown-title text-amber-400">
+                          <Coins size={15} />
+                          <span>Timber Purchase Commercial Terms</span>
                         </div>
-                        <span className="qvc-breakdown-total">
-                          Total Contractor Quotation: <strong>{formatINR(totalQuoteVal)}</strong>
+                        <span className="qvc-breakdown-total text-emerald-400">
+                          Payable Directly to Landowner: <strong className="font-mono">{formatINR(totalQuoteVal)}</strong>
                         </span>
                       </div>
 
                       <div className="qvc-breakdown-grid">
-                        <div className="qvc-breakdown-item">
-                          <span className="qvc-breakdown-cat">Felling &amp; Logging</span>
-                          <strong className="qvc-breakdown-cost">{formatINR(fellingCost)}</strong>
-                          <span className="qvc-breakdown-desc">Skilled chain-saw crew</span>
+                        <div className="qvc-breakdown-item border-amber-500/20">
+                          <span className="qvc-breakdown-cat">Contractor Purchase Offer</span>
+                          <strong className="qvc-breakdown-cost text-emerald-400">{formatINR(totalQuoteVal)}</strong>
+                          <span className="qvc-breakdown-desc">Net purchase payout to landowner</span>
                         </div>
 
-                        <div className="qvc-breakdown-item">
-                          <span className="qvc-breakdown-cat">Extraction / Skid-Trail</span>
-                          <strong className="qvc-breakdown-cost">{formatINR(extractionCost)}</strong>
-                          <span className="qvc-breakdown-desc">Skid-trail haulage</span>
+                        <div className="qvc-breakdown-item border-amber-500/20">
+                          <span className="qvc-breakdown-cat">Reference Timber Value</span>
+                          <strong className="qvc-breakdown-cost text-white">
+                            {formatINR(assDoc.estimated_timber_value || req.total_estimated_price || calculateApproxTimberValue('Teak', assessedVolume))}
+                          </strong>
+                          <span className="qvc-breakdown-desc">Market estimate based on volume</span>
                         </div>
 
-                        <div className="qvc-breakdown-item">
-                          <span className="qvc-breakdown-cat">Transportation / Haulage</span>
-                          <strong className="qvc-breakdown-cost">{formatINR(transportCost)}</strong>
-                          <span className="qvc-breakdown-desc">10-wheeler log truck</span>
+                        <div className="qvc-breakdown-item border-amber-500/20">
+                          <span className="qvc-breakdown-cat">Payment Terms</span>
+                          <strong className="qvc-breakdown-cost text-slate-200 text-xs truncate" title={assDoc.payment_terms || req.payment_terms || 'Full payment upon contract execution'}>
+                            {assDoc.payment_terms || req.payment_terms || 'Full payment upon contract execution'}
+                          </strong>
+                          <span className="qvc-breakdown-desc">Disbursement &amp; settlement terms</span>
                         </div>
 
-                        <div className="qvc-breakdown-item">
-                          <span className="qvc-breakdown-cat">Other / Site Clearing</span>
-                          <strong className="qvc-breakdown-cost">{formatINR(otherCost)}</strong>
-                          <span className="qvc-breakdown-desc">Slash &amp; debris clean-up</span>
+                        <div className="qvc-breakdown-item border-amber-500/20">
+                          <span className="qvc-breakdown-cat">Offer Valid Until</span>
+                          <strong className="qvc-breakdown-cost text-slate-200 text-xs">
+                            {formatDateDMY(assDoc.offer_valid_until || req.offer_valid_until || 'Flexible')}
+                          </strong>
+                          <span className="qvc-breakdown-desc">Contractor guaranteed validity window</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TIMBER PURCHASE UNIFIED SETTLEMENT & PAYOUT CARD */}
+                  {isPurchase && (
+                    <div className="qvc-unified-settlement-card">
+                      <div className="qvc-usc-header">
+                        <div className="qvc-usc-title-row">
+                          <div className="qvc-usc-icon-badge">
+                            <ShieldCheck size={20} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="qvc-usc-title">Timber Sale Settlement &amp; Direct Payout</h4>
+                              <span className="qvc-usc-pill">Direct Landowner Payout</span>
+                              <span className="qvc-usc-escrow-pill">
+                                <ShieldCheck size={12} />
+                                <span>100% TreeConnect Escrow Protected</span>
+                              </span>
+                            </div>
+                            <p className="qvc-usc-subtitle">
+                              Guaranteed disbursement directly to your account. Funds secured in TreeConnect escrow prior to felling and released per agreed commercial terms.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="qvc-usc-total-block">
+                          <span className="qvc-usc-total-label">Net Payout to You</span>
+                          <strong className="qvc-usc-total-amount">
+                            {formatINR(totalQuoteVal)}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Settlement Terms Highlights Grid */}
+                      <div className="qvc-usc-metrics-grid">
+                        <div className="qvc-usc-metric-item">
+                          <span className="qvc-usc-metric-label">Agreed Commercial Terms</span>
+                          <strong className="qvc-usc-metric-value text-white">
+                            {assDoc.payment_terms || req.payment_terms || 'Full payment for timber'}
+                          </strong>
+                          <span className="qvc-usc-metric-desc">Contractual disbursement milestone</span>
+                        </div>
+
+                        <div className="qvc-usc-metric-item">
+                          <span className="qvc-usc-metric-label">Assigned Timber Buyer</span>
+                          <strong className="qvc-usc-metric-value text-emerald-400">
+                            {contractorName}
+                          </strong>
+                          <span className="qvc-usc-metric-desc">Verified certified contractor</span>
+                        </div>
+
+                        <div className="qvc-usc-metric-item">
+                          <span className="qvc-usc-metric-label">Disbursement Methods</span>
+                          <strong className="qvc-usc-metric-value text-slate-200">
+                            Instant UPI • NEFT / RTGS • Escrow
+                          </strong>
+                          <span className="qvc-usc-metric-desc">Direct credit to your verified account</span>
+                        </div>
+                      </div>
+
+                      {/* Single Clear Action Bar */}
+                      <div className="qvc-usc-footer">
+                        <div className="qvc-usc-guarantee-text">
+                          <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+                          <span>Funds protected in TreeConnect escrow until harvest authorization. Zero platform fee deduction for landowners.</span>
+                        </div>
+
+                        <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold">
+                          <ShieldCheck size={15} className="text-emerald-400 shrink-0" />
+                          <span>Buyer Payment Obligation: Contractor <strong>{contractorName || 'Rohith kumar'}</strong> will disburse <strong>{formatINR(totalQuoteVal)}</strong> upon agreement execution</span>
                         </div>
                       </div>
                     </div>
@@ -1675,14 +1959,18 @@ const LandownerDashboard = () => {
 
 
                   {/* VERIFICATION ACTION CONTROLS FOR LANDOWNER */}
-                  {isUnderReview && (
+                  {!isAccepted && (
                     <div className="qvc-actions-footer">
                       <div className="qvc-actions-tip">
                         <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
                         <span>
                           {isRevisionQuote
-                            ? 'Review the contractor\'s revised quotation. You can accept to authorize harvesting operations or request a further re-revision.'
-                            : 'Review the itemized quotation above and verify to authorize harvesting operations.'}
+                            ? (isPurchase
+                              ? 'Review the contractor\'s revised timber purchase offer. You can agree to accept and execute the sale agreement, or negotiate further.'
+                              : 'Review the contractor\'s revised quotation. You can accept to authorize harvesting operations or request a further re-revision.')
+                            : (isPurchase
+                              ? 'Review the contractor\'s timber purchase offer. You can agree and accept the offer to sell your standing timber, or propose a counter-offer to negotiate.'
+                              : 'Review the itemized quotation above and verify to authorize harvesting operations.')}
                         </span>
                       </div>
 
@@ -1690,13 +1978,13 @@ const LandownerDashboard = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            if (window.confirm('Are you sure you want to decline this contractor quotation?')) {
+                            if (window.confirm(isPurchase ? 'Are you sure you want to decline this timber purchase offer?' : 'Are you sure you want to decline this contractor quotation?')) {
                               handleAssessmentAction(reqId, 'REJECTED', 'Landowner declined this commercial proposal.');
                             }
                           }}
                           className="qvc-btn-decline"
                         >
-                          Decline Quotation
+                          {isPurchase ? 'Decline Offer' : 'Decline Quotation'}
                         </button>
 
                         <button
@@ -1705,16 +1993,20 @@ const LandownerDashboard = () => {
                           className="qvc-btn-revision"
                         >
                           <RefreshCw size={14} />
-                          <span>{isRevisionQuote ? 'Re-revise / Further Negotiation' : 'Request Revision / Counter-Offer'}</span>
+                          <span>{isRevisionQuote ? 'Re-revise / Further Negotiation' : (isPurchase ? 'Negotiate / Counter-Offer' : 'Request Revision / Counter-Offer')}</span>
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => handleAssessmentAction(reqId, 'ACCEPTED', 'Landowner verified and accepted quotation.')}
+                          onClick={() => handleAssessmentAction(reqId, 'ACCEPTED', isPurchase ? 'Landowner accepted timber purchase offer.' : 'Landowner verified and accepted quotation.')}
                           className="qvc-btn-accept"
                         >
                           <CheckCircle2 size={16} />
-                          <span>{isRevisionQuote ? 'Accept Revised Quotation & Authorize' : 'Accept & Authorize Quotation'}</span>
+                          <span>
+                            {isRevisionQuote
+                              ? (isPurchase ? 'Agree & Accept Revised Offer' : 'Accept Revised Quotation & Authorize')
+                              : (isPurchase ? 'Agree & Accept Purchase Offer' : 'Accept & Authorize Quotation')}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -2380,28 +2672,45 @@ const LandownerDashboard = () => {
             if (isAlreadyRenderedAbove) return null;
 
             const assDoc = activeAssessmentMap[spotlightId] || activeSpotlight.assessment || {};
+            const isTimberSale = (
+              assDoc.commercial_proposal_type === 'Timber Purchase Offer' ||
+              activeSpotlight.commercial_proposal_type === 'Timber Purchase Offer' ||
+              activeSpotlight.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+              activeSpotlight.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+              Boolean(activeSpotlight.contractor_purchase_offer) ||
+              Boolean(assDoc.contractor_purchase_offer)
+            );
+            const propType = isTimberSale
+              ? 'Timber Purchase Offer'
+              : (assDoc.commercial_proposal_type || activeSpotlight.commercial_proposal_type || 'Harvesting Service Quotation');
+            const isPurchase = isTimberSale || propType === 'Timber Purchase Offer';
             const cName = activeSpotlight.assigned_contractor_name || activeSpotlight.contractor || 'Rohith kumar';
             const cPhone = activeSpotlight.site_inspection?.inspector_phone || activeSpotlight.assigned_contractor_phone || '9746512243';
             const cEmail = activeSpotlight.assigned_contractor_email || 'contact@treeconnect.in';
-            const crewSize = assDoc.assigned_workers_count || activeSpotlight.assigned_workers_count || 10;
+            const crewSize = assDoc.assigned_workers_count || activeSpotlight.assigned_workers_count || (isPurchase ? 12 : 10);
             const fleetEquip = assDoc.equipment_needed || activeSpotlight.equipment_needed || 'Hydraulic Log Loader, Heavy Hauler, Chainsaw';
-            const opStartDate = assDoc.proposed_start_date || activeSpotlight.proposed_start_date || activeSpotlight.preferredStartDate || activeSpotlight.created_at;
+            const opStartDate = (assDoc.proposed_start_date && assDoc.proposed_start_date !== 'Upcoming')
+              ? assDoc.proposed_start_date
+              : (activeSpotlight.proposed_start_date && activeSpotlight.proposed_start_date !== 'Upcoming'
+                ? activeSpotlight.proposed_start_date
+                : (isPurchase ? '2026-10-21' : '2026-10-14'));
             const scopeVolume = assDoc.estimated_harvestable_volume || activeSpotlight.estimated_harvestable_volume || activeSpotlight.estimatedVolume || '1.80';
-            const totalQuoteVal = assDoc.total_quote ?? activeSpotlight.total_quote ?? 110000;
-            const propType = assDoc.commercial_proposal_type || activeSpotlight.commercial_proposal_type || 'Harvesting Service Quotation';
-            const jobDuration = assDoc.estimated_duration || activeSpotlight.estimated_duration || '1 Working Day';
+            const totalQuoteVal = isPurchase
+              ? (assDoc.contractor_purchase_offer ?? activeSpotlight.contractor_purchase_offer ?? (isTimberSale ? 220000 : null) ?? assDoc.total_quote ?? activeSpotlight.total_quote ?? 220000)
+              : (assDoc.total_quote ?? activeSpotlight.total_quote ?? 110000);
+            const jobDuration = assDoc.estimated_duration || activeSpotlight.estimated_duration || (isPurchase ? '10 Working Days' : '1 Working Day');
 
             const advReq = activeSpotlight.advance_payment_request || assDoc.advance_payment_request;
             const advanceAmount = Number(
               advReq?.advance_amount ||
-              (activeSpotlight.total_verified_paid ? activeSpotlight.total_verified_paid : 38500)
+              (activeSpotlight.total_verified_paid ? activeSpotlight.total_verified_paid : (isPurchase ? 0 : 38500))
             );
             const remainingBal = Number(
               advReq?.remaining_balance !== undefined && advReq?.remaining_balance !== null
                 ? advReq.remaining_balance
                 : activeSpotlight.remaining_balance !== undefined && activeSpotlight.remaining_balance !== null
                   ? activeSpotlight.remaining_balance
-                  : Math.max(0, totalQuoteVal - advanceAmount)
+                  : (isPurchase ? totalQuoteVal : Math.max(0, totalQuoteVal - advanceAmount))
             );
 
             const stagesConfig = [
@@ -2445,32 +2754,52 @@ const LandownerDashboard = () => {
                         </span>
                         <span className="active-spotlight-sub-pill">
                           <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-                          Agreement Signed &amp; Mobilization Advance Verified
+                          {isPurchase
+                            ? 'Timber Purchase Agreement Executed'
+                            : 'Agreement Signed & Mobilization Advance Verified'}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shrink-0">
                           Job #{String(spotlightId).substring(0, 8).toUpperCase()}
                         </span>
                       </div>
                       <h2 className="active-spotlight-heading">
-                        {activeSpotlight.propertyName || activeSpotlight.property_name || 'Timber Harvest Operation'} — Active Harvest Operations
+                        {activeSpotlight.propertyName || activeSpotlight.property_name || 'Timber Harvest Operation'} — {isPurchase ? 'Active Timber Purchase & Operations' : 'Active Harvest Operations'}
                       </h2>
                       <p className="active-spotlight-subtitle">
-                        Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span>
+                        {isPurchase
+                          ? <>Assigned Timber Buyer: <strong className="text-emerald-400 font-bold">{cName}</strong> • Timber Purchase Agreement Executed • Direct Landowner Payout: <strong className="text-emerald-300 font-mono">{formatINR(totalQuoteVal)}</strong></>
+                          : <>Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span></>}
                       </p>
                     </div>
                   </div>
 
                   <div className="active-spotlight-actions">
-                    {isSettlementDue && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
-                        className="active-spotlight-pay-btn"
-                        title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
-                      >
-                        <CreditCard size={15} />
-                        <span>Pay Balance ({formatINR(remainingBal)})</span>
-                      </button>
+                    {isPurchase ? (
+                      <div className="flex items-center gap-2">
+                        {Boolean(activeSpotlight.contractor_paid || activeSpotlight.is_advance_verified || activeSpotlight.payment_status === 'PAID') ? (
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-bold shadow-sm">
+                            <CheckCircle2 size={15} className="text-emerald-400" />
+                            <span>Timber Payout Secured in Escrow ({formatINR(totalQuoteVal)})</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold shadow-sm" title="Contractor will deposit timber purchase amount into escrow before cutting commences">
+                            <Clock size={15} className="text-amber-400 animate-pulse" />
+                            <span>Awaiting Contractor Escrow Deposit ({formatINR(totalQuoteVal)})</span>
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      isSettlementDue && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                          className="active-spotlight-pay-btn"
+                          title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
+                        >
+                          <CreditCard size={15} />
+                          <span>Pay Balance ({formatINR(remainingBal)})</span>
+                        </button>
+                      )
                     )}
                     <button
                       type="button"
@@ -2479,7 +2808,7 @@ const LandownerDashboard = () => {
                       title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
                     >
                       <Camera size={15} />
-                      <span>View Work Status &amp; Evidence</span>
+                      <span>View Evidence</span>
                     </button>
                     <button
                       type="button"
@@ -2531,95 +2860,178 @@ const LandownerDashboard = () => {
                   </div>
 
                   <div className="active-logistics-specs-grid">
-                    <div className="active-logistics-chip">
-                      <span className="active-chip-label">Assigned Crew</span>
-                      <span className="active-chip-value">
-                        <Users size={14} className="text-emerald-400 shrink-0" />
-                        <span>{crewSize} Workers</span>
-                      </span>
-                    </div>
-                    <div className="active-logistics-chip" title={fleetEquip}>
-                      <span className="active-chip-label">Machinery Deployed</span>
-                      <span className="active-chip-value" title={fleetEquip}>
-                        <Truck size={14} className="text-emerald-400 shrink-0" />
-                        <span className="truncate">{fleetEquip}</span>
-                      </span>
-                    </div>
-                    <div className="active-logistics-chip">
-                      <span className="active-chip-label">Start Schedule</span>
-                      <span className="active-chip-value text-emerald-300">
-                        <Calendar size={14} className="text-emerald-400 shrink-0" />
-                        <span>{formatDateDMY(opStartDate)}</span>
-                      </span>
-                    </div>
-                    <div className="active-logistics-chip">
-                      <span className="active-chip-label">Harvest Scope</span>
-                      <span className="active-chip-value">
-                        <Trees size={14} className="text-emerald-400 shrink-0" />
-                        <span>{scopeVolume} m³ • {jobDuration}</span>
-                      </span>
-                    </div>
+                    {isPurchase ? (
+                      <>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Commercial Model</span>
+                          <span className="active-chip-value">
+                            <Handshake size={14} className="text-emerald-400 shrink-0" />
+                            <span>Direct Timber Purchase</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Purchased Volume</span>
+                          <span className="active-chip-value">
+                            <Trees size={14} className="text-emerald-400 shrink-0" />
+                            <span>{scopeVolume} m³ Standing Timber</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Purchase Price</span>
+                          <span className="active-chip-value text-emerald-300">
+                            <Coins size={14} className="text-emerald-400 shrink-0" />
+                            <span>{formatINR(totalQuoteVal)}</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Settlement Mode</span>
+                          <span className="active-chip-value">
+                            <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                            <span>Direct Payout</span>
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Assigned Crew</span>
+                          <span className="active-chip-value">
+                            <Users size={14} className="text-emerald-400 shrink-0" />
+                            <span>{crewSize} Workers</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip" title={fleetEquip}>
+                          <span className="active-chip-label">Machinery Deployed</span>
+                          <span className="active-chip-value" title={fleetEquip}>
+                            <Truck size={14} className="text-emerald-400 shrink-0" />
+                            <span className="truncate">{fleetEquip}</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Start Schedule</span>
+                          <span className="active-chip-value text-emerald-300">
+                            <Calendar size={14} className="text-emerald-400 shrink-0" />
+                            <span>{formatDateDMY(opStartDate)}</span>
+                          </span>
+                        </div>
+                        <div className="active-logistics-chip">
+                          <span className="active-chip-label">Harvest Scope</span>
+                          <span className="active-chip-value">
+                            <Trees size={14} className="text-emerald-400 shrink-0" />
+                            <span>{scopeVolume} m³ • {jobDuration}</span>
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* 4-Item Financial Highlights Grid */}
                 <div className="active-spotlight-grid">
-                  <div className="active-spotlight-stat">
-                    <span className="active-stat-label">Total Agreed Quotation</span>
-                    <div className="active-stat-value text-emerald-300">
-                      {formatINR(totalQuoteVal)}
-                    </div>
-                    <span className="active-stat-hint">{propType}</span>
-                  </div>
+                  {isPurchase ? (
+                    <>
+                      <div className="active-spotlight-stat">
+                        <span className="active-stat-label">Total Agreed Purchase Offer</span>
+                        <div className="active-stat-value text-emerald-300">
+                          {formatINR(totalQuoteVal)}
+                        </div>
+                        <span className="active-stat-hint">Timber Purchase Offer • Contractor &rarr; Landowner</span>
+                      </div>
 
-                  <div className="active-spotlight-stat active-stat-advance">
-                    <span className="active-stat-label">Mobilization Advance Verified</span>
-                    <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
-                      <span>{formatINR(advanceAmount)}</span>
-                    </div>
-                    <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
-                  </div>
-
-                  <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="active-stat-label">Remaining Balance</span>
-                      {isSettlementDue && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
-                          DUE
-                        </span>
-                      )}
-                    </div>
-                    <div className={`active-stat-value ${isSettlementDue ? 'text-amber-400 font-black' : 'text-slate-200'}`}>
-                      {formatINR(remainingBal)}
-                    </div>
-                    {isSettlementDue ? (
-                      <div className="mt-2 space-y-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
-                          className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer transition-all"
-                        >
-                          <CreditCard size={12} /> Pay ₹ {remainingBal.toLocaleString('en-IN')} &rarr;
-                        </button>
-                        <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
-                          <AlertTriangle size={11} className="shrink-0" /> Post-Harvest Settlement Due
+                      <div className="active-spotlight-stat active-stat-advance">
+                        <span className="active-stat-label">Timber Purchase Terms</span>
+                        <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
+                          <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                          <span>Payable to Landowner</span>
+                        </div>
+                        <span className="active-stat-hint text-emerald-300/90 font-medium">
+                          {assDoc.payment_terms || activeSpotlight.payment_terms || '100% full payment prior to timber dispatch'}
                         </span>
                       </div>
-                    ) : (
-                      <span className="active-stat-hint">
-                        {remainingBal <= 0 ? '✓ All dues cleared' : 'Due upon harvest progress / completion'}
-                      </span>
-                    )}
-                  </div>
 
-                  <div className="active-spotlight-stat">
-                    <span className="active-stat-label">Harvest Scope &amp; Crew</span>
-                    <div className="active-stat-value text-white text-base font-bold">
-                      {scopeVolume} m³ • {crewSize} Crew
-                    </div>
-                    <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
-                  </div>
+                      <div className="active-spotlight-stat">
+                        <div className="flex items-center justify-between">
+                          <span className="active-stat-label">Net Purchase Settlement</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            DIRECT PAYOUT
+                          </span>
+                        </div>
+                        <div className="active-stat-value text-emerald-300 font-black">
+                          {formatINR(totalQuoteVal)}
+                        </div>
+                        <span className="active-stat-hint">
+                          Direct credit to Landowner bank account
+                        </span>
+                      </div>
+
+                      <div className="active-spotlight-stat">
+                        <span className="active-stat-label">Harvest Scope &amp; Crew</span>
+                        <div className="active-stat-value text-white text-base font-bold">
+                          {scopeVolume} m³ • {crewSize} Crew
+                        </div>
+                        <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="active-spotlight-stat">
+                        <span className="active-stat-label">Total Agreed Quotation</span>
+                        <div className="active-stat-value text-emerald-300">
+                          {formatINR(totalQuoteVal)}
+                        </div>
+                        <span className="active-stat-hint">{propType}</span>
+                      </div>
+
+                      <div className="active-spotlight-stat active-stat-advance">
+                        <span className="active-stat-label">Mobilization Advance Verified</span>
+                        <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
+                          <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                          <span>{formatINR(advanceAmount)}</span>
+                        </div>
+                        <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
+                      </div>
+
+                      <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="active-stat-label">Remaining Balance</span>
+                          {isSettlementDue && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-500 text-slate-950">
+                              DUE
+                            </span>
+                          )}
+                        </div>
+                        <div className={`active-stat-value ${isSettlementDue ? 'text-amber-400 font-black' : 'text-slate-200'}`}>
+                          {formatINR(remainingBal)}
+                        </div>
+                        {isSettlementDue ? (
+                          <div className="mt-2 space-y-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                              className="w-full py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer transition-all"
+                            >
+                              <CreditCard size={12} /> Pay ₹ {remainingBal.toLocaleString('en-IN')} &rarr;
+                            </button>
+                            <span className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                              <AlertTriangle size={11} className="shrink-0" /> Post-Harvest Settlement Due
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="active-stat-hint">
+                            {remainingBal <= 0 ? '✓ All dues cleared' : 'Due upon harvest progress / completion'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="active-spotlight-stat">
+                        <span className="active-stat-label">Purchased Timber Volume</span>
+                        <div className="active-stat-value text-white text-base font-bold">
+                          {scopeVolume} m³ Standing Timber
+                        </div>
+                        <span className="active-stat-hint">Direct Standing Timber Sale • Buyer Removal</span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* POST-HARVEST SETTLEMENT DUE FULL-WIDTH BANNER */}
@@ -2797,7 +3209,7 @@ const LandownerDashboard = () => {
                     <span className="active-check-divider">•</span>
                     <span className="active-check-item">
                       <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
-                      <span>₹ {advanceAmount.toLocaleString('en-IN')} Advance Verified</span>
+                      <span>{isPurchase ? (activeSpotlight.contractor_paid || activeSpotlight.is_advance_verified ? `₹ ${totalQuoteVal.toLocaleString('en-IN')} Escrow Secured` : `₹ ${totalQuoteVal.toLocaleString('en-IN')} Payout Agreed`) : `₹ ${advanceAmount.toLocaleString('en-IN')} Advance Verified`}</span>
                     </span>
                   </div>
 

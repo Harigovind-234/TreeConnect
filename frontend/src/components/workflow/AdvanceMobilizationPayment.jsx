@@ -80,15 +80,33 @@ export const AdvanceMobilizationPayment = ({
         : Math.max(0, acceptedQuotation - (request?.total_verified_paid || advanceAmount))
   );
 
+  const isTimberPurchase = Boolean(
+    mode === 'timber_purchase' ||
+    request?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    request?.assessment?.commercial_proposal_type === 'Timber Purchase Offer' ||
+    Boolean(request?.contractor_purchase_offer) ||
+    Boolean(request?.assessment?.contractor_purchase_offer) ||
+    request?.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE'
+  );
+
+  const purchaseOffer = Number(
+    request?.contractor_purchase_offer ||
+    request?.assessment?.contractor_purchase_offer ||
+    defaultAmount ||
+    220000
+  );
+
   const isFinal = Boolean(
     isFinalProp ||
     mode === 'final' ||
     (isAdvanceVerified && remainingBalance > 0)
   );
 
-  const payableAmount = isFinal
-    ? Number(defaultAmount || remainingBalance || 44900)
-    : Number(defaultAmount || advanceAmount);
+  const payableAmount = isTimberPurchase
+    ? Number(defaultAmount || purchaseOffer || 220000)
+    : isFinal
+      ? Number(defaultAmount || remainingBalance || 44900)
+      : Number(defaultAmount || advanceAmount);
 
   const isVerified = isFinal
     ? Boolean(request?.is_fully_paid || request?.final_payment_status === 'VERIFIED' || (remainingBalance <= 0 && !defaultAmount) || isSuccess)
@@ -103,6 +121,8 @@ export const AdvanceMobilizationPayment = ({
       user,
       payableAmount,
       isFinal,
+      isTimberPurchase,
+      paymentPurpose: isTimberPurchase ? 'TIMBER_PURCHASE_PAYOUT' : (isFinal ? 'FINAL_PAYMENT' : 'ADVANCE_MOBILIZATION'),
       onSuccess: (result) => {
         if (onPaymentSuccess) onPaymentSuccess(result);
       },
@@ -115,126 +135,129 @@ export const AdvanceMobilizationPayment = ({
   return (
     <div className="space-y-4">
       {/* 1. Primary Payment Summary Card */}
-      <div className="p-5 rounded-2xl bg-[#030e06] border border-emerald-500/35 shadow-xl relative overflow-hidden">
-        {/* Decorative background glow */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 space-y-4">
-          {/* Header Row */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-emerald-500/20">
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                Harvest Request Reference
-              </span>
-              <strong className="text-sm font-mono text-white font-bold">
-                {request?.propertyName || `TC-HR-${String(reqId || '').slice(-6).toUpperCase() || 'PLOT-01'}`}
-              </strong>
-            </div>
-
-            <div className="text-right">
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">
-                Payment Purpose
-              </span>
-              <span className="text-xs font-semibold text-emerald-300 flex items-center gap-1 justify-end">
-                <Sparkles size={12} className="text-emerald-400" />
-                {isFinal ? 'Final Contract Settlement' : `Mobilization Advance (${advancePercentage}%)`}
-              </span>
-            </div>
+      <div className="rapm-summary-card">
+        {/* Header Row */}
+        <div className="rapm-ref-row">
+          <div>
+            <span className="rapm-ref-label">
+              Harvest Request Reference
+            </span>
+            <strong className="rapm-ref-val">
+              {request?.propertyName || `TC-HR-${String(reqId || '').slice(-6).toUpperCase() || 'PLOT-01'}`}
+            </strong>
           </div>
 
-          {/* Quotation & Amount Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="p-3.5 rounded-xl bg-black/40 border border-emerald-500/20">
-              <span className="text-[11px] font-medium text-slate-400 block mb-0.5">
-                Accepted Total Contract Value
-              </span>
-              <strong className="text-base font-bold text-slate-200 font-mono">
-                {formatINR(acceptedQuotation)}
-              </strong>
-              <span className="text-[10.5px] text-slate-400 block mt-0.5">
-                {isFinal
-                  ? `Mobilization advance credited: ${formatINR(request?.total_verified_paid || advanceAmount)}`
-                  : 'Agreed total harvesting contract'}
-              </span>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-gradient-to-br from-emerald-950/60 to-[#041a0c] border border-emerald-500/40">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">
-                  {isFinal ? 'Remaining Balance Payable' : 'Advance Amount Payable'}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
-                  INR
-                </span>
-              </div>
-              <strong className="text-2xl font-black text-emerald-300 font-mono block my-0.5">
-                {formatINR(payableAmount)}
-              </strong>
-              <span className="text-[10.5px] text-emerald-400/80 font-medium">
-                {isFinal ? 'Due post-harvest completion' : `${advancePercentage}% mobilization deposit`}
-              </span>
-            </div>
+          <div className="text-right">
+            <span className="rapm-ref-label">
+              Payment Purpose
+            </span>
+            <span className="rapm-purpose-pill">
+              <Sparkles size={12} />
+              {isTimberPurchase ? 'Timber Purchase Settlement' : (isFinal ? 'Final Contract Settlement' : `Mobilization Advance (${advancePercentage}%)`)}
+            </span>
           </div>
-
-          {/* Payment Status Component */}
-          {paymentState !== PAYMENT_STATES.IDLE && (
-            <PaymentStatus
-              status={paymentState}
-              amount={payableAmount}
-              referenceId={activePayment?.razorpay_payment_id || activePayment?.order_id}
-              errorMessage={errorMessage}
-              onRetry={resetPaymentState}
-            />
-          )}
-
-          {/* 2. Prominent Razorpay CTA Button */}
-          {!isVerified && paymentState !== PAYMENT_STATES.VERIFIED && (
-            <div className="pt-1 space-y-2.5">
-              <button
-                type="button"
-                onClick={handlePayClick}
-                disabled={isLoading}
-                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm sm:text-base flex items-center justify-center gap-3 shadow-lg hover:shadow-emerald-500/30 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed group"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 size={19} className="animate-spin text-slate-950" />
-                    <span>
-                      {isVerifying ? 'Verifying with Razorpay...' : 'Connecting to Gateway...'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <CreditCard size={20} className="group-hover:scale-110 transition-transform" />
-                    <span>Pay {formatINR(payableAmount)} with Razorpay</span>
-                    <Lock size={16} className="text-slate-800 ml-1 opacity-70" />
-                  </>
-                )}
-              </button>
-
-              {/* Trust Badges */}
-              <div className="flex items-center justify-center gap-3 flex-wrap text-[11px] text-slate-400 pt-1">
-                <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-                  <ShieldCheck size={13} /> Secured by Razorpay
-                </span>
-                <span>•</span>
-                <span>UPI (GPay / PhonePe / Paytm)</span>
-                <span>•</span>
-                <span>Cards &amp; NetBanking</span>
-              </div>
-            </div>
-          )}
-
-          {/* Already Verified Banner */}
-          {isVerified && (
-            <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2.5">
-              <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
-              <span>
-                <strong>{isFinal ? 'Final Contract Settlement Completed' : 'Advance Mobilization Completed'}</strong> — Funds verified and credited to this harvest operation. {isFinal && 'Contract successfully closed and certified.'}
-              </span>
-            </div>
-          )}
         </div>
+
+        {/* Quotation & Amount Grid */}
+        <div className="rapm-amounts-grid">
+          <div className="rapm-amount-box">
+            <span className="rapm-amount-title">
+              {isTimberPurchase ? 'Agreed Standing Timber Value' : 'Accepted Total Contract Value'}
+            </span>
+            <strong className="rapm-amount-figure">
+              {formatINR(isTimberPurchase ? payableAmount : acceptedQuotation)}
+            </strong>
+            <span className="rapm-amount-desc">
+              {isTimberPurchase
+                ? 'Full commercial purchase price for timber'
+                : isFinal
+                  ? `Advance credited: ${formatINR(request?.total_verified_paid || advanceAmount)}`
+                  : 'Agreed harvesting contract value'}
+            </span>
+          </div>
+
+          <div className="rapm-amount-box rapm-amount-box-highlight">
+            <div className="flex items-center justify-between">
+              <span className="rapm-amount-title text-emerald-400">
+                {isTimberPurchase ? 'Timber Purchase Payout to Landowner' : (isFinal ? 'Remaining Balance Payable' : 'Advance Amount Payable')}
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                INR
+              </span>
+            </div>
+            <strong className="rapm-amount-figure">
+              {formatINR(payableAmount)}
+            </strong>
+            <span className="rapm-amount-desc">
+              {isTimberPurchase
+                ? '100% full timber payout • Released via escrow'
+                : (isFinal ? 'Due post-harvest completion' : `${advancePercentage}% mobilization deposit`)}
+            </span>
+          </div>
+        </div>
+
+        {/* Payment Status Component */}
+        {paymentState !== PAYMENT_STATES.IDLE && (
+          <PaymentStatus
+            status={paymentState}
+            amount={payableAmount}
+            referenceId={activePayment?.razorpay_payment_id || activePayment?.order_id}
+            errorMessage={errorMessage}
+            onRetry={resetPaymentState}
+          />
+        )}
+
+        {/* 2. Prominent Razorpay CTA Button */}
+        {!isVerified && paymentState !== PAYMENT_STATES.VERIFIED && (
+          <div className="pt-1 space-y-2.5">
+            <button
+              type="button"
+              onClick={handlePayClick}
+              disabled={isLoading}
+              className="rapm-primary-btn disabled:opacity-60 disabled:cursor-not-allowed group"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 size={18} className="animate-spin text-slate-950" />
+                  <span>
+                    {isVerifying ? 'Verifying Escrow Gateway...' : 'Connecting to Gateway...'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <CreditCard size={18} />
+                  <span>
+                    {isTimberPurchase
+                      ? `Disburse Escrow Payout (${formatINR(payableAmount)})`
+                      : `Pay ${formatINR(payableAmount)} with Razorpay`}
+                  </span>
+                  <Lock size={15} className="text-slate-800 ml-1 opacity-70" />
+                </>
+              )}
+            </button>
+
+            {/* Trust Badges */}
+            <div className="rapm-trust-bar">
+              <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                <ShieldCheck size={13} /> {isTimberPurchase ? '100% Escrow Protected' : 'Secured by Razorpay'}
+              </span>
+              <span>•</span>
+              <span>{isTimberPurchase ? 'Instant UPI / Bank Credit' : 'UPI (GPay / PhonePe / Paytm)'}</span>
+              <span>•</span>
+              <span>{isTimberPurchase ? 'Zero Platform Fee' : 'Cards & NetBanking'}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Already Verified Banner */}
+        {isVerified && (
+          <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2.5">
+            <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+            <span>
+              <strong>{isTimberPurchase ? 'Timber Purchase Settlement Completed' : (isFinal ? 'Final Contract Settlement Completed' : 'Advance Mobilization Completed')}</strong> — Funds verified and credited to this harvest operation.
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 3. Fallback Manual Transfer Option (Separately Labeled) */}

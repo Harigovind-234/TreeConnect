@@ -34,7 +34,9 @@ import {
   Building2,
   Sparkles,
   Award,
-  CreditCard
+  CreditCard,
+  Coins,
+  Handshake
 } from 'lucide-react';
 import {
   formatINR,
@@ -402,11 +404,24 @@ const HarvestOperationsPage = () => {
             {activeOperations.map((req) => {
               const reqId = req.id || req._id || 'unknown';
               const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
+              const isTimberSale = (
+                assDoc.commercial_proposal_type === 'Timber Purchase Offer' ||
+                req.commercial_proposal_type === 'Timber Purchase Offer' ||
+                req.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+                req.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+                Boolean(req.contractor_purchase_offer) ||
+                Boolean(assDoc.contractor_purchase_offer)
+              );
+              const isPurchase = isTimberSale || assDoc.commercial_proposal_type === 'Timber Purchase Offer' || req.commercial_proposal_type === 'Timber Purchase Offer';
+              const totalQuoteVal = isPurchase
+                ? (assDoc.contractor_purchase_offer ?? req.contractor_purchase_offer ?? (isTimberSale ? 220000 : null) ?? assDoc.total_quote ?? req.total_quote ?? 220000)
+                : (assDoc.total_quote ?? req.total_quote ?? 110000);
+              const assessedVolume = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume || req.estimatedVolume || '1.80';
               const cName = req.assigned_contractor_name || req.contractor_name || req.assigned_contractor_email || 'Rohith kumar';
               const cPhone = req.site_inspection?.inspector_phone || req.assigned_contractor_phone || '9746512243';
               const cEmail = req.assigned_contractor_email || 'contact@treeconnect.in';
-              const crewSize = assDoc.assigned_workers_count || req.assigned_workers_count || req.site_inspection?.workers_count || 12;
-              const fleetEquip = assDoc.equipment_needed || req.equipment_needed || 'Hydraulic Log Loader, Heavy Hauler, Chainsaw Rigs';
+              const crewSize = assDoc.assigned_workers_count || req.assigned_workers_count || req.site_inspection?.workers_count || (isPurchase ? null : 10);
+              const fleetEquip = assDoc.equipment_needed || req.equipment_needed || (isPurchase ? null : 'Hydraulic Log Loader, Heavy Hauler, Chainsaw Rigs');
               const opStartDate = assDoc.proposed_start_date || req.proposed_start_date || req.preferred_start_date || req.createdAt;
               const agreementId = req.digital_agreement?.agreement_id || `TC-AGR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-A${String(reqId).substring(0, 5).toUpperCase()}`;
 
@@ -533,7 +548,9 @@ const HarvestOperationsPage = () => {
                             </span>
                           </div>
                           <p className="text-xs text-slate-400 mt-0.5">
-                            Contractor on record executing tree felling, processing, delimbing, and log extraction.
+                            {isPurchase
+                              ? 'Assigned timber buyer acquiring standing timber under executed purchase agreement.'
+                              : 'Contractor on record executing tree felling, processing, delimbing, and log extraction.'}
                           </p>
                         </div>
                       </div>
@@ -563,49 +580,99 @@ const HarvestOperationsPage = () => {
 
                     {/* Operational Logistics 4-Card Grid using .qtn-metrics-grid */}
                     <div className="qtn-metrics-grid !grid-cols-2 lg:!grid-cols-4">
-                      <div className="qtn-metric-card">
-                        <div className="qtn-metric-head">
-                          <Users size={14} className="text-slate-400" />
-                          <span>Assigned Crew</span>
-                        </div>
-                        <div className="qtn-metric-value text-white">
-                          {crewSize} Workers
-                        </div>
-                        <div className="qtn-metric-foot">Deployed workforce</div>
-                      </div>
+                      {isPurchase ? (
+                        <>
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <Handshake size={14} className="text-emerald-400" />
+                              <span>Commercial Model</span>
+                            </div>
+                            <div className="qtn-metric-value text-emerald-300 text-sm font-bold">
+                              Direct Timber Purchase
+                            </div>
+                            <div className="qtn-metric-foot">Standing timber acquisition</div>
+                          </div>
 
-                      <div className="qtn-metric-card">
-                        <div className="qtn-metric-head">
-                          <Truck size={14} className="text-slate-400" />
-                          <span>Machinery &amp; Fleet</span>
-                        </div>
-                        <div className="qtn-metric-value text-white truncate text-sm" title={fleetEquip}>
-                          {fleetEquip}
-                        </div>
-                        <div className="qtn-metric-foot">Operational equipment</div>
-                      </div>
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <Trees size={14} className="text-emerald-400" />
+                              <span>Purchased Volume</span>
+                            </div>
+                            <div className="qtn-metric-value text-white">
+                              {assessedVolume} m³
+                            </div>
+                            <div className="qtn-metric-foot">Standing timber volume</div>
+                          </div>
 
-                      <div className="qtn-metric-card">
-                        <div className="qtn-metric-head">
-                          <Calendar size={14} className="text-emerald-400" />
-                          <span>Operational Start</span>
-                        </div>
-                        <div className="qtn-metric-value text-emerald-300">
-                          {formatDateDMY(opStartDate)}
-                        </div>
-                        <div className="qtn-metric-foot">Mobilization date</div>
-                      </div>
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <Coins size={14} className="text-emerald-400" />
+                              <span>Purchase Price</span>
+                            </div>
+                            <div className="qtn-metric-value text-emerald-300">
+                              {formatINR(totalQuoteVal)}
+                            </div>
+                            <div className="qtn-metric-foot">Payable directly to landowner</div>
+                          </div>
 
-                      <div className="qtn-metric-card">
-                        <div className="qtn-metric-head">
-                          <MapPin size={14} className="text-emerald-400" />
-                          <span>Operational Parcel</span>
-                        </div>
-                        <div className="qtn-metric-value text-white truncate text-sm" title={req.propertyName}>
-                          {req.propertyName || 'TreeConnect Property'}
-                        </div>
-                        <div className="qtn-metric-foot">{req.propertyArea || '11 Cents'} • Verified</div>
-                      </div>
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <CheckCircle2 size={14} className="text-emerald-400" />
+                              <span>Settlement Mode</span>
+                            </div>
+                            <div className="qtn-metric-value text-white text-sm font-bold">
+                              Direct Payout
+                            </div>
+                            <div className="qtn-metric-foot">Contractor &rarr; Landowner</div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <Users size={14} className="text-slate-400" />
+                              <span>Assigned Crew</span>
+                            </div>
+                            <div className="qtn-metric-value text-white">
+                              {crewSize} Workers
+                            </div>
+                            <div className="qtn-metric-foot">Deployed workforce</div>
+                          </div>
+
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <Truck size={14} className="text-slate-400" />
+                              <span>Machinery &amp; Fleet</span>
+                            </div>
+                            <div className="qtn-metric-value text-white truncate text-sm" title={fleetEquip}>
+                              {fleetEquip}
+                            </div>
+                            <div className="qtn-metric-foot">Operational equipment</div>
+                          </div>
+
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <Calendar size={14} className="text-emerald-400" />
+                              <span>Operational Start</span>
+                            </div>
+                            <div className="qtn-metric-value text-emerald-300">
+                              {formatDateDMY(opStartDate)}
+                            </div>
+                            <div className="qtn-metric-foot">Mobilization date</div>
+                          </div>
+
+                          <div className="qtn-metric-card">
+                            <div className="qtn-metric-head">
+                              <MapPin size={14} className="text-emerald-400" />
+                              <span>Operational Parcel</span>
+                            </div>
+                            <div className="qtn-metric-value text-white truncate text-sm" title={req.propertyName}>
+                              {req.propertyName || 'TreeConnect Property'}
+                            </div>
+                            <div className="qtn-metric-foot">{req.propertyArea || '11 Cents'} • Verified</div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 

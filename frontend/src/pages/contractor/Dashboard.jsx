@@ -51,7 +51,8 @@ import {
   RefreshCw,
   Sparkles,
   Handshake,
-  MessageSquare
+  MessageSquare,
+  ShoppingBag
 } from 'lucide-react';
 import {
   calculateApproxTimberValue,
@@ -602,6 +603,13 @@ const ContractorDashboard = () => {
 
                   {/* ASSIGNED JOBS ACTION */}
                   <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
+                    <button
+                      onClick={() => navigate('/contractor/marketplace')}
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                    >
+                      <ShoppingBag size={14} />
+                      <span>Timber Marketplace</span>
+                    </button>
                     <button
                       onClick={() => navigate('/contractor/assigned-jobs')}
                       className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"

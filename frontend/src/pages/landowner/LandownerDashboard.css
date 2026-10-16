@@ -4466,6 +4466,200 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   display: block !important;
 }
 
+/* Timber Sale Payout & Settlement Section */
+/* Single Unified Timber Sale Settlement Card */
+.qvc-unified-settlement-card {
+  background: #041008 !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  border-radius: 16px !important;
+  padding: 20px 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  margin: 16px 0 !important;
+}
+
+.qvc-usc-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 14px !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.16) !important;
+  padding-bottom: 14px !important;
+}
+
+.qvc-usc-title-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.qvc-usc-icon-badge {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 12px !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #34d399 !important;
+  flex-shrink: 0 !important;
+}
+
+.qvc-usc-title {
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 !important;
+}
+
+.qvc-usc-pill {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  padding: 3px 8px !important;
+  border-radius: 6px !important;
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+
+.qvc-usc-escrow-pill {
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 3px 9px !important;
+  border-radius: 6px !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.qvc-usc-subtitle {
+  font-size: 12px !important;
+  color: #94a3b8 !important;
+  margin: 4px 0 0 0 !important;
+  line-height: 1.45 !important;
+}
+
+.qvc-usc-total-block {
+  text-align: right !important;
+}
+
+.qvc-usc-total-label {
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  display: block !important;
+}
+
+.qvc-usc-total-amount {
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  color: #34d399 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  display: block !important;
+}
+
+.qvc-usc-metrics-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 14px !important;
+}
+
+@media (max-width: 860px) {
+  .qvc-usc-metrics-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.qvc-usc-metric-item {
+  background: #07190d !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 14px 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  transition: all 0.2s ease !important;
+}
+
+.qvc-usc-metric-item:hover {
+  background: #0b2514 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+.qvc-usc-metric-label {
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  color: #94a3b8 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.qvc-usc-metric-value {
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  margin: 2px 0 !important;
+}
+
+.qvc-usc-metric-desc {
+  font-size: 11px !important;
+  color: #64748b !important;
+}
+
+.qvc-usc-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 14px !important;
+  padding-top: 14px !important;
+  border-top: 1px solid rgba(16, 185, 129, 0.16) !important;
+}
+
+.qvc-usc-guarantee-text {
+  font-size: 12px !important;
+  color: #cbd5e1 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  max-width: 600px !important;
+}
+
+.qvc-usc-primary-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 22px !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #031309 !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  border: none !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.4) !important;
+  transition: all 0.2s ease !important;
+}
+
+.qvc-usc-primary-btn:hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%) !important;
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.55) !important;
+  transform: translateY(-1px) !important;
+}
+
 /* Assessor Official Remarks */
 .qvc-remarks-box {
   background: rgba(4, 18, 11, 0.6) !important;
@@ -5802,18 +5996,20 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   justify-content: space-between !important;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1100px) {
   .active-spotlight-header {
     flex-direction: row !important;
-    align-items: center !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
   }
 }
 
 .active-spotlight-title-group {
   display: flex !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   gap: 16px !important;
   min-width: 0 !important;
+  flex: 1 1 auto !important;
 }
 
 .active-spotlight-icon-wrap {
@@ -5828,6 +6024,7 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   color: #34d399 !important;
   flex-shrink: 0 !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  margin-top: 2px !important;
 }
 
 .active-spotlight-status-pill {
@@ -5842,6 +6039,8 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   background: rgba(16, 185, 129, 0.18) !important;
   color: #34d399 !important;
   border: 1px solid rgba(16, 185, 129, 0.45) !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
 .live-pulse-dot {
@@ -5870,6 +6069,8 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   background: rgba(16, 185, 129, 0.08) !important;
   color: #a7f3d0 !important;
   border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
 .active-spotlight-heading {

@@ -56,7 +56,9 @@ import {
   Check,
   Target,
   FileCheck,
-  Ruler
+  Ruler,
+  TrendingUp,
+  CreditCard
 } from 'lucide-react';
 
 import {
@@ -877,15 +879,29 @@ const HarvestRequestsPage = () => {
                           {/* FORMAL CONTRACTOR ASSESSMENT & COMMERCIAL PROPOSAL (SHOWN BEFORE & AFTER SITE VISIT) */}
                       {(isAssessmentSubmitted || isAccepted || isRevisionRequested || activeAssessmentMap[reqId] || req.assessment || req.total_quote || req.contractor_purchase_offer) && (() => {
                         const assDoc = activeAssessmentMap[reqId] || req.assessment || {};
-                        const propType = assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation';
-                        const isPurchase = propType === 'Timber Purchase Offer';
+                        const isTimberSale = (
+                          assDoc.commercial_proposal_type === 'Timber Purchase Offer' ||
+                          req.commercial_proposal_type === 'Timber Purchase Offer' ||
+                          req.site_inspection?.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+                          req.landowner_preferred_arrangement === 'INTERESTED_IN_TIMBER_SALE' ||
+                          Boolean(req.contractor_purchase_offer) ||
+                          Boolean(assDoc.contractor_purchase_offer)
+                        );
+                        const propType = isTimberSale
+                          ? 'Timber Purchase Offer'
+                          : (assDoc.commercial_proposal_type || req.commercial_proposal_type || 'Harvesting Service Quotation');
+                        const isPurchase = isTimberSale || propType === 'Timber Purchase Offer';
                         const isHybrid = propType === 'Purchase + Harvesting';
                         const isService = propType === 'Harvesting Service Quotation';
 
                         const assessedVolume = assDoc.estimated_harvestable_volume || req.estimated_harvestable_volume || stands.reduce((sum, s) => sum + parseVolumeNumber(s.estimatedVolume || s.volume), 0);
-                        const totalQuoteVal = assDoc.total_quote ?? req.total_quote ?? 110000;
                         const purchaseOfferVal = assDoc.contractor_purchase_offer ?? req.contractor_purchase_offer;
                         const purchasePriceVal = assDoc.timber_purchase_price ?? req.timber_purchase_price;
+                        const totalQuoteVal = isPurchase
+                          ? (purchaseOfferVal ?? (isTimberSale ? 220000 : null) ?? req.total_quote ?? assDoc.total_quote ?? 220000)
+                          : isHybrid
+                            ? (purchasePriceVal ?? req.total_quote ?? assDoc.total_quote ?? 110000)
+                            : (assDoc.total_quote ?? req.total_quote ?? 110000);
                         const harvestArrangementCostVal = assDoc.harvesting_arrangement_cost ?? req.harvesting_arrangement_cost;
                         const paymentTermsVal = assDoc.payment_terms || req.payment_terms;
                         const isInspectedSite = Boolean(req.site_inspected || isInspectionCompleted || assDoc.is_reassessed_after_inspection || req.inspection_status === 'COMPLETED');
@@ -896,7 +912,10 @@ const HarvestRequestsPage = () => {
                           req.is_revision ||
                           (previousQuoteVal && previousQuoteVal !== totalQuoteVal) ||
                           (assDoc.reduction && assDoc.reduction > 0) ||
-                          (req.reduction && req.reduction > 0)
+                          (req.reduction && req.reduction > 0) ||
+                          isRevisionRequested ||
+                          req.counter_offer_amount ||
+                          assDoc.counter_offer_amount
                         );
                         const reductionAmt = assDoc.reduction ?? req.reduction ?? (previousQuoteVal && totalQuoteVal < previousQuoteVal ? previousQuoteVal - totalQuoteVal : 0);
                         const reductionPct = (previousQuoteVal && reductionAmt > 0) ? Math.round((reductionAmt / previousQuoteVal) * 100) : 0;
@@ -1092,46 +1111,88 @@ const HarvestRequestsPage = () => {
                                   <span>{isPurchase ? 'Purchase Offer' : 'Total Quotation'}</span>
                                 </div>
                                 <div className="qtn-metric-value text-amber-300">
-                                  {formatINR(isPurchase ? (purchaseOfferVal || 0) : totalQuoteVal)}
+                                  {formatINR(totalQuoteVal)}
                                 </div>
                                 <div className="qtn-metric-foot">{isPurchase ? 'Direct landowner payout' : 'Agreed harvest quotation'}</div>
                               </div>
 
-                              {/* 3. Assigned Crew */}
-                              <div className="qtn-metric-card">
-                                <div className="qtn-metric-head">
-                                  <Users size={14} className="text-slate-400" />
-                                  <span>Assigned Crew</span>
-                                </div>
-                                <div className="qtn-metric-value text-white">
-                                  {assDoc.assigned_workers_count || assDoc.workers_assigned || req.assigned_workers_count || req.workers_assigned || 10} Workers
-                                </div>
-                                <div className="qtn-metric-foot">Deployed workforce</div>
-                              </div>
+                              {isPurchase ? (
+                                <>
+                                  {/* 3. Standing Timber Value */}
+                                  <div className="qtn-metric-card">
+                                    <div className="qtn-metric-head">
+                                      <TrendingUp size={14} className="text-emerald-400" />
+                                      <span>Timber Valuation</span>
+                                    </div>
+                                    <div className="qtn-metric-value text-white">
+                                      {formatINR(assDoc.reference_timber_value || req.reference_timber_value || 251082)}
+                                    </div>
+                                    <div className="qtn-metric-foot">Market benchmark</div>
+                                  </div>
 
-                              {/* 4. Job Duration */}
-                              <div className="qtn-metric-card">
-                                <div className="qtn-metric-head">
-                                  <Clock size={14} className="text-slate-400" />
-                                  <span>Job Duration</span>
-                                </div>
-                                <div className="qtn-metric-value text-white">
-                                  {assDoc.estimated_duration || req.estimated_duration || '1 Working Day'}
-                                </div>
-                                <div className="qtn-metric-foot">Operational timeline</div>
-                              </div>
+                                  {/* 4. Payment Terms */}
+                                  <div className="qtn-metric-card">
+                                    <div className="qtn-metric-head">
+                                      <CreditCard size={14} className="text-slate-400" />
+                                      <span>Payment Terms</span>
+                                    </div>
+                                    <div className="qtn-metric-value text-white truncate text-sm" title={paymentTermsVal || 'Full payment for timber'}>
+                                      {paymentTermsVal || 'Full payment for timber'}
+                                    </div>
+                                    <div className="qtn-metric-foot">Commercial settlement</div>
+                                  </div>
 
-                              {/* 5. Proposed Start */}
-                              <div className="qtn-metric-card">
-                                <div className="qtn-metric-head">
-                                  <Calendar size={14} className="text-emerald-400" />
-                                  <span>Proposed Start</span>
-                                </div>
-                                <div className="qtn-metric-value text-emerald-300">
-                                  {formatDateDMY(assDoc.proposed_start_date || req.proposed_start_date || '2026-10-14')}
-                                </div>
-                                <div className="qtn-metric-foot">Post-inspection mobilization</div>
-                              </div>
+                                  {/* 5. Offer Valid Until */}
+                                  <div className="qtn-metric-card">
+                                    <div className="qtn-metric-head">
+                                      <Calendar size={14} className="text-emerald-400" />
+                                      <span>Offer Valid Until</span>
+                                    </div>
+                                    <div className="qtn-metric-value text-emerald-300">
+                                      {formatDateDMY(assDoc.quote_valid_until || req.quote_valid_until || '2026-10-20')}
+                                    </div>
+                                    <div className="qtn-metric-foot">Binding expiry date</div>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  {/* 3. Assigned Crew */}
+                                  <div className="qtn-metric-card">
+                                    <div className="qtn-metric-head">
+                                      <Users size={14} className="text-slate-400" />
+                                      <span>Assigned Crew</span>
+                                    </div>
+                                    <div className="qtn-metric-value text-white">
+                                      {assDoc.assigned_workers_count || assDoc.workers_assigned || req.assigned_workers_count || req.workers_assigned || 10} Workers
+                                    </div>
+                                    <div className="qtn-metric-foot">Deployed workforce</div>
+                                  </div>
+
+                                  {/* 4. Job Duration */}
+                                  <div className="qtn-metric-card">
+                                    <div className="qtn-metric-head">
+                                      <Clock size={14} className="text-slate-400" />
+                                      <span>Job Duration</span>
+                                    </div>
+                                    <div className="qtn-metric-value text-white">
+                                      {assDoc.estimated_duration || req.estimated_duration || '1 Working Day'}
+                                    </div>
+                                    <div className="qtn-metric-foot">Operational timeline</div>
+                                  </div>
+
+                                  {/* 5. Proposed Start */}
+                                  <div className="qtn-metric-card">
+                                    <div className="qtn-metric-head">
+                                      <Calendar size={14} className="text-emerald-400" />
+                                      <span>Proposed Start</span>
+                                    </div>
+                                    <div className="qtn-metric-value text-emerald-300">
+                                      {formatDateDMY((assDoc.proposed_start_date && assDoc.proposed_start_date !== 'Upcoming') ? assDoc.proposed_start_date : (req.proposed_start_date && req.proposed_start_date !== 'Upcoming' ? req.proposed_start_date : '2026-10-14'))}
+                                    </div>
+                                    <div className="qtn-metric-foot">Post-inspection mobilization</div>
+                                  </div>
+                                </>
+                              )}
                             </div>
 
                             {/* 3. COST BREAKDOWN */}
@@ -1416,15 +1477,17 @@ const HarvestRequestsPage = () => {
                             )}
 
                             {/* Action Bar (When proposal is under review and not yet accepted) */}
-                            {!isAgreementReady && !isRevisionRequested && (
+                            {!isAgreementReady && (
                               <div className="qtn-action-bar">
                                 <div className="qtn-action-hint">
                                   <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
                                   <span>
                                     {isRevision
-                                      ? 'Review the contractor\'s revised quotation. You can accept to generate the binding agreement or request a re-revision.'
+                                      ? (isPurchase
+                                        ? 'Review the contractor\'s revised timber purchase offer. You can agree to accept and execute the sale agreement, or negotiate further.'
+                                        : 'Review the contractor\'s revised quotation. You can accept to generate the binding agreement or request a re-revision.')
                                       : (isPurchase
-                                        ? 'Accepting enters into a binding timber sale agreement with the contractor.'
+                                        ? 'Review the contractor\'s timber purchase offer. You can agree and accept the offer to sell your standing timber, or propose a counter-offer to negotiate.'
                                         : isHybrid
                                           ? 'Accepting confirms the valuation and generates a binding digital contract.'
                                           : 'Accepting authorizes the quotation, generates the Digital Harvest Agreement, and readies work for execution.')}
@@ -1438,7 +1501,7 @@ const HarvestRequestsPage = () => {
                                     className="qtn-btn-decline"
                                   >
                                     <XCircle size={15} />
-                                    <span>Decline Proposal</span>
+                                    <span>{isPurchase ? 'Decline Offer' : 'Decline Proposal'}</span>
                                   </button>
 
                                   <button
@@ -1447,7 +1510,7 @@ const HarvestRequestsPage = () => {
                                     className="qtn-btn-negotiate"
                                   >
                                     <RefreshCw size={14} />
-                                    <span>{isRevision ? 'Re-revise / Further Negotiation' : 'Negotiate / Counter-Offer'}</span>
+                                    <span>{isRevision ? 'Re-revise / Further Negotiation' : (isPurchase ? 'Negotiate / Counter-Offer' : 'Request Revision / Counter-Offer')}</span>
                                   </button>
 
                                   <button
@@ -1458,9 +1521,9 @@ const HarvestRequestsPage = () => {
                                     <CheckCircle2 size={16} />
                                     <span>
                                       {isRevision
-                                        ? 'Accept Revised Quotation & Execute Agreement'
+                                        ? (isPurchase ? 'Agree & Accept Revised Offer' : 'Accept Revised Quotation & Execute Agreement')
                                         : (isPurchase
-                                          ? 'Accept Offer & Execute Contract'
+                                          ? 'Agree & Accept Purchase Offer'
                                           : isHybrid
                                             ? 'Accept Proposal & Execute Contract'
                                             : 'Accept Quote & Execute Agreement')}

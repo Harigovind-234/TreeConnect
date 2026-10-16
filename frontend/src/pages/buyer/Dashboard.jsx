@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
+import marketplaceService from '../../services/marketplaceService';
 import {
   ShoppingBag,
   Filter,
@@ -16,135 +17,298 @@ import {
   MapPin,
   CheckCircle2,
   Activity,
-  CloudSun,
-  Wind,
-  Droplets,
-  Bell,
-  Calendar,
   Layers,
   ChevronRight,
   X,
   FileText,
   Building,
-  Award
+  Award,
+  Trees,
+  Search,
+  MessageSquare,
+  Handshake,
+  RotateCcw,
+  Sparkles,
+  Phone,
+  Eye,
+  AlertCircle
 } from 'lucide-react';
 
 const BuyerDashboard = () => {
   const { user } = useAuth();
+  const buyerName = user?.name || user?.full_name || 'Pacific Lumber Mills';
+  const buyerCompany = user?.company_name || 'Pacific Lumber & Veneer Corp';
+  const buyerEmail = (user?.email || 'buyer@treeconnect.com').toLowerCase().trim();
+
+  // Active view tab: 'marketplace' | 'negotiations' | 'orders' | 'analytics'
+  const [activeTab, setActiveTab] = useState('marketplace');
+
+  // Data state from marketplaceService
+  const [listings, setListings] = useState([]);
+  const [negotiations, setNegotiations] = useState([]);
+  const [orders, setOrders] = useState([]);
+
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sellerRoleFilter, setSellerRoleFilter] = useState('All'); // 'All' | 'landowner' | 'contractor'
   const [selectedSpecies, setSelectedSpecies] = useState('All');
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [selectedLog, setSelectedLog] = useState(null);
-  const [orderVolume, setOrderVolume] = useState('100');
-  const [deliveryMillLocation, setDeliveryMillLocation] = useState('Ernakulam Timber Mill Yard #2');
-  const [paymentTerms, setPaymentTerms] = useState('Letter of Credit / Net 30');
+  const [selectedGrade, setSelectedGrade] = useState('All');
+  const [selectedDistrict, setSelectedDistrict] = useState('All');
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'price_asc' | 'price_desc' | 'volume_desc'
 
-  const [catalog, setCatalog] = useState([
-    {
-      id: 'log_1',
-      species: 'Teakwood (Sawlogs Grade A1)',
-      volume: '450 m³',
-      rawVolumeNum: 450,
-      grade: 'Export Sawlog Grade',
-      location: 'Wayanad, Kerala',
-      price: '₹ 42,500 / m³',
-      unitPrice: 42500,
-      origin: 'Wayanad Forest Parcel #3',
-      fscCert: 'FSC-C012984 Verified'
-    },
-    {
-      id: 'log_2',
-      species: 'Rosewood (Peeler & Decorative Grade)',
-      volume: '300 m³',
-      rawVolumeNum: 300,
-      grade: 'Premium Veneer Grade',
-      location: 'Palakkad, Kerala',
-      price: '₹ 58,000 / m³',
-      unitPrice: 58000,
-      origin: 'Palakkad Estate Stand #1',
-      fscCert: 'FSC-C088210 Verified'
-    },
-    {
-      id: 'log_3',
-      species: 'Rubberwood (Seasoned Mill Quality)',
-      volume: '600 m³',
-      rawVolumeNum: 600,
-      grade: 'Industrial Furniture Grade',
-      location: 'Kottayam, Kerala',
-      price: '₹ 12,800 / m³',
-      unitPrice: 12800,
-      origin: 'Kottayam Rubber Plantation',
-      fscCert: 'PEFC Certified'
-    },
-    {
-      id: 'log_4',
-      species: 'Mahogany (Commercial Board Grade)',
-      volume: '520 m³',
-      rawVolumeNum: 520,
-      grade: 'Joinery Grade #1',
-      location: 'Idukki, Kerala',
-      price: '₹ 24,000 / m³',
-      unitPrice: 24000,
-      origin: 'High Range Timber Reserve',
-      fscCert: 'FSC-C099411 Verified'
-    }
-  ]);
+  // Modals
+  const [selectedListingForDetails, setSelectedListingForDetails] = useState(null);
 
-  const [orders, setOrders] = useState([
-    {
-      id: 'ORD-2026-901',
-      item: 'Teakwood Sawlogs (Grade A1)',
-      volume: '200 m³',
-      total: '₹ 85,000,00',
-      status: 'In Transit',
-      ETA: 'Aug 14, 2026',
-      contractor: 'Apex Harvesting Co.',
-      mill: 'Ernakulam Mill Yard #1'
-    },
-    {
-      id: 'ORD-2026-882',
-      item: 'Rosewood Veneer Logs',
-      volume: '150 m³',
-      total: '₹ 87,000,00',
-      status: 'Delivered to Mill',
-      ETA: 'Aug 02, 2026',
-      contractor: 'Northwest Logging Ops',
-      mill: 'Kochi Lumber Processing Port'
-    }
-  ]);
+  // Negotiation Modal
+  const [negotiateModalOpen, setNegotiateModalOpen] = useState(false);
+  const [negotiateTarget, setNegotiateTarget] = useState(null);
+  const [negotiateForm, setNegotiateForm] = useState({
+    offeredPricePerM3: '',
+    requestedVolume: '',
+    deliveryPreference: 'Seller Contractor Hauling to Mill',
+    destinationMill: 'Ernakulam Timber Mill Yard #2',
+    paymentTerms: '50% Advance Escrow + 50% Post-Weighbridge',
+    notes: ''
+  });
 
-  const filteredCatalog = selectedSpecies === 'All'
-    ? catalog
-    : catalog.filter(item => item.species.toLowerCase().includes(selectedSpecies.toLowerCase()));
+  // Buy Now Modal
+  const [buyNowModalOpen, setBuyNowModalOpen] = useState(false);
+  const [buyNowTarget, setBuyNowTarget] = useState(null);
+  const [buyNowForm, setBuyNowForm] = useState({
+    volume: '',
+    destinationMill: 'Ernakulam Timber Mill Yard #2',
+    haulingCarrier: 'Kerala Agro Logistics Fleet',
+    paymentMethod: 'TreeConnect Escrow (Standard Safe Settlement)',
+    notes: ''
+  });
 
-  const handleOpenOrderModal = (item) => {
-    setSelectedLog(item);
-    setOrderVolume('100');
-    setShowOrderModal(true);
+  // Counter response modal (for buyer to reply to seller's counter)
+  const [counterReplyModalOpen, setCounterReplyModalOpen] = useState(false);
+  const [selectedNegotiationForReply, setSelectedNegotiationForReply] = useState(null);
+  const [counterReplyPrice, setCounterReplyPrice] = useState('');
+  const [counterReplyMessage, setCounterReplyMessage] = useState('');
+
+  // Toast
+  const [toastMessage, setToastMessage] = useState('');
+
+  const loadData = () => {
+    setListings(marketplaceService.getListings());
+    setNegotiations(marketplaceService.getNegotiations());
+    setOrders(marketplaceService.getOrders());
   };
 
-  const handleConfirmOrder = (e) => {
+  useEffect(() => {
+    loadData();
+
+    const handleUpdate = () => loadData();
+    window.addEventListener('treeconnect_marketplace_updated', handleUpdate);
+    return () => window.removeEventListener('treeconnect_marketplace_updated', handleUpdate);
+  }, []);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
+
+  // Buyer's negotiations
+  const myNegotiations = negotiations.filter(n => {
+    if (!n) return false;
+    const bEmail = (n.buyerEmail || '').toLowerCase().trim();
+    if (buyerEmail && bEmail === buyerEmail) return true;
+    return true; // default include seed negotiations for preview
+  });
+
+  // Buyer's orders
+  const myOrders = orders.filter(o => {
+    if (!o) return false;
+    const bEmail = (o.buyerEmail || '').toLowerCase().trim();
+    if (buyerEmail && bEmail === buyerEmail) return true;
+    return true;
+  });
+
+  // Metrics
+  const totalMarketVolume = listings
+    .filter(l => l.status === 'Published' || l.status === 'Under Negotiation')
+    .reduce((sum, item) => sum + (Number(item.volume) || 0), 0);
+
+  const activeNegotiationsCount = myNegotiations.filter(n => n.status === 'Pending Review' || n.status === 'Counter-Offer').length;
+  const activeShipmentsCount = myOrders.filter(o => o.status?.includes('Transit') || o.status?.includes('Scheduled')).length;
+
+  const totalProcurementSpend = myOrders.reduce((sum, ord) => sum + (Number(ord.totalNum) || 0), 0);
+
+  // Filtered & Sorted listings
+  const filteredListings = listings.filter((item) => {
+    if (item.status === 'Sold') return false;
+
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchTitle = (item.title || '').toLowerCase().includes(q);
+      const matchSpecies = (item.timberSpecies || '').toLowerCase().includes(q);
+      const matchSeller = (item.sellerName || '').toLowerCase().includes(q);
+      const matchLocation = (item.district || '').toLowerCase().includes(q) || (item.storageLocation || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchSpecies && !matchSeller && !matchLocation) return false;
+    }
+
+    // Seller Role
+    if (sellerRoleFilter !== 'All' && item.sellerRole !== sellerRoleFilter) {
+      return false;
+    }
+
+    // Species
+    if (selectedSpecies !== 'All' && !item.timberSpecies?.toLowerCase().includes(selectedSpecies.toLowerCase())) {
+      return false;
+    }
+
+    // Grade
+    if (selectedGrade !== 'All' && !item.gradeQuality?.toLowerCase().includes(selectedGrade.toLowerCase())) {
+      return false;
+    }
+
+    // District
+    if (selectedDistrict !== 'All' && item.district !== selectedDistrict) {
+      return false;
+    }
+
+    return true;
+  }).sort((a, b) => {
+    if (sortBy === 'price_asc') return (Number(a.pricePerM3) || 0) - (Number(b.pricePerM3) || 0);
+    if (sortBy === 'price_desc') return (Number(b.pricePerM3) || 0) - (Number(a.pricePerM3) || 0);
+    if (sortBy === 'volume_desc') return (Number(b.volume) || 0) - (Number(a.volume) || 0);
+    return (b.id || '').localeCompare(a.id || '');
+  });
+
+  // Handler: Open Negotiation Modal
+  const handleOpenNegotiate = (listing) => {
+    setNegotiateTarget(listing);
+    setNegotiateForm({
+      offeredPricePerM3: Math.round((listing.pricePerM3 || 35000) * 0.92), // default ~8% lower for opening bid
+      requestedVolume: listing.volume || 25,
+      deliveryPreference: listing.transportAvailable ? 'Seller Contractor Hauling to Mill' : 'Buyer Logistics / Mill Truck Dispatch',
+      destinationMill: 'Ernakulam Timber Mill Yard #2',
+      paymentTerms: '50% Advance Escrow + 50% Post-Weighbridge',
+      notes: `We are interested in procuring this ${listing.timberSpecies} lot. Ready to dispatch trucks upon permit approval.`
+    });
+    setNegotiateModalOpen(true);
+  };
+
+  // Handler: Submit Negotiation
+  const handleSubmitNegotiation = (e) => {
     e.preventDefault();
-    if (!selectedLog) return;
+    if (!negotiateTarget) return;
 
-    const volNum = Number(orderVolume) || 100;
-    const totalCost = volNum * selectedLog.unitPrice;
+    try {
+      marketplaceService.createNegotiation({
+        listingId: negotiateTarget.id,
+        timberTitle: negotiateTarget.title || `${negotiateTarget.gradeQuality} ${negotiateTarget.timberSpecies}`,
+        timberSpecies: negotiateTarget.timberSpecies,
+        sellerRole: negotiateTarget.sellerRole,
+        sellerName: negotiateTarget.sellerName,
+        sellerEmail: negotiateTarget.sellerEmail,
+        buyerName,
+        buyerEmail,
+        buyerCompany,
+        originalPricePerM3: negotiateTarget.pricePerM3,
+        offeredPricePerM3: Number(negotiateForm.offeredPricePerM3),
+        requestedVolume: Number(negotiateForm.requestedVolume),
+        deliveryPreference: negotiateForm.deliveryPreference,
+        paymentTerms: negotiateForm.paymentTerms,
+        notes: negotiateForm.notes
+      }, user);
 
-    const newOrder = {
-      id: `ORD-2026-${Math.floor(100 + Math.random() * 900)}`,
-      item: `${selectedLog.species}`,
-      volume: `${volNum} m³`,
-      total: `₹ ${totalCost.toLocaleString('en-IN')}`,
-      status: 'Processing Dispatch',
-      ETA: 'Aug 22, 2026',
-      contractor: 'Malabar Agro Transport',
-      mill: deliveryMillLocation
-    };
-
-    setOrders([newOrder, ...orders]);
-    setShowOrderModal(false);
+      setNegotiateModalOpen(false);
+      showToast(`Negotiation offer submitted to ${negotiateTarget.sellerName} (${negotiateTarget.sellerRole})!`);
+      loadData();
+      setActiveTab('negotiations');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to submit negotiation offer');
+    }
   };
 
-  const buyerName = user?.name || 'Pacific Lumber Mills';
+  // Handler: Open Buy Now
+  const handleOpenBuyNow = (listing) => {
+    setBuyNowTarget(listing);
+    setBuyNowForm({
+      volume: listing.volume || 30,
+      destinationMill: 'Ernakulam Timber Mill Yard #2',
+      haulingCarrier: listing.sellerRole === 'contractor' ? `${listing.sellerName} Fleet` : 'Kerala Forest Freight Logistics',
+      paymentMethod: 'TreeConnect Escrow (Standard Safe Settlement)',
+      notes: 'Standard delivery requested with KL forest department transit pass.'
+    });
+    setBuyNowModalOpen(true);
+  };
+
+  // Handler: Confirm Purchase Order
+  const handleConfirmPurchase = (e) => {
+    e.preventDefault();
+    if (!buyNowTarget) return;
+
+    try {
+      const newOrder = marketplaceService.createOrder({
+        listingId: buyNowTarget.id,
+        timberItem: buyNowTarget.title || `${buyNowTarget.timberSpecies} Sawlogs`,
+        species: buyNowTarget.timberSpecies,
+        volume: Number(buyNowForm.volume),
+        unitPrice: buyNowTarget.pricePerM3,
+        sellerRole: buyNowTarget.sellerRole,
+        sellerName: buyNowTarget.sellerName,
+        sellerEmail: buyNowTarget.sellerEmail,
+        destinationMill: buyNowForm.destinationMill,
+        contractor: buyNowForm.haulingCarrier,
+        paymentTerms: buyNowForm.paymentMethod,
+        buyerName,
+        buyerEmail
+      }, user);
+
+      setBuyNowModalOpen(false);
+      showToast(`Purchase order ${newOrder.id} confirmed! Timber dispatch scheduled.`);
+      loadData();
+      setActiveTab('orders');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to process purchase order');
+    }
+  };
+
+  // Handler: Accept Counter-Offer from Seller
+  const handleAcceptSellerCounter = (neg) => {
+    const finalPrice = neg.counterOffer ? neg.counterOffer.pricePerM3 : neg.offeredPricePerM3;
+
+    try {
+      // 1. Mark negotiation accepted
+      marketplaceService.respondToNegotiation(neg.id, 'accept', {
+        sender: 'Buyer',
+        senderName: buyerName,
+        message: `Buyer accepted counter-offer of ₹${finalPrice.toLocaleString('en-IN')}/m³.`
+      });
+
+      // 2. Open purchase checkout with agreed price
+      const listing = marketplaceService.getListingById(neg.listingId) || {
+        id: neg.listingId,
+        title: neg.timberTitle,
+        timberSpecies: neg.timberSpecies,
+        sellerRole: neg.sellerRole,
+        sellerName: neg.sellerName,
+        sellerEmail: neg.sellerEmail,
+        pricePerM3: finalPrice,
+        volume: neg.requestedVolume
+      };
+
+      setBuyNowTarget({ ...listing, pricePerM3: finalPrice, volume: neg.requestedVolume });
+      setBuyNowForm({
+        volume: neg.requestedVolume,
+        destinationMill: 'Ernakulam Timber Mill Yard #2',
+        haulingCarrier: neg.sellerRole === 'contractor' ? `${neg.sellerName} Fleet` : 'Kerala Agro Logistics',
+        paymentMethod: neg.paymentTerms || 'TreeConnect Escrow (Standard Safe Settlement)',
+        notes: `Purchase from agreed negotiation #${neg.id}.`
+      });
+      setBuyNowModalOpen(true);
+      loadData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   return (
     <div className="dashboard-layout">
@@ -152,554 +316,1202 @@ const BuyerDashboard = () => {
       <div className="dashboard-body">
         <Sidebar />
 
-        {/* Main Workspace Container */}
         <div className="dashboard-workspace">
+          <main className="dashboard-content max-w-7xl mx-auto py-6">
 
-          {/* Center Main Dashboard Content */}
-          <main className="dashboard-content">
+            {/* HERO BANNER */}
+            <section className="hero-welcome-card card mb-6 border border-color rounded-2xl bg-card overflow-hidden">
+              <div className="hero-welcome-body p-6 flex flex-wrap items-center justify-between gap-6">
+                <div className="hero-welcome-text max-w-2xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="hero-greeting-badge px-3 py-1 rounded-full text-xs font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1.5">
+                      <Award size={14} /> Commercial Timber Procurement Portal
+                    </span>
+                    <span className="text-xs text-muted font-medium">Kerala Forest Exchange</span>
+                  </div>
 
-            {/* HERO WELCOME CARD */}
-            <section className="hero-welcome-card card">
-              <div className="hero-welcome-body">
-                <div className="hero-welcome-text">
-                  <span className="hero-greeting-badge">
-                    <Award size={14} /> FSC Certified Commercial Timber Procurement
-                  </span>
-                  <h1 className="hero-title-text">Welcome Back, {buyerName}</h1>
-                  <p className="hero-subtitle-text">
-                    Source verified timber log inventories from certified Kerala forest estates, submit purchase orders, and track mill deliveries.
+                  <h1 className="hero-title-text text-3xl font-extrabold text-main mb-2">
+                    Welcome Back, {buyerName}
+                  </h1>
+                  <p className="hero-subtitle-text text-sm text-muted leading-relaxed">
+                    Browse certified timber lots uploaded directly by <strong className="text-emerald">Estate Landowners</strong> and <strong className="text-blue-400">Harvesting Contractors</strong>. Negotiate custom rates, buy lots directly, and track live mill deliveries.
                   </p>
 
                   {/* Summary Metric Pills */}
-                  <div className="today-summary-pills">
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-emerald"></span>
-                      <span className="pill-val">1,870 m³</span> Available Volume
+                  <div className="today-summary-pills flex flex-wrap items-center gap-2 mt-4 text-xs font-semibold">
+                    <div className="summary-pill px-3 py-1.5 rounded-lg bg-surface border border-color flex items-center gap-2">
+                      <span className="pill-dot w-2 h-2 rounded-full bg-emerald"></span>
+                      <span className="pill-val text-white font-mono">{totalMarketVolume.toFixed(1)} m³</span> Available Volume
                     </div>
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-amber"></span>
-                      <span className="pill-val">2</span> Active Shipments
+                    <div className="summary-pill px-3 py-1.5 rounded-lg bg-surface border border-color flex items-center gap-2">
+                      <span className="pill-dot w-2 h-2 rounded-full bg-amber-400"></span>
+                      <span className="pill-val text-white font-mono">{activeNegotiationsCount}</span> Active Negotiations
                     </div>
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-blue"></span>
-                      <span className="pill-val">₹ 1.72 Cr</span> Procurement Spend
+                    <div className="summary-pill px-3 py-1.5 rounded-lg bg-surface border border-color flex items-center gap-2">
+                      <span className="pill-dot w-2 h-2 rounded-full bg-blue-400"></span>
+                      <span className="pill-val text-white font-mono">{activeShipmentsCount}</span> Active Shipments
                     </div>
-                    <div className="summary-pill">
-                      <span className="pill-dot bg-muted"></span>
-                      <span className="pill-val">4</span> Verified Estates
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Action Buttons Beside Hero */}
-                <div className="hero-quick-actions">
-                  <button className="btn btn-primary btn-sm" onClick={() => handleOpenOrderModal(catalog[0])}>
-                    <ShoppingBag size={16} /> Procure Log Volume
-                  </button>
-                  <button className="btn btn-secondary btn-sm">
-                    <Truck size={16} /> Track Mill Shipments
-                  </button>
-                  <button className="btn btn-secondary btn-sm">
-                    <FileText size={16} /> Download Invoices
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* UNIFORM KPI CARDS */}
-            <section className="kpi-grid">
-              {/* Card 1 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-blue">
-                    <ShoppingBag size={20} />
-                  </span>
-                  <span className="kpi-trend trend-positive">
-                    <TrendingUp size={12} /> +8.4%
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">1,870 m³</div>
-                  <div className="kpi-label">Available Timber Inventory</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 18 Q 20 12, 40 15 T 80 8 T 100 4" fill="none" stroke="#3b82f6" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-amber">
-                    <Truck size={20} />
-                  </span>
-                  <span className="kpi-trend trend-neutral">
-                    In Transit
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">2 Shipments</div>
-                  <div className="kpi-label">En-Route to Mill Yard</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 12 Q 25 15, 50 8 T 75 12 T 100 7" fill="none" stroke="#fbbf24" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-emerald">
-                    <DollarSign size={20} />
-                  </span>
-                  <span className="kpi-trend trend-positive">
-                    <TrendingUp size={12} /> +14.2%
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">₹ 1.72 Cr</div>
-                  <div className="kpi-label">Monthly Procurement Spend</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 20 Q 25 18, 50 10 T 75 14 T 100 5" fill="none" stroke="#10b981" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 4 */}
-              <div className="kpi-card">
-                <div className="kpi-card-header">
-                  <span className="kpi-icon-box icon-forest">
-                    <ShieldCheck size={20} />
-                  </span>
-                  <span className="kpi-trend trend-positive">
-                    100% FSC Traceable
-                  </span>
-                </div>
-                <div className="kpi-card-body">
-                  <div className="kpi-value">4 Estates</div>
-                  <div className="kpi-label">Verified Timber Suppliers</div>
-                  <div className="kpi-sparkline">
-                    <svg viewBox="0 0 100 24" className="sparkline-svg">
-                      <path d="M0 19 Q 20 14, 40 16 T 70 6 T 100 2" fill="none" stroke="#34d399" strokeWidth="2.5" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* LIVE MILL TRANSIT OPERATIONS SPOTLIGHT */}
-            <section className="active-harvest-section card highlight-card">
-              <div className="card-header">
-                <div className="section-header-title">
-                  <span className="live-indicator"><span className="pulse-dot"></span> LIVE SHIPMENT IN TRANSIT</span>
-                  <h2 className="section-heading">Timber Freight & Delivery Spotlight</h2>
-                </div>
-                <span className="status-chip status-chip-active">
-                  On Schedule
-                </span>
-              </div>
-
-              <div className="active-harvest-grid">
-                <div className="harvest-details-col">
-                  <div className="harvest-primary-info">
-                    <h3 className="harvest-property-title">Order ORD-2026-901: Wayanad Teakwood Sawlogs</h3>
-                    <p className="harvest-meta"><MapPin size={14} /> Wayanad Forest Yard → Ernakulam Mill Yard #1</p>
-                  </div>
-
-                  <div className="harvest-stats-row">
-                    <div className="h-stat">
-                      <span className="h-stat-label">Volume Transmitted</span>
-                      <span className="h-stat-value text-emerald font-bold">200 m³ (4 Log Trucks)</span>
-                    </div>
-                    <div className="h-stat">
-                      <span className="h-stat-label">Hauling Contractor</span>
-                      <span className="h-stat-value font-semibold">Apex Harvesting Co.</span>
-                    </div>
-                    <div className="h-stat">
-                      <span className="h-stat-label">Estimated Delivery</span>
-                      <span className="h-stat-value">Aug 14, 2026 (14:00 hrs)</span>
-                    </div>
-                    <div className="h-stat">
-                      <span className="h-stat-label">Forest Clearance</span>
-                      <span className="h-stat-value text-emerald">Pass No. KL-8821 OK</span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="harvest-progress-wrapper">
-                    <div className="progress-label-bar">
-                      <span>Highway Transit Progress (Wayanad to Ernakulam)</span>
-                      <span className="progress-pct font-bold">75%</span>
-                    </div>
-                    <div className="progress-track">
-                      <div className="progress-fill" style={{ width: '75%' }}></div>
+                    <div className="summary-pill px-3 py-1.5 rounded-lg bg-surface border border-color flex items-center gap-2">
+                      <span className="pill-dot w-2 h-2 rounded-full bg-gold"></span>
+                      <span className="pill-val text-gold font-mono">₹ {(totalProcurementSpend / 10000000).toFixed(2)} Cr</span> Total Procurement
                     </div>
                   </div>
                 </div>
 
-                {/* Milestone Timeline */}
-                <div className="harvest-timeline-col">
-                  <span className="timeline-title">Logistics & Transit Milestones</span>
-                  <div className="timeline-steps">
-                    <div className="timeline-step step-complete">
-                      <span className="step-icon"><CheckCircle2 size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">Forest Yard Loading & Stenciling</span>
-                        <span className="step-date">Completed Aug 08</span>
-                      </div>
-                    </div>
-                    <div className="timeline-step step-complete">
-                      <span className="step-icon"><CheckCircle2 size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">Waybill & Transit Permit Verification</span>
-                        <span className="step-date">Passed Checkpost</span>
-                      </div>
-                    </div>
-                    <div className="timeline-step step-active">
-                      <span className="step-icon"><Activity size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">NH-66 Highway Truck Transit</span>
-                        <span className="step-date">Active (75% completed)</span>
-                      </div>
-                    </div>
-                    <div className="timeline-step step-upcoming">
-                      <span className="step-icon"><Clock size={14} /></span>
-                      <div className="step-info">
-                        <span className="step-name">Mill Gate Unloading & Moisture Inspection</span>
-                        <span className="step-date">Est. Aug 14</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* VERIFIED TIMBER INVENTORY CATALOG */}
-            <section className="dashboard-section card">
-              <div className="card-header flex-between">
-                <div>
-                  <h2 className="section-heading"><Package size={18} /> Verified Kerala Timber Inventory Catalog</h2>
-                  <p className="section-subtext">Direct procurement from certified forest landowners with timber origin tracking</p>
-                </div>
-
-                <div className="filter-group flex items-center gap-2">
-                  <Filter size={16} className="text-slate-400" />
-                  <span className="text-xs font-semibold text-slate-300">Filter Species:</span>
-                  <select
-                    value={selectedSpecies}
-                    onChange={(e) => setSelectedSpecies(e.target.value)}
-                    className="select-input bg-slate-950 text-white font-medium border-slate-700 text-xs px-3 py-1.5 rounded-lg cursor-pointer"
+                {/* Quick Shortcuts */}
+                <div className="flex flex-col gap-2.5 min-w-[200px]">
+                  <button
+                    onClick={() => setActiveTab('marketplace')}
+                    className="btn btn-primary btn-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald/20"
                   >
-                    <option value="All">All Species</option>
-                    <option value="Teakwood">Teakwood</option>
-                    <option value="Rosewood">Rosewood</option>
-                    <option value="Rubberwood">Rubberwood</option>
-                    <option value="Mahogany">Mahogany</option>
-                  </select>
+                    <ShoppingBag size={16} /> Procure Timber Lots
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('negotiations')}
+                    className="btn btn-secondary btn-sm flex items-center justify-center gap-2"
+                  >
+                    <Handshake size={16} /> My Negotiations ({activeNegotiationsCount})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('orders')}
+                    className="btn btn-secondary btn-sm flex items-center justify-center gap-2"
+                  >
+                    <Truck size={16} /> Track Shipments ({activeShipmentsCount})
+                  </button>
                 </div>
-              </div>
-
-              <div className="properties-grid">
-                {filteredCatalog.map((item) => (
-                  <div key={item.id} className="property-card">
-                    <div className="property-content">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800 flex items-center gap-1">
-                          <ShieldCheck size={12} /> {item.fscCert}
-                        </span>
-                        <span className="text-xs text-slate-400 font-medium"><MapPin size={12} className="inline" /> {item.location}</span>
-                      </div>
-
-                      <h4 className="property-name text-base">{item.species}</h4>
-                      <p className="text-xs text-slate-400 mb-3">Origin: <strong className="text-slate-200">{item.origin}</strong></p>
-
-                      <div className="property-specs bg-slate-900/80 p-2.5 rounded-xl border border-slate-800/80 mb-3">
-                        <div className="spec-item">
-                          <span className="spec-label">Available Volume</span>
-                          <span className="spec-val text-emerald-400 font-bold">{item.volume}</span>
-                        </div>
-                        <div className="spec-item">
-                          <span className="spec-label">Quality Grade</span>
-                          <span className="spec-val text-slate-200">{item.grade}</span>
-                        </div>
-                      </div>
-
-                      <div className="property-actions flex items-center justify-between pt-2 border-t border-slate-800">
-                        <span className="text-base font-bold text-emerald-400">{item.price}</span>
-                        <button
-                          className="btn btn-sm btn-primary cursor-pointer flex items-center gap-1"
-                          onClick={() => handleOpenOrderModal(item)}
-                        >
-                          Procure Log Volume <ArrowRight size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
               </div>
             </section>
 
-            {/* PURCHASE ORDERS & MILL DELIVERY LOG TABLE */}
-            <section className="dashboard-section card">
-              <div className="card-header">
-                <div>
-                  <h2 className="section-heading"><Truck size={18} /> Purchase Orders & Delivery Log</h2>
-                  <p className="section-subtext">Track procurement contracts, freight status, and delivery schedules</p>
+            {/* TOAST NOTIFICATION */}
+            {toastMessage && (
+              <div className="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-500 text-emerald-200 flex items-center gap-3 shadow-xl animate-fade-in">
+                <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0" />
+                <span className="font-semibold text-sm">{toastMessage}</span>
+              </div>
+            )}
+
+            {/* KPI METRIC CARDS */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-muted uppercase">Market Inventory</span>
+                  <span className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center">
+                    <ShoppingBag size={18} />
+                  </span>
                 </div>
-                <span className="dash-user-count font-semibold text-emerald">{orders.length} Active Orders</span>
+                <div className="text-2xl font-extrabold text-main font-mono">{totalMarketVolume.toFixed(1)} m³</div>
+                <div className="text-xs text-emerald flex items-center gap-1 mt-1 font-semibold">
+                  <TrendingUp size={12} /> {listings.length} verified listings across Kerala
+                </div>
               </div>
 
-              <div className="table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Order Ref</th>
-                      <th>Timber Item</th>
-                      <th>Volume</th>
-                      <th>Contract Total</th>
-                      <th>Hauling Partner</th>
-                      <th>Destination Mill</th>
-                      <th>Status</th>
-                      <th>ETA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((ord) => (
-                      <tr key={ord.id}>
-                        <td className="font-semibold text-white">{ord.id}</td>
-                        <td className="text-slate-200 font-medium">{ord.item}</td>
-                        <td className="text-emerald-400 font-bold">{ord.volume}</td>
-                        <td className="text-slate-100 font-bold">{ord.total}</td>
-                        <td className="text-slate-300">{ord.contractor}</td>
-                        <td className="text-slate-400 text-xs">{ord.mill}</td>
-                        <td>
-                          <span className={`status-pill ${ord.status.includes('Delivered') ? 'status-green' : 'status-yellow'}`}>
-                            {ord.status.includes('Delivered') ? <CheckCircle2 size={13} /> : <Clock size={13} />}
-                            {ord.status}
-                          </span>
-                        </td>
-                        <td className="text-slate-400 text-xs">{ord.ETA}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-muted uppercase">Active Price Bids</span>
+                  <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
+                    <Handshake size={18} />
+                  </span>
+                </div>
+                <div className="text-2xl font-extrabold text-amber-400 font-mono">{activeNegotiationsCount} Deals</div>
+                <div className="text-xs text-muted mt-1">Bargaining with Landowners & Contractors</div>
+              </div>
+
+              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-muted uppercase">Active Mill Transit</span>
+                  <span className="w-8 h-8 rounded-lg bg-emerald/15 text-emerald flex items-center justify-center">
+                    <Truck size={18} />
+                  </span>
+                </div>
+                <div className="text-2xl font-extrabold text-emerald font-mono">{activeShipmentsCount} Shipments</div>
+                <div className="text-xs text-emerald flex items-center gap-1 mt-1 font-semibold">
+                  <ShieldCheck size={12} /> 100% Forest Pass Clearance
+                </div>
+              </div>
+
+              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-muted uppercase">Procurement Spend</span>
+                  <span className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                    <DollarSign size={18} />
+                  </span>
+                </div>
+                <div className="text-2xl font-extrabold text-gold font-mono">
+                  ₹ {(totalProcurementSpend / 10000000).toFixed(2)} Cr
+                </div>
+                <div className="text-xs text-muted mt-1">Through TreeConnect Escrow</div>
               </div>
             </section>
 
-          </main>
+            {/* TAB CONTROLS */}
+            <div className="flex items-center gap-2 border-b border-color mb-6 overflow-x-auto pb-1">
+              <button
+                onClick={() => setActiveTab('marketplace')}
+                className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'marketplace'
+                    ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                <ShoppingBag size={18} /> Browse Timber Marketplace ({filteredListings.length})
+              </button>
 
-          {/* RIGHT INSIGHTS PANEL */}
-          <aside className="right-insights-panel">
+              <button
+                onClick={() => setActiveTab('negotiations')}
+                className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 relative cursor-pointer ${
+                  activeTab === 'negotiations'
+                    ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                <Handshake size={18} /> My Negotiations & Offers
+                {activeNegotiationsCount > 0 && (
+                  <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500 text-black font-bold">
+                    {activeNegotiationsCount}
+                  </span>
+                )}
+              </button>
 
-            {/* Widget 1: FSC Certification Status Card */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><ShieldCheck size={16} /> Certified Buyer Profile</span>
-                <span className="widget-badge badge-green font-semibold">Verified</span>
-              </div>
-              <div className="p-3 bg-blue-950/40 rounded-xl border border-blue-800/60 mt-2">
-                <p className="text-xs text-blue-300 font-bold mb-1">Pacific Lumber Mills Inc.</p>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Authorized Timber Procurement Buyer. Verified FSC Chain of Custody (CoC) License #FSC-C99120.
-                </p>
-              </div>
-            </div>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'orders'
+                    ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                <Truck size={18} /> Purchase Orders & Shipments ({myOrders.length})
+              </button>
 
-            {/* Widget 2: Timber Moisture & Logging Weather */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><CloudSun size={16} /> Yard Weather Index</span>
-                <span className="widget-badge badge-green font-semibold">Optimal</span>
-              </div>
-              <div className="weather-content">
-                <div className="weather-main">
-                  <div className="weather-temp">29°C</div>
-                  <div className="weather-desc">
-                    <span className="font-semibold">Dry & Sunny</span>
-                    <span className="text-muted text-xs">Kochi & Ernakulam Mills</span>
-                  </div>
-                </div>
-                <div className="weather-stats">
-                  <div className="w-stat"><Wind size={12} /> Wind: 9 km/h</div>
-                  <div className="w-stat"><Droplets size={12} /> Log Moisture: 16%</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Widget 3: Today's Procurement Tasks */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><CheckCircle2 size={16} /> Procurement Tasks</span>
-                <span className="widget-count">3 Pending</span>
-              </div>
-              <ul className="task-list">
-                <li className="task-item">
-                  <input type="checkbox" id="bt1" className="task-check" />
-                  <label htmlFor="bt1" className="task-label">Approve Wayanad Teak Weight Receipt</label>
-                </li>
-                <li className="task-item">
-                  <input type="checkbox" id="bt2" className="task-check" />
-                  <label htmlFor="bt2" className="task-label">Issue Payment for Rosewood Order #882</label>
-                </li>
-                <li className="task-item">
-                  <input type="checkbox" id="bt3" className="task-check" />
-                  <label htmlFor="bt3" className="task-label">Inspect Rubberwood Seasoning Quality</label>
-                </li>
-              </ul>
-            </div>
-
-            {/* Widget 4: Kerala Log Market Index (INR / m³) */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><DollarSign size={16} /> Log Market Index</span>
-                <span className="text-xs text-muted">₹ / m³</span>
-              </div>
-              <div className="market-prices">
-                <div className="price-row">
-                  <span className="species-name">Teakwood (Sawlog)</span>
-                  <span className="price-val font-bold">₹ 42,500</span>
-                  <span className="price-change text-emerald">+2.4%</span>
-                </div>
-                <div className="price-row">
-                  <span className="species-name">Rosewood (Veneer)</span>
-                  <span className="price-val font-bold">₹ 58,000</span>
-                  <span className="price-change text-emerald">+1.8%</span>
-                </div>
-                <div className="price-row">
-                  <span className="species-name">Rubberwood</span>
-                  <span className="price-val font-bold">₹ 12,800</span>
-                  <span className="price-change text-emerald">+0.5%</span>
-                </div>
-                <div className="price-row">
-                  <span className="species-name">Mahogany</span>
-                  <span className="price-val font-bold">₹ 24,000</span>
-                  <span className="price-change text-red">-0.8%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Widget 5: Freight & Mill Schedule */}
-            <div className="insight-widget card glass-widget">
-              <div className="widget-header">
-                <span className="widget-title"><Calendar size={16} /> Mill Unloading Schedule</span>
-              </div>
-              <div className="schedule-list">
-                <div className="sched-item">
-                  <div className="sched-date">
-                    <span className="sched-day">14</span>
-                    <span className="sched-month">AUG</span>
-                  </div>
-                  <div className="sched-details">
-                    <span className="sched-title font-semibold">Teakwood Unloading</span>
-                    <span className="sched-location text-muted">Ernakulam Mill Yard #1</span>
-                  </div>
-                </div>
-                <div className="sched-item">
-                  <div className="sched-date">
-                    <span className="sched-day">22</span>
-                    <span className="sched-month">AUG</span>
-                  </div>
-                  <div className="sched-details">
-                    <span className="sched-title font-semibold">Rubberwood Delivery</span>
-                    <span className="sched-location text-muted">Kochi Processing Mill</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </aside>
-
-        </div>
-      </div>
-
-      {/* Procure Log Volume Modal */}
-      {showOrderModal && selectedLog && (
-        <div className="modal-overlay">
-          <div className="modal-content card max-w-lg w-full">
-            <div className="modal-header flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <ShoppingBag size={18} className="text-emerald-400" />
-                <span>Initiate Log Procurement Order</span>
-              </h3>
-              <button className="btn-icon cursor-pointer text-slate-400 hover:text-white" onClick={() => setShowOrderModal(false)}>
-                <X size={18} />
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'analytics'
+                    ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                <TrendingUp size={18} /> Market Trends & Rates
               </button>
             </div>
-            <form onSubmit={handleConfirmOrder} className="modal-body space-y-4 pt-4">
-              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
-                <p className="font-bold text-white text-sm">{selectedLog.species}</p>
-                <p className="text-slate-300">Grade: {selectedLog.grade} • Origin: {selectedLog.origin}</p>
-                <p className="text-emerald-400 font-semibold">Unit Price: {selectedLog.price} • Available: {selectedLog.volume}</p>
-              </div>
 
-              <div className="form-group">
-                <label className="block text-xs font-bold text-slate-200 mb-1.5">
-                  Procurement Volume Quantity (m³) *
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="10"
-                  max={selectedLog.rawVolumeNum}
-                  value={orderVolume}
-                  onChange={(e) => setOrderVolume(e.target.value)}
-                  className="w-full form-input bg-slate-950 border-slate-700 text-white font-bold"
-                />
-              </div>
+            {/* ========================================================= */}
+            {/* TAB 1: BROWSE TIMBER MARKETPLACE (CORE BUYER FEED) */}
+            {/* ========================================================= */}
+            {activeTab === 'marketplace' && (
+              <div className="space-y-6">
 
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Target Mill / Delivery Destination (Kerala) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={deliveryMillLocation}
-                  onChange={(e) => setDeliveryMillLocation(e.target.value)}
-                  className="w-full form-input bg-slate-950 border-slate-700 text-slate-200 text-xs"
-                />
-              </div>
+                {/* SEARCH & MULTI-FILTER BAR */}
+                <div className="card p-5 rounded-2xl border border-color bg-card shadow-lg space-y-4">
+                  <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+                    {/* Search Input */}
+                    <div className="relative flex-1">
+                      <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by timber species (Teak, Rosewood), estate, yard, or district..."
+                        className="form-input pl-10 text-sm font-medium w-full bg-surface"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted hover:text-white"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
 
-              <div className="form-group">
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Payment & Credit Terms
-                </label>
-                <select
-                  value={paymentTerms}
-                  onChange={(e) => setPaymentTerms(e.target.value)}
-                  className="w-full form-input bg-slate-950 border-slate-700 text-slate-200 text-xs cursor-pointer"
-                >
-                  <option value="Letter of Credit / Net 30">Letter of Credit (Net 30 Days)</option>
-                  <option value="Direct Bank Wire Transfer">Direct Bank Wire Transfer (FOB)</option>
-                  <option value="Escrow Milestone Payment">TreeConnect Escrow Protected</option>
-                </select>
-              </div>
+                    {/* Quick Seller Role Filter Buttons */}
+                    <div className="flex items-center gap-1.5 p-1 bg-surface rounded-xl border border-color text-xs">
+                      <button
+                        onClick={() => setSellerRoleFilter('All')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                          sellerRoleFilter === 'All'
+                            ? 'bg-emerald text-dark shadow-sm'
+                            : 'text-muted hover:text-white'
+                        }`}
+                      >
+                        All Sellers
+                      </button>
+                      <button
+                        onClick={() => setSellerRoleFilter('landowner')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                          sellerRoleFilter === 'landowner'
+                            ? 'bg-emerald text-dark shadow-sm'
+                            : 'text-muted hover:text-white'
+                        }`}
+                      >
+                        <Trees size={14} /> Landowners
+                      </button>
+                      <button
+                        onClick={() => setSellerRoleFilter('contractor')}
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                          sellerRoleFilter === 'contractor'
+                            ? 'bg-blue-500 text-white shadow-sm'
+                            : 'text-muted hover:text-white'
+                        }`}
+                      >
+                        <Truck size={14} /> Contractors
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="bg-emerald-950/40 p-3 rounded-xl border border-emerald-800/60 flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-medium">Estimated Total Cost:</span>
-                <span className="text-emerald-400 font-bold text-base">
-                  ₹ {((Number(orderVolume) || 100) * selectedLog.unitPrice).toLocaleString('en-IN')}
-                </span>
-              </div>
+                  {/* Secondary Filter Dropdowns */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-color text-xs">
+                    <div>
+                      <label className="text-muted block mb-1 font-semibold">Species</label>
+                      <select
+                        value={selectedSpecies}
+                        onChange={(e) => setSelectedSpecies(e.target.value)}
+                        className="form-input text-xs py-1.5"
+                      >
+                        <option value="All">All Species</option>
+                        <option value="Teakwood">Teakwood</option>
+                        <option value="Rosewood">Rosewood</option>
+                        <option value="Rubberwood">Rubberwood</option>
+                        <option value="Mahogany">Mahogany</option>
+                        <option value="Eucalyptus">Eucalyptus</option>
+                      </select>
+                    </div>
 
-              <div className="modal-actions flex justify-end gap-3 pt-2">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowOrderModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  <CheckCircle2 size={15} /> Confirm & Place Order
-                </button>
+                    <div>
+                      <label className="text-muted block mb-1 font-semibold">Quality Grade</label>
+                      <select
+                        value={selectedGrade}
+                        onChange={(e) => setSelectedGrade(e.target.value)}
+                        className="form-input text-xs py-1.5"
+                      >
+                        <option value="All">All Grades</option>
+                        <option value="Grade A">Grade A Prime Sawlogs</option>
+                        <option value="Veneer">Premium Veneer Grade</option>
+                        <option value="Industrial">Industrial Furniture</option>
+                        <option value="Joinery">Joinery Grade</option>
+                        <option value="Pole">Poles & Posts</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-muted block mb-1 font-semibold">District</label>
+                      <select
+                        value={selectedDistrict}
+                        onChange={(e) => setSelectedDistrict(e.target.value)}
+                        className="form-input text-xs py-1.5"
+                      >
+                        <option value="All">All Districts</option>
+                        <option value="Wayanad">Wayanad</option>
+                        <option value="Palakkad">Palakkad</option>
+                        <option value="Kottayam">Kottayam</option>
+                        <option value="Idukki">Idukki</option>
+                        <option value="Ernakulam">Ernakulam</option>
+                        <option value="Thrissur">Thrissur</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-muted block mb-1 font-semibold">Sort By</label>
+                      <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="form-input text-xs py-1.5"
+                      >
+                        <option value="newest">Newest Listed</option>
+                        <option value="price_asc">Price: Low to High</option>
+                        <option value="price_desc">Price: High to Low</option>
+                        <option value="volume_desc">Volume: Largest First</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* TIMBER LISTINGS GRID */}
+                {filteredListings.length === 0 ? (
+                  <div className="card p-12 text-center rounded-2xl border border-color bg-card">
+                    <Trees size={48} className="mx-auto text-muted mb-3" />
+                    <h3 className="text-lg font-bold text-main mb-1">No Timber Lots Match Your Filter</h3>
+                    <p className="text-xs text-muted max-w-md mx-auto mb-4">
+                      Try clearing filters or search terms to view all available timber inventory across Kerala.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSellerRoleFilter('All');
+                        setSelectedSpecies('All');
+                        setSelectedGrade('All');
+                        setSelectedDistrict('All');
+                      }}
+                      className="btn btn-secondary inline-flex items-center gap-2"
+                    >
+                      <RotateCcw size={16} /> Reset All Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredListings.map((listing) => {
+                      const isContractorSeller = listing.sellerRole === 'contractor';
+
+                      return (
+                        <div
+                          key={listing.id}
+                          className="card border border-color rounded-2xl overflow-hidden bg-card flex flex-col justify-between hover:border-emerald/50 transition-all duration-300 shadow-md hover:shadow-2xl group"
+                        >
+                          <div>
+                            {/* Card Media Header */}
+                            <div className="h-48 bg-surface relative overflow-hidden">
+                              {listing.images?.[0] ? (
+                                <img
+                                  src={listing.images[0]}
+                                  alt={listing.timberSpecies}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#06140b] to-[#030805] text-slate-500 p-4 text-center">
+                                  {isContractorSeller ? (
+                                    <Truck size={42} className="text-blue-500/40 mb-2" />
+                                  ) : (
+                                    <Trees size={42} className="text-emerald-500/40 mb-2" />
+                                  )}
+                                  <span className="text-sm font-bold text-slate-200">{listing.timberSpecies}</span>
+                                  <span className="text-xs text-slate-500">{listing.timberType}</span>
+                                </div>
+                              )}
+
+                              {/* SELLER IDENTITY BADGE (The key user requirement!) */}
+                              <div className="absolute top-3 left-3">
+                                <span
+                                  className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider backdrop-blur-md flex items-center gap-1.5 shadow-md ${
+                                    isContractorSeller
+                                      ? 'bg-blue-950/90 text-blue-300 border border-blue-500/60'
+                                      : 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/60'
+                                  }`}
+                                >
+                                  {isContractorSeller ? (
+                                    <>
+                                      <Truck size={13} className="text-blue-400" /> Contractor Lot
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Trees size={13} className="text-emerald-400" /> Landowner Lot
+                                    </>
+                                  )}
+                                </span>
+                              </div>
+
+                              {/* FSC / Verification Badge */}
+                              {listing.fscCert && (
+                                <span className="absolute bottom-3 left-3 px-2 py-0.5 rounded text-[10px] font-bold bg-black/80 text-emerald-300 border border-emerald-500/40 backdrop-blur-md flex items-center gap-1">
+                                  <ShieldCheck size={12} /> {listing.fscCert}
+                                </span>
+                              )}
+
+                              {/* Status Chip */}
+                              <span
+                                className={`absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow ${
+                                  listing.status === 'Under Negotiation'
+                                    ? 'bg-amber-500 text-black'
+                                    : 'bg-emerald text-dark'
+                                }`}
+                              >
+                                {listing.status === 'Under Negotiation' ? 'Under Negotiation' : 'Available'}
+                              </span>
+                            </div>
+
+                            {/* Card Content */}
+                            <div className="p-5 space-y-3.5">
+                              {/* Seller Name & Location Subtitle */}
+                              <div className="flex items-center justify-between text-xs text-muted">
+                                <span className="font-semibold text-slate-300 flex items-center gap-1">
+                                  Sold by: <strong className={isContractorSeller ? 'text-blue-400' : 'text-emerald'}>{listing.sellerName}</strong>
+                                </span>
+                                <span className="flex items-center gap-1 text-slate-400">
+                                  <MapPin size={12} className="text-emerald" /> {listing.district}
+                                </span>
+                              </div>
+
+                              <div>
+                                <h3 className="text-lg font-bold text-main leading-snug line-clamp-1 group-hover:text-emerald transition-colors">
+                                  {listing.title || `${listing.gradeQuality} ${listing.timberSpecies}`}
+                                </h3>
+                                <p className="text-xs text-muted line-clamp-2 mt-1">
+                                  {listing.description || 'Verified timber logs from private plantation stand.'}
+                                </p>
+                              </div>
+
+                              {/* Specs Matrix */}
+                              <div className="grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-surface border border-color text-xs">
+                                <div>
+                                  <span className="text-muted block text-[11px]">Available Volume:</span>
+                                  <span className="font-extrabold text-emerald font-mono text-base">
+                                    {listing.volume} m³
+                                  </span>
+                                  <span className="text-[10px] text-muted block">({listing.quantity || 50} logs)</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted block text-[11px]">Rate / m³:</span>
+                                  <span className="font-extrabold text-main font-mono text-base">
+                                    ₹ {Number(listing.pricePerM3).toLocaleString('en-IN')}
+                                  </span>
+                                  <span className="text-[10px] text-muted block">per cubic meter</span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted block text-[11px]">Quality Grade:</span>
+                                  <span className="font-semibold text-slate-200 line-clamp-1">
+                                    {listing.gradeQuality}
+                                  </span>
+                                </div>
+
+                                <div>
+                                  <span className="text-muted block text-[11px]">Total Asking Price:</span>
+                                  <span className="font-bold text-gold font-mono">
+                                    ₹ {Number(listing.askingPrice).toLocaleString('en-IN')}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Dimensions and Hauling Support indicator */}
+                              <div className="text-[11px] text-muted space-y-1">
+                                {listing.logDimensions && (
+                                  <div>
+                                    <strong className="text-slate-400">Dimensions:</strong> {listing.logDimensions}
+                                  </div>
+                                )}
+                                {listing.transportAvailable && (
+                                  <div className="text-blue-400 flex items-center gap-1 font-semibold">
+                                    <Truck size={12} /> Seller fleet hauling available to buyer mill
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ACTION BUTTONS: NEGOTIATE OR BUY NOW */}
+                          <div className="p-4 border-t border-color bg-surface/50 flex items-center justify-between gap-2">
+                            <button
+                              onClick={() => setSelectedListingForDetails(listing)}
+                              className="btn btn-secondary btn-sm text-xs px-2.5"
+                              title="View Full Specifications"
+                            >
+                              <Eye size={14} /> Specs
+                            </button>
+
+                            <div className="flex items-center gap-2">
+                              {listing.negotiable === 'Yes' && (
+                                <button
+                                  onClick={() => handleOpenNegotiate(listing)}
+                                  className="btn btn-secondary btn-sm text-xs flex items-center gap-1 font-bold text-amber-400 border-amber-500/40 hover:bg-amber-500/10 cursor-pointer"
+                                >
+                                  <Handshake size={14} /> Negotiate
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleOpenBuyNow(listing)}
+                                className="btn btn-primary btn-sm text-xs flex items-center gap-1 font-bold cursor-pointer shadow-md shadow-emerald/20"
+                              >
+                                Buy Now <ArrowRight size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </form>
-          </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* TAB 2: ACTIVE NEGOTIATIONS (BARGAINING DIALOGUE TRACKER) */}
+            {/* ========================================================= */}
+            {activeTab === 'negotiations' && (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-card border border-color flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-main flex items-center gap-2">
+                      <Handshake size={20} className="text-amber-400" /> Active Price Negotiations & Bargaining Hub
+                    </h2>
+                    <p className="text-xs text-muted">
+                      Track custom price offers you submitted to Landowners and Contractors. Review seller responses, accept counter-rates, or counter again.
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold px-3 py-1 rounded-full bg-surface border border-color text-main">
+                    {myNegotiations.length} Active Bargains
+                  </span>
+                </div>
+
+                {myNegotiations.length === 0 ? (
+                  <div className="card p-12 text-center rounded-2xl border border-color bg-card">
+                    <Handshake size={48} className="mx-auto text-muted mb-3" />
+                    <h3 className="text-lg font-bold text-main mb-1">No Negotiations Underway</h3>
+                    <p className="text-xs text-muted max-w-md mx-auto mb-4">
+                      When you click "Negotiate" on any timber listing, your offer and bargaining timeline will appear here.
+                    </p>
+                    <button onClick={() => setActiveTab('marketplace')} className="btn btn-primary">
+                      Browse Timber Marketplace
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {myNegotiations.map((neg) => {
+                      const isCounter = neg.status === 'Counter-Offer';
+                      const isAccepted = neg.status === 'Accepted';
+                      const isPending = neg.status === 'Pending Review';
+                      const isContractorSeller = neg.sellerRole === 'contractor';
+
+                      return (
+                        <div
+                          key={neg.id}
+                          className={`card p-5 rounded-2xl border bg-card transition-all space-y-4 ${
+                            isCounter ? 'border-blue-500/60 ring-1 ring-blue-500/20' : 'border-color'
+                          }`}
+                        >
+                          {/* Header */}
+                          <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-color">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                    isContractorSeller
+                                      ? 'bg-blue-950 text-blue-300 border border-blue-800'
+                                      : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                  }`}
+                                >
+                                  {isContractorSeller ? '🚜 Contractor Seller' : '🌲 Landowner Seller'}
+                                </span>
+                                <span className="text-xs text-muted font-mono">{neg.id}</span>
+                              </div>
+
+                              <h3 className="text-base font-bold text-main">{neg.timberTitle}</h3>
+                              <p className="text-xs text-muted mt-0.5">
+                                Seller: <strong className="text-white">{neg.sellerName}</strong> ({neg.sellerEmail})
+                              </p>
+                            </div>
+
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                isAccepted
+                                  ? 'bg-emerald/20 text-emerald border border-emerald/40'
+                                  : isCounter
+                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              }`}
+                            >
+                              {neg.status}
+                            </span>
+                          </div>
+
+                          {/* Rate Comparison Strip */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-surface border border-color text-xs">
+                            <div>
+                              <span className="text-muted block">Original Asking Rate:</span>
+                              <span className="font-semibold text-slate-300 font-mono">
+                                ₹ {Number(neg.originalPricePerM3).toLocaleString('en-IN')} / m³
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-muted block">Your Submitted Bid:</span>
+                              <span className="font-extrabold text-amber-400 font-mono text-sm">
+                                ₹ {Number(neg.offeredPricePerM3).toLocaleString('en-IN')} / m³
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-muted block">Target Volume:</span>
+                              <span className="font-bold text-white font-mono">{neg.requestedVolume} m³</span>
+                            </div>
+
+                            <div>
+                              <span className="text-muted block">Total Deal Value:</span>
+                              <span className="font-extrabold text-gold font-mono text-sm">
+                                ₹ {Number(neg.totalOffered).toLocaleString('en-IN')}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* COUNTER-OFFER ALERT BOX */}
+                          {isCounter && neg.counterOffer && (
+                            <div className="p-4 rounded-xl bg-blue-950/40 border border-blue-500/40 text-xs text-blue-200 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-sm text-blue-300 flex items-center gap-1.5">
+                                  <RotateCcw size={15} /> Seller Proposed Counter-Offer:
+                                </span>
+                                <span className="font-extrabold text-emerald text-base font-mono">
+                                  ₹ {Number(neg.counterOffer.pricePerM3).toLocaleString('en-IN')} / m³
+                                </span>
+                              </div>
+                              <p className="text-slate-300 italic">"{neg.counterOffer.message}"</p>
+                            </div>
+                          )}
+
+                          {/* Timeline / Chat history */}
+                          {neg.timeline && neg.timeline.length > 0 && (
+                            <div className="text-xs space-y-1.5 p-3 rounded-xl bg-surface/50 border border-color">
+                              <span className="text-muted font-semibold block text-[11px] uppercase">Negotiation History:</span>
+                              {neg.timeline.map((item, idx) => (
+                                <div key={idx} className="flex items-start gap-2 text-slate-300">
+                                  <span className="text-muted font-mono text-[10px] mt-0.5">{item.date}</span>
+                                  <span><strong className="text-emerald">{item.senderName}:</strong> {item.message}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-color">
+                            {isCounter && (
+                              <>
+                                <button
+                                  onClick={() => handleAcceptSellerCounter(neg)}
+                                  className="btn btn-primary btn-sm flex items-center gap-1.5 font-bold shadow-md shadow-emerald/20"
+                                >
+                                  <Check size={14} /> Accept Counter-Offer & Buy Now (₹{Number(neg.counterOffer.pricePerM3).toLocaleString('en-IN')}/m³)
+                                </button>
+                              </>
+                            )}
+
+                            {isAccepted && (
+                              <button
+                                onClick={() => handleAcceptSellerCounter(neg)}
+                                className="btn btn-primary btn-sm flex items-center gap-1.5 font-bold"
+                              >
+                                <ShoppingBag size={14} /> Proceed to Order Checkout
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* TAB 3: PURCHASE ORDERS & LOGISTICS TRACKING */}
+            {/* ========================================================= */}
+            {activeTab === 'orders' && (
+              <div className="space-y-6">
+                <div className="p-4 rounded-xl bg-card border border-color flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-bold text-main flex items-center gap-2">
+                      <Truck size={20} className="text-emerald" /> Procurement Contracts & Mill Logistics Tracking
+                    </h2>
+                    <p className="text-xs text-muted">
+                      Monitor highway log truck transit, Kerala forest transit passes, and mill gate weighbridge deliveries.
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold px-3 py-1 rounded bg-surface border border-color text-emerald font-bold">
+                    {myOrders.length} Confirmed Orders
+                  </span>
+                </div>
+
+                {myOrders.length === 0 ? (
+                  <div className="card p-12 text-center rounded-2xl border border-color bg-card">
+                    <Truck size={48} className="mx-auto text-muted mb-3" />
+                    <h3 className="text-lg font-bold text-main mb-1">No Orders Placed Yet</h3>
+                    <p className="text-xs text-muted max-w-md mx-auto mb-4">
+                      Purchase timber lots directly from the marketplace to track fulfillment and transport permits here.
+                    </p>
+                    <button onClick={() => setActiveTab('marketplace')} className="btn btn-primary">
+                      Procure Timber
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Active Transit Spotlight Card */}
+                    {myOrders[0] && (
+                      <div className="card p-6 rounded-2xl border border-emerald/50 bg-card shadow-xl space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-color">
+                          <div>
+                            <span className="live-indicator inline-flex items-center gap-1.5 text-xs font-bold text-emerald uppercase tracking-wider mb-1">
+                              <span className="w-2 h-2 rounded-full bg-emerald animate-pulse"></span> Active Freight Haulage
+                            </span>
+                            <h3 className="text-lg font-bold text-main">
+                              Order {myOrders[0].id}: {myOrders[0].timberItem}
+                            </h3>
+                            <p className="text-xs text-muted">
+                              Hauling Partner: <strong className="text-white">{myOrders[0].contractor}</strong> • Pass No: <span className="font-mono text-emerald">{myOrders[0].passNo}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-xs text-muted block">Contract Value</span>
+                            <span className="text-lg font-extrabold text-gold font-mono">{myOrders[0].total}</span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <span className="text-slate-300 font-semibold">Delivery Transit Progress to {myOrders[0].mill}</span>
+                            <span className="font-extrabold text-emerald font-mono">{myOrders[0].progress || 75}%</span>
+                          </div>
+                          <div className="w-full h-2.5 rounded-full bg-surface overflow-hidden border border-color">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
+                              style={{ width: `${myOrders[0].progress || 75}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Milestones */}
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 text-xs">
+                          {myOrders[0].milestones?.map((m, idx) => (
+                            <div
+                              key={idx}
+                              className={`p-3 rounded-xl border ${
+                                m.done
+                                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                                  : 'bg-surface border-color text-muted'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 font-bold mb-1">
+                                {m.done ? <CheckCircle2 size={14} className="text-emerald" /> : <Clock size={14} />}
+                                <span>Step {idx + 1}</span>
+                              </div>
+                              <div className="font-semibold text-slate-200 line-clamp-1">{m.step}</div>
+                              <div className="text-[11px] text-muted mt-0.5">{m.date}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Orders Table */}
+                    <div className="table-wrapper card p-0 rounded-2xl overflow-hidden border border-color">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Order ID</th>
+                            <th>Timber Description</th>
+                            <th>Seller / Supplier</th>
+                            <th>Volume</th>
+                            <th>Contract Total</th>
+                            <th>Destination Mill</th>
+                            <th>Status</th>
+                            <th>ETA</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {myOrders.map((ord) => (
+                            <tr key={ord.id}>
+                              <td className="font-mono font-bold text-white">{ord.id}</td>
+                              <td className="font-semibold text-main">{ord.timberItem}</td>
+                              <td className="text-xs">
+                                <div className="font-bold text-slate-200">{ord.sellerName}</div>
+                                <span className={`text-[10px] font-bold uppercase ${
+                                  ord.sellerRole === 'contractor' ? 'text-blue-400' : 'text-emerald'
+                                }`}>
+                                  {ord.sellerRole || 'Seller'}
+                                </span>
+                              </td>
+                              <td className="text-emerald font-mono font-bold">{ord.volume}</td>
+                              <td className="text-gold font-mono font-bold">{ord.total}</td>
+                              <td className="text-xs text-muted">{ord.mill}</td>
+                              <td>
+                                <span className={`status-pill ${ord.status?.includes('Delivered') ? 'status-green' : 'status-yellow'}`}>
+                                  {ord.status?.includes('Delivered') ? <CheckCircle2 size={13} /> : <Clock size={13} />}
+                                  {ord.status}
+                                </span>
+                              </td>
+                              <td className="text-xs text-muted font-mono">{ord.ETA}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* TAB 4: MARKET TRENDS & PRICE BENCHMARKS */}
+            {/* ========================================================= */}
+            {activeTab === 'analytics' && (
+              <div className="space-y-6">
+                <div className="p-4 rounded-xl bg-card border border-color">
+                  <h2 className="text-base font-bold text-main">Kerala Timber Rate Index & Price Benchmarks</h2>
+                  <p className="text-xs text-muted">
+                    Quarterly commercial sawlog price averages compiled across Kerala forest auctions and private estate transactions.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="card p-5 rounded-2xl border border-color bg-card space-y-3">
+                    <span className="text-xs font-bold text-emerald uppercase tracking-wider">Hardwood Premium</span>
+                    <h3 className="text-lg font-bold text-main">Nilambur & Wayanad Teak</h3>
+                    <div className="text-2xl font-extrabold text-gold font-mono">₹ 42,000 - ₹ 46,500 / m³</div>
+                    <p className="text-xs text-muted">
+                      High demand for Grade A1 export sawlogs with girth &gt; 130cm. Prices holding firm.
+                    </p>
+                  </div>
+
+                  <div className="card p-5 rounded-2xl border border-color bg-card space-y-3">
+                    <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Luxury Decorative</span>
+                    <h3 className="text-lg font-bold text-main">Malabar Rosewood (Eetti)</h3>
+                    <div className="text-2xl font-extrabold text-gold font-mono">₹ 56,000 - ₹ 62,000 / m³</div>
+                    <p className="text-xs text-muted">
+                      Limited supply from regulated estate replanting. Veneer slicer demand remains strong.
+                    </p>
+                  </div>
+
+                  <div className="card p-5 rounded-2xl border border-color bg-card space-y-3">
+                    <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Industrial Plantation</span>
+                    <h3 className="text-lg font-bold text-main">Seasoned Rubberwood</h3>
+                    <div className="text-2xl font-extrabold text-gold font-mono">₹ 12,500 - ₹ 13,800 / m³</div>
+                    <p className="text-xs text-muted">
+                      Consistent supply across Kottayam and Pathanamthitta replanting parcels.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* NEGOTIATION / MAKE OFFER MODAL */}
+            {/* ========================================================= */}
+            {negotiateModalOpen && negotiateTarget && (
+              <div className="modal-backdrop fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="modal-container bg-card border border-color rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-scale-up space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-color">
+                    <h3 className="text-lg font-bold text-main flex items-center gap-2">
+                      <Handshake size={20} className="text-amber-400" /> Submit Negotiation Offer
+                    </h3>
+                    <button
+                      onClick={() => setNegotiateModalOpen(false)}
+                      className="text-muted hover:text-white"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Summary of listing */}
+                  <div className="p-3.5 rounded-xl bg-surface border border-color text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <strong className="text-white text-sm">{negotiateTarget.title || negotiateTarget.timberSpecies}</strong>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        negotiateTarget.sellerRole === 'contractor' ? 'bg-blue-950 text-blue-300' : 'bg-emerald-950 text-emerald-300'
+                      }`}>
+                        {negotiateTarget.sellerRole === 'contractor' ? 'Contractor' : 'Landowner'}: {negotiateTarget.sellerName}
+                      </span>
+                    </div>
+                    <div className="text-muted flex items-center justify-between">
+                      <span>Original Asking Rate: <strong className="text-slate-200">₹ {Number(negotiateTarget.pricePerM3).toLocaleString('en-IN')}/m³</strong></span>
+                      <span>Total Available: <strong className="text-emerald">{negotiateTarget.volume} m³</strong></span>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSubmitNegotiation} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="form-group">
+                        <label className="form-label text-xs">Your Offered Rate (₹ / m³) *</label>
+                        <input
+                          type="number"
+                          value={negotiateForm.offeredPricePerM3}
+                          onChange={(e) => setNegotiateForm({ ...negotiateForm, offeredPricePerM3: e.target.value })}
+                          className="form-input text-base font-bold font-mono text-emerald"
+                          required
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label text-xs">Requested Volume (m³) *</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={negotiateForm.requestedVolume}
+                          onChange={(e) => setNegotiateForm({ ...negotiateForm, requestedVolume: e.target.value })}
+                          className="form-input text-base font-bold font-mono text-white"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Computed deal amount */}
+                    <div className="p-3 bg-surface rounded-xl border border-color text-xs flex items-center justify-between">
+                      <span className="text-muted">Total Proposed Deal Value:</span>
+                      <span className="text-base font-extrabold text-gold font-mono">
+                        ₹ {((Number(negotiateForm.offeredPricePerM3) || 0) * (Number(negotiateForm.requestedVolume) || 0)).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label text-xs">Haulage & Logistics Preference</label>
+                      <select
+                        value={negotiateForm.deliveryPreference}
+                        onChange={(e) => setNegotiateForm({ ...negotiateForm, deliveryPreference: e.target.value })}
+                        className="form-input text-xs"
+                      >
+                        <option value="Seller Contractor Hauling to Mill">Seller Arranged Transport to Buyer Mill</option>
+                        <option value="Buyer Arranged Truck Pickup from Yard">Buyer Self-Pickup (We Dispatch Trucks to Yard)</option>
+                        <option value="Shared Freight 50/50">Shared Freight Costs</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label text-xs">Destination Mill Yard</label>
+                      <input
+                        type="text"
+                        value={negotiateForm.destinationMill}
+                        onChange={(e) => setNegotiateForm({ ...negotiateForm, destinationMill: e.target.value })}
+                        className="form-input text-xs"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label text-xs">Payment Terms Proposed</label>
+                      <select
+                        value={negotiateForm.paymentTerms}
+                        onChange={(e) => setNegotiateForm({ ...negotiateForm, paymentTerms: e.target.value })}
+                        className="form-input text-xs"
+                      >
+                        <option value="50% Advance Escrow + 50% Post-Weighbridge">50% Advance Escrow + 50% Weighbridge Inspection</option>
+                        <option value="100% Escrow on Dispatch">100% Escrow on Forest Transit Clearance</option>
+                        <option value="Commercial Letter of Credit (LC)">Commercial Letter of Credit (Net 30)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label text-xs">Note to Seller</label>
+                      <textarea
+                        rows="2"
+                        value={negotiateForm.notes}
+                        onChange={(e) => setNegotiateForm({ ...negotiateForm, notes: e.target.value })}
+                        className="form-input text-xs"
+                        placeholder="State your purchase readiness, inspection preferences..."
+                      ></textarea>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-color">
+                      <button
+                        type="button"
+                        onClick={() => setNegotiateModalOpen(false)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-sm flex items-center gap-1.5 font-bold"
+                      >
+                        <Handshake size={15} /> Send Offer to Seller
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* BUY NOW / PURCHASE CHECKOUT MODAL */}
+            {/* ========================================================= */}
+            {buyNowModalOpen && buyNowTarget && (
+              <div className="modal-backdrop fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="modal-container bg-card border border-color rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-scale-up space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-color">
+                    <h3 className="text-lg font-bold text-main flex items-center gap-2">
+                      <ShoppingBag size={20} className="text-emerald" /> Timber Purchase Checkout
+                    </h3>
+                    <button
+                      onClick={() => setBuyNowModalOpen(false)}
+                      className="text-muted hover:text-white"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-surface border border-color text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-white">{buyNowTarget.title || buyNowTarget.timberSpecies}</span>
+                      <span className="text-emerald font-bold">{buyNowTarget.gradeQuality}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-muted">
+                      <span>Seller: <strong className="text-slate-200">{buyNowTarget.sellerName}</strong></span>
+                      <span>Rate: <strong className="text-main font-mono">₹ {Number(buyNowTarget.pricePerM3).toLocaleString('en-IN')}/m³</strong></span>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleConfirmPurchase} className="space-y-4">
+                    <div className="form-group">
+                      <label className="form-label text-xs">Procurement Volume (m³)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        max={buyNowTarget.volume}
+                        value={buyNowForm.volume}
+                        onChange={(e) => setBuyNowForm({ ...buyNowForm, volume: e.target.value })}
+                        className="form-input text-base font-bold font-mono text-emerald"
+                        required
+                      />
+                      <span className="text-[11px] text-muted block mt-1">
+                        Available in lot: {buyNowTarget.volume} m³
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-surface rounded-xl border border-color text-xs flex items-center justify-between">
+                      <span className="text-muted">Total Purchase Price:</span>
+                      <span className="text-lg font-extrabold text-gold font-mono">
+                        ₹ {((Number(buyNowForm.volume) || 0) * Number(buyNowTarget.pricePerM3)).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label text-xs">Destination Sawmill / Processing Depot</label>
+                      <input
+                        type="text"
+                        value={buyNowForm.destinationMill}
+                        onChange={(e) => setBuyNowForm({ ...buyNowForm, destinationMill: e.target.value })}
+                        className="form-input text-xs"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label text-xs">Hauling & Logistics Carrier</label>
+                      <input
+                        type="text"
+                        value={buyNowForm.haulingCarrier}
+                        onChange={(e) => setBuyNowForm({ ...buyNowForm, haulingCarrier: e.target.value })}
+                        className="form-input text-xs"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label text-xs">Safe Settlement Method</label>
+                      <select
+                        value={buyNowForm.paymentMethod}
+                        onChange={(e) => setBuyNowForm({ ...buyNowForm, paymentMethod: e.target.value })}
+                        className="form-input text-xs"
+                      >
+                        <option value="TreeConnect Escrow (Standard Safe Settlement)">TreeConnect Safe Escrow (Released on Weighbridge Acceptance)</option>
+                        <option value="Bank Wire / Letter of Credit">Commercial Bank LC / Wire Transfer</option>
+                      </select>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-2">
+                      <ShieldCheck size={18} className="text-emerald-400 flex-shrink-0" />
+                      <span>
+                        Protected by TreeConnect Buyer Protection: Funds held safely in escrow until logs pass gate inspection.
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-color">
+                      <button
+                        type="button"
+                        onClick={() => setBuyNowModalOpen(false)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-sm flex items-center gap-1.5 font-bold shadow-lg shadow-emerald/20"
+                      >
+                        <Check size={15} /> Confirm Purchase & Secure Lot
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* TIMBER SPECIFICATIONS MODAL */}
+            {/* ========================================================= */}
+            {selectedListingForDetails && (
+              <div className="modal-backdrop fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="modal-container bg-card border border-color rounded-2xl max-w-xl w-full p-6 shadow-2xl animate-scale-up space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-color">
+                    <h3 className="text-lg font-bold text-main">
+                      {selectedListingForDetails.title || `${selectedListingForDetails.gradeQuality} ${selectedListingForDetails.timberSpecies}`}
+                    </h3>
+                    <button
+                      onClick={() => setSelectedListingForDetails(null)}
+                      className="text-muted hover:text-white"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 text-xs">
+                    <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-surface border border-color">
+                      <div>
+                        <span className="text-muted block">Seller Type:</span>
+                        <span className="font-bold text-emerald uppercase">{selectedListingForDetails.sellerRole}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">Seller Name:</span>
+                        <span className="font-semibold text-white">{selectedListingForDetails.sellerName}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">Location:</span>
+                        <span className="font-semibold text-white">{selectedListingForDetails.district}, Kerala</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">Storage Yard:</span>
+                        <span className="font-semibold text-white">{selectedListingForDetails.storageLocation || 'Central Yard'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">Log Dimensions:</span>
+                        <span className="font-semibold text-white">{selectedListingForDetails.logDimensions || 'Standard'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">Certification:</span>
+                        <span className="font-semibold text-emerald">{selectedListingForDetails.fscCert || 'Forest Clearance Pass'}</span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-surface border border-color">
+                      <span className="text-muted block mb-1 font-semibold">Description & Inspection Notes:</span>
+                      <p className="text-slate-200 leading-relaxed">
+                        {selectedListingForDetails.description || 'Verified timber lot from certified Kerala stand.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        onClick={() => setSelectedListingForDetails(null)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Close
+                      </button>
+                      {selectedListingForDetails.negotiable === 'Yes' && (
+                        <button
+                          onClick={() => {
+                            const l = selectedListingForDetails;
+                            setSelectedListingForDetails(null);
+                            handleOpenNegotiate(l);
+                          }}
+                          className="btn btn-secondary btn-sm text-amber-400 font-bold"
+                        >
+                          Negotiate Price
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          const l = selectedListingForDetails;
+                          setSelectedListingForDetails(null);
+                          handleOpenBuyNow(l);
+                        }}
+                        className="btn btn-primary btn-sm font-bold"
+                      >
+                        Buy Now
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </main>
         </div>
-      )}
+      </div>
     </div>
   );
 };
