@@ -6425,6 +6425,29 @@ input[type="date"].cd-inspection-input::-webkit-calendar-picker-indicator:hover 
   padding-left: 14px !important;
 }
 
+.active-stat-advance-pending {
+  border-left: 2px solid rgba(245, 158, 11, 0.7) !important;
+  padding-left: 14px !important;
+  background: rgba(245, 158, 11, 0.05) !important;
+  border-radius: 0 10px 10px 0 !important;
+}
+
+.active-advance-payment-container {
+  width: 100% !important;
+  animation: fadeInDown 0.3s ease-out !important;
+}
+
+.active-harvest-not-started-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(6, 26, 17, 0.95) 100%) !important;
+  border: 1.5px solid rgba(245, 158, 11, 0.4) !important;
+  border-radius: 18px !important;
+  padding: 20px 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
 .active-stat-label {
   font-size: 0.68rem !important;
   font-weight: 800 !important;

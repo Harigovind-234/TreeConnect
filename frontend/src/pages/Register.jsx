@@ -175,6 +175,12 @@ const Register = () => {
   const [buyerGstFile, setBuyerGstFile] = useState(null);
   const [buyerBusinessCertFile, setBuyerBusinessCertFile] = useState(null);
   const [buyerIdProofFile, setBuyerIdProofFile] = useState(null);
+  const [buyerDocErrors, setBuyerDocErrors] = useState({
+    forestLicence: '',
+    tradeLicence: '',
+    businessCert: '',
+    idProof: ''
+  });
   const [buyerVerificationError, setBuyerVerificationError] = useState('');
 
   // File state for Landowner Land Tax Invoice & Identity Proof upload
@@ -298,11 +304,59 @@ const Register = () => {
     setToast({ type: '', message: '' });
     setIdProofError('');
     setBuyerVerificationError('');
+    setBuyerDocErrors({
+      forestLicence: '',
+      tradeLicence: '',
+      businessCert: '',
+      idProof: ''
+    });
 
     // Contractor specific validation
     if (selectedRole === 'contractor') {
       if (!idProofFile) {
         setIdProofError('Government identity document upload is required for verification.');
+        const el = document.getElementById('govt-identity-proof');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+
+    // Buyer specific verification document validation
+    if (selectedRole === 'buyer') {
+      const isForestLicenceRequired = ['Sawmill', 'Wood Processing Unit', 'Timber Depot'].includes(watchBuyerType);
+      const isTradeLicenceRequired = watchBuyerType !== 'Other';
+      const isBusinessCertRequired = watchBuyerType === 'Furniture/Manufacturing Business';
+
+      const newErrors = {};
+      if (isForestLicenceRequired && !buyerForestLicenceFile) {
+        newErrors.forestLicence = `Applicable Forest Department Licence is mandatory for ${watchBuyerType} verification.`;
+      }
+      if (isTradeLicenceRequired && !buyerTradeLicenceFile) {
+        newErrors.tradeLicence = 'Local-body Trade / Business Licence is required for commercial buyer verification.';
+      }
+      if (isBusinessCertRequired && !buyerBusinessCertFile) {
+        newErrors.businessCert = 'Business Registration or MSME Certificate is required.';
+      }
+      if (!buyerIdProofFile) {
+        newErrors.idProof = 'Government identity document of the business owner is required.';
+      } else if (!watchIdProofType) {
+        newErrors.idProof = 'Please select your identity document type (e.g. Aadhaar Card, PAN Card).';
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setBuyerDocErrors(newErrors);
+        setToast({
+          type: 'error',
+          message: 'Please upload the required verification documents highlighted in red below.'
+        });
+
+        const firstKey = Object.keys(newErrors)[0];
+        const targetId =
+          firstKey === 'forestLicence' ? 'buyer-forest-licence' :
+          firstKey === 'tradeLicence' ? 'buyer-trade-licence' :
+          firstKey === 'businessCert' ? 'buyer-business-cert' : 'buyer-id-proof';
+        const el = document.getElementById(targetId);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
     }
@@ -370,18 +424,18 @@ const Register = () => {
         role={selectedRole}
       />
 
-      <main className="flex-grow py-10 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/40 via-slate-950 to-slate-950">
+      <main className="flex-grow py-12 sm:py-16 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/40 via-slate-950 to-slate-950">
         <div className="w-full max-w-[1300px] mx-auto flex flex-col items-center justify-center">
           {/* Header Banner */}
-          <div className="text-center mb-8 max-w-3xl mx-auto flex flex-col items-center justify-center">
-            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold text-xs tracking-widest uppercase mb-3 border border-emerald-500/20 shadow-sm backdrop-blur-sm">
+          <div className="text-center mb-10 sm:mb-12 max-w-3xl mx-auto flex flex-col items-center justify-center">
+            <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold text-xs tracking-widest uppercase mb-3.5 border border-emerald-500/20 shadow-sm backdrop-blur-sm">
               <Trees size={16} className="text-emerald-400" />
               <span>TreeConnect Enterprise</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight text-center">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight text-center">
               Create Your Account
             </h1>
-            <p className="mt-2 text-slate-400 text-sm sm:text-base max-w-xl mx-auto font-normal leading-relaxed text-center">
+            <p className="mt-3 text-slate-400 text-sm sm:text-base max-w-xl mx-auto font-normal leading-relaxed text-center">
               Join the sustainable timber network connecting landowners, harvesting contractors, and commercial buyers.
             </p>
           </div>
@@ -558,18 +612,23 @@ const Register = () => {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} method="post" action="#" className="w-full space-y-6">
+              <form onSubmit={handleSubmit(onSubmit)} method="post" action="#" className="w-full space-y-8 sm:space-y-10">
                 {/* SUB-CONTAINER ①: ACCOUNT INFORMATION */}
                 <div className="form-section-subcard w-full">
-                  <h3 className="text-sm font-bold text-white flex items-center justify-center gap-2 mb-4 text-emerald-400 border-b border-slate-800/80 pb-2 text-center">
-                    <User size={18} />
-                    <span>① Account Information</span>
-                  </h3>
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+                    <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                      <User size={22} className="text-emerald-400" />
+                      <span>① Account Information</span>
+                    </h3>
+                    <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+                      Credentials
+                    </span>
+                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
                     {/* Full Name */}
                     <div className="sm:col-span-2">
-                      <label htmlFor="fullName" className="block text-xs font-semibold text-slate-300 mb-2">
+                      <label htmlFor="fullName" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         {selectedRole === 'landowner' && 'Full Name / Property Owner Name *'}
                         {selectedRole === 'contractor' && 'Full Name / Contractor Name *'}
                         {selectedRole === 'buyer' && 'Buyer Name / Business Name *'}
@@ -598,7 +657,7 @@ const Register = () => {
                     {/* Contact Person (Buyer Only) */}
                     {selectedRole === 'buyer' && (
                       <div className="sm:col-span-2">
-                        <label htmlFor="contactPerson" className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="contactPerson" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                           Contact Person Name *
                         </label>
                         <div className="relative">
@@ -619,7 +678,7 @@ const Register = () => {
 
                     {/* Email */}
                     <div>
-                      <label htmlFor="email" className="block text-xs font-semibold text-slate-300 mb-2">
+                      <label htmlFor="email" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         Email Address *
                       </label>
                       <div className="relative">
@@ -639,7 +698,7 @@ const Register = () => {
 
                     {/* Phone */}
                     <div>
-                      <label htmlFor="phone" className="block text-xs font-semibold text-slate-300 mb-2">
+                      <label htmlFor="phone" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         Mobile Number *
                       </label>
                       <div className="relative">
@@ -666,7 +725,7 @@ const Register = () => {
 
                     {/* Password */}
                     <div>
-                      <label htmlFor="password" className="block text-xs font-semibold text-slate-300 mb-2">
+                      <label htmlFor="password" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         Password *
                       </label>
                       <div className="relative">
@@ -688,13 +747,15 @@ const Register = () => {
                           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
                       </div>
-                      <PasswordStrengthMeter password={watchPassword} />
+                      <div className="mt-2.5">
+                        <PasswordStrengthMeter password={watchPassword} />
+                      </div>
                       {errors.password && <p className="text-xs text-red-400 font-medium mt-1.5">{errors.password.message}</p>}
                     </div>
 
                     {/* Confirm Password */}
                     <div>
-                      <label htmlFor="confirmPassword" className="block text-xs font-semibold text-slate-300 mb-2">
+                      <label htmlFor="confirmPassword" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         Confirm Password *
                       </label>
                       <div className="relative">
@@ -727,21 +788,21 @@ const Register = () => {
                 {/* BUYER BUSINESS CLASSIFICATION & DYNAMIC VERIFICATION */}
                 {/* ==================================================== */}
                 {selectedRole === 'buyer' && (
-                  <div className="form-section-subcard w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-6 sm:p-8 shadow-xl space-y-8">
+                  <div className="form-section-subcard w-full space-y-6 sm:space-y-7">
                     {/* Section Header */}
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                      <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+                      <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
                         <Briefcase size={22} className="text-emerald-400" />
-                        <span>Business & Verification Profile</span>
+                        <span>② Business & Verification Profile</span>
                       </h3>
-                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
                         Buyer Verification
                       </span>
                     </div>
 
                     {/* FIELD 1: What type of buyer are you? */}
-                    <div>
-                      <label htmlFor="buyerType" className="block text-sm sm:text-base font-bold text-slate-100 mb-2">
+                    <div className="mb-6">
+                      <label htmlFor="buyerType" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         What type of buyer are you? <span className="text-emerald-400">*</span>
                       </label>
                       <select
@@ -770,7 +831,7 @@ const Register = () => {
 
                     {/* Kerala Forest Dept Notice for Sawmills & Wood Processing Units */}
                     {['Sawmill', 'Wood Processing Unit', 'Timber Depot'].includes(watchBuyerType) && (
-                      <div className="rounded-2xl bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-950 border border-emerald-500/30 p-5 sm:p-6 shadow-lg space-y-2">
+                      <div className="mb-6 rounded-2xl bg-gradient-to-br from-emerald-950/70 via-slate-900 to-slate-950 border border-emerald-500/30 p-5 sm:p-6 shadow-lg space-y-2">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
                             <Trees size={22} />
@@ -787,7 +848,7 @@ const Register = () => {
                     )}
 
                     {/* DYNAMIC VERIFICATION DOCUMENT UPLOADS BASED ON BUYER TYPE */}
-                    <div className="pt-6 border-t border-slate-800/80 space-y-8">
+                    <div className="pt-6 border-t border-slate-800/80 space-y-6 sm:space-y-7">
                       <h4 className="text-base font-bold text-white flex items-center gap-2 text-emerald-400">
                         <FileText size={20} />
                         <span>Dynamic Verification Documents for {watchBuyerType}</span>
@@ -809,7 +870,11 @@ const Register = () => {
                           acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                           maxSizeMB={10}
                           fileData={buyerForestLicenceFile}
-                          onFileChange={(file) => setBuyerForestLicenceFile(file)}
+                          onFileChange={(file) => {
+                            setBuyerForestLicenceFile(file);
+                            if (file) setBuyerDocErrors((prev) => ({ ...prev, forestLicence: '' }));
+                          }}
+                          error={buyerDocErrors.forestLicence}
                         />
                       )}
 
@@ -829,7 +894,11 @@ const Register = () => {
                           acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                           maxSizeMB={10}
                           fileData={buyerTradeLicenceFile}
-                          onFileChange={(file) => setBuyerTradeLicenceFile(file)}
+                          onFileChange={(file) => {
+                            setBuyerTradeLicenceFile(file);
+                            if (file) setBuyerDocErrors((prev) => ({ ...prev, tradeLicence: '' }));
+                          }}
+                          error={buyerDocErrors.tradeLicence}
                         />
                       )}
 
@@ -849,7 +918,11 @@ const Register = () => {
                           acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                           maxSizeMB={10}
                           fileData={buyerBusinessCertFile}
-                          onFileChange={(file) => setBuyerBusinessCertFile(file)}
+                          onFileChange={(file) => {
+                            setBuyerBusinessCertFile(file);
+                            if (file) setBuyerDocErrors((prev) => ({ ...prev, businessCert: '' }));
+                          }}
+                          error={buyerDocErrors.businessCert}
                         />
                       )}
 
@@ -875,12 +948,23 @@ const Register = () => {
                         helperText="Upload a valid government identity document of the authorized business owner / contact person."
                         docTypes={['Aadhaar Card', 'PAN Card', 'Driving Licence', 'Passport', 'Voter ID']}
                         selectedDocType={watchIdProofType}
-                        onDocTypeChange={(val) => setValue('idProofType', val, { shouldValidate: true })}
+                        onDocTypeChange={(val) => {
+                          setValue('idProofType', val, { shouldValidate: true });
+                          if (val && buyerIdProofFile) {
+                            setBuyerDocErrors((prev) => ({ ...prev, idProof: '' }));
+                          }
+                        }}
                         acceptedFormatsText="PDF, JPG, PNG"
                         acceptedMimeTypes="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
                         maxSizeMB={5}
                         fileData={buyerIdProofFile}
-                        onFileChange={(file) => setBuyerIdProofFile(file)}
+                        onFileChange={(file) => {
+                          setBuyerIdProofFile(file);
+                          if (file && watchIdProofType) {
+                            setBuyerDocErrors((prev) => ({ ...prev, idProof: '' }));
+                          }
+                        }}
+                        error={buyerDocErrors.idProof}
                       />
                     </div>
 
@@ -928,14 +1012,14 @@ const Register = () => {
                 {/* LANDOWNER PROPERTY & LAND TAX VERIFICATION SECTION  */}
                 {/* ==================================================== */}
                 {selectedRole === 'landowner' && (
-                  <div className="form-section-subcard w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-6 sm:p-8 shadow-xl space-y-8">
+                  <div className="form-section-subcard w-full space-y-6 sm:space-y-7">
                     {/* Section Header */}
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                      <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+                      <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
                         <Trees size={22} className="text-emerald-400" />
-                        <span>Property Ownership &amp; Identity Verification</span>
+                        <span>② Property Ownership & Verification</span>
                       </h3>
-                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
                         Landowner Verification
                       </span>
                     </div>
@@ -984,22 +1068,22 @@ const Register = () => {
                 {/* CONTRACTOR PROFESSIONAL INFORMATION SECTION           */}
                 {/* ==================================================== */}
                 {selectedRole === 'contractor' && (
-                  <div className="form-section-subcard w-full bg-slate-900/90 rounded-2xl border border-slate-800 p-6 sm:p-8 shadow-xl">
+                  <div className="form-section-subcard w-full space-y-6 sm:space-y-7">
                     {/* Main Section Header */}
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-8">
-                      <h3 className="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
-                        <Award size={24} className="text-emerald-400" />
-                        <span>Professional Information</span>
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+                      <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                        <Award size={22} className="text-emerald-400" />
+                        <span>② Professional Information</span>
                       </h3>
-                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
-                        Kerala Harvesting Contractor
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+                        Contractor Verification
                       </span>
                     </div>
 
-                    <div className="space-y-10 sm:space-y-12">
+                    <div className="space-y-6 sm:space-y-7">
                       {/* FIELD 1: Years of Experience (Required) */}
                       <div>
-                        <label className="block text-base sm:text-lg font-bold text-slate-100 mb-3.5">
+                        <label className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                           1. Years of Experience <span className="text-emerald-400">*</span>
                         </label>
                         <select
@@ -1014,16 +1098,16 @@ const Register = () => {
                           <option value="8–15 Years" className="bg-slate-900 text-white font-medium">8–15 Years</option>
                           <option value="More than 15 Years" className="bg-slate-900 text-white font-medium">More than 15 Years</option>
                         </select>
-                        <p className="text-sm text-slate-300 font-medium mt-3 leading-relaxed">
+                        <p className="text-xs text-slate-400 mt-2">
                           Select your approximate experience in tree harvesting or forestry-related work.
                         </p>
                         {errors.yearsOfExperience && (
-                          <p className="text-sm text-red-400 font-semibold mt-2">{errors.yearsOfExperience.message}</p>
+                          <p className="text-xs text-red-400 font-semibold mt-1">{errors.yearsOfExperience.message}</p>
                         )}
                       </div>
 
                       {/* FIELD 2: Government-Issued Identity / Business Identification (Required) */}
-                      <div className="pt-8 border-t border-slate-800/80">
+                      <div className="pt-6 border-t border-slate-800/80">
                         <FileUploadCard
                           id="govt-identity-proof"
                           label="2. Government-Issued Identity / Business Identification"
@@ -1045,7 +1129,7 @@ const Register = () => {
                       </div>
 
                       {/* FIELD 3: Supporting Verification Document (Optional) */}
-                      <div className="pt-8 border-t border-slate-800/80">
+                      <div className="pt-6 border-t border-slate-800/80">
                         <FileUploadCard
                           id="supporting-verification-doc"
                           label="3. Supporting Verification Document"
@@ -1071,7 +1155,7 @@ const Register = () => {
                       </div>
 
                       {/* DECLARATION (Required Checkbox) */}
-                      <div className="pt-8 border-t border-slate-800/80">
+                      <div className="pt-6 border-t border-slate-800/80">
                         <div className="p-5 sm:p-6 rounded-xl bg-slate-950 border border-slate-800 shadow-sm">
                           <label className="flex items-start gap-3.5 cursor-pointer group">
                             <input
@@ -1090,7 +1174,7 @@ const Register = () => {
                       </div>
 
                       {/* VERIFICATION NOTICE CARD */}
-                      <div className="pt-8 border-t border-slate-800/80">
+                      <div className="pt-6 border-t border-slate-800/80">
                         <div className="rounded-2xl bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-950 border border-emerald-500/40 p-6 sm:p-7 shadow-xl">
                           <div className="flex items-center gap-3.5 mb-5 border-b border-emerald-500/20 pb-4">
                             <div className="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0 border border-emerald-500/30">
@@ -1137,19 +1221,24 @@ const Register = () => {
 
                 {/* SUB-CONTAINER ③: ADDRESS & LOCATION INFORMATION */}
                 <div className="form-section-subcard w-full">
-                  <h3 className="text-sm font-bold text-white flex items-center justify-center gap-2 mb-4 text-emerald-400 border-b border-slate-800/80 pb-2 text-center">
-                    <MapPin size={18} />
-                    <span>
-                      {selectedRole === 'landowner' && '② Property / Estate Location'}
-                      {selectedRole === 'contractor' && '③ Primary Operating Address'}
-                      {selectedRole === 'buyer' && '③ Business Address'}
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+                    <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                      <MapPin size={22} className="text-emerald-400" />
+                      <span>
+                        {selectedRole === 'landowner' && '③ Property / Estate Location'}
+                        {selectedRole === 'contractor' && '③ Primary Operating Address'}
+                        {selectedRole === 'buyer' && '③ Business Address'}
+                      </span>
+                    </h3>
+                    <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+                      Location
                     </span>
-                  </h3>
+                  </div>
 
-                  <div className="space-y-4">
+                  <div className="space-y-5 sm:space-y-6">
                     {/* Full Width Address */}
                     <div>
-                      <label htmlFor="address" className="block text-xs font-semibold text-slate-300 mb-2">
+                      <label htmlFor="address" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         Address *
                       </label>
                       <div className="relative">
@@ -1169,8 +1258,8 @@ const Register = () => {
 
                     {/* Panchayat / Local Body Field */}
                     <div>
-                      <label htmlFor="localBody" className="block text-xs font-semibold text-slate-300 mb-2">
-                        Panchayat / Local Body <span className="text-slate-500 font-normal">(Gram Panchayat / Municipality)</span>
+                      <label htmlFor="localBody" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
+                        Panchayat / Local Body <span className="text-slate-400 font-normal">(Gram Panchayat / Municipality)</span>
                       </label>
                       <div className="relative">
                         <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10" size={18} />
@@ -1186,17 +1275,17 @@ const Register = () => {
                     </div>
 
                     {/* Grouped Location Fields */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
                       {/* District Field with Smart Selector & Validation */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label htmlFor="district" className="block text-xs font-semibold text-slate-300">
+                          <label htmlFor="district" className="block text-xs sm:text-sm font-semibold text-slate-200">
                             District / County *
                           </label>
                           <button
                             type="button"
                             onClick={() => setCustomDistrictMode(!customDistrictMode)}
-                            className="text-[11px] font-bold text-emerald-400 hover:underline cursor-pointer"
+                            className="text-xs font-bold text-emerald-400 hover:underline cursor-pointer"
                           >
                             {customDistrictMode ? 'Select from List' : '+ Type Custom'}
                           </button>
@@ -1254,7 +1343,7 @@ const Register = () => {
 
                       {/* State Field */}
                       <div>
-                        <label htmlFor="state" className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="state" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                           State / Province *
                         </label>
                         <div className="relative">
@@ -1273,10 +1362,10 @@ const Register = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-6">
                       {/* Country Field */}
                       <div>
-                        <label htmlFor="country" className="block text-xs font-semibold text-slate-300 mb-2">
+                        <label htmlFor="country" className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                           Country *
                         </label>
                         <div className="relative">
@@ -1297,7 +1386,7 @@ const Register = () => {
                       {/* Postal Code Field with Live PIN Auto-Fetch */}
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <label htmlFor="postalCode" className="block text-xs font-semibold text-slate-300">
+                          <label htmlFor="postalCode" className="block text-xs sm:text-sm font-semibold text-slate-200">
                             PIN / Postal Code *
                           </label>
                           {isFetchingPin && (
@@ -1323,12 +1412,12 @@ const Register = () => {
                         {errors.postalCode ? (
                           <p className="text-xs text-red-400 font-medium mt-1.5">{errors.postalCode.message}</p>
                         ) : pinAutoMsg ? (
-                          <p className="text-xs text-emerald-400 font-medium mt-1.5 flex items-center gap-1 bg-emerald-950/60 p-1.5 rounded-lg border border-emerald-800/80">
+                          <p className="text-xs text-emerald-400 font-medium mt-1.5 flex items-center gap-1 bg-emerald-950/60 p-2 rounded-xl border border-emerald-800/80">
                             <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" />
                             <span>{pinAutoMsg}</span>
                           </p>
                         ) : (
-                          <p className="text-[11px] text-slate-500 font-normal mt-1">
+                          <p className="text-[11px] text-slate-400 font-normal mt-1">
                             Type a 6-digit PIN code to auto-fill District, State & Country.
                           </p>
                         )}
@@ -1340,20 +1429,25 @@ const Register = () => {
                 {/* SUB-CONTAINER ④: COMMUNICATION & LANGUAGE PREFERENCES */}
                 {(selectedRole === 'landowner' || selectedRole === 'buyer') && (
                   <div className="form-section-subcard w-full">
-                    <h3 className="text-sm font-bold text-white flex items-center justify-center gap-2 mb-4 text-emerald-400 border-b border-slate-800/80 pb-2 text-center">
-                      <MessageSquare size={18} />
-                      <span>
-                        {selectedRole === 'landowner' && '③ Preferences'}
-                        {selectedRole === 'buyer' && '④ Communication & Language'}
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
+                      <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5 text-emerald-400">
+                        <MessageSquare size={22} className="text-emerald-400" />
+                        <span>
+                          {selectedRole === 'landowner' && '④ Communication Preferences'}
+                          {selectedRole === 'buyer' && '④ Communication & Language'}
+                        </span>
+                      </h3>
+                      <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+                        Preferences
                       </span>
-                    </h3>
+                    </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-2">
+                      <label className="block text-xs sm:text-sm font-semibold text-slate-200 mb-2">
                         Communication Preference
                       </label>
                       <select
-                        className="w-full form-input-56 cursor-pointer"
+                        className="w-full form-input-56 cursor-pointer bg-slate-950 text-white font-medium border-slate-700 focus:border-emerald-500"
                         {...register('preferredCommunication')}
                       >
                         <option value="Email">Email</option>
@@ -1365,52 +1459,54 @@ const Register = () => {
                 )}
 
                 {/* TERMS & PRIVACY ACCEPTANCE */}
-                <div className="pt-2 space-y-3 flex flex-col items-center justify-center text-center">
-                  <label className="flex items-center justify-center gap-3 cursor-pointer group">
+                <div className="pt-6 sm:pt-8 border-t border-slate-800/80 space-y-3.5 flex flex-col items-center justify-center text-center">
+                  <label className="flex items-center justify-center gap-3 cursor-pointer group py-0.5">
                     <input
                       type="checkbox"
                       checked={acceptTerms}
                       onChange={(e) => setAcceptTerms(e.target.checked)}
                       className="w-4.5 h-4.5 text-emerald-600 rounded focus:ring-emerald-500 border-slate-700 bg-slate-800 cursor-pointer"
                     />
-                    <span className="text-xs text-slate-300 group-hover:text-white transition-colors">
+                    <span className="text-xs sm:text-sm text-slate-300 group-hover:text-white transition-colors">
                       I accept the <a href="#terms" className="text-emerald-400 font-semibold underline hover:text-emerald-300">Terms & Conditions</a>
                     </span>
                   </label>
 
-                  <label className="flex items-center justify-center gap-3 cursor-pointer group">
+                  <label className="flex items-center justify-center gap-3 cursor-pointer group py-0.5">
                     <input
                       type="checkbox"
                       checked={acceptPrivacy}
                       onChange={(e) => setAcceptPrivacy(e.target.checked)}
                       className="w-4.5 h-4.5 text-emerald-600 rounded focus:ring-emerald-500 border-slate-700 bg-slate-800 cursor-pointer"
                     />
-                    <span className="text-xs text-slate-300 group-hover:text-white transition-colors">
+                    <span className="text-xs sm:text-sm text-slate-300 group-hover:text-white transition-colors">
                       I accept the <a href="#privacy" className="text-emerald-400 font-semibold underline hover:text-emerald-300">Privacy Policy</a>
                     </span>
                   </label>
                 </div>
 
                 {/* Glowing Emerald Register Button */}
-                <button
-                  type="submit"
-                  disabled={!acceptTerms || !acceptPrivacy || isSubmitting}
-                  className={`w-full h-14 rounded-2xl font-black text-base transition-all duration-300 flex items-center justify-center gap-2.5 ${acceptTerms && acceptPrivacy && !isSubmitting
-                    ? 'bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white btn-glow-emerald cursor-pointer'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60 shadow-none'
-                    }`}
-                >
-                  <UserPlus size={20} />
-                  <span>
-                    {isSubmitting
-                      ? 'Registering Account...'
-                      : `Register as ${selectedRole.toUpperCase()}`}
-                  </span>
-                </button>
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={!acceptTerms || !acceptPrivacy || isSubmitting}
+                    className={`w-full h-14 sm:h-15 rounded-2xl font-black text-base sm:text-lg transition-all duration-300 flex items-center justify-center gap-2.5 ${acceptTerms && acceptPrivacy && !isSubmitting
+                      ? 'bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white btn-glow-emerald cursor-pointer'
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/60 shadow-none'
+                      }`}
+                  >
+                    <UserPlus size={20} />
+                    <span>
+                      {isSubmitting
+                        ? 'Registering Account...'
+                        : `Register as ${selectedRole.toUpperCase()}`}
+                    </span>
+                  </button>
+                </div>
               </form>
 
               {/* Bottom Sign In Link */}
-              <div className="w-full mt-8 text-center text-sm font-medium text-slate-400 border-t border-slate-800 pt-6">
+              <div className="w-full mt-10 text-center text-sm font-medium text-slate-400 border-t border-slate-800 pt-7">
                 Already have an account?{' '}
                 <Link to="/login" className="font-bold text-emerald-400 hover:text-emerald-300 underline transition-colors ml-1">
                   Sign In

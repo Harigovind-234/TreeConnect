@@ -25,7 +25,8 @@ import {
   CheckCircle2,
   Eye,
   Download,
-  ExternalLink
+  ExternalLink,
+  Building2
 } from 'lucide-react';
 
 const UserDetailModal = ({
@@ -233,6 +234,70 @@ const UserDetailModal = ({
           </div>
         </section>
 
+        {/* 2B. BUYER BUSINESS & COMPLIANCE SPECIFICATIONS (BUYER ONLY) */}
+        {user.role?.toLowerCase() === 'buyer' && (
+          <section className="space-y-3">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                <Building2 size={15} className="text-emerald-400" />
+                <span>BUYER BUSINESS &amp; COMPLIANCE SPECIFICATIONS</span>
+              </h3>
+              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-2 py-0.5 rounded-md">
+                Kerala Wood-Based Industry
+              </span>
+            </div>
+
+            <div className="p-4 bg-slate-900/40 rounded-xl border border-emerald-500/20 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
+                  <Building2 size={13} className="text-slate-500" /> Buyer Category
+                </span>
+                <span className="font-bold text-white text-xs">{user.buyerType || user.businessType || 'Sawmill'}</span>
+              </div>
+
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
+                  <UserCheck size={13} className="text-slate-500" /> Contact Person
+                </span>
+                <span className="font-bold text-white text-xs">{user.contactPerson || user.fullName || user.name}</span>
+              </div>
+
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
+                  <MapPin size={13} className="text-slate-500" /> Local Body / Panchayat
+                </span>
+                <span className="font-bold text-white text-xs">
+                  {user.localBody || user.panchayat || (user.district ? `${user.district} Municipality / Panchayat` : 'Local Body Jurisdiction')}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                <span className="text-slate-400 text-xs font-medium flex items-center gap-1.5">
+                  <Globe size={13} className="text-slate-500" /> Operating Address &amp; PIN
+                </span>
+                <span className="font-bold text-white text-xs">
+                  {user.address ? `${user.address}${user.postalCode ? ` - ${user.postalCode}` : ''}` : `${user.location || 'Kottayam, Kerala'} - 686001`}
+                </span>
+              </div>
+            </div>
+
+            {/* Declaration Card */}
+            <div className="p-3 rounded-xl bg-slate-900/60 border border-emerald-500/20 flex items-center gap-3 text-xs">
+              <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0">
+                <CheckCircle size={15} />
+              </div>
+              <div>
+                <span className="font-bold text-emerald-300 block text-[11px]">
+                  Legal Declaration Certified &amp; Signed
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  All business details and uploaded licences/certificates certified genuine under Kerala Forest &amp; Local Body rules.
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* 3. VERIFICATION STATUS (Spacious 2-Column Grid) */}
         <section className="space-y-3">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-2">
@@ -276,7 +341,127 @@ const UserDetailModal = ({
 
           {/* UPLOADED DOCUMENT VERIFICATION CARDS */}
           <div className="mt-5 space-y-4 pt-3 border-t border-emerald-500/15">
-            {/* Government-Issued Identity / Business Identification Verification Badge */}
+            {/* Buyer Forest Department Licence Verification Card */}
+            {(user.role?.toLowerCase() === 'buyer' || user.forestLicenceDoc) && (
+              <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-amber-950/40 border-amber-500/30'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-lg border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                    <Trees size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold text-white block">
+                        Kerala Forest Department Licence ({user.buyerType || 'Wood-Based Industry'})
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Forest Rule
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
+                      {user.forestLicenceDoc || 'kerala_forest_dept_licence.pdf'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewingDoc({
+                      title: `Applicable Kerala Forest Department Licence (${user.buyerType || 'Sawmill'})`,
+                      fileName: user.forestLicenceDoc || 'kerala_forest_dept_licence.pdf',
+                      type: 'Kerala Forest Dept Sawmill / Timber Depot Licence',
+                      fileUrl: user.forestLicenceUrl || (user.forestLicenceDoc && (user.forestLicenceDoc.startsWith('http') || user.forestLicenceDoc.startsWith('data:')) ? user.forestLicenceDoc : '')
+                    })}
+                    className="admin-btn-outline text-xs py-1.5 px-3 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
+                  >
+                    <Eye size={13} className="text-emerald-400" />
+                    <span>View Document</span>
+                  </button>
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border flex items-center gap-1 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
+                    {isVerified ? '✓ Forest Licence Verified' : '⏳ Pending Review'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Buyer Local-Body Trade Licence Verification Card */}
+            {(user.role?.toLowerCase() === 'buyer' || user.tradeLicenceDoc) && (
+              <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-amber-950/40 border-amber-500/30'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-lg border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                    <Building2 size={16} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold text-white block">Local-Body Trade / Business Licence</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                        Local Permit
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
+                      {user.tradeLicenceDoc || 'local_body_trade_licence.pdf'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewingDoc({
+                      title: 'Local-Body Trade / Business Licence',
+                      fileName: user.tradeLicenceDoc || 'local_body_trade_licence.pdf',
+                      type: 'Gram Panchayat / Municipal Trade Licence',
+                      fileUrl: user.tradeLicenceUrl || (user.tradeLicenceDoc && (user.tradeLicenceDoc.startsWith('http') || user.tradeLicenceDoc.startsWith('data:')) ? user.tradeLicenceDoc : '')
+                    })}
+                    className="admin-btn-outline text-xs py-1.5 px-3 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
+                  >
+                    <Eye size={13} className="text-emerald-400" />
+                    <span>View Document</span>
+                  </button>
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border flex items-center gap-1 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
+                    {isVerified ? '✓ Trade Licence Verified' : '⏳ Pending Review'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Buyer GST Registration Card */}
+            {(user.role?.toLowerCase() === 'buyer' || user.gstDoc || user.gstNumber) && (
+              <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800'}`}>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg border bg-slate-800 text-emerald-400 border-slate-700 shrink-0">
+                    <FileText size={16} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold text-white block">GST Registration Certificate (REG-06)</span>
+                    <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
+                      {user.gstDoc || (user.gstNumber ? `GST: ${user.gstNumber}` : 'gst_reg_06_certificate.pdf')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewingDoc({
+                      title: 'GST Registration Certificate (REG-06)',
+                      fileName: user.gstDoc || 'gst_reg_06_certificate.pdf',
+                      type: 'GST Tax Registration Certificate',
+                      fileUrl: user.gstUrl || (user.gstDoc && (user.gstDoc.startsWith('http') || user.gstDoc.startsWith('data:')) ? user.gstDoc : '')
+                    })}
+                    className="admin-btn-outline text-xs py-1.5 px-3 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
+                  >
+                    <Eye size={13} className="text-emerald-400" />
+                    <span>View Document</span>
+                  </button>
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border flex items-center gap-1 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'}`}>
+                    {isVerified ? '✓ GST Verified' : 'Tax Compliance'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Government-Issued Identity / Authorized Signatory Proof */}
             {(user.idProofDocument || user.idProofType || user.role?.toLowerCase() === 'landowner' || user.role?.toLowerCase() === 'contractor' || user.role?.toLowerCase() === 'buyer') && (
               <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 ${isVerified ? 'bg-emerald-950/40 border-emerald-500/30' : 'bg-amber-950/40 border-amber-500/30'}`}>
                 <div className="flex items-center gap-2.5">
@@ -284,7 +469,12 @@ const UserDetailModal = ({
                     <ShieldCheck size={16} />
                   </div>
                   <div>
-                    <span className="text-xs font-extrabold text-white block">Government-Issued Identity / Business Identification</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold text-white block">Government Identity / Authorized Signatory</span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {user.idProofType || 'Government ID'}
+                      </span>
+                    </div>
                     <span className="text-[11px] text-slate-300 font-mono block mt-0.5">
                       {user.idProofDocument || (user.idProofType ? `${user.idProofType} Document` : 'govt_identity_proof.pdf')}
                     </span>
@@ -295,16 +485,17 @@ const UserDetailModal = ({
                   <button
                     type="button"
                     onClick={() => setViewingDoc({
-                      title: 'Government-Issued Identity / Business Identification',
+                      title: `Government-Issued Identity Proof (${user.idProofType || 'Identity Proof'})`,
                       fileName: user.idProofDocument || (user.idProofType ? `${user.idProofType} Document` : 'govt_identity_proof.pdf'),
                       type: user.idProofType || 'Government Identity Proof',
                       fileUrl: user.idProofUrl || (user.idProofDocument && (user.idProofDocument.startsWith('http') || user.idProofDocument.startsWith('data:')) ? user.idProofDocument : '')
                     })}
-                    className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    className="admin-btn-outline text-xs py-1.5 px-3 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
                   >
-                    <Eye size={13} /> View Document
+                    <Eye size={13} className="text-emerald-400" />
+                    <span>View Document</span>
                   </button>
-                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border flex items-center gap-1 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
                     {isVerified ? '✓ Identity Verified' : '⏳ Pending Admin Verification'}
                   </span>
                 </div>
@@ -335,11 +526,12 @@ const UserDetailModal = ({
                       type: 'Land Tax Invoice / Property Tax Document',
                       fileUrl: user.landTaxInvoiceUrl || (user.landTaxInvoiceDoc && (user.landTaxInvoiceDoc.startsWith('http') || user.landTaxInvoiceDoc.startsWith('data:')) ? user.landTaxInvoiceDoc : '')
                     })}
-                    className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    className="admin-btn-outline text-xs py-1.5 px-3 rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
                   >
-                    <Eye size={13} /> View Document
+                    <Eye size={13} className="text-emerald-400" />
+                    <span>View Document</span>
                   </button>
-                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
+                  <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border flex items-center gap-1 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
                     {isVerified ? '✓ Land Tax Receipt Verified' : '⏳ Pending Admin Verification'}
                   </span>
                 </div>
@@ -544,7 +736,22 @@ const UserDetailModal = ({
 
         {/* 6. BOTTOM ADMIN ACTIONS */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
+            {!isVerified && onVerify && (
+              <button
+                type="button"
+                className="btn btn-xs cursor-pointer flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-black transition-all text-xs w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg"
+                onClick={() => onVerify(user.id)}
+              >
+                <UserCheck size={15} />
+                {user.role?.toLowerCase() === 'buyer'
+                  ? 'Verify Buyer (Issue Verified Badge)'
+                  : user.role?.toLowerCase() === 'contractor'
+                  ? 'Verify Contractor'
+                  : 'Verify User'}
+              </button>
+            )}
+
             <button
               type="button"
               className={`btn btn-xs cursor-pointer flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl font-bold transition-all text-xs w-full sm:w-auto ${isSuspended

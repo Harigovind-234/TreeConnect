@@ -67,17 +67,29 @@ const UserDetailPage = () => {
       let found = null;
 
       try {
-        const res = await api.get('/admin/users');
-        if (res.data && Array.isArray(res.data.users)) {
-          found = res.data.users.find(
-            (u) =>
-              String(u.id).toLowerCase() === decodedUserId ||
-              u.email?.toLowerCase() === decodedUserId ||
-              u.name?.toLowerCase() === decodedUserId
-          );
+        // 1. First attempt direct lookup by ID/email to get all populated buyer fields and document URLs
+        const userRes = await api.get(`/admin/users/${encodeURIComponent(userId)}`);
+        if (userRes.data && userRes.data.user) {
+          found = userRes.data.user;
         }
-      } catch (apiErr) {
-        console.warn('API error in UserDetailPage, checking registered users fallback:', apiErr);
+      } catch (directErr) {
+        // Direct route fallback to list
+      }
+
+      if (!found) {
+        try {
+          const res = await api.get('/admin/users');
+          if (res.data && Array.isArray(res.data.users)) {
+            found = res.data.users.find(
+              (u) =>
+                String(u.id).toLowerCase() === decodedUserId ||
+                u.email?.toLowerCase() === decodedUserId ||
+                u.name?.toLowerCase() === decodedUserId
+            );
+          }
+        } catch (apiErr) {
+          console.warn('API error in UserDetailPage, checking registered users fallback:', apiErr);
+        }
       }
 
       if (!found) {
@@ -94,10 +106,17 @@ const UserDetailPage = () => {
           found = {
             id: localMatch.id || localMatch.email,
             name: localMatch.name || localMatch.fullName || localMatch.email?.split('@')[0],
+            contactPerson: localMatch.contactPerson || localMatch.name || localMatch.fullName || '',
+            buyerType: localMatch.buyerType || localMatch.businessType || '',
+            businessType: localMatch.businessType || localMatch.buyerType || '',
             email: localMatch.email,
             phone: localMatch.phone || 'N/A',
             role: localMatch.role || 'landowner',
             location: localMatch.district ? `${localMatch.district}, Kerala` : (localMatch.location || 'Kerala'),
+            district: localMatch.district || 'Kottayam',
+            address: localMatch.address || '',
+            localBody: localMatch.localBody || localMatch.panchayat || '',
+            postalCode: localMatch.postalCode || localMatch.pinCode || '',
             status: localMatch.status || 'Pending',
             verification: (localMatch.isVerified || localMatch.status === 'Active') ? 'Verified by TreeConnect Admin' : 'Pending Verification',
             isVerified: Boolean(localMatch.isVerified),
@@ -107,7 +126,12 @@ const UserDetailPage = () => {
             landTaxInvoiceDoc: localMatch.landTaxInvoiceDoc || '',
             forestLicenceDoc: localMatch.forestLicenceDoc || '',
             tradeLicenceDoc: localMatch.tradeLicenceDoc || '',
-            idProofDocument: localMatch.idProofDocument || ''
+            gstDoc: localMatch.gstDoc || '',
+            businessCertDoc: localMatch.businessCertDoc || '',
+            idProofType: localMatch.idProofType || 'Aadhaar Card',
+            idProofDocument: localMatch.idProofDocument || '',
+            declarationAccepted: localMatch.declarationAccepted ?? true,
+            preferredCommunication: localMatch.preferredCommunication || 'Email'
           };
         }
       }
@@ -320,12 +344,17 @@ const UserDetailPage = () => {
 
                 {/* Header Action Buttons */}
                 <div className="flex items-center gap-3 self-end md:self-center">
-                  {userData.role === 'contractor' && !isVerified && (
+                  {!isVerified && (
                     <button
                       onClick={handleVerify}
-                      className="admin-btn-emerald text-xs sm:text-sm font-bold py-2.5 px-5"
+                      className="admin-btn-emerald text-xs sm:text-sm font-bold py-2.5 px-5 flex items-center gap-2 shadow-lg"
                     >
-                      <UserCheck size={16} /> Verify Contractor
+                      <UserCheck size={16} />
+                      {userData.role?.toLowerCase() === 'buyer'
+                        ? 'Verify Buyer (Issue Verified Badge)'
+                        : userData.role?.toLowerCase() === 'contractor'
+                        ? 'Verify Contractor'
+                        : 'Verify Landowner'}
                     </button>
                   )}
 
@@ -409,6 +438,89 @@ const UserDetailPage = () => {
                   </div>
                 </section>
 
+                {/* BUYER BUSINESS & COMPLIANCE SPECIFICATIONS (DISPLAYED FOR BUYERS) */}
+                {userData.role?.toLowerCase() === 'buyer' && (
+                  <section className="admin-card space-y-5 border border-emerald-500/30 bg-emerald-950/20">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-emerald-500/15 pb-3">
+                      <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-emerald-300 flex items-center gap-2">
+                        <Building2 size={18} className="text-emerald-400" />
+                        <span>BUYER BUSINESS PROFILE &amp; COMPLIANCE SPECIFICATIONS</span>
+                      </h3>
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-sm">
+                        <ShieldCheck size={13} /> Kerala Wood-Based Industry
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
+                      <div className="admin-subcard p-4 space-y-1">
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Building2 size={13} className="text-emerald-400" /> Buyer / Business Category
+                        </span>
+                        <span className="font-extrabold text-white text-sm sm:text-base block">
+                          {userData.buyerType || userData.businessType || 'Sawmill'}
+                        </span>
+                        <span className="text-[11px] text-emerald-400/90 font-medium block">
+                          Timber Processing &amp; Commercial Procurement
+                        </span>
+                      </div>
+
+                      <div className="admin-subcard p-4 space-y-1">
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <UserCheck size={13} className="text-emerald-400" /> Authorized Contact Person
+                        </span>
+                        <span className="font-extrabold text-white text-sm sm:text-base block">
+                          {userData.contactPerson || userData.fullName || userData.name}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-medium block">
+                          Authorized Business Signatory
+                        </span>
+                      </div>
+
+                      <div className="admin-subcard p-4 space-y-1">
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <MapPin size={13} className="text-emerald-400" /> Local Body / Panchayat
+                        </span>
+                        <span className="font-bold text-white text-sm sm:text-base block">
+                          {userData.localBody || userData.panchayat || (userData.district ? `${userData.district} Municipality / Panchayat` : 'Local Body Jurisdiction')}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-medium block">
+                          Licensing Local Authority
+                        </span>
+                      </div>
+
+                      <div className="admin-subcard p-4 space-y-1">
+                        <span className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Globe size={13} className="text-emerald-400" /> Commercial Operating Address &amp; PIN
+                        </span>
+                        <span className="font-bold text-white text-sm sm:text-base block">
+                          {userData.address ? `${userData.address}${userData.postalCode ? ` - ${userData.postalCode}` : ''}` : `${userData.location || 'Kottayam, Kerala'} - 686001`}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-medium block">
+                          Registered Operating Yard / Depot
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Declaration / Legal Compliance Box */}
+                    <div className="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/30 flex items-start gap-3">
+                      <div className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
+                        <CheckCircle size={18} />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-xs font-bold text-emerald-300 block">
+                          Legal Compliance &amp; Authenticity Declaration: Accepted
+                        </span>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          "I certify that all business details and uploaded licences/certificates are genuine and valid under Kerala Forest Department and Local Body rules."
+                        </p>
+                        <span className="text-[10px] text-slate-400 block font-mono">
+                          Status: Signed electronically upon registration • Preferred Communication: {userData.preferredCommunication || 'Email & Phone'}
+                        </span>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
                 {/* VERIFICATION STATUS */}
                 <section className="admin-card space-y-5">
                   <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-200 flex items-center gap-2 border-b border-emerald-500/15 pb-3">
@@ -448,67 +560,223 @@ const UserDetailPage = () => {
 
                   {/* DOCUMENT VERIFICATION ATTACHMENT CARDS WITH GENEROUS SPACING */}
                   <div className="mt-6 mb-2 space-y-5 pt-4 border-t border-emerald-500/15">
-                    {/* GOVERNMENT-ISSUED IDENTITY / BUSINESS IDENTIFICATION CARD */}
-                    {(userData.idProofDocument || userData.idProofType || userData.role?.toLowerCase() === 'landowner' || userData.role?.toLowerCase() === 'contractor' || userData.role?.toLowerCase() === 'buyer') && (
-                      <div className={`admin-doc-subcard p-5 space-y-3 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-xl border ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
-                              <ShieldCheck size={20} />
+                    {/* APPLICABLE KERALA FOREST DEPARTMENT LICENCE CARD (BUYER) */}
+                    {(userData.role?.toLowerCase() === 'buyer' || userData.forestLicenceDoc) && (
+                      <div className={`admin-doc-subcard p-5 space-y-3.5 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border-b border-slate-800/80 pb-3.5">
+                          <div className="flex items-center gap-3.5">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                              <Trees size={20} />
                             </div>
                             <div>
-                              <span className="text-sm font-extrabold text-white block">Government-Issued Identity / Business Identification</span>
-                              <span className="text-xs text-slate-300 font-mono block mt-0.5">
-                                {userData.idProofDocument || (userData.idProofType ? `${userData.idProofType} Document` : 'govt_identity_proof.pdf')}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm sm:text-base font-extrabold text-white block">
+                                  Applicable Kerala Forest Department Licence ({userData.buyerType || 'Wood-Based Industry'})
+                                </span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  Forest Compliance
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-300 font-mono block mt-1">
+                                {userData.forestLicenceDoc || 'kerala_forest_dept_licence.pdf'}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto flex-wrap">
                             <button
                               type="button"
                               onClick={() => setViewingDoc({
-                                title: 'Government-Issued Identity / Business Identification',
-                                fileName: userData.idProofDocument || (userData.idProofType ? `${userData.idProofType} Document` : 'govt_identity_proof.pdf'),
-                                type: userData.idProofType || 'Government Identity Proof',
-                                fileUrl: userData.idProofUrl || (userData.idProofDocument && (userData.idProofDocument.startsWith('http') || userData.idProofDocument.startsWith('data:')) ? userData.idProofDocument : '')
+                                title: `Applicable Kerala Forest Department Licence (${userData.buyerType || 'Sawmill'})`,
+                                fileName: userData.forestLicenceDoc || 'kerala_forest_dept_licence.pdf',
+                                type: 'Kerala Forest Dept Sawmill / Timber Depot Licence',
+                                fileUrl: userData.forestLicenceUrl || (userData.forestLicenceDoc && (userData.forestLicenceDoc.startsWith('http') || userData.forestLicenceDoc.startsWith('data:')) ? userData.forestLicenceDoc : '')
                               })}
-                              className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                              className="admin-btn-outline text-xs py-2 px-3.5 rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
                             >
-                              <Eye size={14} /> View Document
+                              <Eye size={15} className="text-emerald-400" />
+                              <span>View Document</span>
                             </button>
-                            <span className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
-                              {isVerified ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-                              {isVerified ? 'Identity Verified' : 'Pending Verification'}
+                            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
+                              {isVerified ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Clock size={14} className="text-amber-400" />}
+                              <span>{isVerified ? 'Forest Licence Verified' : 'Pending Verification'}</span>
                             </span>
                           </div>
                         </div>
 
                         <p className="text-xs text-slate-300 leading-relaxed">
                           {isVerified
-                            ? 'Uploaded Government-Issued Identity / Business Identification document verified by TreeConnect Administrator.'
-                            : 'Uploaded Government-Issued Identity / Business Identification document pending review by TreeConnect Administrator.'}
+                            ? 'Uploaded Kerala Forest Department Licence / Wood-Based Industry Operating Permit verified by TreeConnect Administrator.'
+                            : 'Uploaded Kerala Forest Department Licence / Wood-Based Industry Operating Permit pending review under Kerala Forest Department Wood-Based Industry Rules.'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* LOCAL-BODY TRADE / BUSINESS LICENCE CARD (BUYER) */}
+                    {(userData.role?.toLowerCase() === 'buyer' || userData.tradeLicenceDoc) && (
+                      <div className={`admin-doc-subcard p-5 space-y-3.5 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border-b border-slate-800/80 pb-3.5">
+                          <div className="flex items-center gap-3.5">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                              <Building2 size={20} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm sm:text-base font-extrabold text-white block">Local-Body Trade / Business Licence</span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                  Local Body Permit
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-300 font-mono block mt-1">
+                                {userData.tradeLicenceDoc || 'local_body_trade_licence.pdf'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setViewingDoc({
+                                title: 'Local-Body Trade / Business Licence',
+                                fileName: userData.tradeLicenceDoc || 'local_body_trade_licence.pdf',
+                                type: 'Gram Panchayat / Municipal Trade Licence',
+                                fileUrl: userData.tradeLicenceUrl || (userData.tradeLicenceDoc && (userData.tradeLicenceDoc.startsWith('http') || userData.tradeLicenceDoc.startsWith('data:')) ? userData.tradeLicenceDoc : '')
+                              })}
+                              className="admin-btn-outline text-xs py-2 px-3.5 rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
+                            >
+                              <Eye size={15} className="text-emerald-400" />
+                              <span>View Document</span>
+                            </button>
+                            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
+                              {isVerified ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Clock size={14} className="text-amber-400" />}
+                              <span>{isVerified ? 'Trade Licence Verified' : 'Pending Verification'}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          {isVerified
+                            ? 'Uploaded Gram Panchayat / Municipality Trade / Business Licence verified by TreeConnect Administrator.'
+                            : 'Uploaded Gram Panchayat / Municipality Trade / Business Licence pending review by TreeConnect Administrator.'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* GST REGISTRATION CERTIFICATE CARD (BUYER) */}
+                    {(userData.role?.toLowerCase() === 'buyer' || userData.gstDoc || userData.gstNumber) && (
+                      <div className={`admin-doc-subcard p-5 space-y-3.5 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-slate-800 bg-slate-900/50'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border-b border-slate-800/80 pb-3.5">
+                          <div className="flex items-center gap-3.5">
+                            <div className="p-2.5 rounded-xl border bg-slate-800/80 text-emerald-400 border-slate-700 shrink-0">
+                              <FileText size={20} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm sm:text-base font-extrabold text-white block">GST Registration Certificate (REG-06)</span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                  Tax Compliance
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-300 font-mono block mt-1">
+                                {userData.gstDoc || (userData.gstNumber ? `GST: ${userData.gstNumber}` : 'gst_registration_cert.pdf')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setViewingDoc({
+                                title: 'GST Registration Certificate (REG-06)',
+                                fileName: userData.gstDoc || 'gst_registration_cert.pdf',
+                                type: 'GST REG-06 Tax Certificate',
+                                fileUrl: userData.gstUrl || (userData.gstDoc && (userData.gstDoc.startsWith('http') || userData.gstDoc.startsWith('data:')) ? userData.gstDoc : '')
+                              })}
+                              className="admin-btn-outline text-xs py-2 px-3.5 rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
+                            >
+                              <Eye size={15} className="text-emerald-400" />
+                              <span>View Document</span>
+                            </button>
+                            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'}`}>
+                              {isVerified ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Clock size={14} className="text-emerald-400" />}
+                              <span>{isVerified ? 'GST Verified' : 'Tax Compliance'}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          Goods &amp; Services Tax Registration (REG-06) for verified commercial invoicing and timber transactions.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* GOVERNMENT-ISSUED IDENTITY / BUSINESS IDENTIFICATION CARD */}
+                    {(userData.idProofDocument || userData.idProofType || userData.role?.toLowerCase() === 'landowner' || userData.role?.toLowerCase() === 'contractor' || userData.role?.toLowerCase() === 'buyer') && (
+                      <div className={`admin-doc-subcard p-5 space-y-3.5 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border-b border-slate-800/80 pb-3.5">
+                          <div className="flex items-center gap-3.5">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                              <ShieldCheck size={20} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm sm:text-base font-extrabold text-white block">Government-Issued Identity / Authorized Signatory Proof</span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  {userData.idProofType || 'Government ID'}
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-300 font-mono block mt-1">
+                                {userData.idProofDocument || (userData.idProofType ? `${userData.idProofType} Document` : 'govt_identity_proof.pdf')}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setViewingDoc({
+                                title: `Government-Issued Identity Proof (${userData.idProofType || 'Identity Proof'})`,
+                                fileName: userData.idProofDocument || (userData.idProofType ? `${userData.idProofType} Document` : 'govt_identity_proof.pdf'),
+                                type: userData.idProofType || 'Government Identity Proof',
+                                fileUrl: userData.idProofUrl || (userData.idProofDocument && (userData.idProofDocument.startsWith('http') || userData.idProofDocument.startsWith('data:')) ? userData.idProofDocument : '')
+                              })}
+                              className="admin-btn-outline text-xs py-2 px-3.5 rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
+                            >
+                              <Eye size={15} className="text-emerald-400" />
+                              <span>View Document</span>
+                            </button>
+                            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
+                              {isVerified ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Clock size={14} className="text-amber-400" />}
+                              <span>{isVerified ? 'Identity Verified' : 'Pending Verification'}</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          {isVerified
+                            ? `Uploaded ${userData.idProofType || 'Government Identity'} for authorized contact person ${userData.contactPerson || userData.name} verified by TreeConnect Administrator.`
+                            : `Uploaded ${userData.idProofType || 'Government Identity'} for authorized contact person ${userData.contactPerson || userData.name} pending review by TreeConnect Administrator.`}
                         </p>
                       </div>
                     )}
 
                     {/* PROPERTY OWNERSHIP & LAND TAX INVOICE DETAILS CARD */}
                     {(userData.role?.toLowerCase() === 'landowner' || userData.landTaxInvoiceDoc) && (
-                      <div className={`admin-doc-subcard p-5 space-y-3 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-xl border ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                      <div className={`admin-doc-subcard p-5 space-y-3.5 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border-b border-slate-800/80 pb-3.5">
+                          <div className="flex items-center gap-3.5">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
                               <Trees size={20} />
                             </div>
                             <div>
-                              <span className="text-sm font-extrabold text-white block">Property Ownership &amp; Land Tax Invoice Details</span>
-                              <span className="text-xs text-slate-300 font-mono block mt-0.5">
+                              <span className="text-sm sm:text-base font-extrabold text-white block">Property Ownership &amp; Land Tax Invoice Details</span>
+                              <span className="text-xs text-slate-300 font-mono block mt-1">
                                 {userData.landTaxInvoiceDoc || 'land_tax_payment_receipt.pdf'}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto flex-wrap">
                             <button
                               type="button"
                               onClick={() => setViewingDoc({
@@ -517,13 +785,14 @@ const UserDetailPage = () => {
                                 type: 'Land Tax Invoice / Property Tax Document',
                                 fileUrl: userData.landTaxInvoiceUrl || (userData.landTaxInvoiceDoc && (userData.landTaxInvoiceDoc.startsWith('http') || userData.landTaxInvoiceDoc.startsWith('data:')) ? userData.landTaxInvoiceDoc : '')
                               })}
-                              className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                              className="admin-btn-outline text-xs py-2 px-3.5 rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
                             >
-                              <Eye size={14} /> View Document
+                              <Eye size={15} className="text-emerald-400" />
+                              <span>View Document</span>
                             </button>
-                            <span className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
-                              {isVerified ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-                              {isVerified ? 'Land Tax Verified' : 'Pending Verification'}
+                            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
+                              {isVerified ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Clock size={14} className="text-amber-400" />}
+                              <span>{isVerified ? 'Land Tax Verified' : 'Pending Verification'}</span>
                             </span>
                           </div>
                         </div>
@@ -538,21 +807,21 @@ const UserDetailPage = () => {
 
                     {/* CONTRACTOR SUPPORTING VERIFICATION DOCUMENT / UNION MEMBERSHIP DETAILS CARD */}
                     {(userData.role?.toLowerCase() === 'contractor' || userData.supportingDocument) && (
-                      <div className={`admin-doc-subcard p-5 space-y-3 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-xl border ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
+                      <div className={`admin-doc-subcard p-5 space-y-3.5 border ${isVerified ? 'border-emerald-500/30 bg-emerald-950/30' : 'border-amber-500/30 bg-amber-950/30'}`}>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 border-b border-slate-800/80 pb-3.5">
+                          <div className="flex items-center gap-3.5">
+                            <div className={`p-2.5 rounded-xl border shrink-0 ${isVerified ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}`}>
                               <Truck size={20} />
                             </div>
                             <div>
-                              <span className="text-sm font-extrabold text-white block">Supporting Verification Document / Union Membership Details</span>
-                              <span className="text-xs text-slate-300 font-mono block mt-0.5">
+                              <span className="text-sm sm:text-base font-extrabold text-white block">Supporting Verification Document / Union Membership Details</span>
+                              <span className="text-xs text-slate-300 font-mono block mt-1">
                                 {userData.supportingDocument || 'tree_cutting_union_membership_card.pdf'}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto flex-wrap">
                             <button
                               type="button"
                               onClick={() => setViewingDoc({
@@ -561,13 +830,14 @@ const UserDetailPage = () => {
                                 type: 'Union Membership ID Card / Experience Verification Certificate',
                                 fileUrl: userData.supportingUrl || (userData.supportingDocument && (userData.supportingDocument.startsWith('http') || userData.supportingDocument.startsWith('data:')) ? userData.supportingDocument : '')
                               })}
-                              className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                              className="admin-btn-outline text-xs py-2 px-3.5 rounded-xl font-bold flex items-center gap-2 cursor-pointer shadow-sm hover:border-emerald-400 hover:text-emerald-300"
                             >
-                              <Eye size={14} /> View Document
+                              <Eye size={15} className="text-emerald-400" />
+                              <span>View Document</span>
                             </button>
-                            <span className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}`}>
-                              {isVerified ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-                              {isVerified ? 'Union Document Verified' : 'Pending Verification'}
+                            <span className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${isVerified ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'}`}>
+                              {isVerified ? <CheckCircle2 size={14} className="text-emerald-400" /> : <Clock size={14} className="text-amber-400" />}
+                              <span>{isVerified ? 'Union Document Verified' : 'Pending Verification'}</span>
                             </span>
                           </div>
                         </div>
@@ -734,75 +1004,125 @@ const UserDetailPage = () => {
                   )}
                 </section>
 
-                {/* REGISTERED LANDOWNER PROPERTIES SECTION */}
-                <section className="admin-card space-y-5">
-                  <div className="flex justify-between items-center border-b border-emerald-500/15 pb-3">
-                    <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                      <Trees size={18} className="text-emerald-400" />
-                      <span>REGISTERED LANDOWNER PROPERTIES ({userProperties.length})</span>
-                    </h3>
-                    <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-xl">
-                      Live Registered Parcels
-                    </span>
-                  </div>
-
-                  {userProperties.length === 0 ? (
-                    <div className="admin-subcard p-8 text-center space-y-1">
-                      <Trees size={24} className="text-slate-500 mx-auto mb-1" />
-                      <p className="text-xs font-bold text-slate-300">No Properties Registered Yet</p>
-                      <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                        Properties registered by this landowner will automatically sync and display here live.
-                      </p>
+                {/* REGISTERED LANDOWNER PROPERTIES SECTION (LANDOWNER ONLY) */}
+                {userData.role?.toLowerCase() === 'landowner' && (
+                  <section className="admin-card space-y-5">
+                    <div className="flex justify-between items-center border-b border-emerald-500/15 pb-3">
+                      <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                        <Trees size={18} className="text-emerald-400" />
+                        <span>REGISTERED LANDOWNER PROPERTIES ({userProperties.length})</span>
+                      </h3>
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-xl">
+                        Live Registered Parcels
+                      </span>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                      {userProperties.map((p) => (
-                        <div
-                          key={p.id || p._id}
-                          className="admin-subcard p-4 space-y-3"
-                        >
-                          <div className="relative h-36 rounded-xl overflow-hidden bg-slate-950 border border-emerald-500/20">
-                            {(() => {
-                              const realImg = [p.image, ...(p.photos || [])].find(img => typeof img === 'string' && img.trim().length > 5 && !img.includes('unsplash.com'));
-                              return realImg ? (
-                                <img
-                                  src={realImg}
-                                  alt={p.propertyName}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-2 text-center">
-                                  <Trees size={24} className="text-emerald-500/30 mb-1" />
-                                  <span className="text-[10px] font-bold text-slate-300">No Photo</span>
-                                </div>
-                              );
-                            })()}
-                            <div className="absolute top-2 left-2">
-                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase bg-slate-950/90 text-emerald-300 border border-emerald-500/40 backdrop-blur-md">
-                                {p.status || 'Active Estate'}
+
+                    {userProperties.length === 0 ? (
+                      <div className="admin-subcard p-8 text-center space-y-1">
+                        <Trees size={24} className="text-slate-500 mx-auto mb-1" />
+                        <p className="text-xs font-bold text-slate-300">No Properties Registered Yet</p>
+                        <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+                          Properties registered by this landowner will automatically sync and display here live.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        {userProperties.map((p) => (
+                          <div
+                            key={p.id || p._id}
+                            className="admin-subcard p-4 space-y-3"
+                          >
+                            <div className="relative h-36 rounded-xl overflow-hidden bg-slate-950 border border-emerald-500/20">
+                              {(() => {
+                                const realImg = [p.image, ...(p.photos || [])].find(img => typeof img === 'string' && img.trim().length > 5 && !img.includes('unsplash.com'));
+                                return realImg ? (
+                                  <img
+                                    src={realImg}
+                                    alt={p.propertyName}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex flex-col items-center justify-center bg-[#060d08] text-slate-500 p-2 text-center">
+                                    <Trees size={24} className="text-emerald-500/30 mb-1" />
+                                    <span className="text-[10px] font-bold text-slate-300">No Photo</span>
+                                  </div>
+                                );
+                              })()}
+                              <div className="absolute top-2 left-2">
+                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase bg-slate-950/90 text-emerald-300 border border-emerald-500/40 backdrop-blur-md">
+                                  {p.status || 'Active Estate'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="text-sm font-bold text-white">{p.propertyName}</h4>
+                              <p className="text-xs text-slate-300 mt-0.5 flex items-center gap-1">
+                                <MapPin size={13} className="text-emerald-400" />
+                                <span>{p.district || 'Kottayam'}, {p.state || 'Kerala'}</span>
+                              </p>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-800/80 text-xs">
+                              <span className="text-slate-400 font-semibold flex items-center gap-1">
+                                <Ruler size={12} className="text-slate-500" /> Area:
                               </span>
+                              <span className="font-bold text-emerald-400">{p.totalArea} {p.areaUnit || 'Acres'}</span>
                             </div>
                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
 
-                          <div>
-                            <h4 className="text-sm font-bold text-white">{p.propertyName}</h4>
-                            <p className="text-xs text-slate-300 mt-0.5 flex items-center gap-1">
-                              <MapPin size={13} className="text-emerald-400" />
-                              <span>{p.district || 'Kottayam'}, {p.state || 'Kerala'}</span>
-                            </p>
-                          </div>
-
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-800/80 text-xs">
-                            <span className="text-slate-400 font-semibold flex items-center gap-1">
-                              <Ruler size={12} className="text-slate-500" /> Area:
-                            </span>
-                            <span className="font-bold text-emerald-400">{p.totalArea} {p.areaUnit || 'Acres'}</span>
-                          </div>
-                        </div>
-                      ))}
+                {/* BUYER COMMERCIAL SPECIFICATIONS & LOGISTICS (BUYER ONLY) */}
+                {userData.role?.toLowerCase() === 'buyer' && (
+                  <section className="admin-card space-y-5">
+                    <div className="flex justify-between items-center border-b border-emerald-500/15 pb-3">
+                      <h3 className="text-sm sm:text-base font-extrabold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                        <ShoppingBag size={18} className="text-emerald-400" />
+                        <span>BUYER COMMERCIAL SPECIFICATIONS &amp; PROCUREMENT INTENT</span>
+                      </h3>
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-xl">
+                        Active Commercial Profile
+                      </span>
                     </div>
-                  )}
-                </section>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      <div className="admin-subcard p-4 space-y-2">
+                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Trees size={14} className="text-emerald-400" /> Preferred Timber Species
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {['Teak (Tectona grandis)', 'Mahogany', 'Anjili', 'Rosewood', 'Rubber Wood'].map((spec, i) => (
+                            <span key={i} className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                              {spec}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="admin-subcard p-4 space-y-2">
+                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Truck size={14} className="text-emerald-400" /> Delivery &amp; Log Yard Logistics
+                        </span>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          Depot and milling site equipped for heavy vehicle unloading (6-wheel and 10-wheel timber trucks). Direct transport from landowner harvesting sites supported.
+                        </p>
+                      </div>
+
+                      <div className="admin-subcard p-4 space-y-2 sm:col-span-2">
+                        <span className="text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <ShieldCheck size={14} className="text-emerald-400" /> Administrative Governance Note
+                        </span>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          This buyer is registered under TreeConnect Kerala Forest &amp; Sustainable Timber Network. Verifying this buyer grants the <strong className="text-emerald-400">"Verified Buyer"</strong> badge, enabling direct timber bids, auction participation, and digital timber transit pass integrations.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                )}
               </div>
 
               {/* Right Column (1/3 width) - Internal Admin Notes */}

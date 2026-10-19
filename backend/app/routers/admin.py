@@ -18,7 +18,12 @@ USER_LIST_PROJECTION = {
     "phone": 1,
     "district": 1,
     "state": 1,
+    "country": 1,
     "address": 1,
+    "localBody": 1,
+    "panchayat": 1,
+    "postalCode": 1,
+    "pinCode": 1,
     "createdAt": 1,
     "isVerified": 1,
     "status": 1,
@@ -37,6 +42,15 @@ USER_LIST_PROJECTION = {
     "idProofType": 1,
     "idProofDocument": 1,
     "supportingDocument": 1,
+    "declarationAccepted": 1,
+    "preferredCommunication": 1,
+    "forestLicenceUrl": 1,
+    "tradeLicenceUrl": 1,
+    "gstUrl": 1,
+    "businessCertUrl": 1,
+    "landTaxInvoiceUrl": 1,
+    "idProofUrl": 1,
+    "supportingUrl": 1,
 }
 
 def format_user_summary(u, include_urls=False):
@@ -46,7 +60,8 @@ def format_user_summary(u, include_urls=False):
     role = u.get("role", "landowner")
     name = u.get("fullName") or u.get("companyName") or u.get("contactPerson") or email
     phone = u.get("phone") or "N/A"
-    district = u.get("district") or u.get("state") or u.get("address") or "Kerala"
+    district_raw = u.get("district") or ""
+    district = district_raw or u.get("state") or u.get("address") or "Kerala"
     if "Kerala" not in district and district != "N/A":
         district = f"{district}, Kerala"
 
@@ -80,7 +95,6 @@ def format_user_summary(u, include_urls=False):
     if forest_licence: docs_summary_list.append("Forest Dept Licence")
     if trade_licence: docs_summary_list.append("Trade Licence")
     if gst_doc: docs_summary_list.append("GST Registration")
-    if business_cert: docs_summary_list.append("Business Certificate")
     if land_tax_doc: docs_summary_list.append("Land Tax Invoice")
     if id_proof_doc: docs_summary_list.append(u.get("idProofType") or "Govt ID")
 
@@ -97,6 +111,12 @@ def format_user_summary(u, include_urls=False):
         "phone": phone,
         "role": role,
         "location": district,
+        "district": district_raw or (district.split(',')[0].strip() if district else "Kerala"),
+        "state": u.get("state") or "Kerala",
+        "country": u.get("country") or "India",
+        "address": u.get("address") or "",
+        "localBody": u.get("localBody") or u.get("panchayat") or "",
+        "postalCode": u.get("postalCode") or u.get("pinCode") or "",
         "buyerType": buyer_type,
         "businessType": buyer_type,
         "status": status_val,
@@ -112,31 +132,19 @@ def format_user_summary(u, include_urls=False):
         "gstDoc": gst_doc,
         "businessCertDoc": business_cert,
         "landTaxInvoiceDoc": land_tax_doc,
-        "idProofType": u.get("idProofType") or "",
+        "idProofType": u.get("idProofType") or "Aadhaar Card",
         "idProofDocument": id_proof_doc,
         "supportingDocument": u.get("supportingDocument") or "",
+        "declarationAccepted": u.get("declarationAccepted", True),
+        "preferredCommunication": u.get("preferredCommunication") or "Email",
+        "forestLicenceUrl": u.get("forestLicenceUrl") or "",
+        "tradeLicenceUrl": u.get("tradeLicenceUrl") or "",
+        "gstUrl": u.get("gstUrl") or "",
+        "businessCertUrl": u.get("businessCertUrl") or "",
+        "landTaxInvoiceUrl": u.get("landTaxInvoiceUrl") or "",
+        "idProofUrl": u.get("idProofUrl") or "",
+        "supportingUrl": u.get("supportingUrl") or "",
     }
-
-    if include_urls:
-        user_data.update({
-            "forestLicenceUrl": u.get("forestLicenceUrl") or "",
-            "tradeLicenceUrl": u.get("tradeLicenceUrl") or "",
-            "gstUrl": u.get("gstUrl") or "",
-            "businessCertUrl": u.get("businessCertUrl") or "",
-            "landTaxInvoiceUrl": u.get("landTaxInvoiceUrl") or "",
-            "idProofUrl": u.get("idProofUrl") or "",
-            "supportingUrl": u.get("supportingUrl") or "",
-        })
-    else:
-        # Pass non-heavy URLs (HTTP URLs) while omitting heavy base64 strings from bulk list
-        for url_field in ["forestLicenceUrl", "tradeLicenceUrl", "gstUrl", "businessCertUrl", "landTaxInvoiceUrl", "idProofUrl", "supportingUrl"]:
-            val = u.get(url_field) or ""
-            if val and len(val) < 500:
-                user_data[url_field] = val
-            elif val:
-                user_data[url_field] = f"/api/admin/users/{user_id}/doc/{url_field}"
-            else:
-                user_data[url_field] = ""
 
     return user_data
 

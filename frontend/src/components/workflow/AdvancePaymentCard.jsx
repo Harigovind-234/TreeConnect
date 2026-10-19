@@ -73,6 +73,7 @@ const getPaymentStatusBadge = (status) => {
       };
     case 'ADVANCE_REQUESTED':
     case 'PAYMENT_PENDING':
+    case 'ORDER_CREATED':
       return {
         label: 'Payment Pending',
         pillClass: 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
@@ -357,7 +358,7 @@ const AdvancePaymentCard = ({
           )}
 
           {/* LANDOWNER: RECORD ADVANCE PAYMENT */}
-          {isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && (
+          {isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'ORDER_CREATED' || paymentStatus === 'REJECTED') && (
             <button
               type="button"
               onClick={() => onRecordPayment && onRecordPayment({ mode: 'advance', defaultAmount: advanceAmount })}
@@ -641,7 +642,7 @@ const AdvancePaymentCard = ({
           )}
 
           {/* PROMINENT ACTION FOR LANDOWNER TO PAY ADVANCE (ONLY FOR HARVEST SERVICE) */}
-          {!isTimberPurchase && isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'REJECTED') && !isCompleted && (
+          {!isTimberPurchase && isLandowner && (paymentStatus === 'ADVANCE_REQUESTED' || paymentStatus === 'PAYMENT_PENDING' || paymentStatus === 'ORDER_CREATED' || paymentStatus === 'REJECTED') && !isCompleted && (
             <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 via-teal-950/40 to-emerald-950/60 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
               <div>
                 <span className="text-xs text-slate-200 leading-relaxed block">

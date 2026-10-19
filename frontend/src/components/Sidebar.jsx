@@ -185,6 +185,9 @@ const Sidebar = () => {
       if (currentSearch && currentSearch.includes('role=contractor')) {
         return false;
       }
+      if (currentPath === '/buyer' && itemPath === '/buyer/dashboard') {
+        return true;
+      }
       return currentPath === itemPath || (currentPath.startsWith(itemPath + '/') && !currentSearch);
     }
   };
@@ -310,10 +313,13 @@ const Sidebar = () => {
             />
             <div className="sidebar-user-details">
               <span className="sidebar-user-name">
-                {user?.name || (role === 'admin' ? 'TreeConnect Admin' : 'Harigovind D Nair')}
+                {(() => {
+                  const isBuyerUser = role === 'buyer' || user?.email === 'arunbuyer@gmail.com';
+                  return user?.contactPerson || (user?.name && user?.name !== 'timberbuyers' ? user?.name : (isBuyerUser ? 'Arun K' : user?.name)) || (role === 'admin' ? 'TreeConnect Admin' : 'Harigovind D Nair');
+                })()}
               </span>
               <span className="sidebar-user-role">
-                {user?.title || (role === 'admin' ? 'Platform Administrator' : role === 'contractor' ? 'Verified Contractor' : role === 'buyer' ? 'Timber Buyer' : 'Forest Estate Owner')}
+                {user?.companyName ? `${user.companyName}` : (role === 'buyer' ? 'timberbuyers' : (user?.title || (role === 'admin' ? 'Platform Administrator' : role === 'contractor' ? 'Verified Contractor' : 'Forest Estate Owner')))}
               </span>
             </div>
             <button

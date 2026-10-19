@@ -2976,7 +2976,9 @@ a {
   text-align: left;
   width: 100%;
   margin-bottom: 1.75rem;
-  space-y: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .role-card-bullet-item {
@@ -2985,7 +2987,6 @@ a {
   gap: 0.65rem;
   font-size: 0.875rem;
   color: #334155;
-  margin-bottom: 0.65rem;
   line-height: 1.45;
 }
 
@@ -3077,11 +3078,18 @@ select option:disabled {
 
 /* Form Section Sub-Card */
 .form-section-subcard {
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(51, 65, 85, 0.7);
-  border-radius: 1.25rem;
-  padding: 1.75rem;
-  transition: border-color 0.2s ease;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(51, 65, 85, 0.75);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+@media (min-width: 640px) {
+  .form-section-subcard {
+    padding: 2rem;
+  }
 }
 
 .form-section-subcard:hover {

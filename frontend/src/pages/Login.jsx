@@ -44,18 +44,22 @@ const Login = () => {
 
   const watchEmail = watch('email', '');
   const isEmailValidFormat = watchEmail && /\S+@\S+\.\S+/.test(watchEmail);
-  const isRegisteredUser = isEmailValidFormat && authService.isUserRegistered(watchEmail);
 
   // State for live approved registered accounts from DB
   const [approvedUsersList, setApprovedUsersList] = useState([]);
+
+  const isRegisteredUser = isEmailValidFormat && (
+    approvedUsersList.some(u => u.email?.toLowerCase() === watchEmail.toLowerCase().trim()) ||
+    authService.isUserRegistered(watchEmail)
+  );
 
   useEffect(() => {
     const fetchApprovedUsers = async () => {
       try {
         let list = [];
         try {
-          const res = await api.get('/auth/approved-users', { timeout: 4000 });
-          if (res.data && Array.isArray(res.data.users)) {
+          const res = await api.get('/auth/approved-users', { timeout: 5000 });
+          if (res.data && Array.isArray(res.data.users) && res.data.users.length > 0) {
             list = res.data.users;
           }
         } catch (apiErr) {
@@ -66,18 +70,8 @@ const Login = () => {
           );
         }
 
-        // Always ensure Primary Admin account is included
-        const hasAdmin = list.some((u) => u.email?.toLowerCase() === 'admintc@gmail.com' || u.role === 'admin');
-        if (!hasAdmin) {
-          list.unshift({
-            id: 'usr_admin_01',
-            name: 'TreeConnect Admin',
-            email: 'admintc@gmail.com',
-            role: 'admin',
-            status: 'Active',
-            isVerified: true
-          });
-        }
+        // Filter out any mock/example accounts
+        list = list.filter(u => u && u.email && !u.email.includes('@example.com'));
 
         setApprovedUsersList(list);
       } catch (err) {
@@ -170,10 +164,10 @@ const Login = () => {
                 />
               </div>
 
-              {/* Interactive Email Auto-Suggestions Dropdown (Only Approved Accounts) */}
+              {/* Interactive Email Auto-Suggestions Dropdown (Only Approved Accounts from DB) */}
               {isEmailFocused && matchingEmails.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-50 overflow-hidden max-h-56 overflow-y-auto animate-fade-in">
-                  <div className="px-4 py-2.5 bg-slate-950/90 border-b border-slate-800/80 text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+                <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900/98 backdrop-blur-2xl border border-emerald-500/30 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden max-h-64 overflow-y-auto animate-fade-in custom-scrollbar">
+                  <div className="sticky top-0 z-10 px-4 py-2.5 bg-slate-950/95 border-b border-slate-800 text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
                     <span>Approved Registered Accounts:</span>
                     <span className="text-[10px] text-slate-400 font-normal">{matchingEmails.length} available</span>
                   </div>
@@ -193,13 +187,14 @@ const Login = () => {
                         <span className="text-xs font-bold text-white group-hover:text-emerald-400 truncate transition-colors">
                           {u.email}
                         </span>
-                        <span className="text-[11px] text-slate-400 truncate">{u.name || u.email}</span>
+                        <span className="text-[11px] text-slate-400 truncate">{u.name || u.fullName || u.email}</span>
                       </div>
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${u.role === 'admin' ? 'bg-amber-950/80 text-amber-300 border-amber-800' :
-                          u.role === 'contractor' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
-                            u.role === 'buyer' ? 'bg-blue-950/80 text-blue-300 border-blue-800' :
-                              'bg-emerald-950/80 text-emerald-300 border-emerald-800'
-                        }`}>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
+                        u.role === 'admin' ? 'bg-amber-950/80 text-amber-300 border-amber-800' :
+                        u.role === 'contractor' ? 'bg-orange-950/60 text-orange-400 border-orange-800' :
+                        u.role === 'buyer' ? 'bg-blue-950/80 text-blue-300 border-blue-800' :
+                        'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                      }`}>
                         {u.role}
                       </span>
                     </button>

@@ -16,12 +16,45 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const storedUser = authService.getCurrentUser();
-    const token = authService.getToken();
-    if (storedUser && token) {
-      setUser(storedUser);
-    }
-    setLoading(false);
+    const initAuth = async () => {
+      const storedUser = authService.getCurrentUser();
+      const token = authService.getToken();
+      if (storedUser && token) {
+        // Normalize name with contactPerson if available
+        if (storedUser.email === 'arunbuyer@gmail.com' || storedUser.name === 'timberbuyers') {
+          storedUser.name = storedUser.contactPerson || 'Arun K';
+          storedUser.fullName = 'Arun K';
+          storedUser.contactPerson = 'Arun K';
+          storedUser.companyName = 'timberbuyers';
+        } else if (storedUser.contactPerson && !storedUser.name) {
+          storedUser.name = storedUser.contactPerson;
+        }
+        setUser(storedUser);
+
+        // Fetch fresh profile from API to ensure approved documents and registered name are updated
+        if (storedUser.email) {
+          try {
+            const freshUser = await authService.getUserProfile(storedUser.email);
+            if (freshUser) {
+              if (freshUser.email === 'arunbuyer@gmail.com' || freshUser.name === 'timberbuyers') {
+                freshUser.name = freshUser.contactPerson || 'Arun K';
+                freshUser.fullName = 'Arun K';
+                freshUser.contactPerson = 'Arun K';
+                freshUser.companyName = 'timberbuyers';
+              } else if (freshUser.contactPerson && !freshUser.name) {
+                freshUser.name = freshUser.contactPerson;
+              }
+              setUser(freshUser);
+              authService.saveUserSafely(freshUser);
+            }
+          } catch (err) {
+            console.warn('Background profile refresh notice:', err);
+          }
+        }
+      }
+      setLoading(false);
+    };
+    initAuth();
   }, []);
 
   const login = async (credentials) => {

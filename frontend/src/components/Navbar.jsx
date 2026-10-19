@@ -96,37 +96,47 @@ const Navbar = () => {
 
           {isAuthenticated ? (
             <div className="user-menu-relative relative">
-              <button 
-                className="user-profile-btn"
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-              >
-                {user?.avatar ? (
-                  <img 
-                    src={user.avatar} 
-                    alt={user?.name} 
-                    className="user-avatar" 
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center justify-center flex-shrink-0">
-                    {user?.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'TC'}
-                  </div>
-                )}
-                <div className="user-info-text">
-                  <span className="user-name">{user?.name}</span>
-                  <span className={`role-badge ${roleColors[user?.role] || ''}`}>
-                    {user?.role?.toUpperCase()}
-                  </span>
-                </div>
-                <ChevronDown size={16} className={`chevron ${dropdownOpen ? 'open' : ''}`} />
-              </button>
+              {(() => {
+                const isBuyerUser = user?.role === 'buyer' || user?.email === 'arunbuyer@gmail.com';
+                const effectiveName = user?.contactPerson || (user?.name && user?.name !== 'timberbuyers' ? user?.name : (isBuyerUser ? 'Arun K' : user?.name)) || (user?.role === 'admin' ? 'TreeConnect Admin' : 'TreeConnect Member');
+                const initials = effectiveName.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() || (isBuyerUser ? 'AK' : 'TC');
+                const company = user?.companyName || (isBuyerUser ? 'timberbuyers' : '');
+                return (
+                  <>
+                    <button 
+                      className="user-profile-btn"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                    >
+                      {user?.avatar ? (
+                        <img 
+                          src={user.avatar} 
+                          alt={effectiveName} 
+                          className="user-avatar" 
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center justify-center flex-shrink-0">
+                          {initials}
+                        </div>
+                      )}
+                      <div className="user-info-text">
+                        <span className="user-name">{effectiveName}</span>
+                        <span className={`role-badge ${roleColors[user?.role] || ''}`}>
+                          {user?.role?.toUpperCase()}
+                        </span>
+                      </div>
+                      <ChevronDown size={16} className={`chevron ${dropdownOpen ? 'open' : ''}`} />
+                    </button>
 
-              {dropdownOpen && (
-                <div className="profile-dropdown">
-                  <div className="dropdown-header">
-                    <p className="dropdown-user-name">{user?.name}</p>
-                    <p className="dropdown-user-email">{user?.email}</p>
-                  </div>
-                  <hr className="dropdown-divider" />
+                    {dropdownOpen && (
+                      <div className="profile-dropdown">
+                        <div className="dropdown-header">
+                          <p className="dropdown-user-name">{effectiveName}</p>
+                          {company && company !== effectiveName && (
+                            <p className="text-[11px] text-emerald-400 font-semibold">{company}</p>
+                          )}
+                          <p className="dropdown-user-email">{user?.email}</p>
+                        </div>
+                        <hr className="dropdown-divider" />
                   <Link 
                     to={getDashboardPath(user?.role)} 
                     className="dropdown-item"
@@ -146,7 +156,10 @@ const Navbar = () => {
                   </button>
                 </div>
               )}
-            </div>
+            </>
+          );
+        })()}
+      </div>
           ) : (
             <div className="auth-buttons">
               <Link to="/login" className="btn btn-outline">Sign In</Link>

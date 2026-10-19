@@ -12,7 +12,34 @@ const MOCK_USERS = {
   }
 };
 
+const saveUserSafely = (user) => {
+  if (!user) return;
+  try {
+    const light = { ...user };
+    const giantKeys = [
+      'forestLicenceUrl',
+      'tradeLicenceUrl',
+      'gstUrl',
+      'idProofUrl',
+      'supportingUrl',
+      'businessCertUrl',
+      'landTaxInvoiceUrl'
+    ];
+    giantKeys.forEach((k) => {
+      if (light[k] && typeof light[k] === 'string' && light[k].length > 500) {
+        delete light[k];
+      }
+    });
+    localStorage.setItem('treeconnect_user', JSON.stringify(light));
+  } catch (err) {
+    console.warn('localStorage save warning:', err);
+  }
+};
+
 export const authService = {
+  saveUserSafely(user) {
+    saveUserSafely(user);
+  },
   getRegisteredUsers() {
     try {
       const stored = localStorage.getItem('treeconnect_registered_users');
@@ -67,7 +94,7 @@ export const authService = {
       const response = await api.post('/auth/login', credentials);
       if (response.data?.token) {
         localStorage.setItem('treeconnect_token', response.data.token);
-        localStorage.setItem('treeconnect_user', JSON.stringify(response.data.user));
+        saveUserSafely(response.data.user);
         this._recordLoginEvent(
           response.data.user?.email,
           response.data.user?.role,
@@ -130,49 +157,50 @@ export const authService = {
       try {
         const stored = localStorage.getItem('treeconnect_registered_users');
         const customUsers = stored ? JSON.parse(stored) : {};
-        customUsers[emailKey] = {
-          id: `usr_${Date.now()}`,
-          name: userData.fullName || emailKey.split('@')[0],
-          fullName: userData.fullName || '',
-          email: userData.email,
-          role: userData.role || 'landowner',
-          password: userData.password,
-          phone: userData.phone || '',
-          address: userData.address || '',
-          district: userData.district || '',
-          state: userData.state || '',
-          country: userData.country || '',
-          postalCode: userData.postalCode || '',
-          pinCode: userData.postalCode || userData.pinCode || '',
-          localBody: userData.localBody || '',
-          village: userData.village || '',
-          businessType: userData.buyerType || userData.businessType || '',
-          buyerType: userData.buyerType || userData.businessType || '',
-          gstNumber: userData.gstNumber || '',
-          forestLicenceDoc: userData.forestLicenceDoc || '',
-          forestLicenceUrl: userData.forestLicenceUrl || '',
-          tradeLicenceDoc: userData.tradeLicenceDoc || '',
-          tradeLicenceUrl: userData.tradeLicenceUrl || '',
-          gstDoc: userData.gstDoc || '',
-          gstUrl: userData.gstUrl || '',
-          businessCertDoc: userData.businessCertDoc || '',
-          businessCertUrl: userData.businessCertUrl || '',
-          landTaxInvoiceDoc: userData.landTaxInvoiceDoc || '',
-          landTaxInvoiceUrl: userData.landTaxInvoiceUrl || '',
-          idProofType: userData.idProofType || '',
-          idProofDocument: userData.idProofDocument || '',
-          idProofUrl: userData.idProofUrl || '',
-          supportingDocument: userData.supportingDocument || '',
-          supportingUrl: userData.supportingUrl || '',
-          status: (userData.role === 'admin') ? 'Active' : 'Pending',
-          isVerified: (userData.role === 'admin') ? true : false,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.email}`,
-          title: `${(userData.role || 'landowner').charAt(0).toUpperCase() + (userData.role || 'landowner').slice(1)} Member`
-        };
-        localStorage.setItem('treeconnect_registered_users', JSON.stringify(customUsers));
-      } catch (e) {
-        console.error('Error storing registered user:', e);
-      }
+          const sanitizeUrl = (url) => (url && typeof url === 'string' && url.length > 500 ? '[Document Attached]' : (url || ''));
+          customUsers[emailKey] = {
+            id: `usr_${Date.now()}`,
+            name: userData.fullName || emailKey.split('@')[0],
+            fullName: userData.fullName || '',
+            email: userData.email,
+            role: userData.role || 'landowner',
+            password: userData.password,
+            phone: userData.phone || '',
+            address: userData.address || '',
+            district: userData.district || '',
+            state: userData.state || '',
+            country: userData.country || '',
+            postalCode: userData.postalCode || '',
+            pinCode: userData.postalCode || userData.pinCode || '',
+            localBody: userData.localBody || '',
+            village: userData.village || '',
+            businessType: userData.buyerType || userData.businessType || '',
+            buyerType: userData.buyerType || userData.businessType || '',
+            gstNumber: userData.gstNumber || '',
+            forestLicenceDoc: userData.forestLicenceDoc || '',
+            forestLicenceUrl: sanitizeUrl(userData.forestLicenceUrl),
+            tradeLicenceDoc: userData.tradeLicenceDoc || '',
+            tradeLicenceUrl: sanitizeUrl(userData.tradeLicenceUrl),
+            gstDoc: userData.gstDoc || '',
+            gstUrl: sanitizeUrl(userData.gstUrl),
+            businessCertDoc: userData.businessCertDoc || '',
+            businessCertUrl: sanitizeUrl(userData.businessCertUrl),
+            landTaxInvoiceDoc: userData.landTaxInvoiceDoc || '',
+            landTaxInvoiceUrl: sanitizeUrl(userData.landTaxInvoiceUrl),
+            idProofType: userData.idProofType || '',
+            idProofDocument: userData.idProofDocument || '',
+            idProofUrl: sanitizeUrl(userData.idProofUrl),
+            supportingDocument: userData.supportingDocument || '',
+            supportingUrl: sanitizeUrl(userData.supportingUrl),
+            status: (userData.role === 'admin') ? 'Active' : 'Pending',
+            isVerified: (userData.role === 'admin') ? true : false,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.email}`,
+            title: `${(userData.role || 'landowner').charAt(0).toUpperCase() + (userData.role || 'landowner').slice(1)} Member`
+          };
+          localStorage.setItem('treeconnect_registered_users', JSON.stringify(customUsers));
+        } catch (e) {
+          console.error('Error storing registered user in localStorage:', e);
+        }
     }
 
     try {
@@ -350,7 +378,7 @@ export const authService = {
       try {
         const response = await api.get(`/auth/user-profile?email=${encodeURIComponent(email)}`);
         if (response.data?.user) {
-          localStorage.setItem('treeconnect_user', JSON.stringify(response.data.user));
+          saveUserSafely(response.data.user);
           return response.data.user;
         }
       } catch (e) {
@@ -363,6 +391,44 @@ export const authService = {
       return registeredUsers[emailKey];
     }
     return this.getCurrentUser();
+  },
+
+  async updateUserProfile(profileData) {
+    const emailKey = profileData.email?.trim().toLowerCase();
+    let updated = null;
+
+    if (emailKey) {
+      try {
+        const response = await api.put('/auth/user-profile', profileData);
+        if (response.data?.user) {
+          updated = response.data.user;
+        }
+      } catch (e) {
+        console.warn('API error updating profile, saving locally:', e);
+      }
+    }
+
+    // Merge with current data
+    const current = this.getCurrentUser() || {};
+    const merged = { ...current, ...profileData, ...(updated || {}) };
+
+    saveUserSafely(merged);
+
+    // Also update registered users
+    if (emailKey) {
+      try {
+        const stored = localStorage.getItem('treeconnect_registered_users');
+        const customUsers = stored ? JSON.parse(stored) : {};
+        if (customUsers[emailKey]) {
+          customUsers[emailKey] = { ...customUsers[emailKey], ...merged };
+          localStorage.setItem('treeconnect_registered_users', JSON.stringify(customUsers));
+        }
+      } catch (e) {
+        console.error('Error saving updated user to localStorage:', e);
+      }
+    }
+
+    return merged;
   },
 
   getCurrentUser() {

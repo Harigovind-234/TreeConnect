@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import marketplaceService from '../../services/marketplaceService';
 import {
+  LayoutDashboard,
   ShoppingBag,
   Filter,
   Truck,
@@ -36,12 +38,43 @@ import {
 
 const BuyerDashboard = () => {
   const { user } = useAuth();
-  const buyerName = user?.name || user?.full_name || 'Pacific Lumber Mills';
-  const buyerCompany = user?.company_name || 'Pacific Lumber & Veneer Corp';
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const buyerName = user?.contactPerson || user?.name || user?.full_name || 'Arun K';
+  const buyerCompany = user?.companyName || user?.company_name || 'timberbuyers';
   const buyerEmail = (user?.email || 'buyer@treeconnect.com').toLowerCase().trim();
 
-  // Active view tab: 'marketplace' | 'negotiations' | 'orders' | 'analytics'
-  const [activeTab, setActiveTab] = useState('marketplace');
+  // Helper to map route path to active tab
+  const getTabFromPath = (path) => {
+    if (path === '/buyer/dashboard' || path === '/buyer') return 'hub';
+    if (path === '/buyer/marketplace') return 'marketplace';
+    if (path === '/buyer/negotiations') return 'negotiations';
+    if (path === '/buyer/orders') return 'orders';
+    if (path === '/buyer/analytics') return 'analytics';
+    return 'hub';
+  };
+
+  // Active view tab: 'hub' | 'marketplace' | 'negotiations' | 'orders' | 'analytics'
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
+
+  useEffect(() => {
+    setActiveTab(getTabFromPath(location.pathname));
+  }, [location.pathname]);
+
+  const handleTabChange = (tabKey) => {
+    setActiveTab(tabKey);
+    const tabRoutes = {
+      hub: '/buyer/dashboard',
+      marketplace: '/buyer/marketplace',
+      negotiations: '/buyer/negotiations',
+      orders: '/buyer/orders',
+      analytics: '/buyer/analytics'
+    };
+    if (tabRoutes[tabKey] && location.pathname !== tabRoutes[tabKey]) {
+      navigate(tabRoutes[tabKey]);
+    }
+  };
 
   // Data state from marketplaceService
   const [listings, setListings] = useState([]);
@@ -219,7 +252,7 @@ const BuyerDashboard = () => {
       setNegotiateModalOpen(false);
       showToast(`Negotiation offer submitted to ${negotiateTarget.sellerName} (${negotiateTarget.sellerRole})!`);
       loadData();
-      setActiveTab('negotiations');
+      handleTabChange('negotiations');
     } catch (err) {
       console.error(err);
       alert('Failed to submit negotiation offer');
@@ -264,7 +297,7 @@ const BuyerDashboard = () => {
       setBuyNowModalOpen(false);
       showToast(`Purchase order ${newOrder.id} confirmed! Timber dispatch scheduled.`);
       loadData();
-      setActiveTab('orders');
+      handleTabChange('orders');
     } catch (err) {
       console.error(err);
       alert('Failed to process purchase order');
@@ -361,19 +394,19 @@ const BuyerDashboard = () => {
                 {/* Quick Shortcuts */}
                 <div className="flex flex-col gap-2.5 min-w-[200px]">
                   <button
-                    onClick={() => setActiveTab('marketplace')}
+                    onClick={() => handleTabChange('marketplace')}
                     className="btn btn-primary btn-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald/20"
                   >
                     <ShoppingBag size={16} /> Procure Timber Lots
                   </button>
                   <button
-                    onClick={() => setActiveTab('negotiations')}
+                    onClick={() => handleTabChange('negotiations')}
                     className="btn btn-secondary btn-sm flex items-center justify-center gap-2"
                   >
                     <Handshake size={16} /> My Negotiations ({activeNegotiationsCount})
                   </button>
                   <button
-                    onClick={() => setActiveTab('orders')}
+                    onClick={() => handleTabChange('orders')}
                     className="btn btn-secondary btn-sm flex items-center justify-center gap-2"
                   >
                     <Truck size={16} /> Track Shipments ({activeShipmentsCount})
@@ -392,7 +425,10 @@ const BuyerDashboard = () => {
 
             {/* KPI METRIC CARDS */}
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+              <div
+                onClick={() => handleTabChange('marketplace')}
+                className="kpi-card card p-4 rounded-xl border border-color bg-card cursor-pointer hover:border-emerald/50 transition-all"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-muted uppercase">Market Inventory</span>
                   <span className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center">
@@ -405,7 +441,10 @@ const BuyerDashboard = () => {
                 </div>
               </div>
 
-              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+              <div
+                onClick={() => handleTabChange('negotiations')}
+                className="kpi-card card p-4 rounded-xl border border-color bg-card cursor-pointer hover:border-amber-500/50 transition-all"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-muted uppercase">Active Price Bids</span>
                   <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
@@ -416,7 +455,10 @@ const BuyerDashboard = () => {
                 <div className="text-xs text-muted mt-1">Bargaining with Landowners & Contractors</div>
               </div>
 
-              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+              <div
+                onClick={() => handleTabChange('orders')}
+                className="kpi-card card p-4 rounded-xl border border-color bg-card cursor-pointer hover:border-blue-500/50 transition-all"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-muted uppercase">Active Mill Transit</span>
                   <span className="w-8 h-8 rounded-lg bg-emerald/15 text-emerald flex items-center justify-center">
@@ -429,7 +471,10 @@ const BuyerDashboard = () => {
                 </div>
               </div>
 
-              <div className="kpi-card card p-4 rounded-xl border border-color bg-card">
+              <div
+                onClick={() => handleTabChange('orders')}
+                className="kpi-card card p-4 rounded-xl border border-color bg-card cursor-pointer hover:border-gold/50 transition-all"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-muted uppercase">Procurement Spend</span>
                   <span className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
@@ -446,25 +491,36 @@ const BuyerDashboard = () => {
             {/* TAB CONTROLS */}
             <div className="flex items-center gap-2 border-b border-color mb-6 overflow-x-auto pb-1">
               <button
-                onClick={() => setActiveTab('marketplace')}
+                onClick={() => handleTabChange('hub')}
+                className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 cursor-pointer ${
+                  activeTab === 'hub'
+                    ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
+                    : 'text-muted hover:text-main'
+                }`}
+              >
+                <LayoutDashboard size={18} /> Procurement Hub
+              </button>
+
+              <button
+                onClick={() => handleTabChange('marketplace')}
                 className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'marketplace'
                     ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
                     : 'text-muted hover:text-main'
                 }`}
               >
-                <ShoppingBag size={18} /> Browse Timber Marketplace ({filteredListings.length})
+                <ShoppingBag size={18} /> Timber Marketplace ({filteredListings.length})
               </button>
 
               <button
-                onClick={() => setActiveTab('negotiations')}
+                onClick={() => handleTabChange('negotiations')}
                 className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 relative cursor-pointer ${
                   activeTab === 'negotiations'
                     ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
                     : 'text-muted hover:text-main'
                 }`}
               >
-                <Handshake size={18} /> My Negotiations & Offers
+                <Handshake size={18} /> My Negotiations
                 {activeNegotiationsCount > 0 && (
                   <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500 text-black font-bold">
                     {activeNegotiationsCount}
@@ -473,27 +529,399 @@ const BuyerDashboard = () => {
               </button>
 
               <button
-                onClick={() => setActiveTab('orders')}
+                onClick={() => handleTabChange('orders')}
                 className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'orders'
                     ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
                     : 'text-muted hover:text-main'
                 }`}
               >
-                <Truck size={18} /> Purchase Orders & Shipments ({myOrders.length})
+                <Truck size={18} /> Purchase Orders ({myOrders.length})
               </button>
 
               <button
-                onClick={() => setActiveTab('analytics')}
+                onClick={() => handleTabChange('analytics')}
                 className={`px-5 py-3 text-sm font-bold rounded-t-xl transition-all flex items-center gap-2 cursor-pointer ${
                   activeTab === 'analytics'
                     ? 'bg-card text-emerald border-b-2 border-emerald shadow-sm'
                     : 'text-muted hover:text-main'
                 }`}
               >
-                <TrendingUp size={18} /> Market Trends & Rates
+                <TrendingUp size={18} /> Market Trends
               </button>
             </div>
+
+            {/* ========================================================= */}
+            {/* TAB 0: PROCUREMENT HUB (EXECUTIVE COMMAND CENTER) */}
+            {/* ========================================================= */}
+            {activeTab === 'hub' && (
+              <div className="space-y-6">
+                {/* 4 Command Modules */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div
+                    onClick={() => handleTabChange('marketplace')}
+                    className="card p-5 rounded-2xl border border-color bg-card hover:border-emerald/60 transition-all cursor-pointer group shadow-md"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald/15 text-emerald flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <ShoppingBag size={20} />
+                      </div>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                        {listings.length} Lots
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-main group-hover:text-emerald transition-colors">Timber Marketplace</h3>
+                    <p className="text-xs text-muted mt-1 mb-3">
+                      Procure verified hardwood sawlogs from certified landowners & contractors across Kerala.
+                    </p>
+                    <div className="text-xs font-bold text-emerald flex items-center gap-1">
+                      Browse Marketplace <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => handleTabChange('negotiations')}
+                    className="card p-5 rounded-2xl border border-color bg-card hover:border-amber-500/60 transition-all cursor-pointer group shadow-md"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Handshake size={20} />
+                      </div>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/60">
+                        {activeNegotiationsCount} Active
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-main group-hover:text-amber-400 transition-colors">My Negotiations</h3>
+                    <p className="text-xs text-muted mt-1 mb-3">
+                      Direct volume bargaining, counter-offers, and transparent pricing with timber sellers.
+                    </p>
+                    <div className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                      Review Offers <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => handleTabChange('orders')}
+                    className="card p-5 rounded-2xl border border-color bg-card hover:border-blue-500/60 transition-all cursor-pointer group shadow-md"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Truck size={20} />
+                      </div>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-950/60 text-blue-300 border border-blue-800/60">
+                        {activeShipmentsCount} In-Transit
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-main group-hover:text-blue-400 transition-colors">Purchase Orders & Hauling</h3>
+                    <p className="text-xs text-muted mt-1 mb-3">
+                      Live mill yard dispatch tracking, weighbridge slips, and Forest Dept transit passes.
+                    </p>
+                    <div className="text-xs font-bold text-blue-400 flex items-center gap-1">
+                      Track Shipments <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => handleTabChange('analytics')}
+                    className="card p-5 rounded-2xl border border-color bg-card hover:border-purple-500/60 transition-all cursor-pointer group shadow-md"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <TrendingUp size={20} />
+                      </div>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-950/60 text-purple-300 border border-purple-800/60">
+                        Live Index
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-main group-hover:text-purple-400 transition-colors">Market Trends & Rates</h3>
+                    <p className="text-xs text-muted mt-1 mb-3">
+                      District-wise timber benchmark rates, quarterly auction trends, and species price charts.
+                    </p>
+                    <div className="text-xs font-bold text-purple-400 flex items-center gap-1">
+                      Explore Trends <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ACTIVE NEGOTIATIONS ALERT STRIP (if any) */}
+                {myNegotiations.length > 0 && (
+                  <div className="card p-5 rounded-2xl border border-amber-500/40 bg-amber-950/20 shadow-lg space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse"></span>
+                        <h3 className="text-sm font-bold text-amber-300">
+                          Active Negotiations Snapshot ({myNegotiations.length} Pending Actions)
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => handleTabChange('negotiations')}
+                        className="btn btn-secondary btn-xs text-xs flex items-center gap-1 text-amber-300 hover:text-white"
+                      >
+                        Open Full Negotiations View <ArrowRight size={12} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      {myNegotiations.slice(0, 2).map((neg) => {
+                        const isCounter = neg.status === 'Counter-Offer';
+                        return (
+                          <div
+                            key={neg.id}
+                            className={`p-3.5 rounded-xl border bg-card/80 text-xs flex flex-col justify-between gap-2.5 ${
+                              isCounter ? 'border-amber-500/60' : 'border-color'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="font-bold text-white text-sm line-clamp-1">{neg.timberTitle}</span>
+                                <span className="text-muted block text-[11px] mt-0.5">
+                                  Seller: <strong className="text-slate-300">{neg.sellerName}</strong> • {neg.volume || neg.requestedVolume} m³
+                                </span>
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  isCounter ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-surface text-muted border border-color'
+                                }`}
+                              >
+                                {neg.status}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2 border-t border-color/60">
+                              <span className="font-mono text-slate-300">
+                                Bid: <strong className="text-emerald">₹{Number(neg.offeredPricePerM3).toLocaleString('en-IN')}/m³</strong>
+                                {neg.counterOffer && (
+                                  <span className="text-amber-400 font-bold ml-2">
+                                    Counter: ₹{Number(neg.counterOffer.pricePerM3).toLocaleString('en-IN')}/m³
+                                  </span>
+                                )}
+                              </span>
+                              {isCounter ? (
+                                <button
+                                  onClick={() => handleAcceptSellerCounter(neg)}
+                                  className="btn btn-primary btn-xs text-[11px] font-bold py-1 px-2.5"
+                                >
+                                  Accept Counter
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleTabChange('negotiations')}
+                                  className="btn btn-secondary btn-xs text-[11px] py-1 px-2.5"
+                                >
+                                  View
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ACTIVE LOGISTICS SHIPMENT SPOTLIGHT (if any) */}
+                {myOrders.length > 0 && myOrders[0] && (
+                  <div className="card p-5 rounded-2xl border border-blue-500/40 bg-card shadow-lg space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-color">
+                      <div className="flex items-center gap-2">
+                        <Truck size={20} className="text-blue-400" />
+                        <div>
+                          <h3 className="text-sm font-bold text-main">Live Mill Dispatch: {myOrders[0].timberItem}</h3>
+                          <p className="text-xs text-muted">
+                            Order {myOrders[0].id} • Contractor: <strong className="text-slate-300">{myOrders[0].contractor}</strong>
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleTabChange('orders')}
+                        className="btn btn-secondary btn-xs text-xs flex items-center gap-1 text-blue-300 hover:text-white"
+                      >
+                        All Orders & Shipments <ArrowRight size={12} />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-surface p-3 rounded-xl border border-color">
+                      <div>
+                        <span className="text-muted block">Volume</span>
+                        <span className="font-bold text-emerald font-mono">{myOrders[0].volume}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">Transit Pass</span>
+                        <span className="font-bold text-white font-mono">{myOrders[0].passNo || 'KL-FD-2026-981'}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">Destination Mill</span>
+                        <span className="font-bold text-white line-clamp-1">{myOrders[0].mill}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted block">ETA Delivery</span>
+                        <span className="font-bold text-amber-400 font-mono">{myOrders[0].ETA}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1 font-semibold">
+                        <span className="text-slate-300">Highway Hauling Progress</span>
+                        <span className="text-emerald font-mono font-bold">{myOrders[0].progress || 75}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-surface overflow-hidden border border-color">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-emerald-400 rounded-full"
+                          style={{ width: `${myOrders[0].progress || 75}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* FEATURED MARKETPLACE LOTS */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-bold text-main flex items-center gap-2">
+                        <Sparkles size={18} className="text-emerald" /> Fresh Timber Lots Ready for Mill Procurement
+                      </h2>
+                      <p className="text-xs text-muted">Direct from certified Wayanad, Palakkad, Kottayam and Idukki plantations</p>
+                    </div>
+                    <button
+                      onClick={() => handleTabChange('marketplace')}
+                      className="btn btn-secondary btn-sm flex items-center gap-1.5 font-bold text-emerald hover:text-white"
+                    >
+                      Browse All ({listings.length}) <ArrowRight size={14} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {listings.slice(0, 3).map((item) => {
+                      const isContractor = item.sellerRole === 'contractor';
+                      return (
+                        <div
+                          key={item.id}
+                          className="card rounded-2xl border border-color bg-card overflow-hidden hover:border-emerald/50 transition-all flex flex-col justify-between shadow-lg group"
+                        >
+                          {/* Image / Header Banner */}
+                          <div className="relative h-44 bg-surface overflow-hidden">
+                            {item.imageUrl ? (
+                              <img
+                                src={item.imageUrl}
+                                alt={item.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 text-muted">
+                                <ShoppingBag size={40} className="mb-2 opacity-40 text-emerald" />
+                                <span className="text-sm font-semibold text-slate-300">{item.timberSpecies}</span>
+                                <span className="text-[11px] text-muted">{item.category}</span>
+                              </div>
+                            )}
+
+                            <div className="absolute top-3 left-3">
+                              <span
+                                className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1 shadow-md ${
+                                  isContractor
+                                    ? 'bg-blue-600/95 text-white'
+                                    : 'bg-emerald-600/95 text-white'
+                                }`}
+                              >
+                                {isContractor ? <Truck size={12} /> : <Trees size={12} />}
+                                {isContractor ? 'Contractor Lot' : 'Landowner Lot'}
+                              </span>
+                            </div>
+
+                            <div className="absolute top-3 right-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black/70 backdrop-blur-sm text-emerald-300 border border-emerald-500/40">
+                                Available
+                              </span>
+                            </div>
+
+                            <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[11px] bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-lg text-slate-200">
+                              <span className="flex items-center gap-1 font-semibold">
+                                <ShieldCheck size={12} className="text-emerald" /> {item.certification || 'Verified Farm Forestry'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Details Content */}
+                          <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                            <div>
+                              <div className="flex items-center justify-between text-xs text-muted mb-1.5">
+                                <span>
+                                  Sold by: <strong className="text-emerald font-semibold">{item.sellerName}</strong>
+                                </span>
+                                <span className="flex items-center gap-1 text-[11px]">
+                                  <MapPin size={11} className="text-muted" /> {item.district}
+                                </span>
+                              </div>
+
+                              <h3 className="text-base font-bold text-main line-clamp-1 group-hover:text-emerald transition-colors">
+                                {item.title || `${item.timberSpecies} Sawlogs`}
+                              </h3>
+                              <p className="text-xs text-muted line-clamp-2 mt-1">{item.description}</p>
+                            </div>
+
+                            {/* Volume & Price Box */}
+                            <div className="p-3 rounded-xl bg-surface border border-color grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-muted block text-[11px]">Available Volume:</span>
+                                <span className="font-extrabold text-emerald text-base font-mono">{item.volume} m³</span>
+                                {item.logCount && <div className="text-[10px] text-muted">({item.logCount} logs)</div>}
+                              </div>
+
+                              <div className="text-right">
+                                <span className="text-muted block text-[11px]">Rate / m³:</span>
+                                <span className="font-extrabold text-white text-base font-mono">
+                                  ₹ {Number(item.pricePerM3).toLocaleString('en-IN')}
+                                </span>
+                                <div className="text-[10px] text-muted">per cubic meter</div>
+                              </div>
+
+                              <div className="col-span-2 pt-2 border-t border-color/60 flex items-center justify-between text-[11px]">
+                                <span className="text-muted">Quality Grade:</span>
+                                <span className="font-bold text-slate-200">{item.grade}</span>
+                              </div>
+
+                              <div className="col-span-2 flex items-center justify-between text-[11px]">
+                                <span className="text-muted">Total Asking Price:</span>
+                                <span className="font-bold text-gold font-mono">
+                                  ₹ {Number(item.totalAskingPrice || (item.volume * item.pricePerM3)).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Actions: Specs, Negotiate, Buy Now */}
+                            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-color">
+                              <button
+                                onClick={() => setSelectedListingForDetails(item)}
+                                className="btn btn-secondary btn-sm text-xs py-2 px-2 flex items-center justify-center gap-1 font-semibold"
+                                title="View log specifications"
+                              >
+                                <Eye size={13} /> Specs
+                              </button>
+
+                              <button
+                                onClick={() => handleOpenNegotiate(item)}
+                                className="btn btn-secondary btn-sm text-xs py-2 px-2 flex items-center justify-center gap-1 font-semibold text-amber-400 hover:text-white"
+                                title="Submit price counter-offer"
+                              >
+                                <Handshake size={13} /> Negotiate
+                              </button>
+
+                              <button
+                                onClick={() => handleOpenBuyNow(item)}
+                                className="btn btn-primary btn-sm text-xs py-2 px-2 flex items-center justify-center gap-1 font-bold shadow-md shadow-emerald/20"
+                                title="Instant escrow purchase"
+                              >
+                                Buy Now <ArrowRight size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ========================================================= */}
             {/* TAB 1: BROWSE TIMBER MARKETPLACE (CORE BUYER FEED) */}
@@ -850,7 +1278,7 @@ const BuyerDashboard = () => {
                     <p className="text-xs text-muted max-w-md mx-auto mb-4">
                       When you click "Negotiate" on any timber listing, your offer and bargaining timeline will appear here.
                     </p>
-                    <button onClick={() => setActiveTab('marketplace')} className="btn btn-primary">
+                    <button onClick={() => handleTabChange('marketplace')} className="btn btn-primary">
                       Browse Timber Marketplace
                     </button>
                   </div>
@@ -1017,7 +1445,7 @@ const BuyerDashboard = () => {
                     <p className="text-xs text-muted max-w-md mx-auto mb-4">
                       Purchase timber lots directly from the marketplace to track fulfillment and transport permits here.
                     </p>
-                    <button onClick={() => setActiveTab('marketplace')} className="btn btn-primary">
+                    <button onClick={() => handleTabChange('marketplace')} className="btn btn-primary">
                       Procure Timber
                     </button>
                   </div>

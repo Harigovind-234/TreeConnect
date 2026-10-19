@@ -189,43 +189,66 @@ const FileUploadCard = ({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
+  const hasError = Boolean(localError || error);
+
   return (
-    <div className="w-full bg-[#0e1612] rounded-2xl border border-emerald-500/15 p-6 sm:p-7 shadow-lg transition-all duration-200 hover:border-emerald-500/35">
+    <div
+      className={`w-full rounded-2xl p-6 sm:p-7 shadow-lg transition-all duration-200 ${
+        hasError
+          ? 'bg-gradient-to-b from-[#180d11] to-[#0e1612] border-2 border-rose-500/70 shadow-[0_0_30px_rgba(244,63,94,0.18)] ring-1 ring-rose-500/40'
+          : 'bg-[#0e1612] border border-emerald-500/15 hover:border-emerald-500/35'
+      }`}
+    >
       {/* Header Section */}
       {(activeLabel || activeHelperText) && (
-        <div className="mb-6">
+        <div className="mb-5">
           {activeLabel && (
-            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
               <label className="text-base sm:text-lg font-bold text-white flex items-center gap-2.5">
-                <span>{activeLabel}</span>
+                <span className={hasError ? 'text-rose-100' : 'text-white'}>{activeLabel}</span>
                 {isRequired ? (
-                  <span className="text-emerald-400 font-extrabold text-base">*</span>
+                  <span className={`${hasError ? 'text-rose-400' : 'text-emerald-400'} font-extrabold text-base`}>
+                    *
+                  </span>
                 ) : (
                   <span className="text-emerald-300 text-xs font-bold uppercase tracking-wider bg-emerald-500/15 px-3 py-1 rounded-md border border-emerald-500/30">
                     Optional
                   </span>
                 )}
               </label>
+
+              {hasError && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                  <AlertCircle size={13} />
+                  <span>Document Required</span>
+                </span>
+              )}
             </div>
           )}
           {activeHelperText && (
-            <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed mt-2">{activeHelperText}</p>
+            <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed mt-1.5">{activeHelperText}</p>
           )}
         </div>
       )}
 
       {/* Select Document Type Dropdown (If provided e.g. for Govt ID) */}
       {docTypes.length > 0 && (
-        <div className="mb-6 mt-2 pt-2">
-          <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
-            Select Document Type <span className="text-emerald-400">*</span>
+        <div className="mb-5 pt-3 border-t border-slate-800/60">
+          <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+            Select Document Type <span className={hasError ? 'text-rose-400' : 'text-emerald-400'}>*</span>
           </label>
           <select
             value={selectedDocType || ''}
             onChange={(e) => onDocTypeChange && onDocTypeChange(e.target.value)}
-            className="w-full form-input-56 bg-[#0a0f0d] border-emerald-500/20 text-white font-semibold text-sm rounded-xl focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 shadow-sm"
+            className={`w-full form-input-56 text-white font-semibold text-sm rounded-xl shadow-sm transition-all ${
+              hasError && !selectedDocType
+                ? 'bg-rose-950/20 border-2 border-rose-500/80 focus:border-rose-400 focus:ring-2 focus:ring-rose-500/30'
+                : 'bg-[#0a0f0d] border border-emerald-500/20 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+            }`}
           >
-            <option value="" disabled className="bg-[#0a0f0d] text-slate-400">-- Select Identity Document Type --</option>
+            <option value="" disabled className="bg-[#0a0f0d] text-slate-400">
+              -- Select Identity Document Type --
+            </option>
             {docTypes.map((type) => (
               <option key={type} value={type} className="bg-[#0a0f0d] text-white font-medium">
                 {type}
@@ -237,8 +260,8 @@ const FileUploadCard = ({
 
       {/* Optional Document Examples List */}
       {examples.length > 0 && (
-        <div className="mb-6 mt-2 p-4 rounded-xl bg-[#0a0f0d] border border-emerald-500/15">
-          <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-2.5">
+        <div className="mb-5 p-3.5 sm:p-4 rounded-xl bg-[#0a0f0d] border border-emerald-500/15">
+          <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-2">
             Recommended Examples:
           </span>
           <div className="flex flex-wrap gap-2">
@@ -262,7 +285,9 @@ const FileUploadCard = ({
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer group flex flex-col items-center justify-center ${
-            isDragging
+            hasError
+              ? 'border-rose-500/80 bg-rose-500/5 hover:border-rose-400 hover:bg-rose-500/10'
+              : isDragging
               ? 'border-emerald-500 bg-emerald-500/15 scale-[0.99]'
               : 'border-emerald-500/25 hover:border-emerald-500/60 bg-[#0a0f0d] hover:bg-[#0e1612]'
           }`}
@@ -276,19 +301,32 @@ const FileUploadCard = ({
             className="hidden"
           />
 
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-emerald-500/25 transition-all shadow-md">
+          <div
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 group-hover:scale-110 transition-all shadow-md ${
+              hasError
+                ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+                : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 group-hover:bg-emerald-500/25'
+            }`}
+          >
             <UploadCloud size={24} />
           </div>
 
           <p className="text-xs sm:text-sm font-bold text-white mb-1">
-            <span className="text-emerald-400 underline decoration-emerald-500/50 underline-offset-4 group-hover:text-emerald-300">
+            <span
+              className={
+                hasError
+                  ? 'text-rose-400 underline decoration-rose-500/50 underline-offset-4 group-hover:text-rose-300'
+                  : 'text-emerald-400 underline decoration-emerald-500/50 underline-offset-4 group-hover:text-emerald-300'
+              }
+            >
               Drag &amp; Drop file here
             </span>{' '}
             or click to browse
           </p>
 
           <p className="text-xs text-slate-300 mb-3 font-medium">
-            Supported formats: <strong className="text-white font-bold">{acceptedFormatsText}</strong> • Max size: <strong className="text-white font-bold">{maxSizeMB} MB</strong>
+            Supported formats: <strong className="text-white font-bold">{acceptedFormatsText}</strong> • Max size:{' '}
+            <strong className="text-white font-bold">{maxSizeMB} MB</strong>
           </p>
 
           <button
@@ -297,7 +335,11 @@ const FileUploadCard = ({
               e.stopPropagation();
               fileInputRef.current?.click();
             }}
-            className="px-4 py-2 rounded-xl bg-[#18241e] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 text-xs font-bold transition-all border border-emerald-500/30 shadow-sm flex items-center gap-2 cursor-pointer"
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border shadow-sm flex items-center gap-2 cursor-pointer ${
+              hasError
+                ? 'bg-rose-950/70 hover:bg-rose-500 hover:text-white text-rose-200 border-rose-500/40'
+                : 'bg-[#18241e] hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border-emerald-500/30'
+            }`}
           >
             <UploadCloud size={14} />
             <span>Browse Files</span>
@@ -352,7 +394,8 @@ const FileUploadCard = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5 font-medium">
-                {normalizedFile?.size ? formatFileSize(normalizedFile.size) : 'File ready'} • {normalizedFile?.type || 'Document'}
+                {normalizedFile?.size ? formatFileSize(normalizedFile.size) : 'File ready'} •{' '}
+                {normalizedFile?.type || 'Document'}
               </p>
             </div>
           </div>
@@ -370,11 +413,13 @@ const FileUploadCard = ({
         </div>
       )}
 
-      {/* Error Displays */}
-      {(localError || error) && (
-        <div className="mt-2.5 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-rose-300 text-xs font-medium">
-          <AlertCircle size={15} className="flex-shrink-0" />
-          <span>{localError || error}</span>
+      {/* Error Displays with Distinct Inline Alert */}
+      {hasError && (
+        <div className="mt-3.5 p-3.5 rounded-xl bg-rose-950/70 border border-rose-500/50 flex items-center gap-3 text-rose-200 text-xs font-semibold shadow-md animate-in fade-in duration-200">
+          <div className="w-6 h-6 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center flex-shrink-0">
+            <AlertCircle size={14} />
+          </div>
+          <span className="leading-relaxed">{localError || error}</span>
         </div>
       )}
     </div>

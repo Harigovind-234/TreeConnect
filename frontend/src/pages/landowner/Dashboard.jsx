@@ -894,7 +894,7 @@ const LandownerDashboard = () => {
                 const advReq = req.advance_payment_request || assDoc.advance_payment_request;
                 const advanceAmount = Number(
                   advReq?.advance_amount ||
-                  (req.total_verified_paid ? req.total_verified_paid : (isPurchase ? 0 : 38500))
+                  (req.total_verified_paid ? req.total_verified_paid : (isPurchase ? 0 : 33000))
                 );
                 const remainingBal = Number(
                   advReq?.remaining_balance !== undefined && advReq?.remaining_balance !== null
@@ -903,6 +903,14 @@ const LandownerDashboard = () => {
                       ? req.remaining_balance
                       : (isPurchase ? totalQuoteVal : Math.max(0, totalQuoteVal - advanceAmount))
                 );
+
+                const isAdvanceVerified = Boolean(
+                  req.is_advance_verified ||
+                  req.advance_payment_status === 'VERIFIED' ||
+                  req.payment_status === 'VERIFIED' ||
+                  (req.total_verified_paid && req.total_verified_paid >= advanceAmount)
+                );
+                const isAdvancePending = !isPurchase && !isAdvanceVerified && Boolean(advReq || advanceAmount > 0);
 
                 const cName = req.assigned_contractor_name || assDoc.contractor_name || 'Rohith kumar';
                 const cPhone = req.site_inspection?.inspector_phone || req.assigned_contractor_phone || assDoc.contractor_phone || '9746512243';
@@ -927,7 +935,7 @@ const LandownerDashboard = () => {
                 const getStageStatus = (sId) => {
                   const st = stagesData[sId];
                   if (!st) {
-                    return sId === (req.current_harvest_stage || 'stage_1') ? 'IN_PROGRESS' : 'PENDING';
+                    return (req.status === 'IN_PROGRESS' && sId === (req.current_harvest_stage || 'stage_1')) ? 'IN_PROGRESS' : 'PENDING';
                   }
                   const raw = String(st.status || '').toUpperCase().trim();
                   if (raw === 'VERIFIED' || raw === 'COMPLETED') return 'VERIFIED';
@@ -936,8 +944,20 @@ const LandownerDashboard = () => {
                   return 'PENDING';
                 };
 
+                const hasActiveOrVerifiedStages = Object.values(stagesData).some(s => {
+                  const st = String(s?.status || '').toUpperCase().trim();
+                  return st === 'IN_PROGRESS' || st === 'ACTIVE' || st === 'SUBMITTED' || st === 'SUBMITTED_FOR_VERIFICATION' || st === 'VERIFIED' || st === 'COMPLETED';
+                });
+
+                const isWorkStarted = Boolean(
+                  req.status === 'IN_PROGRESS' ||
+                  req.status === 'COMPLETED' ||
+                  Boolean(req.current_harvest_stage) ||
+                  hasActiveOrVerifiedStages
+                );
+
                 const verifiedCount = stagesConfig.filter(s => getStageStatus(s.id) === 'VERIFIED').length;
-                const progressPct = req.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : 15))));
+                const progressPct = req.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : (isWorkStarted ? 15 : 0)))));
                 const isCompleted = req.status === 'COMPLETED' || verifiedCount === 4;
                 const isSettlementDue = (isCompleted || verifiedCount === 4) && remainingBal > 0;
 
@@ -951,27 +971,48 @@ const LandownerDashboard = () => {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            <span className="active-spotlight-status-pill">
-                              <span className="live-pulse-dot" />
-                              {req.status === 'COMPLETED' ? '100% Completed' : req.status === 'IN_PROGRESS' ? 'Harvesting Operations In Progress' : 'Operation Ready'}
+                            <span className={`active-spotlight-status-pill ${!isWorkStarted ? '!bg-amber-500/15 !text-amber-300 !border-amber-500/40' : ''}`}>
+                              {isWorkStarted ? (
+                                <>
+                                  <span className="live-pulse-dot" />
+                                  {req.status === 'COMPLETED' ? '100% Completed' : 'Harvesting Operations In Progress'}
+                                </>
+                              ) : (
+                                <>
+                                  <Clock size={12} className="text-amber-400 animate-pulse shrink-0" />
+                                  <span>Scheduled • Work Not Started</span>
+                                </>
+                              )}
                             </span>
-                            <span className="active-spotlight-sub-pill">
-                              <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-                              {isPurchase
-                                ? 'Timber Purchase Agreement Executed'
-                                : 'Agreement Signed & Mobilization Advance Verified'}
+                            <span className={`active-spotlight-sub-pill ${isAdvancePending ? '!bg-amber-500/10 !text-amber-300 !border-amber-500/30' : ''}`}>
+                              {isPurchase ? (
+                                <>
+                                  <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                                  <span>Timber Purchase Agreement Executed</span>
+                                </>
+                              ) : isAdvanceVerified ? (
+                                <>
+                                  <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                                  <span>Agreement Signed &amp; Mobilization Advance Verified</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Clock size={13} className="text-amber-400 shrink-0" />
+                                  <span>Agreement Signed • Mobilization Advance Pending</span>
+                                </>
+                              )}
                             </span>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shrink-0">
                               Job #{String(reqId).substring(0, 8).toUpperCase()}
                             </span>
                           </div>
                           <h2 className="active-spotlight-heading">
-                            {req.propertyName || 'TreeConnect Property'} — {isPurchase ? 'Active Timber Purchase & Operations' : 'Active Harvest Operations'}
+                            {req.propertyName || 'TreeConnect Property'} — {isPurchase ? 'Active Timber Purchase & Operations' : (isWorkStarted ? 'Active Harvest Operations' : 'Scheduled Harvest Operations')}
                           </h2>
                           <p className="active-spotlight-subtitle">
                             {isPurchase
                               ? <>Assigned Timber Buyer: <strong className="text-emerald-400 font-bold">{cName}</strong> • Timber Purchase Agreement Executed • Direct Landowner Payout: <strong className="text-emerald-300 font-mono">{formatINR(totalQuoteVal)}</strong></>
-                              : <>Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span></>}
+                              : <>Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span> • {!isWorkStarted ? <strong className="text-amber-300">Contractor has not started field operations yet</strong> : <span className="text-emerald-400">Field work active</span>}</>}
                           </p>
                         </div>
                       </div>
@@ -992,27 +1033,42 @@ const LandownerDashboard = () => {
                             )}
                           </div>
                         ) : (
-                          isSettlementDue && (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
-                              className="active-spotlight-pay-btn"
-                              title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
-                            >
-                              <CreditCard size={15} />
-                              <span>Pay Balance ({formatINR(remainingBal)})</span>
-                            </button>
-                          )
+                          <>
+                            {isAdvancePending && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecordPaymentModal({ req, mode: 'advance', defaultAmount: advanceAmount, initialTab: 'razorpay' })}
+                                className="active-spotlight-pay-btn !bg-gradient-to-r !from-amber-500 !to-emerald-400 !border-amber-400 shadow-amber-500/20"
+                                title={`Pay mobilization advance of ${formatINR(advanceAmount)} via Razorpay or Bank Transfer`}
+                              >
+                                <CreditCard size={15} />
+                                <span>Pay Advance ({formatINR(advanceAmount)})</span>
+                              </button>
+                            )}
+                            {isSettlementDue && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                                className="active-spotlight-pay-btn"
+                                title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
+                              >
+                                <CreditCard size={15} />
+                                <span>Pay Balance ({formatINR(remainingBal)})</span>
+                              </button>
+                            )}
+                          </>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStageViewerModal(req)}
-                          className="active-spotlight-evidence-btn"
-                          title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
-                        >
-                          <Camera size={15} />
-                          <span>View Evidence</span>
-                        </button>
+                        {isWorkStarted && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedStageViewerModal(req)}
+                            className="active-spotlight-evidence-btn"
+                            title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
+                          >
+                            <Camera size={15} />
+                            <span>View Evidence</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => navigate(`/landowner/harvest-operations?requestId=${reqId}`)}
@@ -1185,13 +1241,35 @@ const LandownerDashboard = () => {
                             <span className="active-stat-hint">{propType}</span>
                           </div>
 
-                          <div className="active-spotlight-stat active-stat-advance">
-                            <span className="active-stat-label">Mobilization Advance Verified</span>
-                            <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
-                              <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
-                              <span>{formatINR(advanceAmount)}</span>
+                          <div className={`active-spotlight-stat ${isAdvanceVerified ? 'active-stat-advance' : 'active-stat-advance-pending'}`}>
+                            <span className="active-stat-label">
+                              {isAdvanceVerified ? 'Mobilization Advance Verified' : 'Mobilization Advance Due'}
+                            </span>
+                            <div className={`active-stat-value flex items-center gap-1.5 ${isAdvanceVerified ? 'text-emerald-400' : 'text-amber-400 font-black'}`}>
+                              {isAdvanceVerified ? (
+                                <>
+                                  <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                                  <span>{formatINR(advanceAmount)}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Clock size={17} className="text-amber-400 shrink-0" />
+                                  <span>{formatINR(advanceAmount)}</span>
+                                </>
+                              )}
                             </div>
-                            <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
+                            <span className={`active-stat-hint ${isAdvanceVerified ? 'text-emerald-300/90 font-medium' : 'text-amber-300/90 font-medium'}`}>
+                              {isAdvanceVerified ? `Verified by ${cName}` : 'Awaiting Landowner Payment (30%)'}
+                            </span>
+                            {isAdvancePending && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecordPaymentModal({ req, mode: 'advance', defaultAmount: advanceAmount, initialTab: 'razorpay' })}
+                                className="mt-2 w-full py-1.5 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer transition-all"
+                              >
+                                <CreditCard size={12} /> Pay ₹ {advanceAmount.toLocaleString('en-IN')} &rarr;
+                              </button>
+                            )}
                           </div>
 
                           <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
@@ -1281,121 +1359,175 @@ const LandownerDashboard = () => {
                       </div>
                     )}
 
-                    {/* Milestone Completion Progress & 4-Stage Interactive Stepper */}
-                    <div className="active-milestones-section">
-                      <div className="active-milestones-header">
-                        <span className="active-milestones-title">
-                          <Layers size={15} className="text-emerald-400" />
-                          Milestone Completion Progress
-                        </span>
-                        <span className="active-milestones-count-pill">
-                          {verifiedCount} of 4 Stages Verified ({progressPct}%)
-                        </span>
+                    {/* ADVANCE PAYMENT DETAILS & ACTION CARD (SHOWN WHEN PAYMENT HAS NOT COMPLETED YET) */}
+                    {isAdvancePending && (
+                      <div className="active-advance-payment-container my-1">
+                        <AdvancePaymentCard
+                          request={req}
+                          role="landowner"
+                          onRecordPayment={(opts) => setSelectedRecordPaymentModal({ req, mode: 'advance', defaultAmount: advanceAmount, ...(opts || {}) })}
+                          onOpenStages={() => setSelectedStageViewerModal(req)}
+                        />
                       </div>
+                    )}
 
-                      <div className="active-progress-track">
-                        <div className="active-progress-fill" style={{ width: `${progressPct}%` }} />
-                      </div>
+                    {/* MILESTONE COMPLETION SECTION: ONLY SHOW ACTIVE TRACKER WHEN CONTRACTOR HAS STARTED WORK */}
+                    {isWorkStarted ? (
+                      <>
+                        <div className="active-milestones-section">
+                          <div className="active-milestones-header">
+                            <span className="active-milestones-title">
+                              <Layers size={15} className="text-emerald-400" />
+                              Milestone Completion Progress
+                            </span>
+                            <span className="active-milestones-count-pill">
+                              {verifiedCount} of 4 Stages Verified ({progressPct}%)
+                            </span>
+                          </div>
 
-                      <div className="active-milestones-grid">
-                        {stagesConfig.map((stage) => {
-                          const stStatus = getStageStatus(stage.id);
-                          const isVerified = stStatus === 'VERIFIED';
-                          const isSubmitted = stStatus === 'SUBMITTED';
-                          const isInProg = stStatus === 'IN_PROGRESS';
-                          const stData = stagesData[stage.id] || {};
-                          const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
+                          <div className="active-progress-track">
+                            <div className="active-progress-fill" style={{ width: `${progressPct}%` }} />
+                          </div>
 
-                          const cardStatusClass = isVerified
-                            ? 'status-verified'
-                            : isInProg
-                              ? 'status-in-progress'
-                              : isSubmitted
-                                ? 'status-submitted'
-                                : 'status-pending';
+                          <div className="active-milestones-grid">
+                            {stagesConfig.map((stage) => {
+                              const stStatus = getStageStatus(stage.id);
+                              const isVerified = stStatus === 'VERIFIED';
+                              const isSubmitted = stStatus === 'SUBMITTED';
+                              const isInProg = stStatus === 'IN_PROGRESS';
+                              const stData = stagesData[stage.id] || {};
+                              const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
 
-                          const badgeStatusClass = isVerified
-                            ? 'badge-verified'
-                            : isInProg
-                              ? 'badge-in-progress'
-                              : isSubmitted
-                                ? 'badge-submitted'
-                                : 'badge-pending';
+                              const cardStatusClass = isVerified
+                                ? 'status-verified'
+                                : isInProg
+                                  ? 'status-in-progress'
+                                  : isSubmitted
+                                    ? 'status-submitted'
+                                    : 'status-pending';
 
-                          const badgeLabel = isVerified
-                            ? '✓ Verified'
-                            : isSubmitted
-                              ? 'Under Review'
-                              : isInProg
-                                ? 'In Progress'
-                                : 'Pending';
+                              const badgeStatusClass = isVerified
+                                ? 'badge-verified'
+                                : isInProg
+                                  ? 'badge-in-progress'
+                                  : isSubmitted
+                                    ? 'badge-submitted'
+                                    : 'badge-pending';
 
-                          return (
-                            <div
-                              key={stage.id}
-                              onClick={() => setSelectedStageViewerModal(req)}
-                              className={`active-milestone-card ${cardStatusClass}`}
-                              title="Click to inspect stage evidence & logs"
-                            >
-                              <div className="active-stage-top">
-                                <span className="active-stage-num">Stage {stage.num}</span>
-                                <span className={`active-stage-status-badge ${badgeStatusClass}`}>
-                                  {badgeLabel}
-                                </span>
-                              </div>
-                              <div>
-                                <h5 className="active-stage-title">{stage.title}</h5>
-                                <p className="active-stage-desc">{stage.desc}</p>
-                              </div>
-                              <div className="active-stage-bottom">
-                                <span className={`active-stage-evidence ${mediaCount > 0 ? 'has-media' : ''}`}>
-                                  <Camera size={11} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
-                                  <span>{mediaCount > 0 ? `${mediaCount} Evidence Files` : 'Awaiting upload'}</span>
-                                </span>
-                                <span className="active-stage-inspect-cta">
-                                  Inspect &rarr;
-                                </span>
-                              </div>
+                              const badgeLabel = isVerified
+                                ? '✓ Verified'
+                                : isSubmitted
+                                  ? 'Under Review'
+                                  : isInProg
+                                    ? 'In Progress'
+                                    : 'Pending';
+
+                              return (
+                                <div
+                                  key={stage.id}
+                                  onClick={() => setSelectedStageViewerModal(req)}
+                                  className={`active-milestone-card ${cardStatusClass}`}
+                                  title="Click to inspect stage evidence & logs"
+                                >
+                                  <div className="active-stage-top">
+                                    <span className="active-stage-num">Stage {stage.num}</span>
+                                    <span className={`active-stage-status-badge ${badgeStatusClass}`}>
+                                      {badgeLabel}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <h5 className="active-stage-title">{stage.title}</h5>
+                                    <p className="active-stage-desc">{stage.desc}</p>
+                                  </div>
+                                  <div className="active-stage-bottom">
+                                    <span className={`active-stage-evidence ${mediaCount > 0 ? 'has-media' : ''}`}>
+                                      <Camera size={11} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
+                                      <span>{mediaCount > 0 ? `${mediaCount} Evidence Files` : 'Awaiting upload'}</span>
+                                    </span>
+                                    <span className="active-stage-inspect-cta">
+                                      Inspect &rarr;
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Live Work Evidence Inspection Callout */}
+                        <div className="active-evidence-banner">
+                          <div className="active-evidence-info">
+                            <div className="active-evidence-icon-wrap">
+                              <Camera size={20} />
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Live Work Evidence Inspection Callout */}
-                    <div className="active-evidence-banner">
-                      <div className="active-evidence-info">
-                        <div className="active-evidence-icon-wrap">
-                          <Camera size={20} />
+                            <div>
+                              <span className="active-evidence-title">
+                                View Live Work Status &amp; Field Evidence Uploaded by Contractor
+                              </span>
+                              <span className="active-evidence-subtitle">
+                                Inspect real-time site photos, equipment checklist, safety compliance logs, and cut logs uploaded directly from your parcel.
+                              </span>
+                            </div>
+                          </div>
+                          <div className="active-evidence-actions">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedStageViewerModal(req)}
+                              className="active-spotlight-evidence-btn"
+                            >
+                              <Camera size={14} />
+                              <span>View Work Status</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/landowner/harvest-operations?requestId=${reqId}`)}
+                              className="active-spotlight-operations-btn"
+                            >
+                              <span>Operations Page</span>
+                              <ChevronRight size={14} />
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <span className="active-evidence-title">
-                            View Live Work Status &amp; Field Evidence Uploaded by Contractor
-                          </span>
-                          <span className="active-evidence-subtitle">
-                            Inspect real-time site photos, equipment checklist, safety compliance logs, and cut logs uploaded directly from your parcel.
-                          </span>
+                      </>
+                    ) : (
+                      /* CONTRACTOR HAS NOT STARTED HARVEST WORK YET */
+                      <div className="active-harvest-not-started-banner">
+                        <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
+                          <div className="flex items-start gap-3.5 min-w-0">
+                            <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 shadow-inner">
+                              <CalendarClock size={24} />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                  Contractor Mobilization Pending
+                                </span>
+                                <span className="text-xs text-slate-300 font-medium">
+                                  Scheduled Start Date: <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • {jobDuration}
+                                </span>
+                              </div>
+                              <h4 className="text-white text-base sm:text-lg font-bold">
+                                Contractor Has Not Started Harvest Operations Yet
+                              </h4>
+                              <p className="text-slate-300 text-xs mt-1 leading-relaxed max-w-2xl">
+                                Assigned contractor <strong className="text-emerald-300 font-semibold">{cName}</strong> and field crew have not commenced on-site tree felling or processing yet. The live 4-stage execution tracker and field photo evidence logs will activate automatically as soon as the contractor arrives on-site and initiates Stage 1.
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/landowner/harvest-operations?requestId=${reqId}`)}
+                              className="active-spotlight-operations-btn"
+                              title="Open Harvest Operations Page"
+                            >
+                              <span>Operations Hub</span>
+                              <ChevronRight size={14} />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="active-evidence-actions">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStageViewerModal(req)}
-                          className="active-spotlight-evidence-btn"
-                        >
-                          <Camera size={14} />
-                          <span>View Work Status</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/landowner/harvest-operations?requestId=${reqId}`)}
-                          className="active-spotlight-operations-btn"
-                        >
-                          <span>Operations Page</span>
-                          <ChevronRight size={14} />
-                        </button>
-                      </div>
-                    </div>
+                    )}
 
                     {/* Pre-conditions Verified & Quick Access Bar */}
                     <div className="active-spotlight-footer">
@@ -1411,8 +1543,17 @@ const LandownerDashboard = () => {
                         </span>
                         <span className="active-check-divider">•</span>
                         <span className="active-check-item">
-                          <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
-                          <span>{isPurchase ? (req.contractor_paid || req.is_advance_verified ? `₹ ${totalQuoteVal.toLocaleString('en-IN')} Escrow Secured` : `₹ ${totalQuoteVal.toLocaleString('en-IN')} Payout Agreed`) : `₹ ${advanceAmount.toLocaleString('en-IN')} Advance Verified`}</span>
+                          {isAdvanceVerified ? (
+                            <>
+                              <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                              <span>{isPurchase ? (req.contractor_paid || req.is_advance_verified ? `₹ ${totalQuoteVal.toLocaleString('en-IN')} Escrow Secured` : `₹ ${totalQuoteVal.toLocaleString('en-IN')} Payout Agreed`) : `₹ ${advanceAmount.toLocaleString('en-IN')} Advance Verified`}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Clock size={14} className="text-amber-400 shrink-0 font-extrabold" />
+                              <span className="text-amber-300 font-medium">₹ {advanceAmount.toLocaleString('en-IN')} Advance Payment Pending</span>
+                            </>
+                          )}
                         </span>
                       </div>
 
@@ -1450,17 +1591,30 @@ const LandownerDashboard = () => {
                             )}
                           </div>
                         ) : (
-                          (isCompleted || verifiedCount === 4) && remainingBal > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal })}
-                              className="active-spotlight-link-btn !bg-emerald-500 !text-slate-950 font-black hover:!bg-emerald-400 shadow-md shadow-emerald-500/20"
-                              title="Pay final contract settlement"
-                            >
-                              <CreditCard size={14} />
-                              <span>Pay Settlement ({formatINR(remainingBal)})</span>
-                            </button>
-                          )
+                          <>
+                            {isAdvancePending && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecordPaymentModal({ req, mode: 'advance', defaultAmount: advanceAmount, initialTab: 'razorpay' })}
+                                className="active-spotlight-link-btn !bg-amber-500 !text-slate-950 font-black hover:!bg-amber-400 shadow-md shadow-amber-500/20"
+                                title="Complete Mobilization Advance Payment"
+                              >
+                                <CreditCard size={14} />
+                                <span>Pay Advance ({formatINR(advanceAmount)})</span>
+                              </button>
+                            )}
+                            {(isCompleted || verifiedCount === 4) && remainingBal > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRecordPaymentModal({ req, mode: 'final', defaultAmount: remainingBal })}
+                                className="active-spotlight-link-btn !bg-emerald-500 !text-slate-950 font-black hover:!bg-emerald-400 shadow-md shadow-emerald-500/20"
+                                title="Pay final contract settlement"
+                              >
+                                <CreditCard size={14} />
+                                <span>Pay Settlement ({formatINR(remainingBal)})</span>
+                              </button>
+                            )}
+                          </>
                         )}
                         <button
                           type="button"
@@ -2703,7 +2857,7 @@ const LandownerDashboard = () => {
             const advReq = activeSpotlight.advance_payment_request || assDoc.advance_payment_request;
             const advanceAmount = Number(
               advReq?.advance_amount ||
-              (activeSpotlight.total_verified_paid ? activeSpotlight.total_verified_paid : (isPurchase ? 0 : 38500))
+              (activeSpotlight.total_verified_paid ? activeSpotlight.total_verified_paid : (isPurchase ? 0 : 33000))
             );
             const remainingBal = Number(
               advReq?.remaining_balance !== undefined && advReq?.remaining_balance !== null
@@ -2712,6 +2866,14 @@ const LandownerDashboard = () => {
                   ? activeSpotlight.remaining_balance
                   : (isPurchase ? totalQuoteVal : Math.max(0, totalQuoteVal - advanceAmount))
             );
+
+            const isAdvanceVerified = Boolean(
+              activeSpotlight.is_advance_verified ||
+              activeSpotlight.advance_payment_status === 'VERIFIED' ||
+              activeSpotlight.payment_status === 'VERIFIED' ||
+              (activeSpotlight.total_verified_paid && activeSpotlight.total_verified_paid >= advanceAmount)
+            );
+            const isAdvancePending = !isPurchase && !isAdvanceVerified && Boolean(advReq || advanceAmount > 0);
 
             const stagesConfig = [
               { id: 'stage_1', num: 1, title: 'Mobilization & Safety', desc: 'Site prep & boundary safety' },
@@ -2724,7 +2886,7 @@ const LandownerDashboard = () => {
             const getStageStatus = (sId) => {
               const st = stagesData[sId];
               if (!st) {
-                return sId === (activeSpotlight.current_harvest_stage || 'stage_1') ? 'IN_PROGRESS' : 'PENDING';
+                return (activeSpotlight.status === 'IN_PROGRESS' && sId === (activeSpotlight.current_harvest_stage || 'stage_1')) ? 'IN_PROGRESS' : 'PENDING';
               }
               const raw = String(st.status || '').toUpperCase().trim();
               if (raw === 'VERIFIED' || raw === 'COMPLETED') return 'VERIFIED';
@@ -2733,8 +2895,20 @@ const LandownerDashboard = () => {
               return 'PENDING';
             };
 
+            const hasActiveOrVerifiedStages = Object.values(stagesData).some(s => {
+              const st = String(s?.status || '').toUpperCase().trim();
+              return st === 'IN_PROGRESS' || st === 'ACTIVE' || st === 'SUBMITTED' || st === 'SUBMITTED_FOR_VERIFICATION' || st === 'VERIFIED' || st === 'COMPLETED';
+            });
+
+            const isWorkStarted = Boolean(
+              activeSpotlight.status === 'IN_PROGRESS' ||
+              activeSpotlight.status === 'COMPLETED' ||
+              Boolean(activeSpotlight.current_harvest_stage) ||
+              hasActiveOrVerifiedStages
+            );
+
             const verifiedCount = stagesConfig.filter(s => getStageStatus(s.id) === 'VERIFIED').length;
-            const progressPct = activeSpotlight.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : 15))));
+            const progressPct = activeSpotlight.status === 'COMPLETED' ? 100 : (verifiedCount === 4 ? 100 : (verifiedCount === 3 ? 75 : (verifiedCount === 2 ? 50 : (verifiedCount === 1 ? 25 : (isWorkStarted ? 15 : 0)))));
             const isCompleted = activeSpotlight.status === 'COMPLETED' || verifiedCount === 4;
             const isSettlementDue = (isCompleted || verifiedCount === 4) && remainingBal > 0;
 
@@ -2748,27 +2922,48 @@ const LandownerDashboard = () => {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                        <span className="active-spotlight-status-pill">
-                          <span className="live-pulse-dot" />
-                          {activeSpotlight.status === 'COMPLETED' ? '100% Completed' : activeSpotlight.status === 'IN_PROGRESS' ? 'Harvesting Operations In Progress' : 'Operation Ready'}
+                        <span className={`active-spotlight-status-pill ${!isWorkStarted ? '!bg-amber-500/15 !text-amber-300 !border-amber-500/40' : ''}`}>
+                          {isWorkStarted ? (
+                            <>
+                              <span className="live-pulse-dot" />
+                              {activeSpotlight.status === 'COMPLETED' ? '100% Completed' : 'Harvesting Operations In Progress'}
+                            </>
+                          ) : (
+                            <>
+                              <Clock size={12} className="text-amber-400 animate-pulse shrink-0" />
+                              <span>Scheduled • Work Not Started</span>
+                            </>
+                          )}
                         </span>
-                        <span className="active-spotlight-sub-pill">
-                          <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
-                          {isPurchase
-                            ? 'Timber Purchase Agreement Executed'
-                            : 'Agreement Signed & Mobilization Advance Verified'}
+                        <span className={`active-spotlight-sub-pill ${isAdvancePending ? '!bg-amber-500/10 !text-amber-300 !border-amber-500/30' : ''}`}>
+                          {isPurchase ? (
+                            <>
+                              <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                              <span>Timber Purchase Agreement Executed</span>
+                            </>
+                          ) : isAdvanceVerified ? (
+                            <>
+                              <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />
+                              <span>Agreement Signed &amp; Mobilization Advance Verified</span>
+                            </>
+                          ) : (
+                            <>
+                              <Clock size={13} className="text-amber-400 shrink-0" />
+                              <span>Agreement Signed • Mobilization Advance Pending</span>
+                            </>
+                          )}
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap shrink-0">
                           Job #{String(spotlightId).substring(0, 8).toUpperCase()}
                         </span>
                       </div>
                       <h2 className="active-spotlight-heading">
-                        {activeSpotlight.propertyName || activeSpotlight.property_name || 'Timber Harvest Operation'} — {isPurchase ? 'Active Timber Purchase & Operations' : 'Active Harvest Operations'}
+                        {activeSpotlight.propertyName || activeSpotlight.property_name || 'Timber Harvest Operation'} — {isPurchase ? 'Active Timber Purchase & Operations' : (isWorkStarted ? 'Active Harvest Operations' : 'Scheduled Harvest Operations')}
                       </h2>
                       <p className="active-spotlight-subtitle">
                         {isPurchase
                           ? <>Assigned Timber Buyer: <strong className="text-emerald-400 font-bold">{cName}</strong> • Timber Purchase Agreement Executed • Direct Landowner Payout: <strong className="text-emerald-300 font-mono">{formatINR(totalQuoteVal)}</strong></>
-                          : <>Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span></>}
+                          : <>Assigned Contractor: <strong className="text-emerald-400 font-bold">{cName}</strong> • On-site operations scheduled from <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • <span className="text-slate-300">{jobDuration}</span> • {!isWorkStarted ? <strong className="text-amber-300">Contractor has not started field operations yet</strong> : <span className="text-emerald-400">Field work active</span>}</>}
                       </p>
                     </div>
                   </div>
@@ -2789,27 +2984,42 @@ const LandownerDashboard = () => {
                         )}
                       </div>
                     ) : (
-                      isSettlementDue && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
-                          className="active-spotlight-pay-btn"
-                          title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
-                        >
-                          <CreditCard size={15} />
-                          <span>Pay Balance ({formatINR(remainingBal)})</span>
-                        </button>
-                      )
+                      <>
+                        {isAdvancePending && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'advance', defaultAmount: advanceAmount, initialTab: 'razorpay' })}
+                            className="active-spotlight-pay-btn !bg-gradient-to-r !from-amber-500 !to-emerald-400 !border-amber-400 shadow-amber-500/20"
+                            title={`Pay mobilization advance of ${formatINR(advanceAmount)} via Razorpay or Bank Transfer`}
+                          >
+                            <CreditCard size={15} />
+                            <span>Pay Advance ({formatINR(advanceAmount)})</span>
+                          </button>
+                        )}
+                        {isSettlementDue && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'final', defaultAmount: remainingBal, initialTab: 'razorpay' })}
+                            className="active-spotlight-pay-btn"
+                            title={`Pay final post-harvest settlement of ${formatINR(remainingBal)}`}
+                          >
+                            <CreditCard size={15} />
+                            <span>Pay Balance ({formatINR(remainingBal)})</span>
+                          </button>
+                        )}
+                      </>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStageViewerModal(activeSpotlight)}
-                      className="active-spotlight-evidence-btn"
-                      title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
-                    >
-                      <Camera size={15} />
-                      <span>View Evidence</span>
-                    </button>
+                    {isWorkStarted && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStageViewerModal(activeSpotlight)}
+                        className="active-spotlight-evidence-btn"
+                        title="Inspect live stage photos, videos, and field measurement logs uploaded by the contractor"
+                      >
+                        <Camera size={15} />
+                        <span>View Evidence</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
@@ -2982,13 +3192,35 @@ const LandownerDashboard = () => {
                         <span className="active-stat-hint">{propType}</span>
                       </div>
 
-                      <div className="active-spotlight-stat active-stat-advance">
-                        <span className="active-stat-label">Mobilization Advance Verified</span>
-                        <div className="active-stat-value text-emerald-400 flex items-center gap-1.5">
-                          <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
-                          <span>{formatINR(advanceAmount)}</span>
+                      <div className={`active-spotlight-stat ${isAdvanceVerified ? 'active-stat-advance' : 'active-stat-advance-pending'}`}>
+                        <span className="active-stat-label">
+                          {isAdvanceVerified ? 'Mobilization Advance Verified' : 'Mobilization Advance Due'}
+                        </span>
+                        <div className={`active-stat-value flex items-center gap-1.5 ${isAdvanceVerified ? 'text-emerald-400' : 'text-amber-400 font-black'}`}>
+                          {isAdvanceVerified ? (
+                            <>
+                              <CheckCircle2 size={17} className="text-emerald-400 shrink-0" />
+                              <span>{formatINR(advanceAmount)}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Clock size={17} className="text-amber-400 shrink-0" />
+                              <span>{formatINR(advanceAmount)}</span>
+                            </>
+                          )}
                         </div>
-                        <span className="active-stat-hint text-emerald-300/90 font-medium">Verified by {cName}</span>
+                        <span className={`active-stat-hint ${isAdvanceVerified ? 'text-emerald-300/90 font-medium' : 'text-amber-300/90 font-medium'}`}>
+                          {isAdvanceVerified ? `Verified by ${cName}` : 'Awaiting Landowner Payment (30%)'}
+                        </span>
+                        {isAdvancePending && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'advance', defaultAmount: advanceAmount, initialTab: 'razorpay' })}
+                            className="mt-2 w-full py-1.5 px-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer transition-all"
+                          >
+                            <CreditCard size={12} /> Pay ₹ {advanceAmount.toLocaleString('en-IN')} &rarr;
+                          </button>
+                        )}
                       </div>
 
                       <div className={`active-spotlight-stat ${isSettlementDue ? '!border-amber-500/60 !bg-amber-950/25' : ''}`}>
@@ -3024,11 +3256,11 @@ const LandownerDashboard = () => {
                       </div>
 
                       <div className="active-spotlight-stat">
-                        <span className="active-stat-label">Purchased Timber Volume</span>
+                        <span className="active-stat-label">Harvest Scope &amp; Crew</span>
                         <div className="active-stat-value text-white text-base font-bold">
-                          {scopeVolume} m³ Standing Timber
+                          {scopeVolume} m³ • {crewSize} Crew
                         </div>
-                        <span className="active-stat-hint">Direct Standing Timber Sale • Buyer Removal</span>
+                        <span className="active-stat-hint">{jobDuration} • Starts {formatDateDMY(opStartDate)}</span>
                       </div>
                     </>
                   )}
@@ -3078,121 +3310,175 @@ const LandownerDashboard = () => {
                   </div>
                 )}
 
-                {/* Milestone Completion Progress & 4-Stage Interactive Stepper */}
-                <div className="active-milestones-section">
-                  <div className="active-milestones-header">
-                    <span className="active-milestones-title">
-                      <Layers size={15} className="text-emerald-400" />
-                      Milestone Completion Progress
-                    </span>
-                    <span className="active-milestones-count-pill">
-                      {verifiedCount} of 4 Stages Verified ({progressPct}%)
-                    </span>
+                {/* ADVANCE PAYMENT DETAILS & ACTION CARD (SHOWN WHEN PAYMENT HAS NOT COMPLETED YET) */}
+                {isAdvancePending && (
+                  <div className="active-advance-payment-container my-1">
+                    <AdvancePaymentCard
+                      request={activeSpotlight}
+                      role="landowner"
+                      onRecordPayment={(opts) => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'advance', defaultAmount: advanceAmount, ...(opts || {}) })}
+                      onOpenStages={() => setSelectedStageViewerModal(activeSpotlight)}
+                    />
                   </div>
+                )}
 
-                  <div className="active-progress-track">
-                    <div className="active-progress-fill" style={{ width: `${progressPct}%` }} />
-                  </div>
+                {/* MILESTONE COMPLETION SECTION: ONLY SHOW ACTIVE TRACKER WHEN CONTRACTOR HAS STARTED WORK */}
+                {isWorkStarted ? (
+                  <>
+                    <div className="active-milestones-section">
+                      <div className="active-milestones-header">
+                        <span className="active-milestones-title">
+                          <Layers size={15} className="text-emerald-400" />
+                          Milestone Completion Progress
+                        </span>
+                        <span className="active-milestones-count-pill">
+                          {verifiedCount} of 4 Stages Verified ({progressPct}%)
+                        </span>
+                      </div>
 
-                  <div className="active-milestones-grid">
-                    {stagesConfig.map((stage) => {
-                      const stStatus = getStageStatus(stage.id);
-                      const isVerified = stStatus === 'VERIFIED';
-                      const isSubmitted = stStatus === 'SUBMITTED';
-                      const isInProg = stStatus === 'IN_PROGRESS';
-                      const stData = stagesData[stage.id] || {};
-                      const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
+                      <div className="active-progress-track">
+                        <div className="active-progress-fill" style={{ width: `${progressPct}%` }} />
+                      </div>
 
-                      const cardStatusClass = isVerified
-                        ? 'status-verified'
-                        : isInProg
-                          ? 'status-in-progress'
-                          : isSubmitted
-                            ? 'status-submitted'
-                            : 'status-pending';
+                      <div className="active-milestones-grid">
+                        {stagesConfig.map((stage) => {
+                          const stStatus = getStageStatus(stage.id);
+                          const isVerified = stStatus === 'VERIFIED';
+                          const isSubmitted = stStatus === 'SUBMITTED';
+                          const isInProg = stStatus === 'IN_PROGRESS';
+                          const stData = stagesData[stage.id] || {};
+                          const mediaCount = Array.isArray(stData.media) ? stData.media.length : 0;
 
-                      const badgeStatusClass = isVerified
-                        ? 'badge-verified'
-                        : isInProg
-                          ? 'badge-in-progress'
-                          : isSubmitted
-                            ? 'badge-submitted'
-                            : 'badge-pending';
+                          const cardStatusClass = isVerified
+                            ? 'status-verified'
+                            : isInProg
+                              ? 'status-in-progress'
+                              : isSubmitted
+                                ? 'status-submitted'
+                                : 'status-pending';
 
-                      const badgeLabel = isVerified
-                        ? '✓ Verified'
-                        : isSubmitted
-                          ? 'Under Review'
-                          : isInProg
-                            ? 'In Progress'
-                            : 'Pending';
+                          const badgeStatusClass = isVerified
+                            ? 'badge-verified'
+                            : isInProg
+                              ? 'badge-in-progress'
+                              : isSubmitted
+                                ? 'badge-submitted'
+                                : 'badge-pending';
 
-                      return (
-                        <div
-                          key={stage.id}
-                          onClick={() => setSelectedStageViewerModal(activeSpotlight)}
-                          className={`active-milestone-card ${cardStatusClass}`}
-                          title="Click to inspect stage evidence & logs"
-                        >
-                          <div className="active-stage-top">
-                            <span className="active-stage-num">Stage {stage.num}</span>
-                            <span className={`active-stage-status-badge ${badgeStatusClass}`}>
-                              {badgeLabel}
-                            </span>
-                          </div>
-                          <div>
-                            <h5 className="active-stage-title">{stage.title}</h5>
-                            <p className="active-stage-desc">{stage.desc}</p>
-                          </div>
-                          <div className="active-stage-bottom">
-                            <span className={`active-stage-evidence ${mediaCount > 0 ? 'has-media' : ''}`}>
-                              <Camera size={11} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
-                              <span>{mediaCount > 0 ? `${mediaCount} Evidence Files` : 'Awaiting upload'}</span>
-                            </span>
-                            <span className="active-stage-inspect-cta">
-                              Inspect &rarr;
-                            </span>
-                          </div>
+                          const badgeLabel = isVerified
+                            ? '✓ Verified'
+                            : isSubmitted
+                              ? 'Under Review'
+                              : isInProg
+                                ? 'In Progress'
+                                : 'Pending';
+
+                          return (
+                            <div
+                              key={stage.id}
+                              onClick={() => setSelectedStageViewerModal(activeSpotlight)}
+                              className={`active-milestone-card ${cardStatusClass}`}
+                              title="Click to inspect stage evidence & logs"
+                            >
+                              <div className="active-stage-top">
+                                <span className="active-stage-num">Stage {stage.num}</span>
+                                <span className={`active-stage-status-badge ${badgeStatusClass}`}>
+                                  {badgeLabel}
+                                </span>
+                              </div>
+                              <div>
+                                <h5 className="active-stage-title">{stage.title}</h5>
+                                <p className="active-stage-desc">{stage.desc}</p>
+                              </div>
+                              <div className="active-stage-bottom">
+                                <span className={`active-stage-evidence ${mediaCount > 0 ? 'has-media' : ''}`}>
+                                  <Camera size={11} className={mediaCount > 0 ? 'text-emerald-400' : 'text-slate-500'} />
+                                  <span>{mediaCount > 0 ? `${mediaCount} Evidence Files` : 'Awaiting upload'}</span>
+                                </span>
+                                <span className="active-stage-inspect-cta">
+                                  Inspect &rarr;
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Live Work Evidence Inspection Callout */}
+                    <div className="active-evidence-banner">
+                      <div className="active-evidence-info">
+                        <div className="active-evidence-icon-wrap">
+                          <Camera size={20} />
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Live Work Evidence Inspection Callout */}
-                <div className="active-evidence-banner">
-                  <div className="active-evidence-info">
-                    <div className="active-evidence-icon-wrap">
-                      <Camera size={20} />
+                        <div>
+                          <span className="active-evidence-title">
+                            View Live Work Status &amp; Field Evidence Uploaded by Contractor
+                          </span>
+                          <span className="active-evidence-subtitle">
+                            Inspect real-time site photos, equipment checklist, safety compliance logs, and cut logs uploaded directly from your parcel.
+                          </span>
+                        </div>
+                      </div>
+                      <div className="active-evidence-actions">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStageViewerModal(activeSpotlight)}
+                          className="active-spotlight-evidence-btn"
+                        >
+                          <Camera size={14} />
+                          <span>View Work Status</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
+                          className="active-spotlight-operations-btn"
+                        >
+                          <span>Operations Page</span>
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <span className="active-evidence-title">
-                        View Live Work Status &amp; Field Evidence Uploaded by Contractor
-                      </span>
-                      <span className="active-evidence-subtitle">
-                        Inspect real-time site photos, equipment checklist, safety compliance logs, and cut logs uploaded directly from your parcel.
-                      </span>
+                  </>
+                ) : (
+                  /* CONTRACTOR HAS NOT STARTED HARVEST WORK YET */
+                  <div className="active-harvest-not-started-banner">
+                    <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-start gap-3.5 min-w-0">
+                        <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 shadow-inner">
+                          <CalendarClock size={24} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              Contractor Mobilization Pending
+                            </span>
+                            <span className="text-xs text-slate-300 font-medium">
+                              Scheduled Start Date: <strong className="text-white">{formatDateDMY(opStartDate)}</strong> • {jobDuration}
+                            </span>
+                          </div>
+                          <h4 className="text-white text-base sm:text-lg font-bold">
+                            Contractor Has Not Started Harvest Operations Yet
+                          </h4>
+                          <p className="text-slate-300 text-xs mt-1 leading-relaxed max-w-2xl">
+                            Assigned contractor <strong className="text-emerald-300 font-semibold">{cName}</strong> and field crew have not commenced on-site tree felling or processing yet. The live 4-stage execution tracker and field photo evidence logs will activate automatically as soon as the contractor arrives on-site and initiates Stage 1.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
+                          className="active-spotlight-operations-btn"
+                          title="Open Harvest Operations Page"
+                        >
+                          <span>Operations Hub</span>
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="active-evidence-actions">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStageViewerModal(activeSpotlight)}
-                      className="active-spotlight-evidence-btn"
-                    >
-                      <Camera size={14} />
-                      <span>View Work Status</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/landowner/harvest-operations?requestId=${spotlightId}`)}
-                      className="active-spotlight-operations-btn"
-                    >
-                      <span>Operations Page</span>
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </div>
+                )}
 
                 {/* Pre-conditions Verified & Quick Access Bar */}
                 <div className="active-spotlight-footer">
@@ -3208,8 +3494,17 @@ const LandownerDashboard = () => {
                     </span>
                     <span className="active-check-divider">•</span>
                     <span className="active-check-item">
-                      <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
-                      <span>{isPurchase ? (activeSpotlight.contractor_paid || activeSpotlight.is_advance_verified ? `₹ ${totalQuoteVal.toLocaleString('en-IN')} Escrow Secured` : `₹ ${totalQuoteVal.toLocaleString('en-IN')} Payout Agreed`) : `₹ ${advanceAmount.toLocaleString('en-IN')} Advance Verified`}</span>
+                      {isAdvanceVerified ? (
+                        <>
+                          <Check size={14} className="text-emerald-400 shrink-0 font-extrabold" />
+                          <span>{isPurchase ? (activeSpotlight.contractor_paid || activeSpotlight.is_advance_verified ? `₹ ${totalQuoteVal.toLocaleString('en-IN')} Escrow Secured` : `₹ ${totalQuoteVal.toLocaleString('en-IN')} Payout Agreed`) : `₹ ${advanceAmount.toLocaleString('en-IN')} Advance Verified`}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Clock size={14} className="text-amber-400 shrink-0 font-extrabold" />
+                          <span className="text-amber-300 font-medium">₹ {advanceAmount.toLocaleString('en-IN')} Advance Payment Pending</span>
+                        </>
+                      )}
                     </span>
                   </div>
 
@@ -3232,6 +3527,17 @@ const LandownerDashboard = () => {
                       <FileText size={14} />
                       <span>Assessment Certificate</span>
                     </button>
+                    {isAdvancePending && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRecordPaymentModal({ req: activeSpotlight, mode: 'advance', defaultAmount: advanceAmount, initialTab: 'razorpay' })}
+                        className="active-spotlight-link-btn !bg-amber-500 !text-slate-950 font-black hover:!bg-amber-400 shadow-md shadow-amber-500/20"
+                        title="Complete Mobilization Advance Payment"
+                      >
+                        <CreditCard size={14} />
+                        <span>Pay Advance ({formatINR(advanceAmount)})</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => navigate(`/landowner/harvest-requests?requestId=${spotlightId}`)}

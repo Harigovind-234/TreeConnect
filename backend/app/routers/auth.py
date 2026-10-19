@@ -91,8 +91,10 @@ def login_user(credentials: UserLogin):
 
                 user_data = {
                     "id": user_id,
-                    "name": existing_user.get("fullName") or existing_user.get("companyName") or clean_email,
-                    "fullName": existing_user.get("fullName", ""),
+                    "name": existing_user.get("contactPerson") or existing_user.get("name") or existing_user.get("fullName") or clean_email,
+                    "fullName": existing_user.get("fullName") or existing_user.get("contactPerson") or "",
+                    "contactPerson": existing_user.get("contactPerson", ""),
+                    "companyName": existing_user.get("companyName") or (existing_user.get("fullName") if existing_user.get("contactPerson") else ""),
                     "email": clean_email,
                     "role": user_role,
                     "phone": existing_user.get("phone", ""),
@@ -104,6 +106,29 @@ def login_user(credentials: UserLogin):
                     "pinCode": existing_user.get("postalCode") or existing_user.get("pinCode") or "",
                     "localBody": existing_user.get("localBody") or existing_user.get("panchayat") or "",
                     "village": existing_user.get("village", ""),
+                    "businessType": existing_user.get("businessType") or existing_user.get("buyerType") or "",
+                    "buyerType": existing_user.get("buyerType") or existing_user.get("businessType") or "",
+                    "gstNumber": existing_user.get("gstNumber", ""),
+                    "yearsOfExperience": existing_user.get("yearsOfExperience", ""),
+                    "serviceArea": existing_user.get("serviceArea", ""),
+                    "idProofType": existing_user.get("idProofType", ""),
+                    "idProofDocument": existing_user.get("idProofDocument", ""),
+                    "idProofUrl": existing_user.get("idProofUrl", ""),
+                    "supportingDocument": existing_user.get("supportingDocument", ""),
+                    "supportingUrl": existing_user.get("supportingUrl", ""),
+                    "forestLicenceDoc": existing_user.get("forestLicenceDoc", ""),
+                    "forestLicenceUrl": existing_user.get("forestLicenceUrl", ""),
+                    "tradeLicenceDoc": existing_user.get("tradeLicenceDoc", ""),
+                    "tradeLicenceUrl": existing_user.get("tradeLicenceUrl", ""),
+                    "gstDoc": existing_user.get("gstDoc", ""),
+                    "gstUrl": existing_user.get("gstUrl", ""),
+                    "businessCertDoc": existing_user.get("businessCertDoc", ""),
+                    "businessCertUrl": existing_user.get("businessCertUrl", ""),
+                    "landTaxInvoiceDoc": existing_user.get("landTaxInvoiceDoc", ""),
+                    "landTaxInvoiceUrl": existing_user.get("landTaxInvoiceUrl", ""),
+                    "avatar": existing_user.get("avatar") or existing_user.get("profilePicture") or "",
+                    "profilePicture": existing_user.get("profilePicture") or existing_user.get("avatar") or "",
+                    "bio": existing_user.get("bio", ""),
                     "isVerified": is_verified,
                     "status": user_status,
                     "fleet_equipment": existing_user.get("fleet_equipment", [])
@@ -428,8 +453,10 @@ def get_user_profile(email: Optional[str] = None, authorization: Optional[str] =
 
         user_data = {
             "id": str(existing_user.get("_id", "")),
-            "name": existing_user.get("fullName") or existing_user.get("companyName") or clean_email,
-            "fullName": existing_user.get("fullName", ""),
+            "name": existing_user.get("contactPerson") or existing_user.get("name") or existing_user.get("fullName") or clean_email,
+            "fullName": existing_user.get("fullName") or existing_user.get("contactPerson") or "",
+            "companyName": existing_user.get("companyName") or (existing_user.get("fullName") if existing_user.get("contactPerson") else ""),
+            "contactPerson": existing_user.get("contactPerson", ""),
             "email": clean_email,
             "role": existing_user.get("role", "landowner"),
             "phone": existing_user.get("phone", ""),
@@ -441,6 +468,33 @@ def get_user_profile(email: Optional[str] = None, authorization: Optional[str] =
             "pinCode": existing_user.get("postalCode") or existing_user.get("pinCode") or "",
             "localBody": existing_user.get("localBody") or existing_user.get("panchayat") or "",
             "village": existing_user.get("village", ""),
+            "businessType": existing_user.get("businessType") or existing_user.get("buyerType") or "",
+            "buyerType": existing_user.get("buyerType") or existing_user.get("businessType") or "",
+            "gstNumber": existing_user.get("gstNumber", ""),
+            "yearsOfExperience": existing_user.get("yearsOfExperience", ""),
+            "serviceArea": existing_user.get("serviceArea", ""),
+            "idProofType": existing_user.get("idProofType", ""),
+            "idProofDocument": existing_user.get("idProofDocument", ""),
+            "idProofUrl": existing_user.get("idProofUrl", ""),
+            "supportingDocument": existing_user.get("supportingDocument", ""),
+            "supportingUrl": existing_user.get("supportingUrl", ""),
+            "forestLicenceDoc": existing_user.get("forestLicenceDoc", ""),
+            "forestLicenceUrl": existing_user.get("forestLicenceUrl", ""),
+            "tradeLicenceDoc": existing_user.get("tradeLicenceDoc", ""),
+            "tradeLicenceUrl": existing_user.get("tradeLicenceUrl", ""),
+            "gstDoc": existing_user.get("gstDoc", ""),
+            "gstUrl": existing_user.get("gstUrl", ""),
+            "businessCertDoc": existing_user.get("businessCertDoc", ""),
+            "businessCertUrl": existing_user.get("businessCertUrl", ""),
+            "landTaxInvoiceDoc": existing_user.get("landTaxInvoiceDoc", ""),
+            "landTaxInvoiceUrl": existing_user.get("landTaxInvoiceUrl", ""),
+            "declarationAccepted": existing_user.get("declarationAccepted", False),
+            "preferredCommunication": existing_user.get("preferredCommunication", "Email"),
+            "language": existing_user.get("language", "English"),
+            "avatar": existing_user.get("avatar") or existing_user.get("profilePicture") or "",
+            "profilePicture": existing_user.get("profilePicture") or existing_user.get("avatar") or "",
+            "bio": existing_user.get("bio", ""),
+            "createdAt": existing_user.get("createdAt", ""),
             "isVerified": existing_user.get("isVerified", True),
             "status": existing_user.get("status", "Active"),
             "fleet_equipment": existing_user.get("fleet_equipment", []),
@@ -457,39 +511,93 @@ def get_user_profile(email: Optional[str] = None, authorization: Optional[str] =
             content={"message": f"Failed to fetch user profile: {str(e)}"}
         )
 
+@router.put("/user-profile")
+def update_user_profile(payload: dict, authorization: Optional[str] = Header(None)):
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        query_email = payload.get("email")
+        if not query_email and authorization and authorization.startswith("Bearer "):
+            token = authorization.split(" ")[1]
+            try:
+                decoded = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                query_email = decoded.get("email")
+            except JWTError:
+                pass
+
+        if not query_email:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"message": "Email is required to update profile"}
+            )
+
+        clean_email = query_email.strip().lower()
+        
+        # Fields allowed to be updated
+        allowed_keys = [
+            "fullName", "name", "phone", "contactPerson", "address", 
+            "district", "state", "country", "postalCode", "pinCode",
+            "localBody", "panchayat", "village", "bio", "businessType",
+            "buyerType", "gstNumber", "yearsOfExperience", "serviceArea",
+            "preferredCommunication", "language", "avatar", "profilePicture"
+        ]
+        
+        update_doc = {}
+        for key in allowed_keys:
+            if key in payload and payload[key] is not None:
+                update_doc[key] = payload[key]
+
+        if "fullName" in update_doc and "name" not in update_doc:
+            update_doc["name"] = update_doc["fullName"]
+        if "pinCode" in update_doc and "postalCode" not in update_doc:
+            update_doc["postalCode"] = update_doc["pinCode"]
+
+        if update_doc:
+            db.users.update_one({"email": clean_email}, {"$set": update_doc})
+
+        updated_user = db.users.find_one({"email": clean_email})
+        safe_user = {k: v for k, v in updated_user.items() if k != "password"} if updated_user else {}
+        if "_id" in safe_user:
+            safe_user["id"] = str(safe_user["_id"])
+            safe_user["_id"] = str(safe_user["_id"])
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Profile updated successfully", "user": safe_user}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to update user profile: {str(e)}"}
+        )
+
 @router.get("/approved-users")
 def get_approved_users():
     try:
         approved_users = []
         emails_seen = set()
 
-        # Always include primary platform admin account at the top
-        admin_email = "admintc@gmail.com"
-        approved_users.append({
-            "id": "usr_admin_01",
-            "name": "TreeConnect Admin",
-            "email": admin_email,
-            "role": "admin",
-            "status": "Active",
-            "isVerified": True
-        })
-        emails_seen.add(admin_email)
-
         if db is not None:
             try:
+                # Query verified and active users directly from MongoDB
                 db_users = list(db.users.find({
                     "$or": [
                         {"status": "Active"},
                         {"role": "admin"}
                     ]
                 }).max_time_ms(4000))
+
                 for u in db_users:
                     email = u.get("email", "").strip().lower()
-                    if not email or email in emails_seen:
+                    if not email or email in emails_seen or "@example.com" in email:
                         continue
-                    role = u.get("role", "landowner")
-                    status_val = u.get("status", "Pending")
-                    is_verified = u.get("isVerified", False)
+                    role = u.get("role", "landowner").lower()
+                    status_val = u.get("status", "Active")
+                    is_verified = u.get("isVerified", True)
 
                     # Include platform admin or accounts approved by admin
                     if role == "admin" or (status_val == "Active" and is_verified):
@@ -505,6 +613,22 @@ def get_approved_users():
                         emails_seen.add(email)
             except Exception as query_err:
                 print(f"[WARN] db.users query in get_approved_users timed out or failed: {query_err}")
+
+        # Fallback if admin is somehow missing from DB query
+        admin_email = "admintc@gmail.com"
+        if admin_email not in emails_seen:
+            approved_users.insert(0, {
+                "id": "usr_admin_01",
+                "name": "TreeConnect Admin",
+                "email": admin_email,
+                "role": "admin",
+                "status": "Active",
+                "isVerified": True
+            })
+
+        # Role priority ordering: Admin first, Landowner, Contractor, Buyer
+        role_priority = {"admin": 0, "landowner": 1, "contractor": 2, "buyer": 3}
+        approved_users.sort(key=lambda x: (role_priority.get(x.get("role", "").lower(), 99), x.get("name", "").lower()))
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
