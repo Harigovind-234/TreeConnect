@@ -152,7 +152,7 @@ const Sidebar = () => {
       { path: '/contractor/payments', label: 'Payment Details', icon: CreditCard },
     ],
     buyer: [
-      { path: '/buyer/dashboard', label: 'Procurement Hub', icon: LayoutDashboard },
+      { path: '/buyer/dashboard', label: 'Buyer Dashboard', icon: LayoutDashboard },
       { path: '/buyer/marketplace', label: 'Timber Marketplace', icon: ShoppingBag },
       { path: '/buyer/negotiations', label: 'My Negotiations', icon: Handshake },
       { path: '/buyer/orders', label: 'Purchase Orders', icon: FileText },

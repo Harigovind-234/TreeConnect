@@ -84,13 +84,19 @@ const PaymentsPage = () => {
                   .filter(p => p.status === 'COMPLETED' || p.status === 'VERIFIED' || p.status === 'PAID')
                   .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
                 const totalPendingForJob = Math.max(0, acceptedQuotation - totalPaidForJob);
+                const isJobFullySettled = Boolean(req.is_fully_paid || totalPendingForJob <= 0);
 
                 reqPayments.forEach(payment => {
+                  const isFinalPay = payment.payment_purpose === 'FINAL_PAYMENT' ||
+                    String(payment.reference_number || payment.ref || payment.transaction_reference || payment.payment_id || '').startsWith('PAY-FIN');
+                  const isTimber = payment.payment_purpose === 'TIMBER_PURCHASE_PAYOUT' || payment.payment_purpose === 'TIMBER_PURCHASE_SETTLEMENT';
+                  const paymentType = payment.type || (isTimber ? 'Timber Purchase Payout' : isFinalPay ? 'Final Contract Settlement' : 'Advance Mobilization');
+
                   extractedPayments.push({
                     id: payment.payment_id || payment.id || `txn_${Math.random().toString(36).substr(2, 9)}`,
                     date: payment.paid_at || payment.recorded_at || payment.created_at || req.updated_at,
                     amount: payment.amount || 0,
-                    type: payment.type || 'Advance Payment',
+                    type: paymentType,
                     status: (payment.status === 'VERIFIED' || payment.status === 'PAID') ? 'COMPLETED' : (payment.status || 'COMPLETED'),
                     jobName: req.property_details?.propertyName || req.propertyName || req.parcel || `Harvest Request #${String(req.id).slice(-6).toUpperCase()}`,
                     ref: payment.reference_number || payment.payment_id || payment.id || 'N/A',
@@ -99,6 +105,7 @@ const PaymentsPage = () => {
                     overallAmount: acceptedQuotation,
                     totalPaidForJob,
                     totalPendingForJob,
+                    isJobFullySettled,
                     paymentDetails: payment
                   });
                 });
@@ -321,9 +328,9 @@ const PaymentsPage = () => {
 
                       {/* Bottom action row */}
                       <div className="flex flex-col sm:flex-row justify-end gap-3 pt-1">
-                         {payment.totalPendingForJob > 0 && (
+                         {payment.totalPendingForJob > 0 && !payment.isJobFullySettled && (
                            <button 
-                             onClick={() => navigate(`/landowner/harvest-requests?requestId=${payment.reqId}`)}
+                             onClick={() => navigate(`/landowner/harvest-operations`)}
                              className="select-none flex-1 sm:flex-none px-4 py-2.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-sm font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                            >
                              <CreditCard size={16} /> Pay Pending Balance ({formatINR(payment.totalPendingForJob)})

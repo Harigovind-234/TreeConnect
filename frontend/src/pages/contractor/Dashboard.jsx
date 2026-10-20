@@ -437,13 +437,13 @@ const ContractorDashboard = () => {
         const rawDate = r.preferred_start_date || r.proposed_start_date || r.preferredStartDate || r.createdAt;
         const deadline = formatDateDMY(rawDate);
 
-        let estVal = r.total_estimated_price || r.approx_timber_value || r.estimated_timber_value || r.estimatedPrice || r.askingPrice;
+        const totalQuote = r.assessment?.total_quote ?? r.total_quote ?? r.total_quotation_amount;
+        let estVal = totalQuote || r.total_estimated_price || r.approx_timber_value || r.estimated_timber_value || r.estimatedPrice || r.askingPrice;
         if (!estVal && volNum > 0) {
           estVal = calculateApproxTimberValue(species, volNum);
         }
         const estBudget = formatINR(estVal || 195286);
 
-        const totalQuote = r.assessment?.total_quote ?? r.total_quote;
         const isAssignedToMe = (cName && (r.assigned_contractor_name || '').toLowerCase().includes(cName.split(' ')[0].toLowerCase())) ||
                                (cEmail && (r.assigned_contractor_email || '').toLowerCase() === cEmail) ||
                                (cId && (r.assigned_contractor_id || '') === cId);
@@ -470,38 +470,70 @@ const ContractorDashboard = () => {
         });
       });
 
-      // Process any marketplace timber listings in localStorage
+      // 5. Process real timber marketplace listings from backend MongoDB API + localStorage
+      let marketplaceListings = [];
       try {
-        const storedListings = localStorage.getItem('treeconnect_timber_listings');
-        if (storedListings) {
-          const parsed = JSON.parse(storedListings);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((item, idx) => {
-              const listId = item.id || `listing_${idx}`;
-              if (seenJobIds.has(listId)) return;
-              seenJobIds.add(listId);
+        const mRes = await api.get('/marketplace/listings');
+        if (mRes?.data && Array.isArray(mRes.data)) {
+          marketplaceListings = mRes.data.filter(item => item && item.id && item.buyerName !== 'Pacific Lumber Mills');
+          try {
+            localStorage.setItem('treeconnect_timber_listings', JSON.stringify(marketplaceListings));
+          } catch (e) {}
+        }
+      } catch (e) {
+        console.warn("Backend marketplace fetch error:", e);
+      }
 
-              const vol = parseVolumeNumber(item.volume);
-              const speciesStr = item.timberSpecies || 'Commercial Hardwood';
-              const estVal = item.askingPrice || calculateApproxTimberValue(speciesStr, vol);
+      if (marketplaceListings.length === 0) {
+        try {
+          const storedListings = localStorage.getItem('treeconnect_timber_listings');
+          if (storedListings) {
+            const parsed = JSON.parse(storedListings);
+            if (Array.isArray(parsed)) {
+              marketplaceListings = parsed.filter(item => item && item.id && item.buyerName !== 'Pacific Lumber Mills');
+            }
+          }
+        } catch (e) {}
+      }
 
-              jobList.push({
-                id: listId,
-                harvestRequestId: null,
-                parcel: `${item.title || speciesStr} Stand (${item.storageLocation || 'Kerala Parcel'})`,
-                owner: item.ownerName || item.userEmail || 'Registered Landowner',
-                location: `${item.district || 'Kottayam'}, Kerala`,
-                species: speciesStr,
-                volume: formatVolume(vol > 0 ? vol : 1.5),
-                deadline: item.availableUntil ? formatDateDMY(item.availableUntil) : '15-10-2026',
-                estBudget: formatINR(estVal || 210000),
-                myBid: savedBids[listId] ? (typeof savedBids[listId] === 'number' ? formatINR(savedBids[listId]) : savedBids[listId]) : null,
-                status: item.status || 'ACTIVE'
-              });
-            });
+      marketplaceListings.forEach((item, idx) => {
+        const listId = item.id || item._id || `listing_${idx}`;
+        if (seenJobIds.has(listId)) return;
+        seenJobIds.add(listId);
+
+        const vol = parseVolumeNumber(item.volume);
+        const speciesStr = item.timberSpecies || item.species || 'Commercial Hardwood';
+        const estVal = Number(item.askingPrice) || (vol > 0 ? calculateApproxTimberValue(speciesStr, vol) : 0);
+
+        const owner = item.sellerName || item.seller_name || item.ownerName || item.owner_name || item.landownerName || (item.sellerEmail ? item.sellerEmail.split('@')[0] : 'Landowner');
+        const locationParts = [item.storageLocation, item.district ? `${item.district}, Kerala` : 'Kerala'].filter(Boolean);
+        const location = locationParts.length > 0 ? locationParts.join(', ') : 'Kerala, India';
+
+        let deadlineStr = 'Open for Bidding';
+        if (item.availableUntil) {
+          deadlineStr = formatDateDMY(item.availableUntil);
+        } else if (item.createdAt) {
+          const createdDate = new Date(item.createdAt);
+          if (!isNaN(createdDate.getTime())) {
+            const expDate = new Date(createdDate.getTime() + 14 * 86400000);
+            deadlineStr = formatDateDMY(expDate.toISOString());
           }
         }
-      } catch (e) {}
+
+        jobList.push({
+          id: listId,
+          harvestRequestId: null,
+          parcel: item.title || `${speciesStr} Sawlogs Stand`,
+          owner,
+          location,
+          species: speciesStr,
+          volume: formatVolume(vol > 0 ? vol : 1.5),
+          deadline: deadlineStr,
+          estBudget: formatINR(estVal || 210000),
+          myBid: savedBids[listId] ? (typeof savedBids[listId] === 'number' ? formatINR(savedBids[listId]) : savedBids[listId]) : null,
+          status: item.status || 'Published'
+        });
+      });
 
       setJobs(jobList);
     } catch (err) {
@@ -1127,7 +1159,7 @@ const ContractorDashboard = () => {
                         Est. Project Budget: <strong className="text-emerald-400 font-extrabold">{j.estBudget}</strong>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        {j.harvestRequestId && (
+                        {j.harvestRequestId && !j.myBid && (
                           <button
                             type="button"
                             onClick={() => navigate(`/contractor/assessment/${j.harvestRequestId}`)}
@@ -1135,6 +1167,16 @@ const ContractorDashboard = () => {
                             title="Open full formal assessment & quotation form"
                           >
                             <Calculator size={13} /> Assess & Quote
+                          </button>
+                        )}
+                        {j.harvestRequestId && j.myBid && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/contractor/assessment/${j.harvestRequestId}`)}
+                            className="px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 text-emerald-300 hover:text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                            title="View submitted formal assessment & quotation"
+                          >
+                            <Eye size={13} /> View Assessment
                           </button>
                         )}
                         {j.myBid ? (

@@ -177,9 +177,10 @@ def update_harvest_post_payment_verified(
         update_fields["is_advance_verified"] = True
         update_fields["can_start_harvest"] = True
     elif is_final_payment:
-        update_fields["final_payment_status"] = "VERIFIED"
-        update_fields["is_fully_paid"] = True
-        update_fields["status"] = "COMPLETED"
+        update_fields["final_payment_status"] = "VERIFIED" if is_fully_paid else "PARTIALLY_SETTLED"
+        update_fields["is_fully_paid"] = is_fully_paid
+        if is_fully_paid:
+            update_fields["status"] = "COMPLETED"
     else:
         update_fields["advance_payment_status"] = "VERIFIED"
         update_fields["is_advance_verified"] = True

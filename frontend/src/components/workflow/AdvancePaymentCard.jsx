@@ -187,9 +187,9 @@ const AdvancePaymentCard = ({
   );
 
   const isFullyPaid = Boolean(
-    request?.is_fully_paid ||
+    (request?.is_fully_paid && remainingBalance <= 0) ||
     (remainingBalance <= 0 && isVerified) ||
-    request?.final_payment_status === 'VERIFIED'
+    (request?.final_payment_status === 'VERIFIED' && remainingBalance <= 0)
   );
 
   const finalPaymentStatus = request?.final_payment_status ||

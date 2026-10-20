@@ -173,9 +173,7 @@ const RecordAdvancePaymentModal = ({ request, onClose, onSubmit, onPaymentSucces
   const handleOnlineSuccess = (result) => {
     if (onPaymentSuccess) {
       onPaymentSuccess(result);
-    }
-    // Also notify submit handler if present
-    if (onSubmit) {
+    } else if (onSubmit) {
       onSubmit({
         payment_method: result.payment_method || 'Razorpay',
         transaction_reference: result.razorpay_payment_id || result.payment_id,

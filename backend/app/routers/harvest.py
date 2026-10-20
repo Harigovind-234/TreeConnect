@@ -2651,7 +2651,8 @@ def verify_advance_payment(
 
             accepted_quote = float(req_doc.get("total_quotation_amount") or req_doc.get("total_quote") or (req_doc.get("advance_payment_request") or {}).get("accepted_quotation") or 81000.0)
             remaining_balance = round(max(0.0, accepted_quote - verified_total), 2)
-            is_final_payment = target_payment.get("payment_purpose") == "FINAL_PAYMENT" or remaining_balance <= 0
+            is_contract_fully_settled = remaining_balance <= 0
+            is_final_payment = target_payment.get("payment_purpose") == "FINAL_PAYMENT" or is_contract_fully_settled
 
             update_fields = {
                 "total_verified_paid": round(verified_total, 2),
@@ -2663,10 +2664,15 @@ def verify_advance_payment(
             }
 
             if is_final_payment:
-                update_fields["final_payment_status"] = "VERIFIED"
-                update_fields["is_fully_paid"] = True
-                update_fields["status"] = "COMPLETED"
-                success_msg = f"Final settlement payment of ₹{target_payment.get('amount'):,.2f} verified successfully. Harvesting contract is now fully paid and closed."
+                update_fields["final_payment_status"] = "VERIFIED" if is_contract_fully_settled else "PARTIALLY_SETTLED"
+                update_fields["is_fully_paid"] = is_contract_fully_settled
+                if is_contract_fully_settled:
+                    update_fields["status"] = "COMPLETED"
+                success_msg = (
+                    f"Final settlement payment of ₹{target_payment.get('amount'):,.2f} verified successfully. Harvesting contract is now fully paid and closed."
+                    if is_contract_fully_settled else
+                    f"Partial settlement payment of ₹{target_payment.get('amount'):,.2f} verified. Remaining balance payable: ₹{remaining_balance:,.2f}."
+                )
             else:
                 update_fields["advance_payment_status"] = "VERIFIED"
                 update_fields["is_advance_verified"] = True

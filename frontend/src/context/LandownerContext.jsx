@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useLocation } from 'react-router-dom';
 import propertyService from '../services/propertyService';
 import harvestService from '../services/harvestService';
+import marketplaceService from '../services/marketplaceService';
 import { useAuth } from './AuthContext';
 
 const LandownerContext = createContext();
@@ -388,7 +389,13 @@ export const LandownerProvider = ({ children }) => {
         try {
             localStorage.setItem(`treeconnect_timber_listings_${currentEmail}`, JSON.stringify(timberListings));
             if (timberListings.length > 0) {
-                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(timberListings));
+                const globalRaw = localStorage.getItem('treeconnect_timber_listings');
+                const globalList = globalRaw ? JSON.parse(globalRaw) : [];
+                const otherListings = Array.isArray(globalList)
+                    ? globalList.filter(l => (l.sellerEmail || '').toLowerCase().trim() !== currentEmail)
+                    : [];
+                const merged = [...timberListings, ...otherListings];
+                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(merged));
             }
         } catch (e) { }
     }, [timberListings, currentEmail]);
@@ -615,29 +622,23 @@ export const LandownerProvider = ({ children }) => {
     const addTimberListing = (newListing) => {
         const createdListing = {
             ...newListing,
-            id: `tl_${Date.now()}`,
+            id: newListing.id || `tl_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
             status: newListing.status || 'Published',
-            createdAt: new Date().toISOString().split('T')[0],
+            createdAt: newListing.createdAt || new Date().toISOString().split('T')[0],
             images: newListing.images || []
         };
-        setTimberListings(prev => {
-            const updated = [createdListing, ...prev];
-            try {
-                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(updated));
-            } catch (e) { }
-            return updated;
-        });
+        try {
+            marketplaceService.saveListing(createdListing, activeUser);
+        } catch (_) {}
+        setTimberListings(prev => [createdListing, ...prev.filter(l => l.id !== createdListing.id)]);
         return createdListing;
     };
 
     const updateListingStatus = (id, newStatus) => {
-        setTimberListings(prev => {
-            const updated = prev.map(l => l.id === id ? { ...l, status: newStatus } : l);
-            try {
-                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(updated));
-            } catch (e) { }
-            return updated;
-        });
+        try {
+            marketplaceService.updateListingStatus(id, newStatus);
+        } catch (_) {}
+        setTimberListings(prev => prev.map(l => l.id === id ? { ...l, status: newStatus } : l));
     };
 
     const updateProperty = async (id, updatedFields) => {

@@ -116,11 +116,16 @@ const PaymentsPage = () => {
               }
 
               reqPayments.forEach(payment => {
+                const isFinalPay = payment.payment_purpose === 'FINAL_PAYMENT' ||
+                  String(payment.reference_number || payment.ref || payment.transaction_reference || payment.payment_id || '').startsWith('PAY-FIN');
+                const isTimber = payment.payment_purpose === 'TIMBER_PURCHASE_PAYOUT' || payment.payment_purpose === 'TIMBER_PURCHASE_SETTLEMENT';
+                const paymentType = payment.type || (isTimber ? 'Timber Purchase Payout' : isFinalPay ? 'Final Settlement' : 'Advance Mobilization');
+
                 extractedPayments.push({
                   id: payment.payment_id || payment.id || `txn_${Math.random().toString(36).substr(2, 9)}`,
                   date: payment.paid_at || payment.recorded_at || payment.created_at || req.updated_at,
                   amount: payment.amount || 0,
-                  type: payment.type || 'Advance Mobilization',
+                  type: paymentType,
                   status: (payment.status === 'VERIFIED' || payment.status === 'PAID') ? 'COMPLETED' : (payment.status || 'COMPLETED'),
                   jobName: req.property_details?.propertyName || req.propertyName || req.parcel || `Harvest Request #${String(req.id).slice(-6).toUpperCase()}`,
                   ref: payment.reference_number || payment.payment_id || payment.id || 'N/A',

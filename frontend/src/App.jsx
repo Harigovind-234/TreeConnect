@@ -26,6 +26,9 @@ import AssignedHarvestJobsPage from './pages/contractor/AssignedHarvestJobsPage'
 import PaymentsPage from './pages/contractor/PaymentsPage';
 import SubmitAssessmentPage from './pages/contractor/SubmitAssessmentPage';
 import BuyerDashboard from './pages/buyer/Dashboard';
+import BuyerMarketplacePage from './pages/buyer/TimberMarketplacePage';
+import BuyerNegotiationsPage from './pages/buyer/NegotiationsPage';
+import BuyerOrdersPage from './pages/buyer/PurchaseOrdersPage';
 
 // Dedicated Landowner Action Pages
 import RegisterProperty from './pages/landowner/RegisterProperty';
@@ -321,7 +324,7 @@ function App() {
               path="/buyer/marketplace"
               element={
                 <ProtectedRoute allowedRoles={['buyer']}>
-                  <BuyerDashboard />
+                  <BuyerMarketplacePage />
                 </ProtectedRoute>
               }
             />
@@ -329,7 +332,7 @@ function App() {
               path="/buyer/negotiations"
               element={
                 <ProtectedRoute allowedRoles={['buyer']}>
-                  <BuyerDashboard />
+                  <BuyerNegotiationsPage />
                 </ProtectedRoute>
               }
             />
@@ -337,7 +340,7 @@ function App() {
               path="/buyer/orders"
               element={
                 <ProtectedRoute allowedRoles={['buyer']}>
-                  <BuyerDashboard />
+                  <BuyerOrdersPage />
                 </ProtectedRoute>
               }
             />

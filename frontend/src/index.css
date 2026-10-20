@@ -1075,9 +1075,7 @@ a {
   color: var(--text-muted);
 }
 
-.input-icon-wrapper input,
-.form-group input,
-.select-input {
+.input-icon-wrapper input {
   width: 100%;
   padding: 12px 14px 12px 42px;
   background: var(--bg-dark);
@@ -1089,8 +1087,21 @@ a {
   transition: border-color 0.2s;
 }
 
+.auth-form .form-group input:not([type="checkbox"]):not([type="radio"]),
+.select-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
 .input-icon-wrapper input:focus,
-.form-group input:focus,
+.auth-form .form-group input:focus,
 .select-input:focus {
   border-color: var(--primary-emerald);
 }

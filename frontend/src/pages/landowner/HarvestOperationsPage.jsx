@@ -36,7 +36,8 @@ import {
   Award,
   CreditCard,
   Coins,
-  Handshake
+  Handshake,
+  ShoppingBag
 } from 'lucide-react';
 import {
   formatINR,
@@ -92,6 +93,97 @@ const HarvestOperationsPage = () => {
     } catch (err) {
       alert('Failed to record final payment: ' + (err.message || 'Error'));
     }
+  };
+
+  const handleListOnMarketplace = (req) => {
+    const reqId = req.id || req._id || 'unknown';
+    const stagesData = req.harvest_stages || {};
+    const stage2Data = stagesData.stage_2?.stage_data || {};
+    const stage3Data = stagesData.stage_3?.stage_data || {};
+    const stage4Data = stagesData.stage_4?.stage_data || {};
+
+    const rawLogCount = stage4Data.logsMeasured || stage3Data.logsProduced || stagesData.stage_4?.logs_measured || stagesData.stage_3?.logs_produced || 2;
+    const logCount = parseInt(String(rawLogCount).replace(/\D+/g, ''), 10) || 2;
+    const rawVolume = stage4Data.estimatedVolume || stagesData.stage_4?.measured_volume || req.estimated_harvestable_volume || '1.70';
+    const measuredVol = parseFloat(String(rawVolume).replace(/[^\d.]/g, '')) || 1.70;
+    const speciesName = req.tree_groups?.[0]?.species || req.species || req.treeSpecies || 'Teakwood';
+    const propName = req.propertyName || 'TreeConnect Property';
+    const propDistrict = req.propertyDistrict || req.district || (String(req.propertyLocation || '').includes('Kottayam') ? 'Kottayam' : 'Kottayam');
+    const pickupLoc = req.propertyLocation || 'Main Highway Access Gate #1';
+    const cName = req.assigned_contractor_name || req.contractor_name || req.assigned_contractor_email || 'Verified Contractor';
+    const agreementId = req.digital_agreement?.agreement_id || `TC-AGR-${String(reqId).substring(0, 8).toUpperCase()}`;
+
+    const rawHarvestDate = 
+      stagesData.stage_2?.completed_at ||
+      stagesData.stage_2?.verified_at ||
+      stagesData.stage_2?.updated_at ||
+      stagesData.stage_4?.completed_at ||
+      stagesData.stage_4?.verified_at ||
+      stagesData.stage_4?.updated_at ||
+      req.actual_completion_date ||
+      req.completed_at ||
+      req.completionDate ||
+      req.actual_harvest_date ||
+      req.confirmed_harvest_date ||
+      req.proposed_harvest_date;
+
+    let parsedHarvestDate = new Date().toISOString().split('T')[0];
+    if (rawHarvestDate) {
+      try {
+        const d = new Date(rawHarvestDate);
+        if (!isNaN(d.getTime())) {
+          parsedHarvestDate = d.toISOString().split('T')[0];
+        }
+      } catch (e) {}
+    }
+
+    const inspectionGirth = 
+      req.site_inspection?.measured_avg_dbh || 
+      req.selected_tree_groups?.[0]?.girth || 
+      req.tree_groups?.[0]?.girth || 
+      '60 - 80cm';
+
+    const completedOp = {
+      id: String(reqId),
+      operationTitle: `Grade A Prime Export ${speciesName} Sawlogs (${propName})`,
+      propertyName: propName,
+      species: speciesName,
+      timberSpecies: speciesName,
+      timberType: 'Sawlogs',
+      quantity: logCount,
+      harvestedVolume: measuredVol,
+      volume: measuredVol,
+      gradeQuality: 'Grade A Prime Export',
+      logDimensions: `Avg girth: ${inspectionGirth}`,
+      harvestDate: parsedHarvestDate,
+      storageLocation: `${propName} On-Site Log Yard`,
+      district: propDistrict,
+      pickupLocation: pickupLoc,
+      contractorName: cName,
+      agreementId: agreementId,
+      transportAvailable: true,
+      pricePerM3: 42500,
+      askingPrice: Math.round(measuredVol * 42500),
+      description: `Matured, high-density Kerala ${speciesName} logs debarked with end-seal from ${propName}. Measured at ${measuredVol} m³ (${logCount} logs). Forest transit clearance ready.`
+    };
+
+    try {
+      const stored = JSON.parse(localStorage.getItem('treeconnect_completed_harvests') || '[]');
+      const exists = stored.some(h => String(h.id) === String(completedOp.id));
+      const updated = exists ? stored.map(h => String(h.id) === String(completedOp.id) ? completedOp : h) : [completedOp, ...stored];
+      localStorage.setItem('treeconnect_completed_harvests', JSON.stringify(updated));
+      localStorage.setItem('treeconnect_active_listing_draft', JSON.stringify(completedOp));
+      if (user?.email) {
+        localStorage.setItem(`treeconnect_completed_harvests_${user.email}`, JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.warn('Could not persist completed harvest for marketplace:', e);
+    }
+
+    const targetRoute = isContractor ? '/contractor/create-timber-listing' : '/landowner/create-timber-listing';
+    navigate(`${targetRoute}?operationId=${encodeURIComponent(completedOp.id)}`, {
+      state: { operation: completedOp }
+    });
   };
 
   // Fetch contractor requests from API and localStorage
@@ -519,7 +611,18 @@ const HarvestOperationsPage = () => {
                     </div>
 
                     {/* Header Right: Primary Action Button */}
-                    <div className="qtn-header-right">
+                    <div className="qtn-header-right flex items-center gap-2">
+                      {isCompleted && (
+                        <button
+                          type="button"
+                          onClick={() => handleListOnMarketplace(req)}
+                          className="qtn-btn-marketplace"
+                          title="List harvested timber logs on the public marketplace"
+                        >
+                          <ShoppingBag size={14} />
+                          <span>List on Timber Marketplace</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setSelectedStageViewerModal(req)}
@@ -692,35 +795,45 @@ const HarvestOperationsPage = () => {
 
                     {/* CELEBRATORY SUCCESSFUL COMPLETION MESSAGE BANNER & SETTLEMENT */}
                     {isCompleted && (
-                      <div className="space-y-3 my-2">
-                        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#031d0d] via-[#093318] to-[#031d0d] border border-emerald-400/70 shadow-[0_4px_25px_rgba(16,185,129,0.3)] flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in relative overflow-hidden">
-                          <div className="flex items-center gap-3.5">
-                            <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg shadow-emerald-500/25">
-                              <CheckCircle2 size={26} className="text-emerald-400 animate-pulse" />
+                      <div className="hop-completion-container">
+                        <div className="hop-completion-card animate-fade-in">
+                          <div className="hop-completion-left">
+                            <div className="hop-completion-icon-box">
+                              <CheckCircle2 size={24} />
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 flex items-center gap-1 shadow-sm">
+                            <div className="hop-completion-content">
+                              <div className="hop-badge-row">
+                                <span className="hop-badge-pill-success">
                                   <Sparkles size={12} /> Operation Successful &amp; Complete
                                 </span>
-                                <span className="text-xs text-emerald-300 font-bold flex items-center gap-1">
-                                  <Award size={13} className="text-emerald-400" /> All 4 Milestones Verified (100%)
+                                <span className="hop-badge-pill-milestone">
+                                  <Award size={13} /> All 4 Milestones Verified (100%)
                                 </span>
                               </div>
-                              <h3 className="text-base sm:text-lg font-black text-white mt-1">
+                              <h3 className="hop-completion-title">
                                 🎉 Harvesting Operation Successfully Completed!
                               </h3>
-                              <p className="text-xs text-slate-200 mt-0.5 leading-relaxed">
+                              <p className="hop-completion-desc">
                                 Mobilization, tree felling, delimbing &amp; bucking, and transit scaling have all been successfully completed and approved by the landowner.
                               </p>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                            <div className="px-3.5 py-2 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-sm">
-                              <CheckCircle2 size={14} className="text-emerald-400" />
+                          <div className="hop-completion-right">
+                            <div className="hop-cert-pill">
+                              <CheckCircle2 size={15} />
                               <span>100% Quality Certified</span>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => handleListOnMarketplace(req)}
+                              className="hop-btn-marketplace-cta"
+                              title="Convert this completed harvest into an active timber marketplace listing"
+                            >
+                              <ShoppingBag size={15} />
+                              <span>List on Timber Marketplace</span>
+                              <ArrowRight size={14} />
+                            </button>
                           </div>
                         </div>
 
@@ -738,14 +851,14 @@ const HarvestOperationsPage = () => {
 
                           if (isFullySettled) {
                             return (
-                              <div className="p-3.5 rounded-xl bg-[#031d0d] border border-emerald-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                                <div className="flex items-center gap-2.5 text-emerald-200 font-bold">
-                                  <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+                              <div className="hop-settled-card">
+                                <div className="hop-settled-left">
+                                  <CheckCircle2 size={18} style={{ color: '#10b981', flexShrink: 0 }} />
                                   <span>
-                                    Contract 100% Fully Settled • Full harvest contract amount of <strong className="text-white font-mono">{formatINR(acceptedQuote)}</strong> cleared to contractor.
+                                    Contract 100% Fully Settled • Full harvest contract amount of <strong style={{ color: '#ffffff', fontFamily: 'monospace' }}>{formatINR(acceptedQuote)}</strong> cleared to contractor.
                                   </span>
                                 </div>
-                                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold border border-emerald-500/40 text-[11px]">
+                                <span className="hop-settled-pill">
                                   ✓ All Dues Settled
                                 </span>
                               </div>
@@ -754,17 +867,17 @@ const HarvestOperationsPage = () => {
 
                           if (remBalance > 0) {
                             return (
-                              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-[#031a0c] via-[#052914] to-[#031a0c] border border-emerald-500/60 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
+                              <div className="hop-settlement-card">
+                                <div className="hop-settlement-info">
+                                  <div className="hop-settlement-header">
+                                    <span className="hop-settlement-badge-amber">
                                       Financial Settlement Required
                                     </span>
-                                    <span className="text-xs text-amber-300 font-bold">
-                                      Remaining Balance: <strong className="font-mono text-white text-sm">{formatINR(remBalance)}</strong>
+                                    <span className="hop-settlement-balance-label">
+                                      Remaining Balance: <strong className="hop-settlement-amt">{formatINR(remBalance)}</strong>
                                     </span>
                                   </div>
-                                  <p className="text-xs text-slate-300 leading-relaxed">
+                                  <p className="hop-settlement-desc">
                                     {isFinalPending
                                       ? `Final settlement payment of ${formatINR(remBalance)} was submitted by landowner and is awaiting contractor reconciliation.`
                                       : !isContractor
@@ -774,11 +887,11 @@ const HarvestOperationsPage = () => {
                                 </div>
 
                                 {!isContractor && !isFinalPending && (
-                                  <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                                  <div className="hop-settlement-actions">
                                     <button
                                       type="button"
                                       onClick={() => setSelectedFinalPaymentModal({ req, defaultAmount: remBalance, initialTab: 'razorpay' })}
-                                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/25 cursor-pointer transition-all"
+                                      className="hop-btn-pay"
                                     >
                                       <CreditCard size={15} />
                                       <span>Pay {formatINR(remBalance)} with Razorpay</span>
@@ -786,23 +899,25 @@ const HarvestOperationsPage = () => {
                                     <button
                                       type="button"
                                       onClick={() => setSelectedFinalPaymentModal({ req, defaultAmount: remBalance, initialTab: 'manual' })}
-                                      className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                                      className="hop-btn-manual"
                                     >
-                                      <Building2 size={14} className="text-slate-400" />
+                                      <Building2 size={14} style={{ color: '#94a3b8' }} />
                                       <span>Manual Transfer</span>
                                     </button>
                                   </div>
                                 )}
 
                                 {isContractor && isFinalPending && (
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate('/contractor/assigned-jobs')}
-                                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer shrink-0 transition-all"
-                                  >
-                                    <CheckCircle2 size={15} />
-                                    <span>Verify Payment in Assigned Jobs</span>
-                                  </button>
+                                  <div className="hop-settlement-actions">
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate('/contractor/assigned-jobs')}
+                                      className="hop-btn-verify-jobs"
+                                    >
+                                      <CheckCircle2 size={15} />
+                                      <span>Verify Payment in Assigned Jobs</span>
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             );
@@ -814,9 +929,9 @@ const HarvestOperationsPage = () => {
                     )}
 
                     {/* Progress Bar */}
-                    <div className="w-full h-2 rounded-full bg-[#030a05] border border-emerald-500/20 overflow-hidden shadow-inner my-1">
+                    <div className="hop-progress-container">
                       <div
-                        className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
+                        className="hop-progress-bar"
                         style={{ width: `${progressPct}%` }}
                       ></div>
                     </div>
@@ -1014,14 +1129,26 @@ const HarvestOperationsPage = () => {
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStageViewerModal(req)}
-                      className="qtn-btn-agreement shrink-0"
-                    >
-                      {isCompleted ? <CheckCircle2 size={15} /> : <Camera size={15} />}
-                      <span>{isCompleted ? 'View Certified Evidence & Audit' : (isContractor ? 'Update Stage Evidence' : 'View Work Status & Evidence')}</span>
-                    </button>
+                    <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                      {isCompleted && (
+                        <button
+                          type="button"
+                          onClick={() => handleListOnMarketplace(req)}
+                          className="hop-btn-marketplace-secondary"
+                        >
+                          <ShoppingBag size={14} />
+                          <span>Add to Timber Marketplace</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStageViewerModal(req)}
+                        className="qtn-btn-agreement shrink-0"
+                      >
+                        {isCompleted ? <CheckCircle2 size={15} /> : <Camera size={15} />}
+                        <span>{isCompleted ? 'View Certified Evidence & Audit' : (isContractor ? 'Update Stage Evidence' : 'View Work Status & Evidence')}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* 5. DIGITAL HARVEST AGREEMENT & COMMERCIAL DETAILS BAR */}

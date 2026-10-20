@@ -4,6 +4,7 @@ import Navbar from '../../components/Navbar';
 import Sidebar from '../../components/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import marketplaceService from '../../services/marketplaceService';
+import './TimberMarketplacePage.css';
 import {
   ShoppingBag,
   Plus,
@@ -27,7 +28,8 @@ import {
   RotateCcw,
   Trash2,
   Eye,
-  Filter
+  Filter,
+  Phone
 } from 'lucide-react';
 
 const TimberMarketplacePage = () => {
@@ -64,10 +66,15 @@ const TimberMarketplacePage = () => {
 
   useEffect(() => {
     loadData();
+    marketplaceService.syncFromBackend().then(() => loadData()).catch(() => {});
 
     const handleUpdate = () => loadData();
     window.addEventListener('treeconnect_marketplace_updated', handleUpdate);
-    return () => window.removeEventListener('treeconnect_marketplace_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('treeconnect_marketplace_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, []);
 
   const showToast = (msg) => {
@@ -181,21 +188,21 @@ const TimberMarketplacePage = () => {
         <Sidebar />
 
         <div className="dashboard-workspace">
-          <main className="dashboard-content max-w-7xl mx-auto py-6">
+          <main className="dashboard-content max-w-7xl mx-auto py-6 tmp-container">
 
             {/* Header */}
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="tmp-header">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald/15 text-emerald border border-emerald/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="tmp-badge-pill">
                     Landowner Portal
                   </span>
                   <span className="text-xs text-muted">Kerala Timber Exchange</span>
                 </div>
-                <h1 className="text-2xl font-bold text-main flex items-center gap-2">
-                  <ShoppingBag className="text-emerald" size={26} /> Timber Marketplace & Sales Hub
+                <h1 className="tmp-title">
+                  <ShoppingBag className="text-emerald-400" size={28} /> Timber Marketplace & Sales Hub
                 </h1>
-                <p className="text-sm text-muted">
+                <p className="tmp-subtitle">
                   List your estate timber, negotiate with verified commercial sawmill buyers, and track sales payouts.
                 </p>
               </div>
@@ -203,7 +210,7 @@ const TimberMarketplacePage = () => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => navigate('/landowner/create-timber-listing')}
-                  className="btn btn-primary flex items-center gap-2 shadow-lg shadow-emerald/20 cursor-pointer"
+                  className="tmp-btn-primary"
                 >
                   <Plus size={18} /> Add Timber to Sell
                 </button>
@@ -212,87 +219,79 @@ const TimberMarketplacePage = () => {
 
             {/* TOAST ALERT */}
             {toastMessage && (
-              <div className="mb-6 p-4 rounded-xl bg-emerald-950/80 border border-emerald-500 text-emerald-200 flex items-center gap-3 shadow-xl animate-fade-in">
+              <div className="tmp-toast">
                 <CheckCircle2 size={20} className="text-emerald-400" />
-                <span className="font-semibold text-sm">{toastMessage}</span>
+                <span>{toastMessage}</span>
               </div>
             )}
 
             {/* KPI METRIC CARDS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <div className="card p-4 rounded-xl border border-color bg-card">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-muted uppercase">My Active Listings</span>
-                  <span className="w-8 h-8 rounded-lg bg-emerald/15 text-emerald flex items-center justify-center">
+            <div className="tmp-kpi-grid">
+              <div className="tmp-kpi-card">
+                <div className="tmp-kpi-top">
+                  <span className="tmp-kpi-label">My Active Listings</span>
+                  <span className="tmp-kpi-icon tmp-kpi-icon-emerald">
                     <ShoppingBag size={18} />
                   </span>
                 </div>
-                <div className="text-2xl font-extrabold text-main font-mono">{myListings.length}</div>
-                <div className="text-xs text-muted mt-1">Available for buyer purchase</div>
+                <div className="tmp-kpi-value">{myListings.length}</div>
+                <div className="tmp-kpi-hint">Available for buyer purchase</div>
               </div>
 
-              <div className="card p-4 rounded-xl border border-color bg-card">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-muted uppercase">Total Volume</span>
-                  <span className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center">
+              <div className="tmp-kpi-card">
+                <div className="tmp-kpi-top">
+                  <span className="tmp-kpi-label">Total Volume</span>
+                  <span className="tmp-kpi-icon tmp-kpi-icon-blue">
                     <Trees size={18} />
                   </span>
                 </div>
-                <div className="text-2xl font-extrabold text-emerald font-mono">{totalVolume.toFixed(1)} m³</div>
-                <div className="text-xs text-muted mt-1">Certified Kerala timber stock</div>
+                <div className="tmp-kpi-value text-emerald-400">{totalVolume.toFixed(1)} m³</div>
+                <div className="tmp-kpi-hint">Certified Kerala timber stock</div>
               </div>
 
-              <div className="card p-4 rounded-xl border border-color bg-card">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-muted uppercase">Buyer Inquiries & Offers</span>
-                  <span className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
+              <div className="tmp-kpi-card">
+                <div className="tmp-kpi-top">
+                  <span className="tmp-kpi-label">Buyer Inquiries & Offers</span>
+                  <span className="tmp-kpi-icon tmp-kpi-icon-amber">
                     <MessageSquare size={18} />
                   </span>
                 </div>
-                <div className="text-2xl font-extrabold text-amber-400 font-mono">{pendingNegotiations.length}</div>
-                <div className="text-xs text-amber-400/80 mt-1">
+                <div className="tmp-kpi-value text-amber-400">{pendingNegotiations.length}</div>
+                <div className="tmp-kpi-hint text-amber-400/80">
                   {pendingNegotiations.length > 0 ? 'Action required: Review offers' : 'No pending offers'}
                 </div>
               </div>
 
-              <div className="card p-4 rounded-xl border border-color bg-card">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-muted uppercase">Total Inventory Value</span>
-                  <span className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+              <div className="tmp-kpi-card">
+                <div className="tmp-kpi-top">
+                  <span className="tmp-kpi-label">Total Inventory Value</span>
+                  <span className="tmp-kpi-icon tmp-kpi-icon-gold">
                     <DollarSign size={18} />
                   </span>
                 </div>
-                <div className="text-2xl font-extrabold text-gold font-mono">
+                <div className="tmp-kpi-value text-amber-300">
                   ₹ {(totalValue / 100000).toFixed(2)} Lakh
                 </div>
-                <div className="text-xs text-muted mt-1">Across all published lots</div>
+                <div className="tmp-kpi-hint">Across all published lots</div>
               </div>
             </div>
 
             {/* TAB NAVIGATION */}
-            <div className="flex items-center gap-2 border-b border-color mb-6 overflow-x-auto pb-1">
+            <div className="tmp-tabs-bar">
               <button
                 onClick={() => setActiveTab('my_listings')}
-                className={`px-4 py-2.5 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'my_listings'
-                    ? 'bg-card text-emerald border-b-2 border-emerald font-bold'
-                    : 'text-muted hover:text-main'
-                }`}
+                className={`tmp-tab-btn ${activeTab === 'my_listings' ? 'active' : ''}`}
               >
                 <Tag size={16} /> My Timber Listings ({myListings.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('negotiations')}
-                className={`px-4 py-2.5 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 relative cursor-pointer ${
-                  activeTab === 'negotiations'
-                    ? 'bg-card text-emerald border-b-2 border-emerald font-bold'
-                    : 'text-muted hover:text-main'
-                }`}
+                className={`tmp-tab-btn ${activeTab === 'negotiations' ? 'active' : ''}`}
               >
                 <MessageSquare size={16} /> Buyer Offers & Negotiations
                 {pendingNegotiations.length > 0 && (
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-amber-500 text-black font-bold">
+                  <span className="tmp-badge-count">
                     {pendingNegotiations.length}
                   </span>
                 )}
@@ -300,22 +299,14 @@ const TimberMarketplacePage = () => {
 
               <button
                 onClick={() => setActiveTab('orders')}
-                className={`px-4 py-2.5 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'orders'
-                    ? 'bg-card text-emerald border-b-2 border-emerald font-bold'
-                    : 'text-muted hover:text-main'
-                }`}
+                className={`tmp-tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
               >
                 <Truck size={16} /> Completed Sales & Orders ({myOrders.length})
               </button>
 
               <button
                 onClick={() => setActiveTab('all_listings')}
-                className={`px-4 py-2.5 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 cursor-pointer ${
-                  activeTab === 'all_listings'
-                    ? 'bg-card text-emerald border-b-2 border-emerald font-bold'
-                    : 'text-muted hover:text-main'
-                }`}
+                className={`tmp-tab-btn ${activeTab === 'all_listings' ? 'active' : ''}`}
               >
                 <Layers size={16} /> All Marketplace Listings ({listings.length})
               </button>
@@ -323,17 +314,18 @@ const TimberMarketplacePage = () => {
 
             {/* TAB 1: MY TIMBER LISTINGS */}
             {activeTab === 'my_listings' && (
-              <div className="space-y-6">
+              <div>
                 {/* Filters */}
-                <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-card border border-color">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Filter size={16} className="text-muted" />
-                    <span className="text-xs font-semibold text-muted uppercase">Filter:</span>
+                <div className="tmp-filter-bar">
+                  <div className="tmp-filter-group">
+                    <span className="tmp-filter-label">
+                      <Filter size={15} className="text-emerald-400" /> Filter:
+                    </span>
 
                     <select
                       value={filterSpecies}
                       onChange={(e) => setFilterSpecies(e.target.value)}
-                      className="form-input text-xs py-1.5 px-3 w-auto"
+                      className="tmp-filter-select"
                     >
                       <option value="All">All Species</option>
                       <option value="Teakwood">Teakwood</option>
@@ -346,7 +338,7 @@ const TimberMarketplacePage = () => {
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
-                      className="form-input text-xs py-1.5 px-3 w-auto"
+                      className="tmp-filter-select"
                     >
                       <option value="All">All Statuses</option>
                       <option value="Published">Published (Active)</option>
@@ -355,61 +347,61 @@ const TimberMarketplacePage = () => {
                     </select>
                   </div>
 
-                  <span className="text-xs text-muted">
-                    Showing <strong className="text-white">{filteredMyListings.length}</strong> listings
+                  <span className="tmp-filter-count">
+                    Showing <strong>{filteredMyListings.length}</strong> {filteredMyListings.length === 1 ? 'listing' : 'listings'}
                   </span>
                 </div>
 
                 {/* Listings Grid */}
                 {filteredMyListings.length === 0 ? (
-                  <div className="card p-12 text-center rounded-xl border border-color bg-card">
-                    <Trees size={48} className="mx-auto text-emerald/40 mb-3" />
-                    <h3 className="text-lg font-bold text-main mb-1">No Timber Listings Found</h3>
-                    <p className="text-xs text-muted max-w-md mx-auto mb-4">
-                      You haven't listed any timber yet, or no items match your filter. Add your first felled timber or standing parcel for commercial buyers!
+                  <div className="tmp-empty-card">
+                    <div className="tmp-empty-icon">
+                      <Trees size={32} />
+                    </div>
+                    <h3 className="tmp-empty-title">No Timber Listings Found</h3>
+                    <p className="tmp-empty-subtitle">
+                      You haven't listed any timber yet, or no items match your current filter. Add your first felled timber or standing parcel for commercial buyers!
                     </p>
                     <button
                       onClick={() => navigate('/landowner/create-timber-listing')}
-                      className="btn btn-primary inline-flex items-center gap-2"
+                      className="tmp-btn-primary"
                     >
                       <Plus size={16} /> List Timber Now
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="tmp-listings-grid">
                     {filteredMyListings.map((listing) => {
                       const listingNegs = myNegotiations.filter(n => n.listingId === listing.id);
 
                       return (
-                        <div
-                          key={listing.id}
-                          className="card border border-color rounded-xl overflow-hidden bg-card flex flex-col justify-between hover:border-emerald/40 transition-all shadow-md hover:shadow-xl"
-                        >
+                        <div key={listing.id} className="tmp-listing-card">
                           <div>
                             {/* Card Media / Header */}
-                            <div className="h-44 bg-surface relative overflow-hidden">
+                            <div className="tmp-card-media">
                               {listing.images?.[0] ? (
                                 <img
                                   src={listing.images[0]}
                                   alt={listing.timberSpecies}
-                                  className="w-full h-full object-cover"
+                                  className="tmp-card-img"
                                 />
                               ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#07130a] to-[#040805] text-slate-500 p-4 text-center">
+                                <div className="tmp-media-placeholder">
                                   <Trees size={36} className="text-emerald-500/40 mb-2" />
                                   <span className="text-xs font-bold text-slate-300">{listing.timberSpecies}</span>
                                   <span className="text-[10px] text-slate-500">{listing.timberType}</span>
                                 </div>
                               )}
+                              <div className="tmp-media-overlay" />
 
                               {/* Status Badge */}
                               <span
-                                className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-bold shadow-md ${
+                                className={`tmp-status-badge ${
                                   listing.status === 'Sold'
-                                    ? 'bg-rose-500 text-white'
+                                    ? 'sold'
                                     : listing.status === 'Under Negotiation'
-                                    ? 'bg-amber-500 text-black'
-                                    : 'bg-emerald text-dark'
+                                    ? 'under-negotiation'
+                                    : 'published'
                                 }`}
                               >
                                 {listing.status}
@@ -417,69 +409,69 @@ const TimberMarketplacePage = () => {
 
                               {/* FSC or Verification Badge */}
                               {listing.fscCert && (
-                                <span className="absolute bottom-3 left-3 px-2 py-0.5 rounded text-[10px] font-bold bg-black/70 text-emerald-300 border border-emerald-500/40 backdrop-blur-sm flex items-center gap-1">
+                                <span className="tmp-cert-badge">
                                   <ShieldCheck size={11} /> {listing.fscCert}
                                 </span>
                               )}
                             </div>
 
                             {/* Card Body */}
-                            <div className="p-5 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-mono text-emerald font-semibold uppercase tracking-wider">
-                                  {listing.timberType}
-                                </span>
-                                <span className="text-xs text-muted font-medium">{listing.gradeQuality}</span>
+                            <div className="tmp-card-body">
+                              <div className="tmp-card-tags">
+                                <span className="tmp-tag-type">{listing.timberType}</span>
+                                <span className="tmp-tag-grade">{listing.gradeQuality}</span>
                               </div>
 
-                              <h3 className="text-lg font-bold text-main line-clamp-1">
+                              <h3 className="tmp-card-title">
                                 {listing.title || `${listing.gradeQuality} ${listing.timberSpecies}`}
                               </h3>
 
-                              <p className="text-xs text-muted line-clamp-2">
+                              <p className="tmp-card-desc">
                                 {listing.description || 'Verified timber lot available for direct pickup.'}
                               </p>
 
                               {/* Specs Grid */}
-                              <div className="grid grid-cols-2 gap-2 p-3 rounded-lg bg-surface border border-color text-xs">
-                                <div>
-                                  <span className="text-muted block">Volume:</span>
-                                  <span className="font-bold text-emerald font-mono text-sm">{listing.volume} m³</span>
+                              <div className="tmp-specs-box">
+                                <div className="tmp-spec-item">
+                                  <span className="tmp-spec-label">Volume</span>
+                                  <span className="tmp-spec-value-emerald">{listing.volume} m³</span>
                                 </div>
-                                <div>
-                                  <span className="text-muted block">Total Price:</span>
-                                  <span className="font-bold text-gold font-mono text-sm">
+                                <div className="tmp-spec-item">
+                                  <span className="tmp-spec-label">Total Price</span>
+                                  <span className="tmp-spec-value-gold">
                                     ₹ {Number(listing.askingPrice).toLocaleString('en-IN')}
                                   </span>
                                 </div>
-                                <div>
-                                  <span className="text-muted block">Rate / m³:</span>
-                                  <span className="font-semibold text-main">
+                                <div className="tmp-spec-item">
+                                  <span className="tmp-spec-label">Rate / m³</span>
+                                  <span className="tmp-spec-value-sub">
                                     ₹ {Number(listing.pricePerM3).toLocaleString('en-IN')}
                                   </span>
                                 </div>
-                                <div>
-                                  <span className="text-muted block">Negotiable:</span>
-                                  <span className={`font-semibold ${listing.negotiable === 'Yes' ? 'text-emerald' : 'text-muted'}`}>
-                                    {listing.negotiable}
-                                  </span>
+                                <div className="tmp-spec-item">
+                                  <span className="tmp-spec-label">Negotiable</span>
+                                  {listing.negotiable === 'Yes' ? (
+                                    <span className="tmp-spec-pill-yes">Yes</span>
+                                  ) : (
+                                    <span className="tmp-spec-pill-no">{listing.negotiable || 'No'}</span>
+                                  )}
                                 </div>
                               </div>
 
-                              <div className="text-xs text-muted flex items-center gap-1">
-                                <MapPin size={12} className="text-emerald" />
-                                {listing.district} • {listing.storageLocation || 'Estate Yard'}
+                              <div className="tmp-location-row">
+                                <MapPin size={13} className="tmp-location-icon" />
+                                <span className="truncate">{listing.district} • {listing.storageLocation || 'Estate Yard'}</span>
                               </div>
 
                               {/* Offers notification strip */}
                               {listingNegs.length > 0 && (
-                                <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/30 text-xs text-amber-300 flex items-center justify-between">
+                                <div className="tmp-offers-banner">
                                   <span className="flex items-center gap-1.5 font-semibold">
                                     <MessageSquare size={13} /> {listingNegs.length} Buyer Offer{listingNegs.length > 1 ? 's' : ''}
                                   </span>
                                   <button
                                     onClick={() => setActiveTab('negotiations')}
-                                    className="text-[11px] underline font-bold hover:text-white"
+                                    className="tmp-offers-link"
                                   >
                                     View Offers →
                                   </button>
@@ -489,28 +481,24 @@ const TimberMarketplacePage = () => {
                           </div>
 
                           {/* Footer Actions */}
-                          <div className="p-4 border-t border-color bg-surface/40 flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={listing.status}
-                                onChange={(e) => handleStatusChange(listing.id, e.target.value)}
-                                className="bg-slate-900 text-xs border border-slate-700 rounded px-2 py-1 text-slate-200"
-                              >
-                                <option value="Published">Active</option>
-                                <option value="Under Negotiation">Under Offer</option>
-                                <option value="Sold">Sold</option>
-                              </select>
-                            </div>
+                          <div className="tmp-card-footer">
+                            <select
+                              value={listing.status}
+                              onChange={(e) => handleStatusChange(listing.id, e.target.value)}
+                              className="tmp-select-status"
+                            >
+                              <option value="Published">Active</option>
+                              <option value="Under Negotiation">Under Offer</option>
+                              <option value="Sold">Sold</option>
+                            </select>
 
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleDeleteListing(listing.id)}
-                                className="p-1.5 text-muted hover:text-red-400 transition-colors"
-                                title="Delete Listing"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => handleDeleteListing(listing.id)}
+                              className="tmp-delete-btn"
+                              title="Delete Listing"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </div>
                         </div>
                       );
@@ -523,23 +511,25 @@ const TimberMarketplacePage = () => {
             {/* TAB 2: BUYER OFFERS & NEGOTIATIONS */}
             {activeTab === 'negotiations' && (
               <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-card border border-color flex items-center justify-between">
+                <div className="tmp-section-header-box">
                   <div>
-                    <h2 className="text-base font-bold text-main">Commercial Buyer Bargaining Inbox</h2>
-                    <p className="text-xs text-muted">
+                    <h2 className="tmp-section-title">Commercial Buyer Bargaining Inbox</h2>
+                    <p className="tmp-section-desc">
                       Review bids submitted by sawmills and timber procurement companies. You can accept, propose counter-rates, or decline.
                     </p>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded bg-surface border border-color text-main">
+                  <span className="tmp-filter-count">
                     {myNegotiations.length} Total Negotiations
                   </span>
                 </div>
 
                 {myNegotiations.length === 0 ? (
-                  <div className="card p-12 text-center rounded-xl border border-color bg-card">
-                    <MessageSquare size={48} className="mx-auto text-muted mb-3" />
-                    <h3 className="text-lg font-bold text-main mb-1">No Buyer Offers Yet</h3>
-                    <p className="text-xs text-muted max-w-md mx-auto">
+                  <div className="tmp-empty-card">
+                    <div className="tmp-empty-icon">
+                      <MessageSquare size={32} />
+                    </div>
+                    <h3 className="tmp-empty-title">No Buyer Offers Yet</h3>
+                    <p className="tmp-empty-subtitle">
                       When buyers on TreeConnect submit price offers or bargaining proposals on your timber listings, they will appear here.
                     </p>
                   </div>
@@ -554,108 +544,167 @@ const TimberMarketplacePage = () => {
                       return (
                         <div
                           key={neg.id}
-                          className="card p-5 rounded-xl border border-color bg-card hover:border-slate-700 transition-all space-y-4"
+                          className="tc-landowner-neg-card"
                         >
-                          <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-color">
+                          {/* Top Header Row */}
+                          <div className="tc-neg-header">
                             <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-bold text-emerald">{neg.timberSpecies}</span>
-                                <span className="text-muted text-xs">•</span>
-                                <span className="text-xs text-muted font-mono">{neg.id}</span>
+                              <div className="tc-neg-title-row">
+                                <span className="tc-neg-badge-species">
+                                  <Trees size={12} /> {neg.timberSpecies || 'Teak'}
+                                </span>
+                                <span className="tc-neg-badge-ref">
+                                  #{String(neg.id).replace('neg_', '').slice(-6)}
+                                </span>
                               </div>
-                              <h3 className="text-base font-bold text-main">{neg.timberTitle}</h3>
-                              <p className="text-xs text-muted mt-0.5">
-                                Buyer: <strong className="text-white">{neg.buyerName}</strong> ({neg.buyerCompany}) • {neg.buyerPhone}
-                              </p>
+                              <h3 className="tc-neg-title">{neg.timberTitle}</h3>
+                              <div className="tc-neg-buyer-line">
+                                <span>Buyer: <strong className="text-white">{neg.buyerName}</strong></span>
+                                <span className="text-slate-500">•</span>
+                                <span className="text-slate-300 font-medium">{neg.buyerCompany}</span>
+                                {neg.buyerPhone && (
+                                  <>
+                                    <span className="text-slate-500">•</span>
+                                    <a href={`tel:${neg.buyerPhone}`} className="text-emerald-400 font-mono hover:underline inline-flex items-center gap-1">
+                                      <Phone size={11} /> {neg.buyerPhone}
+                                    </a>
+                                  </>
+                                )}
+                              </div>
                             </div>
 
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                isAccepted
-                                  ? 'bg-emerald/20 text-emerald border border-emerald/40'
-                                  : isRejected
-                                  ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                                  : isCounter
-                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                              }`}
-                            >
-                              {neg.status}
-                            </span>
+                            {/* Status Badge */}
+                            <div>
+                              <span
+                                className={`px-3 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
+                                  isAccepted
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                                    : isRejected
+                                    ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                    : isCounter
+                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20'
+                                }`}
+                              >
+                                {isPending && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>}
+                                {neg.status}
+                              </span>
+                            </div>
                           </div>
 
-                          {/* Offer Comparison Grid */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-lg bg-surface border border-color text-xs">
-                            <div>
-                              <span className="text-muted block">Original Asking Rate:</span>
-                              <span className="font-semibold text-slate-300 font-mono">
-                                ₹ {Number(neg.originalPricePerM3).toLocaleString('en-IN')} / m³
-                              </span>
+                          {/* 4-Cell Offer Comparison Grid */}
+                          <div className="tc-neg-metrics-grid">
+                            <div className="tc-neg-metric-box">
+                              <span className="tc-neg-metric-label">ORIGINAL ASKING</span>
+                              <div className="tc-neg-metric-val text-slate-300">
+                                ₹ {Number(neg.originalPricePerM3).toLocaleString('en-IN')} <span className="text-xs font-normal text-slate-400">/ m³</span>
+                              </div>
+                              <span className="tc-neg-metric-sub">Catalogue Rate</span>
                             </div>
-                            <div>
-                              <span className="text-muted block">Buyer's Offered Rate:</span>
-                              <span className="font-extrabold text-emerald font-mono text-sm">
-                                ₹ {Number(neg.offeredPricePerM3).toLocaleString('en-IN')} / m³
-                              </span>
+
+                            <div className="tc-neg-metric-box tc-neg-metric-box-highlight">
+                              <span className="tc-neg-metric-label text-emerald-400">BUYER'S OFFERED RATE</span>
+                              <div className="tc-neg-metric-val text-emerald-400">
+                                ₹ {Number(neg.offeredPricePerM3).toLocaleString('en-IN')} <span className="text-xs font-normal text-emerald-300">/ m³</span>
+                              </div>
+                              <span className="tc-neg-metric-sub text-emerald-300 font-medium">Proposed Bid</span>
                             </div>
-                            <div>
-                              <span className="text-muted block">Requested Volume:</span>
-                              <span className="font-bold text-white font-mono">{neg.requestedVolume} m³</span>
+
+                            <div className="tc-neg-metric-box">
+                              <span className="tc-neg-metric-label">REQUESTED VOLUME</span>
+                              <div className="tc-neg-metric-val text-white">
+                                {neg.requestedVolume} <span className="text-xs font-normal text-slate-300">m³</span>
+                              </div>
+                              <span className="tc-neg-metric-sub truncate">{neg.deliveryPreference || 'Truck Pickup'}</span>
                             </div>
-                            <div>
-                              <span className="text-muted block">Total Deal Offer:</span>
-                              <span className="font-extrabold text-gold font-mono text-sm">
+
+                            <div className="tc-neg-metric-box tc-neg-metric-box-highlight">
+                              <span className="tc-neg-metric-label text-amber-300">TOTAL DEAL OFFER</span>
+                              <div className="tc-neg-metric-val text-gold">
                                 ₹ {Number(neg.totalOffered).toLocaleString('en-IN')}
-                              </span>
+                              </div>
+                              <span className="tc-neg-metric-sub text-amber-300/80">Escrow Secured</span>
                             </div>
                           </div>
 
-                          {/* Terms & Notes */}
-                          <div className="text-xs text-muted space-y-1.5">
-                            <div>
-                              <strong className="text-slate-300">Delivery Preference:</strong> {neg.deliveryPreference}
-                            </div>
-                            <div>
-                              <strong className="text-slate-300">Payment Terms:</strong> {neg.paymentTerms}
-                            </div>
-                            {neg.notes && (
-                              <div className="p-2.5 rounded bg-slate-900/60 border border-slate-800 text-slate-200 italic">
-                                "{neg.notes}"
+                          {/* Proposed Timber Survey Visit Card */}
+                          {neg.surveyVisitDate ? (
+                            <div className="tc-neg-survey-card">
+                              <div className="tc-neg-survey-top">
+                                <span className="tc-neg-survey-tag">
+                                  <Calendar size={13} className="text-emerald-400" /> Proposed On-Site Timber Survey Visit
+                                </span>
+                                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                  <Truck size={12} className="text-blue-400" /> {neg.deliveryPreference}
+                                </span>
                               </div>
-                            )}
-                          </div>
+
+                              <div className="tc-neg-survey-detail flex items-center gap-2 flex-wrap">
+                                <span className="text-slate-300">Survey Date:</span>
+                                <strong className="text-white font-mono bg-emerald-950/80 px-2.5 py-0.5 rounded-md border border-emerald-500/30">
+                                  {neg.surveyVisitDate}
+                                </strong>
+                                {neg.surveyTimeSlot && (
+                                  <span className="text-emerald-300 font-medium bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                    {String(neg.surveyTimeSlot).replace(/^\(|\)$/g, '')}
+                                  </span>
+                                )}
+                              </div>
+
+                              {neg.notes && (
+                                <div className="tc-neg-note-box flex items-start gap-2">
+                                  <MessageSquare size={13} className="text-emerald-400 shrink-0 mt-0.5" />
+                                  <span>"{neg.notes}"</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-slate-300 space-y-1.5 p-3 rounded-xl bg-black/40 border border-white/8">
+                              <div><strong className="text-slate-400">Delivery Preference:</strong> {neg.deliveryPreference}</div>
+                              {neg.paymentTerms && <div><strong className="text-slate-400">Payment Terms:</strong> {neg.paymentTerms}</div>}
+                              {neg.notes && (
+                                <div className="tc-neg-note-box flex items-start gap-2">
+                                  <MessageSquare size={13} className="text-emerald-400 shrink-0 mt-0.5" />
+                                  <span>"{neg.notes}"</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {/* Counter offer details if any */}
                           {neg.counterOffer && (
-                            <div className="p-3 rounded-lg bg-blue-950/40 border border-blue-500/30 text-xs text-blue-200">
-                              <span className="font-bold block mb-1">
-                                Current Counter-Rate: ₹ {Number(neg.counterOffer.pricePerM3).toLocaleString('en-IN')} / m³
+                            <div className="p-3.5 rounded-xl bg-blue-950/40 border border-blue-500/30 text-xs text-blue-200 space-y-1">
+                              <span className="font-bold flex items-center gap-1.5 text-blue-300">
+                                <RotateCcw size={14} /> Current Counter-Rate: ₹ {Number(neg.counterOffer.pricePerM3).toLocaleString('en-IN')} / m³
                               </span>
-                              <span>{neg.counterOffer.message}</span>
+                              <p className="text-slate-300 italic">"{neg.counterOffer.message}"</p>
                             </div>
                           )}
 
                           {/* Action Buttons */}
                           {(isPending || isCounter) && (
-                            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2 border-t border-color">
+                            <div className="tc-neg-actions-row">
                               <button
                                 onClick={() => handleRejectOffer(neg)}
-                                className="btn btn-secondary btn-sm text-red-400 hover:text-red-300"
+                                className="tc-neg-btn-decline"
                               >
                                 Decline Offer
                               </button>
-                              <button
-                                onClick={() => openCounterModal(neg)}
-                                className="btn btn-secondary btn-sm flex items-center gap-1.5"
-                              >
-                                <RotateCcw size={14} /> Make Counter-Offer
-                              </button>
-                              <button
-                                onClick={() => handleAcceptOffer(neg)}
-                                className="btn btn-primary btn-sm flex items-center gap-1.5"
-                              >
-                                <Check size={14} /> Accept Offer
-                              </button>
+
+                              <div className="flex items-center gap-2.5">
+                                <button
+                                  onClick={() => openCounterModal(neg)}
+                                  className="tc-neg-btn-counter"
+                                >
+                                  <RotateCcw size={14} /> Make Counter-Offer
+                                </button>
+                                <button
+                                  onClick={() => handleAcceptOffer(neg)}
+                                  className="tc-neg-btn-accept"
+                                >
+                                  <Check size={15} /> Accept Offer & Confirm Visit
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -669,23 +718,27 @@ const TimberMarketplacePage = () => {
             {/* TAB 3: COMPLETED SALES & ORDERS */}
             {activeTab === 'orders' && (
               <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-card border border-color">
-                  <h2 className="text-base font-bold text-main">Timber Purchase Contracts & Fulfillment</h2>
-                  <p className="text-xs text-muted">
-                    Contracts where buyers confirmed procurement. Track transit milestones, forest clearance passes, and settlement.
-                  </p>
+                <div className="tmp-section-header-box">
+                  <div>
+                    <h2 className="tmp-section-title">Timber Purchase Contracts & Fulfillment</h2>
+                    <p className="tmp-section-desc">
+                      Contracts where buyers confirmed procurement. Track transit milestones, forest clearance passes, and settlement.
+                    </p>
+                  </div>
                 </div>
 
                 {myOrders.length === 0 ? (
-                  <div className="card p-12 text-center rounded-xl border border-color bg-card">
-                    <Truck size={48} className="mx-auto text-muted mb-3" />
-                    <h3 className="text-lg font-bold text-main mb-1">No Completed Sales Recorded</h3>
-                    <p className="text-xs text-muted max-w-md mx-auto">
+                  <div className="tmp-empty-card">
+                    <div className="tmp-empty-icon">
+                      <Truck size={32} />
+                    </div>
+                    <h3 className="tmp-empty-title">No Completed Sales Recorded</h3>
+                    <p className="tmp-empty-subtitle">
                       Once buyers confirm orders on your timber, shipping permits and payouts will track here.
                     </p>
                   </div>
                 ) : (
-                  <div className="table-wrapper card p-0 overflow-hidden">
+                  <div className="table-wrapper tmp-content-card p-0 overflow-hidden">
                     <table className="data-table">
                       <thead>
                         <tr>
@@ -708,14 +761,14 @@ const TimberMarketplacePage = () => {
                               <div className="font-bold text-white">{ord.buyerName}</div>
                               <div className="text-muted">{ord.mill}</div>
                             </td>
-                            <td className="text-emerald font-mono font-bold">{ord.volume}</td>
-                            <td className="text-gold font-mono font-bold">{ord.total}</td>
+                            <td className="text-emerald-400 font-mono font-bold">{ord.volume}</td>
+                            <td className="text-amber-300 font-mono font-bold">{ord.total}</td>
                             <td>
                               <span className="status-chip status-chip-active text-xs">
                                 {ord.status}
                               </span>
                             </td>
-                            <td className="text-xs text-emerald font-mono">{ord.passNo || 'Verified'}</td>
+                            <td className="text-xs text-emerald-400 font-mono">{ord.passNo || 'Verified'}</td>
                             <td className="text-xs text-muted">{ord.ETA}</td>
                           </tr>
                         ))}
@@ -729,22 +782,22 @@ const TimberMarketplacePage = () => {
             {/* TAB 4: ALL MARKET TIMBER */}
             {activeTab === 'all_listings' && (
               <div className="space-y-6">
-                <div className="p-4 rounded-xl bg-card border border-color flex items-center justify-between">
+                <div className="tmp-section-header-box">
                   <div>
-                    <h2 className="text-base font-bold text-main">Live Kerala Timber Market Exchange</h2>
-                    <p className="text-xs text-muted">
+                    <h2 className="tmp-section-title">Live Kerala Timber Market Exchange</h2>
+                    <p className="tmp-section-desc">
                       All published timber lots across Kerala from Landowners and Harvesting Contractors.
                     </p>
                   </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded bg-surface border border-color text-main">
+                  <span className="tmp-filter-count">
                     {listings.length} Lots in Market
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="tmp-listings-grid">
                   {listings.map((item) => (
-                    <div key={item.id} className="card border border-color rounded-xl overflow-hidden bg-card flex flex-col justify-between">
-                      <div className="p-5 space-y-3">
+                    <div key={item.id} className="tmp-listing-card">
+                      <div className="tmp-card-body space-y-3">
                         <div className="flex items-center justify-between">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                             item.sellerRole === 'contractor'
@@ -753,27 +806,28 @@ const TimberMarketplacePage = () => {
                           }`}>
                             {item.sellerRole === 'contractor' ? '🚜 Contractor Lot' : '🌲 Landowner Lot'}
                           </span>
-                          <span className="text-xs font-semibold text-emerald">{item.gradeQuality}</span>
+                          <span className="text-xs font-semibold text-emerald-400">{item.gradeQuality}</span>
                         </div>
 
-                        <h3 className="text-base font-bold text-main">{item.title || item.timberSpecies}</h3>
-                        <p className="text-xs text-muted line-clamp-2">{item.description}</p>
+                        <h3 className="tmp-card-title">{item.title || item.timberSpecies}</h3>
+                        <p className="tmp-card-desc">{item.description}</p>
 
-                        <div className="grid grid-cols-2 gap-2 p-3 rounded-lg bg-surface border border-color text-xs">
-                          <div>
-                            <span className="text-muted block">Volume:</span>
-                            <span className="font-bold text-emerald font-mono">{item.volume} m³</span>
+                        <div className="tmp-specs-box">
+                          <div className="tmp-spec-item">
+                            <span className="tmp-spec-label">Volume</span>
+                            <span className="tmp-spec-value-emerald">{item.volume} m³</span>
                           </div>
-                          <div>
-                            <span className="text-muted block">Rate:</span>
-                            <span className="font-bold text-gold font-mono">
+                          <div className="tmp-spec-item">
+                            <span className="tmp-spec-label">Rate</span>
+                            <span className="tmp-spec-value-gold">
                               ₹ {Number(item.pricePerM3).toLocaleString('en-IN')} / m³
                             </span>
                           </div>
                         </div>
 
-                        <div className="text-xs text-muted flex items-center gap-1">
-                          <MapPin size={12} className="text-emerald" /> {item.district} • Seller: {item.sellerName}
+                        <div className="tmp-location-row">
+                          <MapPin size={13} className="tmp-location-icon" />
+                          <span className="truncate">{item.district} • Seller: {item.sellerName}</span>
                         </div>
                       </div>
                     </div>
@@ -783,75 +837,233 @@ const TimberMarketplacePage = () => {
             )}
 
             {/* COUNTER-OFFER MODAL */}
-            {counterModalOpen && selectedNegotiation && (
-              <div className="modal-backdrop fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="modal-container bg-card border border-color rounded-2xl max-w-md w-full p-6 shadow-2xl animate-scale-up">
-                  <div className="flex items-center justify-between pb-3 border-b border-color mb-4">
-                    <h3 className="text-lg font-bold text-main flex items-center gap-2">
-                      <RotateCcw size={18} className="text-emerald" /> Propose Counter-Offer
-                    </h3>
-                    <button
-                      onClick={() => setCounterModalOpen(false)}
-                      className="text-muted hover:text-white"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
+            {counterModalOpen && selectedNegotiation && (() => {
+              const askingRate = Number(selectedNegotiation.originalPricePerM3 || selectedNegotiation.pricePerM3 || 42500);
+              const buyerBidRate = Number(selectedNegotiation.offeredPricePerM3 || 0);
+              const reqVolume = Number(selectedNegotiation.requestedVolume || 1);
+              const splitRate = Math.round((askingRate + buyerBidRate) / 2);
+              const plusFiveRate = Math.round(buyerBidRate * 1.05);
+              const diffPercent = askingRate > 0 && buyerBidRate < askingRate 
+                ? Math.round(((askingRate - buyerBidRate) / askingRate) * 100) 
+                : 0;
+              const numericCounter = Number(counterPrice) || 0;
+              const counterTotal = numericCounter * reqVolume;
+              const gainVsBid = numericCounter > buyerBidRate 
+                ? (numericCounter - buyerBidRate) * reqVolume 
+                : 0;
 
-                  <form onSubmit={submitCounterOffer} className="space-y-4">
-                    <div className="p-3 bg-surface rounded-lg border border-color text-xs space-y-1">
-                      <div className="text-muted">Item: <strong className="text-white">{selectedNegotiation.timberTitle}</strong></div>
-                      <div className="text-muted">Buyer Offer: <strong className="text-amber-400">₹ {Number(selectedNegotiation.offeredPricePerM3).toLocaleString('en-IN')}/m³</strong></div>
-                      <div className="text-muted">Volume Requested: <strong className="text-white">{selectedNegotiation.requestedVolume} m³</strong></div>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label text-xs">Your Counter Rate (₹ per m³):</label>
-                      <input
-                        type="number"
-                        value={counterPrice}
-                        onChange={(e) => setCounterPrice(e.target.value)}
-                        placeholder="e.g. 41000"
-                        className="form-input text-base font-bold font-mono text-emerald"
-                        required
-                      />
-                      {counterPrice && (
-                        <span className="text-[11px] text-muted block mt-1">
-                          Total proposed value: <strong className="text-gold">₹ {(Number(counterPrice) * selectedNegotiation.requestedVolume).toLocaleString('en-IN')}</strong>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label text-xs">Message / Terms for Buyer:</label>
-                      <textarea
-                        rows="3"
-                        value={counterMessage}
-                        onChange={(e) => setCounterMessage(e.target.value)}
-                        className="form-input text-xs"
-                        placeholder="State your conditions, pickup timeline, or loading provisions..."
-                      ></textarea>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-3 pt-3">
+              return (
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[1000] flex items-center justify-center p-4 overflow-y-auto">
+                  <div className="tc-counter-modal-card my-auto">
+                    {/* Header */}
+                    <div className="tc-counter-header">
+                      <div className="tc-counter-title-group">
+                        <div className="tc-counter-icon-wrap">
+                          <RotateCcw size={20} />
+                        </div>
+                        <div>
+                          <h3 className="tc-counter-title">
+                            Propose Counter-Offer
+                          </h3>
+                          <div className="tc-counter-lot-badge">
+                            Lot: <span className="text-emerald-300 font-semibold">{selectedNegotiation.timberTitle}</span>
+                          </div>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setCounterModalOpen(false)}
-                        className="btn btn-secondary btn-sm"
+                        className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                        title="Close"
                       >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn-primary btn-sm flex items-center gap-1.5"
-                      >
-                        <RotateCcw size={14} /> Send Counter-Offer
+                        <X size={20} />
                       </button>
                     </div>
-                  </form>
+
+                    {/* Rate Comparison Grid */}
+                    <div className="tc-counter-compare-grid">
+                      {/* Buyer Bid Card */}
+                      <div className="tc-counter-compare-card bid">
+                        <span className="tc-counter-pill amber">Buyer's Bid</span>
+                        <div className="tc-counter-compare-rate">
+                          ₹ {buyerBidRate.toLocaleString('en-IN')} <span className="text-xs font-normal text-amber-300/80">/ m³</span>
+                        </div>
+                        <div className="tc-counter-compare-sub">
+                          {diffPercent > 0 ? `${diffPercent}% below asking` : 'Initial offer'} • Total ₹ {(buyerBidRate * reqVolume).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      {/* Direction Icon */}
+                      <div className="tc-counter-compare-arrow">
+                        <ArrowRight size={15} />
+                      </div>
+
+                      {/* Your Asking Rate Card */}
+                      <div className="tc-counter-compare-card asking">
+                        <span className="tc-counter-pill emerald">Your Listed Price</span>
+                        <div className="tc-counter-compare-rate">
+                          ₹ {askingRate.toLocaleString('en-IN')} <span className="text-xs font-normal text-emerald-300/80">/ m³</span>
+                        </div>
+                        <div className="tc-counter-compare-sub">
+                          Target • Total ₹ {(askingRate * reqVolume).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Volume & Survey Inspection Strip */}
+                    <div className="tc-counter-deal-info-strip">
+                      <div className="flex items-center gap-2">
+                        <Layers size={14} className="text-emerald-400" />
+                        <span>Volume: <strong className="text-white">{reqVolume} m³</strong></span>
+                      </div>
+                      {selectedNegotiation.surveyVisitDate && (
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <Calendar size={14} className="text-emerald-400" />
+                          <span>Inspection: <strong className="text-emerald-300">{selectedNegotiation.surveyVisitDate}</strong> {selectedNegotiation.surveyTimeSlot ? `(${selectedNegotiation.surveyTimeSlot.split(' ')[0]})` : ''}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <form onSubmit={submitCounterOffer} className="space-y-4">
+                      {/* Counter Rate Input */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-bold text-slate-200">
+                            Your Counter-Rate (₹ per m³):
+                          </label>
+                          <span className="text-[11px] text-slate-400">
+                            Requested: <strong className="text-white">{reqVolume} m³</strong>
+                          </span>
+                        </div>
+
+                        <div className="tc-counter-input-box">
+                          <span className="tc-counter-input-prefix">₹</span>
+                          <input
+                            type="number"
+                            value={counterPrice}
+                            onChange={(e) => setCounterPrice(e.target.value)}
+                            placeholder={String(askingRate)}
+                            className="tc-counter-input-field"
+                            min="1000"
+                            step="50"
+                            required
+                          />
+                          <span className="tc-counter-input-suffix">/ m³</span>
+                        </div>
+
+                        {/* Quick Rate Preset Buttons */}
+                        <div className="tc-counter-presets-row">
+                          <span className="text-[11px] text-slate-400 mr-1">Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCounterPrice(askingRate);
+                              setCounterMessage(`We can agree to sell at ₹${askingRate.toLocaleString('en-IN')}/m³ with prompt yard pickup.`);
+                            }}
+                            className="tc-counter-preset-btn"
+                          >
+                            Hold Listed Rate (₹ {askingRate.toLocaleString('en-IN')})
+                          </button>
+                          {splitRate !== askingRate && splitRate !== buyerBidRate && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCounterPrice(splitRate);
+                                setCounterMessage(`Let's meet halfway at ₹${splitRate.toLocaleString('en-IN')}/m³ with immediate loading clearance.`);
+                              }}
+                              className="tc-counter-preset-btn"
+                            >
+                              Split Difference (₹ {splitRate.toLocaleString('en-IN')})
+                            </button>
+                          )}
+                          {plusFiveRate > buyerBidRate && plusFiveRate < askingRate && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCounterPrice(plusFiveRate);
+                                setCounterMessage(`We can offer a special rate of ₹${plusFiveRate.toLocaleString('en-IN')}/m³ upon on-site survey inspection.`);
+                              }}
+                              className="tc-counter-preset-btn"
+                            >
+                              +5% of Bid (₹ {plusFiveRate.toLocaleString('en-IN')})
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Total Proposed Value Banner */}
+                        {numericCounter > 0 && (
+                          <div className="tc-counter-summary-banner">
+                            <span className="text-slate-300">
+                              Total Proposed Value: <strong className="text-emerald-300 font-mono text-sm ml-1">₹ {counterTotal.toLocaleString('en-IN')}</strong>
+                            </span>
+                            {gainVsBid > 0 && (
+                              <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                                +₹ {gainVsBid.toLocaleString('en-IN')} vs buyer offer
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Message / Terms for Buyer */}
+                      <div>
+                        <label className="text-xs font-bold text-slate-200 block mb-1.5">
+                          Message & Conditions for Buyer:
+                        </label>
+                        <textarea
+                          rows="3"
+                          value={counterMessage}
+                          onChange={(e) => setCounterMessage(e.target.value)}
+                          className="w-full p-3 rounded-xl bg-black/50 border border-white/10 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 transition-all resize-none"
+                          placeholder="Specify yard loading, transport, inspection timeline or payment conditions..."
+                        />
+                        {/* Quick suggestion chips */}
+                        <div className="tc-counter-quick-chips">
+                          <button
+                            type="button"
+                            onClick={() => setCounterMessage(prev => prev ? `${prev} Yard pickup and log-loading included.` : 'Yard pickup and log-loading included.')}
+                            className="tc-counter-quick-chip"
+                          >
+                            + Yard loading included
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCounterMessage(prev => prev ? `${prev} Payment due upon on-site survey inspection.` : 'Payment due upon on-site survey inspection.')}
+                            className="tc-counter-quick-chip"
+                          >
+                            + Payment after survey
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCounterMessage(prev => prev ? `${prev} Log pickup required within 5 days of transit permit clearance.` : 'Log pickup required within 5 days of transit permit clearance.')}
+                            className="tc-counter-quick-chip"
+                          >
+                            + Pickup within 5 days
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Modal Footer Actions */}
+                      <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/8">
+                        <button
+                          type="button"
+                          onClick={() => setCounterModalOpen(false)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 flex items-center gap-2 transition-all cursor-pointer"
+                        >
+                          <RotateCcw size={14} /> Send Counter-Offer
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
           </main>
         </div>

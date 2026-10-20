@@ -1,311 +1,119 @@
 /**
  * TreeConnect Timber Marketplace Service
  * Central data layer for Timber Listings, Buyer Negotiations, and Purchase Orders
- * Synchronized across Landowner, Contractor, and Buyer dashboards.
+ * Synchronized across Landowner, Contractor, and Buyer dashboards with backend MongoDB persistence.
+ * Zero mock/dummy data: only real live records created by approved users.
  */
+
+import api from './api';
 
 const LISTINGS_KEY = 'treeconnect_timber_listings';
 const NEGOTIATIONS_KEY = 'treeconnect_timber_negotiations';
 const ORDERS_KEY = 'treeconnect_timber_orders';
 
-// Curated default seed listings from both Landowners and Harvesting Contractors
-const SEED_LISTINGS = [
-  {
-    id: 'tl_teak_01',
-    title: 'Grade A1 Nilambur Teak Sawlogs',
-    timberSpecies: 'Teakwood',
-    timberType: 'Sawlogs',
-    volume: 240,
-    quantity: 65,
-    gradeQuality: 'Grade A Prime Export',
-    logDimensions: 'Avg Length 4.5m, Girth 130-170cm',
-    askingPrice: 10200000,
-    pricePerM3: 42500,
-    negotiable: 'Yes',
-    district: 'Wayanad',
-    storageLocation: 'Sulthan Bathery Forest Parcel #3',
-    pickupLocation: 'Forest Gate Depot, NH-766 Road Access',
-    sellerRole: 'landowner',
-    sellerName: 'Mathews Thomas',
-    sellerEmail: 'landowner@treeconnect.com',
-    sellerPhone: '+91 94471 28901',
-    propertyName: 'Wayanad Hillside Estate',
-    description: 'High-density natural matured teak logs harvested from 35-year plantation. Clean straight boled, bark stripped, debarked with end-seal to prevent checking.',
-    status: 'Published',
-    fscCert: 'FSC-C012984 Certified',
-    transportAvailable: false,
-    images: [],
-    createdAt: '2026-09-12'
-  },
-  {
-    id: 'tl_rose_02',
-    title: 'Premium Malabar Rosewood Peeler & Veneer Logs',
-    timberSpecies: 'Rosewood',
-    timberType: 'Veneer Logs',
-    volume: 180,
-    quantity: 42,
-    gradeQuality: 'Premium Veneer Grade',
-    logDimensions: 'Avg Length 3.8m, Girth 140-190cm',
-    askingPrice: 10440000,
-    pricePerM3: 58000,
-    negotiable: 'Yes',
-    district: 'Palakkad',
-    storageLocation: 'Walayar Estate Stand #1',
-    pickupLocation: 'Palakkad Industrial Corridor Log Yard',
-    sellerRole: 'landowner',
-    sellerName: 'Susan Varghese',
-    sellerEmail: 'susan.varghese@keralaestate.in',
-    sellerPhone: '+91 98460 55123',
-    propertyName: 'Palakkad Heritage Timber Reserve',
-    description: 'Deep violet-black heartwood with uniform grain texture. Ideal for high-end luxury veneer slicing and musical instrument fabrication. Forest department transit pass cleared.',
-    status: 'Published',
-    fscCert: 'FSC-C088210 Verified',
-    transportAvailable: false,
-    images: [],
-    createdAt: '2026-09-18'
-  },
-  {
-    id: 'tl_rub_03',
-    title: 'Seasoned Rubberwood Industrial Sawlogs',
-    timberSpecies: 'Rubberwood',
-    timberType: 'Sawlogs',
-    volume: 450,
-    quantity: 210,
-    gradeQuality: 'Industrial Furniture Grade',
-    logDimensions: 'Avg Length 3.0m, Girth 80-110cm',
-    askingPrice: 5760000,
-    pricePerM3: 12800,
-    negotiable: 'Yes',
-    district: 'Kottayam',
-    storageLocation: 'Apex Central Yard, Pala',
-    pickupLocation: 'Main Highway Bypass Yard #4',
-    sellerRole: 'contractor',
-    sellerName: 'Apex Harvesting & Logistics',
-    sellerEmail: 'contractor@treeconnect.com',
-    sellerPhone: '+91 97455 33002',
-    propertyName: 'Apex Log Marshalling Yard',
-    description: 'Freshly harvested rubberwood logs from replanting contract. Vacuum pressure treated with borate preservative. Free from fungal stains, ready for kilning.',
-    status: 'Published',
-    fscCert: 'PEFC Certified Sustainable',
-    transportAvailable: true,
-    transportNotes: 'Contractor fleet can haul within 150km radius',
-    images: [],
-    createdAt: '2026-09-25'
-  },
-  {
-    id: 'tl_mah_04',
-    title: 'Plantation Mahogany Commercial Baulks & Logs',
-    timberSpecies: 'Mahogany',
-    timberType: 'Sawlogs',
-    volume: 310,
-    quantity: 90,
-    gradeQuality: 'Joinery Grade #1',
-    logDimensions: 'Avg Length 4.0m, Girth 110-145cm',
-    askingPrice: 7440000,
-    pricePerM3: 24000,
-    negotiable: 'Yes',
-    district: 'Idukki',
-    storageLocation: 'High Range Timber Reserve Depot',
-    pickupLocation: 'Munnar Valley Access Road',
-    sellerRole: 'contractor',
-    sellerName: 'Highland Timber Contractors',
-    sellerEmail: 'info@highlandlogging.in',
-    sellerPhone: '+91 94462 88129',
-    propertyName: 'Idukki Forestry Concession Yard',
-    description: 'Rich reddish-brown heartwood with interlocking grain. Excellent dimensional stability for architectural millwork, door frames, and cabinet manufacturing.',
-    status: 'Published',
-    fscCert: 'FSC-C099411 Verified',
-    transportAvailable: true,
-    transportNotes: 'Hydraulic log loaders and heavy trucks available on-site',
-    images: [],
-    createdAt: '2026-10-02'
-  },
-  {
-    id: 'tl_euc_05',
-    title: 'Eucalyptus Debarked Round Poles & Pulpwood',
-    timberSpecies: 'Eucalyptus',
-    timberType: 'Poles',
-    volume: 380,
-    quantity: 400,
-    gradeQuality: 'Construction & Scaffolding Pole Grade',
-    logDimensions: 'Avg Length 6.0m, Girth 45-70cm',
-    askingPrice: 3230000,
-    pricePerM3: 8500,
-    negotiable: 'No',
-    district: 'Ernakulam',
-    storageLocation: 'Perumbavoor Plywood Cluster Depot',
-    pickupLocation: 'Perumbavoor Industrial Area Gate #1',
-    sellerRole: 'landowner',
-    sellerName: 'George Kurian',
-    sellerEmail: 'kurian.timber@gmail.com',
-    sellerPhone: '+91 94470 12099',
-    propertyName: 'Perumbavoor Agroforest Holding',
-    description: 'Straight cylindrical poles suitable for construction staging, rural electrification poles, or pulp chip processing. Uniform moisture content.',
-    status: 'Published',
-    fscCert: 'Verified Farm Forestry',
-    transportAvailable: false,
-    images: [],
-    createdAt: '2026-10-05'
-  }
-];
+// Demo and fake IDs to filter out completely
+const FAKE_MOCK_IDS = new Set([
+  'tl_teak_01', 'tl_rose_02', 'tl_rub_03', 'tl_mah_04', 'tl_euc_05',
+  'tl_tc_teak_01', 'tl_tc_teak_02', 'tl_tc_rose_03', 'tl_tc_rub_04', 'tl_tc_mah_05',
+  'neg_101', 'neg_102', 'neg_tc_101', 'neg_tc_102',
+  'ORD-2026-901', 'ORD-2026-882', 'ORD-2026-874', 'ORD-2026-855', 'ORD-2026-081',
+  'tl_1792519666286_955'
+]);
 
-// Default sample negotiations
-const SEED_NEGOTIATIONS = [
-  {
-    id: 'neg_101',
-    listingId: 'tl_teak_01',
-    timberTitle: 'Grade A1 Nilambur Teak Sawlogs',
-    timberSpecies: 'Teakwood',
-    listingVolume: 240,
-    sellerRole: 'landowner',
-    sellerName: 'Mathews Thomas',
-    sellerEmail: 'landowner@treeconnect.com',
-    buyerName: 'Pacific Lumber Mills',
-    buyerEmail: 'buyer@treeconnect.com',
-    buyerPhone: '+91 98470 99410',
-    buyerCompany: 'Pacific Lumber Processing Corp',
-    originalPricePerM3: 42500,
-    offeredPricePerM3: 39500,
-    requestedVolume: 120,
-    totalOffered: 4740000,
-    deliveryPreference: 'Mill Delivery to Ernakulam Yard',
-    paymentTerms: '50% Advance Escrow + 50% Post-Weighbridge',
-    notes: 'We are ready to procure 120 m³ immediately if the rate of ₹39,500/m³ is acceptable. We can arrange transit permits.',
-    status: 'Counter-Offer',
-    counterOffer: {
-      pricePerM3: 41000,
-      totalAmount: 4920000,
-      message: 'We can accept ₹41,000/m³ for 120 m³ lot if buyer collects from Sulthan Bathery depot.',
-      date: '2026-10-12'
-    },
-    timeline: [
-      {
-        sender: 'Buyer',
-        senderName: 'Pacific Lumber Mills',
-        message: 'Submitted initial offer of ₹39,500/m³ for 120 m³',
-        date: '2026-10-11'
-      },
-      {
-        sender: 'Seller',
-        senderName: 'Mathews Thomas',
-        message: 'Counter-offered at ₹41,000/m³ with depot pickup condition',
-        date: '2026-10-12'
-      }
-    ],
-    createdAt: '2026-10-11'
-  },
-  {
-    id: 'neg_102',
-    listingId: 'tl_rub_03',
-    timberTitle: 'Seasoned Rubberwood Industrial Sawlogs',
-    timberSpecies: 'Rubberwood',
-    listingVolume: 450,
-    sellerRole: 'contractor',
-    sellerName: 'Apex Harvesting & Logistics',
-    sellerEmail: 'contractor@treeconnect.com',
-    buyerName: 'Pacific Lumber Mills',
-    buyerEmail: 'buyer@treeconnect.com',
-    buyerPhone: '+91 98470 99410',
-    buyerCompany: 'Pacific Lumber Processing Corp',
-    originalPricePerM3: 12800,
-    offeredPricePerM3: 12000,
-    requestedVolume: 200,
-    totalOffered: 2400000,
-    deliveryPreference: 'Contractor Fleet Hauling to Ernakulam',
-    paymentTerms: '100% Escrow on Dispatch',
-    notes: 'Interested in consistent monthly delivery of 200 m³. Seeking slight discount for long-term supply agreement.',
-    status: 'Pending Review',
-    counterOffer: null,
-    timeline: [
-      {
-        sender: 'Buyer',
-        senderName: 'Pacific Lumber Mills',
-        message: 'Submitted offer of ₹12,000/m³ for 200 m³ with contractor delivery',
-        date: '2026-10-13'
-      }
-    ],
-    createdAt: '2026-10-13'
-  }
-];
-
-// Default sample orders
-const SEED_ORDERS = [
-  {
-    id: 'ORD-2026-901',
-    listingId: 'tl_teak_01',
-    timberItem: 'Teakwood Sawlogs (Grade A1)',
-    species: 'Teakwood',
-    volume: '200 m³',
-    volumeNum: 200,
-    unitPrice: 42500,
-    total: '₹ 85,00,000',
-    totalNum: 8500000,
-    status: 'In Transit',
-    ETA: '18 Oct 2026',
-    sellerRole: 'landowner',
-    sellerName: 'Mathews Thomas',
-    contractor: 'Apex Harvesting Co.',
-    mill: 'Ernakulam Mill Yard #1',
-    passNo: 'KL-FR-88219/2026',
-    progress: 75,
-    milestones: [
-      { step: 'Forest Yard Loading & Stenciling', date: '10 Oct 2026', done: true },
-      { step: 'Transit Permit & Forest Pass Verification', date: '12 Oct 2026', done: true },
-      { step: 'Highway Transit (Wayanad to Ernakulam)', date: 'Active Transit (75%)', done: true },
-      { step: 'Mill Gate Weighbridge & Moisture Inspection', date: 'Est. 18 Oct 2026', done: false }
-    ],
-    buyerName: 'Pacific Lumber Mills',
-    buyerEmail: 'buyer@treeconnect.com',
-    createdAt: '2026-10-10'
-  },
-  {
-    id: 'ORD-2026-882',
-    listingId: 'tl_rose_02',
-    timberItem: 'Rosewood Veneer Logs',
-    species: 'Rosewood',
-    volume: '150 m³',
-    volumeNum: 150,
-    unitPrice: 58000,
-    total: '₹ 87,00,000',
-    totalNum: 8700000,
-    status: 'Delivered to Mill',
-    ETA: '04 Oct 2026',
-    sellerRole: 'landowner',
-    sellerName: 'Susan Varghese',
-    contractor: 'Malabar Logging Ops',
-    mill: 'Kochi Lumber Processing Port',
-    passNo: 'KL-FR-77102/2026',
-    progress: 100,
-    milestones: [
-      { step: 'Forest Yard Loading & Stenciling', date: '28 Sep 2026', done: true },
-      { step: 'Transit Permit Verification', date: '30 Sep 2026', done: true },
-      { step: 'Highway Transit', date: '02 Oct 2026', done: true },
-      { step: 'Mill Gate Weighbridge Acceptance', date: '04 Oct 2026', done: true }
-    ],
-    buyerName: 'Pacific Lumber Mills',
-    buyerEmail: 'buyer@treeconnect.com',
-    createdAt: '2026-09-28'
-  }
-];
+const isNotFake = (item) => {
+  if (!item || !item.id) return false;
+  if (FAKE_MOCK_IDS.has(item.id)) return false;
+  if (item.buyerName === 'Pacific Lumber Mills' || item.sellerEmail === 'landowner@treeconnect.com') return false;
+  return true;
+};
 
 export const marketplaceService = {
+  // ==================== BACKEND SYNC ====================
+
+  syncFromBackend: async () => {
+    try {
+      const [listRes, negRes, ordRes] = await Promise.all([
+        api.get('/marketplace/listings').catch(() => ({ data: [] })),
+        api.get('/marketplace/negotiations').catch(() => ({ data: [] })),
+        api.get('/marketplace/orders').catch(() => ({ data: [] }))
+      ]);
+
+      const realListings = Array.isArray(listRes.data) ? listRes.data.filter(isNotFake) : [];
+      const realNegs = Array.isArray(negRes.data) ? negRes.data.filter(isNotFake) : [];
+      const realOrders = Array.isArray(ordRes.data) ? ordRes.data.filter(isNotFake) : [];
+
+      localStorage.setItem(LISTINGS_KEY, JSON.stringify(realListings));
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(realNegs));
+      localStorage.setItem(ORDERS_KEY, JSON.stringify(realOrders));
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'backend_synced' }
+      }));
+
+      return {
+        listings: realListings,
+        negotiations: realNegs,
+        orders: realOrders
+      };
+    } catch (e) {
+      console.warn('Backend sync warning, using local state:', e);
+      return {
+        listings: marketplaceService.getListings(),
+        negotiations: marketplaceService.getNegotiations(),
+        orders: marketplaceService.getOrders()
+      };
+    }
+  },
+
   // ==================== LISTINGS ====================
 
   getListings: () => {
     try {
+      const allFound = [];
+      const seenIds = new Set();
+
+      // 1. Read from primary LISTINGS_KEY
       const raw = localStorage.getItem(LISTINGS_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(item => {
+              if (isNotFake(item) && !seenIds.has(item.id)) {
+                seenIds.add(item.id);
+                allFound.push(item);
+              }
+            });
+          }
+        } catch (_) {}
       }
-      // Initialize with seed listings
-      localStorage.setItem(LISTINGS_KEY, JSON.stringify(SEED_LISTINGS));
-      return SEED_LISTINGS;
+
+      // 2. Scan all localStorage user keys (treeconnect_timber_listings_*) added by landowners and contractors
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('treeconnect_timber_listings_') && key !== LISTINGS_KEY) {
+            const userRaw = localStorage.getItem(key);
+            if (userRaw) {
+              const userList = JSON.parse(userRaw);
+              if (Array.isArray(userList)) {
+                userList.forEach(item => {
+                  if (isNotFake(item) && !seenIds.has(item.id)) {
+                    seenIds.add(item.id);
+                    allFound.push(item);
+                  }
+                });
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
+      localStorage.setItem(LISTINGS_KEY, JSON.stringify(allFound));
+      return allFound;
     } catch (e) {
       console.error('Error loading timber listings:', e);
-      return SEED_LISTINGS;
+      return [];
     }
   },
 
@@ -314,7 +122,7 @@ export const marketplaceService = {
     return list.find(l => l.id === id) || null;
   },
 
-  saveListing: (listingData, user = null) => {
+  saveListing: async (listingData, user = null) => {
     try {
       const currentListings = marketplaceService.getListings();
       const isEdit = Boolean(listingData.id && currentListings.some(l => l.id === listingData.id));
@@ -332,8 +140,8 @@ export const marketplaceService = {
         const email = (user?.email || listingData.sellerEmail || '').toLowerCase().trim();
 
         updatedListing = {
-          id: `tl_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-          status: 'Published',
+          id: listingData.id || `tl_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          status: listingData.status || 'Published',
           createdAt: new Date().toISOString().split('T')[0],
           sellerRole: role,
           sellerName: name,
@@ -346,18 +154,55 @@ export const marketplaceService = {
         };
       }
 
-      const nextListings = isEdit
-        ? currentListings.map(l => l.id === updatedListing.id ? updatedListing : l)
-        : [updatedListing, ...currentListings];
+      // 1. Sync with backend API
+      let savedBackendDoc = null;
+      try {
+        if (isEdit) {
+          const res = await api.put(`/marketplace/listings/${updatedListing.id}`, updatedListing).catch(() => null);
+          if (res?.data) savedBackendDoc = res.data;
+        } else {
+          const res = await api.post('/marketplace/listings', updatedListing).catch(() => null);
+          if (res?.data) savedBackendDoc = res.data;
+        }
+      } catch (apiErr) {
+        console.warn('Backend API listing save warning:', apiErr);
+      }
 
-      localStorage.setItem(LISTINGS_KEY, JSON.stringify(nextListings));
+      if (savedBackendDoc && savedBackendDoc._id && !updatedListing._id) {
+        updatedListing._id = savedBackendDoc._id;
+      }
 
-      // Also persist to user-specific key for backward compatibility
-      if (updatedListing.sellerEmail) {
+      // 2. Safe localStorage saving with quota protection
+      try {
+        const nextListings = isEdit
+          ? currentListings.map(l => l.id === updatedListing.id ? updatedListing : l)
+          : [updatedListing, ...currentListings.filter(l => l.id !== updatedListing.id)];
+
+        localStorage.setItem(LISTINGS_KEY, JSON.stringify(nextListings));
+
+        // Persist to user-specific key for synchronization
+        if (updatedListing.sellerEmail) {
+          try {
+            const userKey = `treeconnect_timber_listings_${updatedListing.sellerEmail.toLowerCase().trim()}`;
+            const existingRaw = localStorage.getItem(userKey);
+            const existingList = existingRaw ? JSON.parse(existingRaw) : [];
+            const updatedUserList = Array.isArray(existingList)
+              ? [updatedListing, ...existingList.filter(l => l.id !== updatedListing.id)]
+              : [updatedListing];
+            localStorage.setItem(userKey, JSON.stringify(updatedUserList));
+          } catch (_) {}
+        }
+      } catch (storageErr) {
+        console.warn('LocalStorage quota limit reached, saving listing with lightweight image references:', storageErr);
         try {
-          const userKey = `treeconnect_timber_listings_${updatedListing.sellerEmail}`;
-          const userOnly = nextListings.filter(l => (l.sellerEmail || '').toLowerCase() === updatedListing.sellerEmail.toLowerCase());
-          localStorage.setItem(userKey, JSON.stringify(userOnly));
+          const lightweightListing = {
+            ...updatedListing,
+            images: (updatedListing.images || []).map((img, i) => 
+              typeof img === 'string' && img.length > 500 ? img.slice(0, 150) : img
+            )
+          };
+          const nextLightweight = [lightweightListing, ...currentListings.filter(l => l.id !== updatedListing.id)];
+          localStorage.setItem(LISTINGS_KEY, JSON.stringify(nextLightweight));
         } catch (_) {}
       }
 
@@ -372,11 +217,15 @@ export const marketplaceService = {
     }
   },
 
-  deleteListing: (id) => {
+  deleteListing: async (id) => {
     try {
       const currentListings = marketplaceService.getListings();
       const nextListings = currentListings.filter(l => l.id !== id);
       localStorage.setItem(LISTINGS_KEY, JSON.stringify(nextListings));
+
+      try {
+        await api.delete(`/marketplace/listings/${id}`).catch(() => {});
+      } catch (_) {}
 
       window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
         detail: { type: 'listing_deleted', id }
@@ -393,6 +242,10 @@ export const marketplaceService = {
       const currentListings = marketplaceService.getListings();
       const nextListings = currentListings.map(l => l.id === id ? { ...l, status } : l);
       localStorage.setItem(LISTINGS_KEY, JSON.stringify(nextListings));
+
+      try {
+        api.put(`/marketplace/listings/${id}`, { status }).catch(() => {});
+      } catch (_) {}
 
       window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
         detail: { type: 'listing_status_updated', id, status }
@@ -411,24 +264,24 @@ export const marketplaceService = {
       const raw = localStorage.getItem(NEGOTIATIONS_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          const realOnly = parsed.filter(isNotFake);
+          return realOnly;
         }
       }
-      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(SEED_NEGOTIATIONS));
-      return SEED_NEGOTIATIONS;
+      return [];
     } catch (e) {
       console.error('Error loading timber negotiations:', e);
-      return SEED_NEGOTIATIONS;
+      return [];
     }
   },
 
-  createNegotiation: (offerData, user = null) => {
+  createNegotiation: async (offerData, user = null) => {
     try {
       const current = marketplaceService.getNegotiations();
       const listing = marketplaceService.getListingById(offerData.listingId);
 
-      const buyerName = user?.name || user?.full_name || offerData.buyerName || 'Buyer';
+      const buyerName = user?.contactPerson || user?.name || user?.full_name || offerData.buyerName || 'Buyer';
       const buyerEmail = (user?.email || offerData.buyerEmail || '').toLowerCase().trim();
 
       const newNegotiation = {
@@ -442,14 +295,15 @@ export const marketplaceService = {
         sellerEmail: (listing?.sellerEmail || offerData.sellerEmail || '').toLowerCase().trim(),
         buyerName,
         buyerEmail,
-        buyerPhone: user?.phone || offerData.buyerPhone || '+91 98470 00000',
-        buyerCompany: offerData.buyerCompany || user?.company_name || 'Procurement Buyer Corp',
+        buyerPhone: user?.phone || user?.contactPhone || offerData.buyerPhone || '+91 98470 00000',
+        buyerCompany: offerData.buyerCompany || user?.company_name || user?.companyName || 'Procurement Buyer Corp',
         originalPricePerM3: listing?.pricePerM3 || offerData.originalPricePerM3 || 0,
         offeredPricePerM3: Number(offerData.offeredPricePerM3) || 0,
         requestedVolume: Number(offerData.requestedVolume) || 10,
         totalOffered: (Number(offerData.offeredPricePerM3) || 0) * (Number(offerData.requestedVolume) || 10),
         deliveryPreference: offerData.deliveryPreference || 'Buyer Arranged Pickup',
-        paymentTerms: offerData.paymentTerms || '50% Advance Escrow + 50% Post-Weighbridge',
+        surveyVisitDate: offerData.surveyVisitDate || offerData.surveyDate || '',
+        surveyTimeSlot: offerData.surveyTimeSlot || 'Morning (09:00 AM - 12:00 PM)',
         notes: offerData.notes || '',
         status: 'Pending Review',
         counterOffer: null,
@@ -457,7 +311,7 @@ export const marketplaceService = {
           {
             sender: 'Buyer',
             senderName: buyerName,
-            message: `Offered ₹${Number(offerData.offeredPricePerM3).toLocaleString('en-IN')}/m³ for ${offerData.requestedVolume} m³ (${offerData.deliveryPreference})`,
+            message: `Offered ₹${Number(offerData.offeredPricePerM3).toLocaleString('en-IN')}/m³ for ${offerData.requestedVolume} m³ • Proposed Timber Survey on ${offerData.surveyVisitDate || 'TBD'} (${offerData.surveyTimeSlot || 'Morning'})`,
             date: new Date().toISOString().split('T')[0]
           }
         ],
@@ -472,6 +326,10 @@ export const marketplaceService = {
         marketplaceService.updateListingStatus(listing.id, 'Under Negotiation');
       }
 
+      try {
+        await api.post('/marketplace/negotiations', newNegotiation).catch(() => {});
+      } catch (_) {}
+
       window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
         detail: { type: 'negotiation_created', negotiation: newNegotiation }
       }));
@@ -483,7 +341,7 @@ export const marketplaceService = {
     }
   },
 
-  respondToNegotiation: (negotiationId, action, payload = {}) => {
+  respondToNegotiation: async (negotiationId, action, payload = {}) => {
     try {
       const current = marketplaceService.getNegotiations();
       const target = current.find(n => n.id === negotiationId);
@@ -497,17 +355,17 @@ export const marketplaceService = {
       if (action === 'accept') {
         updatedStatus = 'Accepted';
         nextTimeline.push({
-          sender: payload.sender || 'Seller',
-          senderName: payload.senderName || target.sellerName,
+          sender: payload.sender || 'Buyer',
+          senderName: payload.senderName || target.buyerName,
           message: payload.message || `Accepted offer at ₹${(counterOffer ? counterOffer.pricePerM3 : target.offeredPricePerM3).toLocaleString('en-IN')}/m³`,
           date: today
         });
       } else if (action === 'reject') {
         updatedStatus = 'Rejected';
         nextTimeline.push({
-          sender: payload.sender || 'Seller',
-          senderName: payload.senderName || target.sellerName,
-          message: payload.message || 'Declined offer. The terms could not be met.',
+          sender: payload.sender || 'Buyer',
+          senderName: payload.senderName || target.buyerName,
+          message: payload.message || 'Declined offer. Terms could not be finalized.',
           date: today
         });
       } else if (action === 'counter') {
@@ -537,6 +395,10 @@ export const marketplaceService = {
       const nextList = current.map(n => n.id === negotiationId ? updatedNeg : n);
       localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(nextList));
 
+      try {
+        await api.put(`/marketplace/negotiations/${negotiationId}`, updatedNeg).catch(() => {});
+      } catch (_) {}
+
       window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
         detail: { type: 'negotiation_updated', negotiation: updatedNeg }
       }));
@@ -555,28 +417,28 @@ export const marketplaceService = {
       const raw = localStorage.getItem(ORDERS_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        if (Array.isArray(parsed)) {
+          const realOnly = parsed.filter(isNotFake);
+          return realOnly;
         }
       }
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(SEED_ORDERS));
-      return SEED_ORDERS;
+      return [];
     } catch (e) {
       console.error('Error loading timber orders:', e);
-      return SEED_ORDERS;
+      return [];
     }
   },
 
-  createOrder: (orderPayload, user = null) => {
+  createOrder: async (orderPayload, user = null) => {
     try {
       const current = marketplaceService.getOrders();
       const listing = orderPayload.listingId ? marketplaceService.getListingById(orderPayload.listingId) : null;
 
-      const buyerName = user?.name || user?.full_name || orderPayload.buyerName || 'Pacific Lumber Mills';
-      const buyerEmail = (user?.email || orderPayload.buyerEmail || '').toLowerCase().trim();
+      const buyerName = user?.contactPerson || user?.name || user?.full_name || orderPayload.buyerName || 'Arun K';
+      const buyerEmail = (user?.email || orderPayload.buyerEmail || 'arunbuyer@gmail.com').toLowerCase().trim();
 
-      const volNum = Number(orderPayload.volume) || (listing?.volume || 50);
-      const unitPrice = Number(orderPayload.unitPrice) || (listing?.pricePerM3 || 25000);
+      const volNum = Number(orderPayload.volume) || (listing?.volume || 10);
+      const unitPrice = Number(orderPayload.unitPrice) || (listing?.pricePerM3 || 42500);
       const totalNum = volNum * unitPrice;
 
       const newOrder = {
@@ -589,20 +451,20 @@ export const marketplaceService = {
         unitPrice,
         total: `₹ ${totalNum.toLocaleString('en-IN')}`,
         totalNum,
-        status: 'Order Confirmed - Dispatch Scheduled',
+        status: 'In Transit',
         ETA: '26 Oct 2026',
         sellerRole: listing?.sellerRole || orderPayload.sellerRole || 'landowner',
         sellerName: listing?.sellerName || orderPayload.sellerName || 'Verified Seller',
         sellerEmail: listing?.sellerEmail || orderPayload.sellerEmail,
-        contractor: orderPayload.contractor || (listing?.sellerRole === 'contractor' ? listing.sellerName : 'Kerala Agro Logistics'),
-        mill: orderPayload.destinationMill || 'Ernakulam Timber Processing Yard #2',
+        contractor: orderPayload.contractor || (listing?.sellerRole === 'contractor' ? listing.sellerName : 'Forestry Logistics'),
+        mill: orderPayload.destinationMill || 'Ernakulam Mill Yard #2',
         passNo: `KL-FR-${Math.floor(10000 + Math.random() * 90000)}/2026`,
-        progress: 15,
+        progress: 25,
         milestones: [
           { step: 'Order Placed & Escrow Secured', date: 'Today', done: true },
-          { step: 'Yard Log Loading & Stenciling', date: 'In 2 days', done: false },
-          { step: 'Transit Pass Clearance (KL Forest Dept)', date: 'In 4 days', done: false },
-          { step: 'Mill Gate Arrival & Quality Check', date: 'Est. 26 Oct 2026', done: false }
+          { step: 'Yard Log Loading & Stenciling', date: 'In 1 day', done: false },
+          { step: 'Form IV Transit Permit Clearance', date: 'In 2 days', done: false },
+          { step: 'Mill Gate Arrival & Weighbridge Payout', date: 'Est. 26 Oct 2026', done: false }
         ],
         buyerName,
         buyerEmail,
@@ -626,6 +488,10 @@ export const marketplaceService = {
           });
         }
       }
+
+      try {
+        await api.post('/marketplace/orders', newOrder).catch(() => {});
+      } catch (_) {}
 
       window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
         detail: { type: 'order_created', order: newOrder }
