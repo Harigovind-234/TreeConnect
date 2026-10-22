@@ -575,3 +575,169 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
   transform: translateY(-1px);
 }
+
+/* ========================================================================== */
+/* Premium Verification Document Cards (Matching Image 2 Aesthetic)          */
+/* ========================================================================== */
+.doc-verify-card {
+  background: linear-gradient(145deg, rgba(7, 26, 17, 0.95) 0%, rgba(4, 15, 10, 0.98) 100%) !important;
+  border: 1.5px solid rgba(16, 185, 129, 0.24) !important;
+  border-radius: 18px !important;
+  padding: 22px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(16, 185, 129, 0.15) !important;
+  transition: all 0.25s ease-in-out !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.doc-verify-card:hover {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 14px 36px -6px rgba(0, 0, 0, 0.65), 0 0 20px rgba(16, 185, 129, 0.1) !important;
+  transform: translateY(-2px) !important;
+}
+
+.doc-verify-icon-box {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 14px !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #34d399 !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+
+.doc-verify-header-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 12px !important;
+  border-radius: 9999px !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em !important;
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.45) !important;
+  white-space: nowrap !important;
+}
+
+.doc-verify-file-strip {
+  background: rgba(2, 10, 7, 0.65) !important;
+  border: 1px solid rgba(16, 185, 129, 0.18) !important;
+  border-radius: 12px !important;
+  padding: 10px 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.doc-verify-file-strip:hover {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.doc-verify-specs-grid {
+  display: grid !important;
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+@media (min-width: 640px) {
+  .doc-verify-specs-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+.doc-verify-chip {
+  background: rgba(6, 22, 14, 0.85) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  border-radius: 12px !important;
+  padding: 10px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  transition: border-color 0.2s ease, background 0.2s ease !important;
+}
+
+.doc-verify-chip:hover {
+  background: rgba(8, 28, 18, 0.95) !important;
+  border-color: rgba(16, 185, 129, 0.38) !important;
+}
+
+.doc-verify-chip-label {
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  color: #94a3b8 !important;
+}
+
+.doc-verify-chip-value {
+  font-size: 0.88rem !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.doc-verify-note-callout {
+  background: rgba(4, 18, 12, 0.6) !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+  border-radius: 12px !important;
+  padding: 10px 14px !important;
+  font-size: 0.78rem !important;
+  color: #cbd5e1 !important;
+  line-height: 1.45 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+}
+
+.doc-verify-action-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 9px 18px !important;
+  border-radius: 12px !important;
+  background: rgba(6, 32, 21, 0.75) !important;
+  color: #34d399 !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+}
+
+.doc-verify-action-btn:hover {
+  background: rgba(16, 185, 129, 0.22) !important;
+  color: #ffffff !important;
+  border-color: rgba(16, 185, 129, 0.65) !important;
+  transform: translateY(-1px) !important;
+}
+
+.doc-verify-status-tag {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 5px 12px !important;
+  border-radius: 9999px !important;
+  font-size: 0.75rem !important;
+  font-weight: 800 !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
