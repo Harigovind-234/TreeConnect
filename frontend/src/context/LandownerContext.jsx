@@ -720,6 +720,12 @@ export const LandownerProvider = ({ children }) => {
             console.error("Error deleting harvest request from DB:", err);
         }
 
+        try {
+            await marketplaceService.cascadeDeleteByHarvestRequestId(id);
+        } catch (e) {
+            console.error("Error cascading harvest request deletion in marketplaceService:", e);
+        }
+
         const idStr = String(id || '');
         const idCanon = idStr.length >= 8 ? idStr.substring(0, 8).toLowerCase() : idStr.toLowerCase();
 

@@ -37,6 +37,25 @@ def serialize_doc(doc: dict) -> dict:
 def get_all_listings():
     try:
         docs = list(db.timber_marketplace_listings.find().sort("createdAt", -1))
+        # Self-healing: verify if any listing has a harvestOperationId / harvestRequestId whose harvest request was deleted
+        orphaned_ids = []
+        for d in docs:
+            op_id = d.get("harvestOperationId") or d.get("harvestRequestId")
+            if op_id:
+                q_hr = [{"_id": ObjectId(op_id)} if ObjectId.is_valid(op_id) else None, {"_id": op_id}, {"id": op_id}]
+                q_hr = [q for q in q_hr if q]
+                hr = db.harvest_requests.find_one({"$or": q_hr})
+                if not hr:
+                    orphaned_ids.append(d.get("id") or str(d.get("_id")))
+
+        if orphaned_ids:
+            for orph_id in orphaned_ids:
+                try:
+                    delete_listing(orph_id)
+                except Exception:
+                    pass
+            docs = list(db.timber_marketplace_listings.find().sort("createdAt", -1))
+
         return [serialize_doc(d) for d in docs]
     except Exception as e:
         print(f"Error fetching listings: {e}")
@@ -115,17 +134,35 @@ def delete_listing(listing_id: str):
 
         res = db.timber_marketplace_listings.delete_many({"$or": q})
 
-        # 2. Cascade delete any associated negotiations from timber_negotiations
+        # 2. Collect associated negotiation IDs
+        matching_negs = list(db.timber_negotiations.find({"listingId": {"$in": list(all_listing_ids)}}))
+        all_neg_ids = set()
+        for ndoc in matching_negs:
+            if ndoc.get("id"):
+                all_neg_ids.add(str(ndoc["id"]))
+            if ndoc.get("_id"):
+                all_neg_ids.add(str(ndoc["_id"]))
+
+        # 3. Cascade delete associated negotiations from timber_negotiations
         neg_res = db.timber_negotiations.delete_many({
             "listingId": {"$in": list(all_listing_ids)}
         })
-        print(f"[CASCADE DELETE] Deleted {res.deleted_count} listing(s) and {neg_res.deleted_count} associated negotiation(s) for IDs {all_listing_ids}")
+
+        # 4. Cascade delete associated orders from timber_orders
+        ord_res = db.timber_orders.delete_many({
+            "$or": [
+                {"listingId": {"$in": list(all_listing_ids)}},
+                {"negotiationId": {"$in": list(all_neg_ids)}}
+            ]
+        })
+        print(f"[CASCADE DELETE] Deleted {res.deleted_count} listing(s), {neg_res.deleted_count} negotiation(s), {ord_res.deleted_count} order(s) for IDs {all_listing_ids}")
 
         return {
             "success": True,
             "deleted_id": listing_id,
             "deleted_count": res.deleted_count,
-            "deleted_negotiations": neg_res.deleted_count
+            "deleted_negotiations": neg_res.deleted_count,
+            "deleted_orders": ord_res.deleted_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -255,13 +292,38 @@ def clear_negotiations(buyer_email: Optional[str] = None):
 
 @router.get("/orders")
 def get_all_orders(buyer_email: Optional[str] = None):
-
     try:
+        # Collect all active listing IDs to prune/filter orphaned orders
+        active_listings = list(db.timber_marketplace_listings.find({}, {"id": 1, "_id": 1, "harvestOperationId": 1, "treeInventoryId": 1}))
+        valid_listing_ids = set()
+        for l in active_listings:
+            if l.get("id"):
+                valid_listing_ids.add(str(l["id"]))
+            if l.get("_id"):
+                valid_listing_ids.add(str(l["_id"]))
+            if l.get("harvestOperationId"):
+                valid_listing_ids.add(str(l["harvestOperationId"]))
+            if l.get("treeInventoryId"):
+                valid_listing_ids.add(str(l["treeInventoryId"]))
+
+        # Prune orphaned orders whose listing was deleted
+        all_db_orders = list(db.timber_orders.find())
+        orphaned_ids = []
+        for o in all_db_orders:
+            lid = str(o.get("listingId") or "").strip()
+            if lid and lid not in valid_listing_ids:
+                orphaned_ids.append(o["_id"])
+        if orphaned_ids:
+            db.timber_orders.delete_many({"_id": {"$in": orphaned_ids}})
+            print(f"[PRUNE ORDERS] Deleted {len(orphaned_ids)} orphaned order(s) whose listing no longer exists")
+
         q = {}
         if buyer_email:
             q["buyerEmail"] = {"$regex": f"^{buyer_email.strip()}$", "$options": "i"}
         docs = list(db.timber_orders.find(q).sort("createdAt", -1))
-        return [serialize_doc(d) for d in docs]
+        # Keep only orders tied to active listings or general orders without listingId
+        filtered_orders = [d for d in docs if not d.get("listingId") or str(d.get("listingId")).strip() in valid_listing_ids]
+        return [serialize_doc(d) for d in filtered_orders]
     except Exception as e:
         print(f"Error fetching orders: {e}")
         return []
@@ -291,6 +353,15 @@ def update_order(order_id: str, updated_data: Dict[str, Any]):
             {"$or": [{"id": order_id}, {"_id": ObjectId(order_id) if ObjectId.is_valid(order_id) else None}]}
         )
         return serialize_doc(found)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/orders/{order_id}")
+def delete_order(order_id: str):
+    try:
+        filt = {"$or": [{"id": order_id}, {"_id": ObjectId(order_id) if ObjectId.is_valid(order_id) else None}]}
+        res = db.timber_orders.delete_many(filt)
+        return {"success": True, "deleted_count": res.deleted_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

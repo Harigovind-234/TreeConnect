@@ -57,7 +57,13 @@ export const marketplaceService = {
         const lid = String(n.listingId || '').trim();
         return lid && validListingIds.has(lid);
       });
-      const realOrders = Array.isArray(ordRes.data) ? ordRes.data.filter(isNotFake) : [];
+
+      const rawOrders = Array.isArray(ordRes.data) ? ordRes.data.filter(isNotFake) : [];
+      // Filter out any orphaned orders whose listing no longer exists
+      const realOrders = rawOrders.filter(o => {
+        const lid = String(o.listingId || '').trim();
+        return !lid || validListingIds.has(lid);
+      });
 
       localStorage.setItem(LISTINGS_KEY, JSON.stringify(realListings));
       localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(realNegs));
@@ -301,6 +307,21 @@ export const marketplaceService = {
         }
       } catch (_) {}
 
+      // 3b. Remove associated orders (buyer dashboard purchases & active deliveries)
+      try {
+        const rawOrders = localStorage.getItem(ORDERS_KEY);
+        if (rawOrders) {
+          const ords = JSON.parse(rawOrders);
+          if (Array.isArray(ords)) {
+            const filteredOrders = ords.filter(o => {
+              const oListingId = String(o?.listingId || '').trim();
+              return !matchingIds.has(oListingId) && oListingId !== idStr && o?.listingId !== id;
+            });
+            localStorage.setItem(ORDERS_KEY, JSON.stringify(filteredOrders));
+          }
+        }
+      } catch (_) {}
+
       // 4. Delete from backend MongoDB API
       try {
         await api.delete(`/marketplace/listings/${encodeURIComponent(idStr)}`).catch(() => {});
@@ -314,6 +335,105 @@ export const marketplaceService = {
     } catch (e) {
       console.error('Error deleting timber listing:', e);
       return false;
+    }
+  },
+
+  cascadeDeleteByHarvestRequestId: async (harvestRequestId) => {
+    if (!harvestRequestId) return;
+    try {
+      const reqIdStr = String(harvestRequestId).trim();
+      const reqCanon = reqIdStr.length >= 8 ? reqIdStr.substring(0, 8).toLowerCase() : reqIdStr.toLowerCase();
+
+      // Find all listings matching this harvest operation / request ID
+      const currentListings = marketplaceService.getListings();
+      const matchingListingIds = new Set([reqIdStr]);
+
+      currentListings.forEach(l => {
+        const opId = String(l?.harvestOperationId || l?.harvestRequestId || '').trim();
+        const opCanon = opId.length >= 8 ? opId.substring(0, 8).toLowerCase() : opId.toLowerCase();
+        const lId = String(l?.id || l?._id || '').trim();
+        const lCanon = lId.length >= 8 ? lId.substring(0, 8).toLowerCase() : lId.toLowerCase();
+        if (opId === reqIdStr || opCanon === reqCanon || lId === reqIdStr || lCanon === reqCanon) {
+          if (l.id) matchingListingIds.add(String(l.id).trim());
+          if (l._id) matchingListingIds.add(String(l._id).trim());
+          if (l.harvestOperationId) matchingListingIds.add(String(l.harvestOperationId).trim());
+          if (l.harvestRequestId) matchingListingIds.add(String(l.harvestRequestId).trim());
+        }
+      });
+
+      // 1. Purge listings from localStorage
+      const nextListings = currentListings.filter(l => {
+        const lId = String(l?.id || l?._id || '').trim();
+        const opId = String(l?.harvestOperationId || l?.harvestRequestId || '').trim();
+        return !matchingListingIds.has(lId) && !matchingListingIds.has(opId);
+      });
+      localStorage.setItem(LISTINGS_KEY, JSON.stringify(nextListings));
+
+      // Purge all user specific listing keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('treeconnect_timber_listings') || key.startsWith('treeconnect_completed_harvests'))) {
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                const filtered = list.filter(l => {
+                  const lId = String(l?.id || l?._id || '').trim();
+                  const opId = String(l?.harvestOperationId || l?.harvestRequestId || '').trim();
+                  return !matchingListingIds.has(lId) && !matchingListingIds.has(opId);
+                });
+                localStorage.setItem(key, JSON.stringify(filtered));
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 2. Purge negotiations
+      try {
+        const rawNegs = localStorage.getItem(NEGOTIATIONS_KEY);
+        if (rawNegs) {
+          const negs = JSON.parse(rawNegs);
+          if (Array.isArray(negs)) {
+            const filteredNegs = negs.filter(n => {
+              const nListingId = String(n?.listingId || '').trim();
+              const opId = String(n?.harvestOperationId || n?.harvestRequestId || '').trim();
+              return !matchingListingIds.has(nListingId) && !matchingListingIds.has(opId);
+            });
+            localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(filteredNegs));
+          }
+        }
+      } catch (_) {}
+
+      // 3. Purge buyer orders
+      try {
+        const rawOrders = localStorage.getItem(ORDERS_KEY);
+        if (rawOrders) {
+          const ords = JSON.parse(rawOrders);
+          if (Array.isArray(ords)) {
+            const filteredOrders = ords.filter(o => {
+              const oListingId = String(o?.listingId || '').trim();
+              const opId = String(o?.harvestOperationId || o?.harvestRequestId || '').trim();
+              return !matchingListingIds.has(oListingId) && !matchingListingIds.has(opId);
+            });
+            localStorage.setItem(ORDERS_KEY, JSON.stringify(filteredOrders));
+          }
+        }
+      } catch (_) {}
+
+      // 4. Also call backend delete for any matching listing
+      for (const lid of matchingListingIds) {
+        try {
+          await api.delete(`/marketplace/listings/${encodeURIComponent(lid)}`).catch(() => {});
+        } catch (_) {}
+      }
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'harvest_cascade_deleted', harvestRequestId: reqIdStr }
+      }));
+    } catch (e) {
+      console.error('Error cascading delete for harvest request:', e);
     }
   },
 
@@ -1069,12 +1189,32 @@ export const marketplaceService = {
 
   getOrders: () => {
     try {
+      // Build a set of all valid listing IDs currently in the system
+      const validListingIds = new Set();
+      const currentListings = marketplaceService.getListings();
+      currentListings.forEach(l => {
+        if (l.id) validListingIds.add(String(l.id).trim());
+        if (l._id) validListingIds.add(String(l._id).trim());
+        if (l.harvestOperationId) validListingIds.add(String(l.harvestOperationId).trim());
+        if (l.harvestRequestId) validListingIds.add(String(l.harvestRequestId).trim());
+        if (l.treeInventoryId) validListingIds.add(String(l.treeInventoryId).trim());
+      });
+
       const raw = localStorage.getItem(ORDERS_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           const realOnly = parsed.filter(isNotFake);
-          return realOnly;
+          // Only keep orders whose parent listing exists
+          const withoutOrphans = realOnly.filter(item => {
+            const lId = String(item.listingId || '').trim();
+            if (validListingIds.size === 0) return false;
+            return validListingIds.has(lId);
+          });
+          if (withoutOrphans.length !== parsed.length) {
+            localStorage.setItem(ORDERS_KEY, JSON.stringify(withoutOrphans));
+          }
+          return withoutOrphans;
         }
       }
       return [];
@@ -1156,6 +1296,28 @@ export const marketplaceService = {
     } catch (e) {
       console.error('Error creating timber purchase order:', e);
       throw e;
+    }
+  },
+
+  deleteOrder: async (orderId) => {
+    try {
+      if (!orderId) return false;
+      const idStr = String(orderId).trim();
+      const current = marketplaceService.getOrders();
+      const next = current.filter(o => String(o.id || o._id || '').trim() !== idStr);
+      localStorage.setItem(ORDERS_KEY, JSON.stringify(next));
+
+      try {
+        await api.delete(`/marketplace/orders/${idStr}`).catch(() => {});
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'order_deleted', id: idStr }
+      }));
+      return true;
+    } catch (e) {
+      console.error('Error deleting purchase order:', e);
+      return false;
     }
   }
 };

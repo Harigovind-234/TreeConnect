@@ -3169,22 +3169,128 @@ def delete_harvest_request(request_id: str):
             )
 
         query = {"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else {"_id": request_id}
-        result = db.harvest_requests.delete_one(query)
+        req_doc = db.harvest_requests.find_one(query)
+        if not req_doc:
+            req_doc = db.harvest_requests.find_one({"id": request_id})
 
+        # Prevent deletion if landowner has accepted/confirmed options (site inspection date, quote, agreement, or active operation)
+        if req_doc:
+            inspection = req_doc.get("site_inspection") or {}
+            is_inspection_confirmed = bool(
+                req_doc.get("inspection_status") == "CONFIRMED" or
+                inspection.get("status") == "CONFIRMED" or
+                inspection.get("landowner_confirmed") or
+                req_doc.get("landowner_confirmed_date") or
+                inspection.get("landowner_confirmed_at")
+            )
+            is_operation_active = req_doc.get("status") in [
+                "OPERATION_READY", "ACCEPTED", "IN_PROGRESS", "COMPLETED"
+            ]
+            if is_inspection_confirmed or is_operation_active or req_doc.get("digital_agreement") or req_doc.get("site_inspected"):
+                return JSONResponse(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    content={"message": "Cannot delete harvest request after options have been confirmed and accepted."}
+                )
+
+        # Collect all ID aliases for this harvest request
+        all_req_ids = {str(request_id)}
+        if req_doc:
+            if req_doc.get("_id"):
+                all_req_ids.add(str(req_doc["_id"]))
+            if req_doc.get("id"):
+                all_req_ids.add(str(req_doc["id"]))
+
+        req_ids_list = list(all_req_ids)
+
+        # 1. Cascade delete contractor assessments
         try:
-            db.contractor_assessments.delete_many({"harvest_request_id": request_id})
+            db.contractor_assessments.delete_many({
+                "$or": [
+                    {"harvest_request_id": {"$in": req_ids_list}},
+                    {"harvestRequestId": {"$in": req_ids_list}}
+                ]
+            })
+        except Exception as e:
+            print(f"[CASCADE DELETE] Assessments cleanup notice: {e}")
+
+        # 2. Find all matching timber listings linked to this harvest request
+        listing_query = {
+            "$or": [
+                {"harvestOperationId": {"$in": req_ids_list}},
+                {"harvestRequestId": {"$in": req_ids_list}},
+                {"id": {"$in": req_ids_list}}
+            ]
+        }
+        matching_listings = list(db.timber_marketplace_listings.find(listing_query))
+        all_listing_ids = set(req_ids_list)
+        for doc in matching_listings:
+            if doc.get("id"):
+                all_listing_ids.add(str(doc["id"]))
+            if doc.get("_id"):
+                all_listing_ids.add(str(doc["_id"]))
+            if doc.get("harvestOperationId"):
+                all_listing_ids.add(str(doc["harvestOperationId"]))
+            if doc.get("harvestRequestId"):
+                all_listing_ids.add(str(doc["harvestRequestId"]))
+
+        listing_ids_list = list(all_listing_ids)
+
+        # 3. Cascade delete from timber_marketplace_listings
+        list_res = db.timber_marketplace_listings.delete_many(listing_query)
+
+        # 4. Find and delete associated negotiations (buyer offers & bargaining)
+        neg_query = {
+            "$or": [
+                {"listingId": {"$in": listing_ids_list}},
+                {"harvestOperationId": {"$in": req_ids_list}},
+                {"harvestRequestId": {"$in": req_ids_list}}
+            ]
+        }
+        matching_negs = list(db.timber_negotiations.find(neg_query))
+        all_neg_ids = set()
+        for ndoc in matching_negs:
+            if ndoc.get("id"):
+                all_neg_ids.add(str(ndoc["id"]))
+            if ndoc.get("_id"):
+                all_neg_ids.add(str(ndoc["_id"]))
+
+        neg_ids_list = list(all_neg_ids)
+        neg_res = db.timber_negotiations.delete_many(neg_query)
+
+        # 5. Cascade delete associated orders (buyer dashboard purchases & deliveries)
+        ord_query = {
+            "$or": [
+                {"listingId": {"$in": listing_ids_list}},
+                {"negotiationId": {"$in": neg_ids_list}},
+                {"harvestOperationId": {"$in": req_ids_list}},
+                {"harvestRequestId": {"$in": req_ids_list}}
+            ]
+        }
+        ord_res = db.timber_orders.delete_many(ord_query)
+
+        # 6. Delete harvest operations, permits, payments if any
+        try:
+            db.harvest_operations.delete_many({"$or": [{"harvest_request_id": {"$in": req_ids_list}}, {"harvestOperationId": {"$in": req_ids_list}}, {"id": {"$in": req_ids_list}}]})
+            db.harvest_permits.delete_many({"$or": [{"harvest_request_id": {"$in": req_ids_list}}, {"requestId": {"$in": req_ids_list}}]})
+            db.harvest_payments.delete_many({"$or": [{"harvest_request_id": {"$in": req_ids_list}}, {"requestId": {"$in": req_ids_list}}]})
         except Exception:
             pass
 
-        if result.deleted_count == 0:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={"message": "Harvest request not found for deletion"}
-            )
+        # 7. Delete the harvest request itself
+        del_query = [{"_id": ObjectId(request_id)} if ObjectId.is_valid(request_id) else None, {"_id": request_id}, {"id": request_id}]
+        del_query = [q for q in del_query if q]
+        result = db.harvest_requests.delete_many({"$or": del_query})
+
+        print(f"[CASCADE DELETE HARVEST REQUEST {request_id}] Deleted {result.deleted_count} reqs, {list_res.deleted_count} listings, {neg_res.deleted_count} negs, {ord_res.deleted_count} orders")
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"message": "Harvest request deleted successfully from DB"}
+            content={
+                "message": "Harvest request and associated timber marketplace listings, buyer negotiations, and orders deleted successfully.",
+                "deleted_listings": list_res.deleted_count,
+                "deleted_negotiations": neg_res.deleted_count,
+                "deleted_orders": ord_res.deleted_count
+            }
         )
     except Exception as e:
         return JSONResponse(

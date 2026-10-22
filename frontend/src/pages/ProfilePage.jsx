@@ -337,6 +337,18 @@ const ProfilePage = () => {
   const totalTreesCount = properties.reduce((acc, p) => acc + (parseInt(p.treesCount, 10) || parseInt(p.trees, 10) || 0), 0);
   const totalAreaAcres = properties.reduce((acc, p) => acc + (parseFloat(p.area) || 0), 0);
 
+  // Helper to extract file extension badge cleanly
+  const getFileExt = (filename) => {
+    if (!filename) return 'PDF';
+    const clean = filename.split('?')[0];
+    const parts = clean.split('.');
+    if (parts.length > 1) {
+      const ext = parts[parts.length - 1].toUpperCase();
+      if (ext.length <= 4) return ext;
+    }
+    return 'PDF';
+  };
+
   return (
     <div className="admin-dashboard-page">
       <Navbar />
@@ -949,42 +961,70 @@ const ProfilePage = () => {
                 {isBuyer && (
                   <>
                     {/* Kerala Forest Dept Licence */}
-                    <div className="admin-subcard p-5 space-y-3.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-bold text-white">Forest Dept Sawmill / Depot Licence</h4>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              Forest Permit
-                            </span>
-                          </div>
-                          <p className="text-xs text-emerald-400 font-mono">
-                            {profile?.forestLicenceDoc || 'sawmill_owner_license.jpeg'}
-                          </p>
+                    <div className="admin-subcard p-5 space-y-4 hover:border-emerald-500/40 transition-all duration-200">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <Trees size={12} className="text-emerald-400" />
+                            <span>Forest Regulatory</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shrink-0">
+                            <CheckCircle2 size={13} className="text-emerald-400" />
+                            <span>Approved by Admin</span>
+                          </span>
                         </div>
-                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0 flex items-center gap-1">
-                          <CheckCircle2 size={13} className="text-emerald-400" />
-                          <span>Approved by Admin</span>
-                        </span>
+
+                        <h4 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                          Forest Dept Sawmill / Depot Licence
+                        </h4>
+
+                        {/* Document File Attachment Preview Bar */}
+                        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#06120b] border border-emerald-500/15">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                            <FileText size={14} />
+                          </div>
+                          <span className="text-xs font-mono font-medium text-emerald-300 truncate flex-1">
+                            {profile?.forestLicenceDoc || 'sawmill_owner_license.jpeg'}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                            {getFileExt(profile?.forestLicenceDoc || 'sawmill_owner_license.jpeg')}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Admin Verification Dossier on Card */}
-                      <div className="p-3 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="p-3.5 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Permit / Reg No</span>
-                          <span className="text-emerald-300 font-mono font-bold">KL-FAD-KTYM-2026/842</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Permit / Reg No
+                          </span>
+                          <span className="text-emerald-300 font-mono font-bold block truncate">
+                            KL-FAD-KTYM-2026/842
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Issuing Authority</span>
-                          <span className="text-slate-200">Divisional Forest Office, Kottayam</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Issuing Authority
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            Divisional Forest Office, {profile?.district || formData.district || 'Kottayam'}
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Authorized Signatory</span>
-                          <span className="text-slate-200 font-medium">{displayName || 'Arun K'} ({businessName || 'timberbuyers'})</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Authorized Signatory
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            {displayName || 'Arun K'} ({businessName || 'timberbuyers'})
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Admin Verification Ref</span>
-                          <span className="text-emerald-400 font-mono">TC-ADM-VER-2026-0941</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Admin Verification Ref
+                          </span>
+                          <span className="text-emerald-400 font-mono font-bold block truncate">
+                            TC-ADM-VER-2026-0941
+                          </span>
                         </div>
                       </div>
 
@@ -1000,7 +1040,7 @@ const ProfilePage = () => {
                             fileName: profile?.forestLicenceDoc || 'sawmill_owner_license.jpeg',
                             type: 'Kerala Forest Department Regulatory Licence',
                             docNumber: 'KL-FAD-KTYM-2026/842',
-                            issuingAuthority: 'Divisional Forest Office, Kerala Forest Department (Kottayam Division)',
+                            issuingAuthority: `Divisional Forest Office, Kerala Forest Department (${profile?.district || formData.district || 'Kottayam'} Division)`,
                             authorizedEntity: businessName || 'timberbuyers',
                             authorizedPerson: displayName || 'Arun K',
                             adminRef: 'TC-ADM-VER-2026-0941',
@@ -1009,52 +1049,83 @@ const ProfilePage = () => {
                             adminNotes: 'Document inspected, statutory sawmill clearance verified and approved for state timber procurement.',
                             fileUrl: profile?.forestLicenceUrl || ''
                           })}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/40"
+                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/60"
                         >
                           <Eye size={13} className="text-emerald-400" />
                           <span>View Document</span>
                         </button>
-                        <span className="text-xs text-emerald-400 font-bold">✓ Forest Certified</span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                          <Check size={13} />
+                          <span>Forest Certified</span>
+                        </span>
                       </div>
                     </div>
 
                     {/* Local-Body Trade Licence */}
-                    <div className="admin-subcard p-5 space-y-3.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-bold text-white">Local-Body Trade / Business Licence</h4>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                              Local Body
-                            </span>
-                          </div>
-                          <p className="text-xs text-blue-300 font-mono">
-                            {profile?.tradeLicenceDoc || 'sawmill_buyer_license.jpeg'}
-                          </p>
+                    <div className="admin-subcard p-5 space-y-4 hover:border-emerald-500/40 transition-all duration-200">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <Building2 size={12} className="text-emerald-400" />
+                            <span>LSGD Trade Licence</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shrink-0">
+                            <CheckCircle2 size={13} className="text-emerald-400" />
+                            <span>Approved by Admin</span>
+                          </span>
                         </div>
-                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30 shrink-0 flex items-center gap-1">
-                          <CheckCircle2 size={13} className="text-blue-400" />
-                          <span>Approved by Admin</span>
-                        </span>
+
+                        <h4 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                          Local-Body Trade / Business Licence
+                        </h4>
+
+                        {/* Document File Attachment Preview Bar */}
+                        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#06120b] border border-emerald-500/15">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                            <FileText size={14} />
+                          </div>
+                          <span className="text-xs font-mono font-medium text-emerald-300 truncate flex-1">
+                            {profile?.tradeLicenceDoc || 'sawmill_buyer_license.jpeg'}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                            {getFileExt(profile?.tradeLicenceDoc || 'sawmill_buyer_license.jpeg')}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Admin Verification Dossier on Card */}
-                      <div className="p-3 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="p-3.5 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Trade Licence No</span>
-                          <span className="text-blue-300 font-mono font-bold">GP-TRD-4519/2026-27</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Trade Licence No
+                          </span>
+                          <span className="text-emerald-300 font-mono font-bold block truncate">
+                            GP-TRD-4519/2026-27
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Issuing Local Authority</span>
-                          <span className="text-slate-200">Meenadom Grama Panchayat, LSGD</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Issuing Local Authority
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            {profile?.localBody || formData.localBody || 'Meenadom Grama Panchayat'}, LSGD
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Authorized Establishment</span>
-                          <span className="text-slate-200 font-medium">{businessName || 'timberbuyers'} Yard</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Authorized Establishment
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            {businessName || 'timberbuyers'} Yard
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Admin Verification Ref</span>
-                          <span className="text-blue-400 font-mono">TC-ADM-VER-2026-0942</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Admin Verification Ref
+                          </span>
+                          <span className="text-emerald-400 font-mono font-bold block truncate">
+                            TC-ADM-VER-2026-0942
+                          </span>
                         </div>
                       </div>
 
@@ -1070,7 +1141,7 @@ const ProfilePage = () => {
                             fileName: profile?.tradeLicenceDoc || 'sawmill_buyer_license.jpeg',
                             type: 'Local Grama Panchayat Trade Permit',
                             docNumber: 'GP-TRD-4519/2026-27',
-                            issuingAuthority: 'Meenadom Grama Panchayat, Local Self Government Department, Kerala',
+                            issuingAuthority: `${profile?.localBody || formData.localBody || 'Meenadom Grama Panchayat'}, Local Self Government Department, Kerala`,
                             authorizedEntity: businessName || 'timberbuyers',
                             authorizedPerson: displayName || 'Arun K',
                             adminRef: 'TC-ADM-VER-2026-0942',
@@ -1079,57 +1150,88 @@ const ProfilePage = () => {
                             adminNotes: 'Local commercial trading licence verified for industrial roundwood timber handling.',
                             fileUrl: profile?.tradeLicenceUrl || ''
                           })}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/40"
+                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/60"
                         >
                           <Eye size={13} className="text-emerald-400" />
                           <span>View Document</span>
                         </button>
-                        <span className="text-xs text-blue-300 font-bold">✓ Trade Certified</span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                          <Check size={13} />
+                          <span>Trade Certified</span>
+                        </span>
                       </div>
                     </div>
 
                     {/* GST Registration Certificate */}
-                    <div className="admin-subcard p-5 space-y-3.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-bold text-white">GST Certificate (Form REG-06)</h4>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                              GST Tax
-                            </span>
-                          </div>
-                          <p className="text-xs text-purple-300 font-mono">
-                            {profile?.gstDoc || 'GST_registartion_certificate.jpg'}
-                          </p>
+                    <div className="admin-subcard p-5 space-y-4 hover:border-emerald-500/40 transition-all duration-200">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <FileText size={12} className="text-emerald-400" />
+                            <span>Taxation &amp; GST</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shrink-0">
+                            <CheckCircle2 size={13} className="text-emerald-400" />
+                            <span>Approved by Admin</span>
+                          </span>
                         </div>
-                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 shrink-0 flex items-center gap-1">
-                          <CheckCircle2 size={13} className="text-purple-400" />
-                          <span>Approved by Admin</span>
-                        </span>
+
+                        <h4 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                          GST Certificate (Form REG-06)
+                        </h4>
+
+                        {/* Document File Attachment Preview Bar */}
+                        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#06120b] border border-emerald-500/15">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                            <FileText size={14} />
+                          </div>
+                          <span className="text-xs font-mono font-medium text-emerald-300 truncate flex-1">
+                            {profile?.gstDoc || 'GST_registration_certificate.jpg'}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                            {getFileExt(profile?.gstDoc || 'GST_registration_certificate.jpg')}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Admin Verification Dossier on Card */}
-                      <div className="p-3 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="p-3.5 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">GSTIN / Tax ID</span>
-                          <span className="text-purple-300 font-mono font-bold">{formData.gstNumber || '32AABCR4589K1Z5'}</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            GSTIN / Tax ID
+                          </span>
+                          <span className="text-emerald-300 font-mono font-bold block truncate">
+                            {formData.gstNumber || profile?.gstNumber || '32AABCR4589K1Z5'}
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Issuing Tax Authority</span>
-                          <span className="text-slate-200">State Goods &amp; Services Tax Dept, Kerala</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Issuing Tax Authority
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            State Goods &amp; Services Tax Dept, Kerala
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Legal &amp; Trade Name</span>
-                          <span className="text-slate-200 font-medium">{displayName || 'Arun K'} — {businessName || 'timberbuyers'}</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Legal &amp; Trade Name
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            {displayName || 'Arun K'} — {businessName || 'timberbuyers'}
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Admin Verification Ref</span>
-                          <span className="text-purple-400 font-mono">TC-ADM-VER-2026-0943</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Admin Verification Ref
+                          </span>
+                          <span className="text-emerald-400 font-mono font-bold block truncate">
+                            TC-ADM-VER-2026-0943
+                          </span>
                         </div>
                       </div>
 
                       <p className="text-xs text-slate-400 leading-relaxed">
-                        Goods &amp; Services Tax Registration Certificate (GSTIN {formData.gstNumber || '32AABCR4589K1Z5'}).
+                        Goods &amp; Services Tax Registration Certificate (GSTIN {formData.gstNumber || profile?.gstNumber || '32AABCR4589K1Z5'}).
                       </p>
 
                       <div className="pt-2 flex items-center justify-between border-t border-emerald-500/15">
@@ -1137,9 +1239,9 @@ const ProfilePage = () => {
                           type="button"
                           onClick={() => setViewingDoc({
                             title: 'GST Registration Certificate (Form REG-06)',
-                            fileName: profile?.gstDoc || 'GST_registartion_certificate.jpg',
+                            fileName: profile?.gstDoc || 'GST_registration_certificate.jpg',
                             type: 'Government of India GST Tax Certificate',
-                            docNumber: formData.gstNumber || '32AABCR4589K1Z5',
+                            docNumber: formData.gstNumber || profile?.gstNumber || '32AABCR4589K1Z5',
                             issuingAuthority: 'State Goods and Services Tax Department, Government of Kerala',
                             authorizedEntity: businessName || 'timberbuyers',
                             authorizedPerson: displayName || 'Arun K',
@@ -1149,57 +1251,88 @@ const ProfilePage = () => {
                             adminNotes: 'GSTIN active status verified against Goods and Services Tax Network (GSTN) registry.',
                             fileUrl: profile?.gstUrl || ''
                           })}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/40"
+                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/60"
                         >
                           <Eye size={13} className="text-emerald-400" />
                           <span>View Document</span>
                         </button>
-                        <span className="text-xs text-purple-300 font-bold">✓ GST Active</span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                          <Check size={13} />
+                          <span>GST Active</span>
+                        </span>
                       </div>
                     </div>
 
                     {/* Signatory Government ID */}
-                    <div className="admin-subcard p-5 space-y-3.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-bold text-white">Signatory ID Proof ({profile?.idProofType || 'Aadhaar Card'})</h4>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                              KYC Proof
-                            </span>
-                          </div>
-                          <p className="text-xs text-teal-300 font-mono">
-                            {profile?.idProofDocument || 'Aadhaar_card.jpg'}
-                          </p>
+                    <div className="admin-subcard p-5 space-y-4 hover:border-emerald-500/40 transition-all duration-200">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <ShieldCheck size={12} className="text-emerald-400" />
+                            <span>Identity KYC</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shrink-0">
+                            <CheckCircle2 size={13} className="text-emerald-400" />
+                            <span>Approved by Admin</span>
+                          </span>
                         </div>
-                        <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30 shrink-0 flex items-center gap-1">
-                          <CheckCircle2 size={13} className="text-teal-400" />
-                          <span>Approved by Admin</span>
-                        </span>
+
+                        <h4 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                          Signatory ID Proof ({profile?.idProofType || 'Aadhaar Card'})
+                        </h4>
+
+                        {/* Document File Attachment Preview Bar */}
+                        <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#06120b] border border-emerald-500/15">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                            <FileText size={14} />
+                          </div>
+                          <span className="text-xs font-mono font-medium text-emerald-300 truncate flex-1">
+                            {profile?.idProofDocument || 'Aadhaar_card.jpg'}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                            {getFileExt(profile?.idProofDocument || 'Aadhaar_card.jpg')}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Admin Verification Dossier on Card */}
-                      <div className="p-3 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="p-3.5 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Identity Reference</span>
-                          <span className="text-teal-300 font-mono font-bold">UIDAI-KL-XXXX-XXXX-4821</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Identity Reference
+                          </span>
+                          <span className="text-emerald-300 font-mono font-bold block truncate">
+                            UIDAI-KL-XXXX-XXXX-4821
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Issuing Authority</span>
-                          <span className="text-slate-200">UIDAI, Government of India</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Issuing Authority
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            UIDAI, Government of India
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Signatory Verified</span>
-                          <span className="text-slate-200 font-medium">{displayName || 'Arun K'}</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Signatory Verified
+                          </span>
+                          <span className="text-slate-200 font-medium block truncate">
+                            {displayName || 'Arun K'}
+                          </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">Admin Verification Ref</span>
-                          <span className="text-teal-400 font-mono">TC-ADM-VER-2026-0944</span>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                            Admin Verification Ref
+                          </span>
+                          <span className="text-emerald-400 font-mono font-bold block truncate">
+                            TC-ADM-VER-2026-0944
+                          </span>
                         </div>
                       </div>
 
                       <p className="text-xs text-slate-400 leading-relaxed">
-                        Government identity document of the enterprise proprietor / authorized signatory.
+                        Official Government identity document confirming authorized enterprise proprietor &amp; signatory KYC.
                       </p>
 
                       <div className="pt-2 flex items-center justify-between border-t border-emerald-500/15">
@@ -1219,14 +1352,120 @@ const ProfilePage = () => {
                             adminNotes: 'Signatory identity demographic and biometric verification confirmed by administrator.',
                             fileUrl: profile?.idProofUrl || ''
                           })}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/40"
+                          className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/60"
                         >
                           <Eye size={13} className="text-emerald-400" />
                           <span>View Document</span>
                         </button>
-                        <span className="text-xs text-teal-300 font-bold">✓ KYC Verified</span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                          <Check size={13} />
+                          <span>KYC Verified</span>
+                        </span>
                       </div>
                     </div>
+
+                    {/* Optional Business / MSME Certificate if present */}
+                    {profile?.businessCertDoc && (
+                      <div className="admin-subcard p-5 space-y-4 hover:border-emerald-500/40 transition-all duration-200">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              <Briefcase size={12} className="text-emerald-400" />
+                              <span>MSME Enterprise</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm shrink-0">
+                              <CheckCircle2 size={13} className="text-emerald-400" />
+                              <span>Approved by Admin</span>
+                            </span>
+                          </div>
+
+                          <h4 className="text-sm sm:text-base font-bold text-white tracking-tight">
+                            Business Registration / MSME Certificate
+                          </h4>
+
+                          {/* Document File Attachment Preview Bar */}
+                          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#06120b] border border-emerald-500/15">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                              <FileText size={14} />
+                            </div>
+                            <span className="text-xs font-mono font-medium text-emerald-300 truncate flex-1">
+                              {profile.businessCertDoc}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                              {getFileExt(profile.businessCertDoc)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Admin Verification Dossier on Card */}
+                        <div className="p-3.5 bg-[#06140d] rounded-xl border border-emerald-500/15 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                              Udyam / Reg No
+                            </span>
+                            <span className="text-emerald-300 font-mono font-bold block truncate">
+                              UDYAM-KL-05-0041289
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                              Issuing Authority
+                            </span>
+                            <span className="text-slate-200 font-medium block truncate">
+                              Ministry of MSME, Govt of India
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                              Enterprise Name
+                            </span>
+                            <span className="text-slate-200 font-medium block truncate">
+                              {businessName || 'timberbuyers'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider block font-semibold">
+                              Admin Verification Ref
+                            </span>
+                            <span className="text-emerald-400 font-mono font-bold block truncate">
+                              TC-ADM-VER-2026-0945
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          Government MSME / Udyam enterprise registration confirming statutory manufacturing and trading credentials.
+                        </p>
+
+                        <div className="pt-2 flex items-center justify-between border-t border-emerald-500/15">
+                          <button
+                            type="button"
+                            onClick={() => setViewingDoc({
+                              title: 'Business Registration / MSME Certificate',
+                              fileName: profile.businessCertDoc,
+                              type: 'Ministry of MSME Certificate of Registration',
+                              docNumber: 'UDYAM-KL-05-0041289',
+                              issuingAuthority: 'Ministry of Micro, Small & Medium Enterprises, Government of India',
+                              authorizedEntity: businessName || 'timberbuyers',
+                              authorizedPerson: displayName || 'Arun K',
+                              adminRef: 'TC-ADM-VER-2026-0945',
+                              verifiedDate: '19 Oct 2026',
+                              regulatoryStandard: 'Micro, Small and Medium Enterprises Development Act 2006',
+                              adminNotes: 'MSME registration certificate verified against Udyam portal.',
+                              fileUrl: profile.businessCertUrl || ''
+                            })}
+                            className="px-3.5 py-1.5 rounded-lg bg-[#0b1812] border border-emerald-500/30 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all hover:bg-emerald-950/60"
+                          >
+                            <Eye size={13} className="text-emerald-400" />
+                            <span>View Document</span>
+                          </button>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                            <Check size={13} />
+                            <span>MSME Certified</span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 

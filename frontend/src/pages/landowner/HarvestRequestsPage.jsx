@@ -443,29 +443,59 @@ const HarvestRequestsPage = () => {
         notes: 'Date accepted by landowner'
       });
 
-      // Synchronize in localStorage for instant reactive update
+      // Synchronize immediately in React context/state so UI re-renders without any lag
+      if (setHarvestRequests) {
+        setHarvestRequests(prev => prev.map(r => {
+          if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+            return {
+              ...r,
+              reschedule_requested: false,
+              inspection_status: 'CONFIRMED',
+              site_inspection: {
+                ...(r.site_inspection || {}),
+                landowner_confirmed: true,
+                landowner_confirmed_at: nowIso,
+                status: 'CONFIRMED',
+                reschedule_requested: false
+              }
+            };
+          }
+          return r;
+        }));
+      }
+
+      // Synchronize in all localStorage keys for persistent update
       try {
-        const stored = localStorage.getItem('treeconnect_harvest_requests');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          const updated = parsed.map(r => {
-            if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
-              return {
-                ...r,
-                reschedule_requested: false,
-                inspection_status: 'CONFIRMED',
-                site_inspection: {
-                  ...(r.site_inspection || {}),
-                  landowner_confirmed: true,
-                  landowner_confirmed_at: nowIso,
-                  status: 'CONFIRMED',
-                  reschedule_requested: false
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('treeconnect_harvest_requests')) {
+            try {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                  const updated = parsed.map(r => {
+                    if (String(r.id) === String(requestId) || String(r._id) === String(requestId)) {
+                      return {
+                        ...r,
+                        reschedule_requested: false,
+                        inspection_status: 'CONFIRMED',
+                        site_inspection: {
+                          ...(r.site_inspection || {}),
+                          landowner_confirmed: true,
+                          landowner_confirmed_at: nowIso,
+                          status: 'CONFIRMED',
+                          reschedule_requested: false
+                        }
+                      };
+                    }
+                    return r;
+                  });
+                  localStorage.setItem(key, JSON.stringify(updated));
                 }
-              };
-            }
-            return r;
-          });
-          localStorage.setItem('treeconnect_harvest_requests', JSON.stringify(updated));
+              }
+            } catch (_) {}
+          }
         }
       } catch (errLocal) {
         console.warn("Could not sync confirmation to localStorage:", errLocal);
@@ -773,6 +803,28 @@ const HarvestRequestsPage = () => {
                         ? req.tree_inventory
                         : [{ groupName: 'Teak Stand #1', numberOfTrees: 1, species: 'Teak', approxAge: '15', girth: '60 - 85cm', estimatedVolume: '1.7 m³' }]));
 
+                  const isInspectionConfirmed = Boolean(
+                    inspection.landowner_confirmed ||
+                    req.inspection_status === 'CONFIRMED' ||
+                    inspection.status === 'CONFIRMED' ||
+                    req.landowner_confirmed_date ||
+                    inspection.landowner_confirmed_at
+                  );
+
+                  const isOptionsConfirmed = Boolean(
+                    isInspectionConfirmed ||
+                    isAccepted ||
+                    isOperationReady ||
+                    isAgreementReady ||
+                    req.status === 'ACCEPTED' ||
+                    req.status === 'OPERATION_READY' ||
+                    req.status === 'IN_PROGRESS' ||
+                    req.status === 'COMPLETED' ||
+                    assessment?.status === 'ACCEPTED' ||
+                    req.digital_agreement ||
+                    isInspectionCompleted
+                  );
+
                   return (
                     <div key={reqId} id={`harvest-request-${reqId}`} className="harvest-request-card">
 
@@ -825,14 +877,16 @@ const HarvestRequestsPage = () => {
                           >
                             {isExpanded ? <><ChevronUp size={15} /><span className="hidden sm:inline">Less</span></> : <><ChevronDown size={15} /><span className="hidden sm:inline">Details</span></>}
                           </button>
-                          <button
-                            onClick={() => handleDeleteHarvestRequest(reqId)}
-                            className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-                            title="Cancel & Delete Harvest Request"
-                          >
-                            <Trash2 size={15} />
-                            <span className="hidden sm:inline">Delete</span>
-                          </button>
+                          {!isOptionsConfirmed && (
+                            <button
+                              onClick={() => handleDeleteHarvestRequest(reqId)}
+                              className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                              title="Cancel & Delete Harvest Request"
+                            >
+                              <Trash2 size={15} />
+                              <span className="hidden sm:inline">Delete</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
