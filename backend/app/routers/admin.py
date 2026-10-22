@@ -147,6 +147,181 @@ def format_user_summary(u, include_urls=False):
     }
 
     return user_data
+def format_inr(amount: float) -> str:
+    if amount >= 10000000:
+        return f"₹{amount / 10000000:.2f} Cr"
+    elif amount >= 100000:
+        return f"₹{amount / 100000:.2f} Lakhs"
+    elif amount >= 1000:
+        return f"₹{amount / 1000:.1f}K"
+    else:
+        return f"₹{amount:,.0f}"
+
+@router.get("/overview")
+def get_platform_overview():
+    try:
+        if db is None:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"message": "Database connection error"}
+            )
+
+        # 1. Users count (exclude admin)
+        users = list(db.users.find({}, {"role": 1, "status": 1, "isVerified": 1, "verification": 1, "forestLicenceDoc": 1, "tradeLicenceDoc": 1}))
+        non_admin_users = [u for u in users if (u.get("role") or "").lower() != "admin"]
+        total_users_count = len(non_admin_users)
+
+        # Pending contractors review
+        pending_contractors = [
+            u for u in non_admin_users
+            if (
+                not u.get("isVerified")
+                or "pending" in str(u.get("verification", "")).lower()
+                or str(u.get("status", "")).lower() == "pending"
+            )
+            and (u.get("role") in ["contractor", "buyer"] or u.get("forestLicenceDoc") or u.get("tradeLicenceDoc"))
+        ]
+        pending_contractor_count = len(pending_contractors)
+
+        # 2. Properties count
+        props = list(db.properties.find({}, {"treeCount": 1, "totalTrees": 1}))
+        total_properties_count = len(props)
+        total_trees = sum(p.get("treeCount", 0) or p.get("totalTrees", 0) for p in props)
+
+        # 3. Harvest requests
+        harvests = list(db.harvest_requests.find({}, {
+            "status": 1,
+            "inspection_status": 1,
+            "inspection_scheduled_date": 1,
+            "current_harvest_stage": 1,
+            "is_advance_verified": 1,
+            "is_fully_paid": 1
+        }))
+        total_harvests_count = len(harvests)
+
+        pending_harvests = []
+        bidding_harvests = []
+        survey_harvests = []
+        active_harvesting = []
+        completed_harvests = []
+
+        for h in harvests:
+            st = str(h.get("status", "")).upper()
+            insp_st = str(h.get("inspection_status", "")).upper()
+            has_insp_date = bool(h.get("inspection_scheduled_date"))
+            stage = str(h.get("current_harvest_stage", "")).lower()
+
+            if "COMPLET" in st or "SETTLED" in st or "FINAL" in st or h.get("is_fully_paid"):
+                completed_harvests.append(h)
+            elif "IN_PROGRESS" in st or "HARVEST" in st or stage in ["stage_1", "stage_2", "stage_3", "stage_4"] or h.get("is_advance_verified"):
+                active_harvesting.append(h)
+            elif "SURVEY" in st or "SCHEDULED" in insp_st or (has_insp_date and insp_st != "COMPLETED"):
+                survey_harvests.append(h)
+            elif st in ["CONTRACTOR_ASSIGNED", "ASSESSMENT_SUBMITTED", "COUNTER_PROPOSED_BY_LANDOWNER", "PENDING_LANDOWNER_APPROVAL"] or "BID" in st:
+                bidding_harvests.append(h)
+            else:
+                pending_harvests.append(h)
+
+        # 4. Timber listings
+        listings = list(db.timber_marketplace_listings.find({}, {"status": 1}))
+        total_listings_count = len(listings)
+        active_listings = [l for l in listings if str(l.get("status", "")).lower() not in ["sold", "inactive"]]
+
+        # 5. Transactions / Payments
+        payments = list(db.harvest_payments.find({}, {"status": 1, "amount": 1}))
+        verified_payments = [p for p in payments if str(p.get("status", "")).upper() in ["VERIFIED", "PAID", "SUCCESS", "COMPLETED"]]
+        verified_amount = sum(float(p.get("amount", 0) or 0) for p in verified_payments)
+
+        orders = list(db.timber_orders.find({}, {"totalAmount": 1, "agreedPrice": 1, "status": 1}))
+        order_amount = sum(float(o.get("totalAmount") or o.get("agreedPrice") or 0) for o in orders)
+        total_transactions_val = verified_amount + order_amount
+
+        metrics = [
+            {
+                "id": "total_users",
+                "label": "TOTAL USERS",
+                "value": str(total_users_count),
+                "subtext": "Live MongoDB count",
+                "icon": "Users",
+                "color": "emerald"
+            },
+            {
+                "id": "pending_contractors",
+                "label": "CONTRACTOR VERIFICATION",
+                "value": str(pending_contractor_count),
+                "subtext": f"{pending_contractor_count} pending review" if pending_contractor_count > 0 else "All verified",
+                "icon": "ShieldCheck",
+                "color": "amber" if pending_contractor_count > 0 else "emerald"
+            },
+            {
+                "id": "active_properties",
+                "label": "ACTIVE PROPERTIES",
+                "value": str(total_properties_count),
+                "subtext": f"{total_trees} trees cataloged" if total_trees > 0 else f"{total_properties_count} registered",
+                "icon": "Trees",
+                "color": "emerald"
+            },
+            {
+                "id": "harvest_requests",
+                "label": "HARVEST REQUESTS",
+                "value": str(total_harvests_count),
+                "subtext": f"{len(pending_harvests)} pending" if len(pending_harvests) > 0 else (f"{len(completed_harvests)} completed" if len(completed_harvests) > 0 else "0 pending"),
+                "icon": "Truck",
+                "color": "blue"
+            },
+            {
+                "id": "timber_listings",
+                "label": "TIMBER LISTINGS",
+                "value": str(len(active_listings)),
+                "subtext": f"{len(active_listings)} active in market",
+                "icon": "ShoppingBag",
+                "color": "purple"
+            },
+            {
+                "id": "transactions",
+                "label": "TRANSACTIONS",
+                "value": format_inr(total_transactions_val),
+                "subtext": f"{len(verified_payments)} verified payments" if len(verified_payments) > 0 else "Escrow protected",
+                "icon": "DollarSign",
+                "color": "emerald"
+            }
+        ]
+
+        operations_overview = {
+            "harvestOperations": {
+                "pendingRequests": len(pending_harvests),
+                "contractorBidding": len(bidding_harvests),
+                "surveyScheduled": len(survey_harvests),
+                "harvesting": len(active_harvesting),
+                "completed": len(completed_harvests),
+                "operationsTotal": total_harvests_count
+            },
+            "timberMarketplace": {
+                "activeListings": len(active_listings),
+                "buyerRequests": len(list(db.timber_negotiations.find({}))),
+                "pendingOrders": len([o for o in orders if str(o.get("status", "")).lower() not in ["delivered", "completed"]]),
+                "completedSales": len([l for l in listings if str(l.get("status", "")).lower() == "sold"]) + len([o for o in orders if str(o.get("status", "")).lower() in ["delivered", "completed"]]),
+                "transactionValue": format_inr(order_amount)
+            },
+            "transactionsSummary": {
+                "completedValue": format_inr(total_transactions_val),
+                "pendingValue": format_inr(sum(float(p.get("amount", 0) or 0) for p in payments if p not in verified_payments)),
+                "failedCount": len([p for p in payments if str(p.get("status", "")).upper() in ["FAILED", "REJECTED"]])
+            }
+        }
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "metrics": metrics,
+                "operationsOverview": operations_overview
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Failed to fetch platform overview: {str(e)}"}
+        )
 
 @router.get("/users")
 def get_all_users(role: Optional[str] = None):
@@ -255,3 +430,87 @@ def update_user_status(user_id: str, payload: UserStatusUpdate):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Failed to update user status: {str(e)}"}
         )
+
+# ==================== OPERATIONS & MARKET DATA ====================
+
+def serialize_mongo(doc):
+    if doc is None:
+        return None
+    if isinstance(doc, ObjectId):
+        return str(doc)
+    if isinstance(doc, dict):
+        res = {}
+        for k, v in doc.items():
+            if isinstance(v, ObjectId):
+                res[k] = str(v)
+            elif isinstance(v, (dict, list)):
+                res[k] = serialize_mongo(v)
+            else:
+                res[k] = v
+        if "_id" in res and "id" not in res:
+            res["id"] = res["_id"]
+        return res
+    if isinstance(doc, list):
+        return [serialize_mongo(i) for i in doc]
+    return doc
+
+@router.get("/harvests")
+def get_admin_harvest_operations():
+    try:
+        if db is None:
+            return JSONResponse(status_code=500, content={"message": "Database offline"})
+
+        docs = list(db.harvest_requests.find().sort("createdAt", -1))
+        serialized = [serialize_mongo(d) for d in docs]
+        return JSONResponse(status_code=200, content={"harvests": serialized})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Failed to fetch harvests: {str(e)}"})
+
+@router.get("/marketplace")
+def get_admin_marketplace():
+    try:
+        if db is None:
+            return JSONResponse(status_code=500, content={"message": "Database offline"})
+
+        listings = list(db.timber_marketplace_listings.find().sort("createdAt", -1))
+        negotiations = list(db.timber_negotiations.find().sort("createdAt", -1))
+        orders = list(db.timber_orders.find().sort("createdAt", -1))
+
+        return JSONResponse(status_code=200, content={
+            "listings": [serialize_mongo(l) for l in listings],
+            "negotiations": [serialize_mongo(n) for n in negotiations],
+            "orders": [serialize_mongo(o) for o in orders]
+        })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Failed to fetch marketplace: {str(e)}"})
+
+@router.get("/payments")
+def get_admin_payments():
+    try:
+        if db is None:
+            return JSONResponse(status_code=500, content={"message": "Database offline"})
+
+        payments = list(db.harvest_payments.find().sort("created_at", -1))
+        orders = list(db.timber_orders.find().sort("createdAt", -1))
+
+        verified = [p for p in payments if str(p.get("status", "")).upper() in ["VERIFIED", "PAID", "SUCCESS", "COMPLETED"]]
+        verified_amount = sum(float(p.get("amount", 0) or 0) for p in verified)
+        order_amount = sum(float(o.get("totalAmount") or o.get("agreedPrice") or 0) for o in orders)
+
+        pending_amount = sum(float(p.get("amount", 0) or 0) for p in payments if str(p.get("status", "")).upper() not in ["VERIFIED", "PAID", "SUCCESS", "COMPLETED", "FAILED", "REJECTED"])
+        failed_count = len([p for p in payments if str(p.get("status", "")).upper() in ["FAILED", "REJECTED"]])
+
+        return JSONResponse(status_code=200, content={
+            "payments": [serialize_mongo(p) for p in payments],
+            "orders": [serialize_mongo(o) for o in orders],
+            "summary": {
+                "totalCompletedVolume": format_inr(verified_amount + order_amount),
+                "totalPendingEscrow": format_inr(pending_amount),
+                "verifiedPaymentsCount": len(verified),
+                "failedPaymentsCount": failed_count,
+                "totalTransactionsCount": len(payments) + len(orders)
+            }
+        })
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"message": f"Failed to fetch payments: {str(e)}"})
+

@@ -1328,38 +1328,38 @@ const ProfilePage = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                   <div className="admin-subcard p-4 space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">TOTAL USERS</span>
-                    <h4 className="text-xl font-black text-white font-mono">1,248</h4>
-                    <p className="text-[11px] text-emerald-400 font-semibold">+12% this month</p>
+                    <h4 className="text-xl font-black text-white font-mono">5</h4>
+                    <p className="text-[11px] text-emerald-400 font-semibold">Live MongoDB count</p>
                   </div>
 
                   <div className="admin-subcard p-4 space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">CONTRACTORS</span>
-                    <h4 className="text-xl font-black text-white font-mono">12</h4>
-                    <p className="text-[11px] text-amber-300 font-semibold">1 Pending review</p>
+                    <h4 className="text-xl font-black text-white font-mono">3</h4>
+                    <p className="text-[11px] text-emerald-400 font-semibold">All verified</p>
                   </div>
 
                   <div className="admin-subcard p-4 space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">ACTIVE ESTATES</span>
-                    <h4 className="text-xl font-black text-white font-mono">486</h4>
-                    <p className="text-[11px] text-emerald-400 font-semibold">+18 this month</p>
+                    <h4 className="text-xl font-black text-white font-mono">1</h4>
+                    <p className="text-[11px] text-emerald-400 font-semibold">1 registered</p>
                   </div>
 
                   <div className="admin-subcard p-4 space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">HARVEST JOBS</span>
-                    <h4 className="text-xl font-black text-white font-mono">74</h4>
-                    <p className="text-[11px] text-teal-300 font-semibold">18 pending</p>
+                    <h4 className="text-xl font-black text-white font-mono">1</h4>
+                    <p className="text-[11px] text-teal-300 font-semibold">1 completed</p>
                   </div>
 
                   <div className="admin-subcard p-4 space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">TIMBER LISTINGS</span>
-                    <h4 className="text-xl font-black text-white font-mono">126</h4>
-                    <p className="text-[11px] text-emerald-400 font-semibold">14 new this month</p>
+                    <h4 className="text-xl font-black text-white font-mono">0</h4>
+                    <p className="text-[11px] text-slate-400 font-semibold">0 in market</p>
                   </div>
 
                   <div className="admin-subcard p-4 space-y-1">
                     <span className="text-[11px] font-bold text-slate-400 uppercase">ESCROW SETTLED</span>
-                    <h4 className="text-xl font-black text-emerald-400 font-mono">₹18.4M</h4>
-                    <p className="text-[11px] text-slate-300 font-semibold">+14.2% volume</p>
+                    <h4 className="text-xl font-black text-emerald-400 font-mono">₹3.91L</h4>
+                    <p className="text-[11px] text-emerald-400 font-semibold">10 verified payments</p>
                   </div>
                 </div>
               </div>

@@ -12,9 +12,9 @@ const ContractorVerification = () => {
   const [infoRequestedMessage, setInfoRequestedMessage] = useState(false);
   const [actionSuccessMessage, setActionSuccessMessage] = useState('');
 
-  const fetchPendingUsers = async () => {
+  const fetchPendingUsers = async (isBackground = false) => {
     try {
-      setLoading(true);
+      if (!isBackground) setLoading(true);
       const res = await api.get('/admin/users');
       if (res.data && Array.isArray(res.data.users)) {
         // Filter DB contractors or buyers that are unverified or pending verification
@@ -28,14 +28,24 @@ const ContractorVerification = () => {
       }
     } catch (err) {
       console.error('API pending users fetch error:', err);
-      setContractors([]);
     } finally {
-      setLoading(false);
+      if (!isBackground) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPendingUsers();
+    fetchPendingUsers(false);
+
+    const interval = setInterval(() => fetchPendingUsers(true), 5000);
+    const handleSync = () => fetchPendingUsers(true);
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
   }, []);
 
   const handleApprove = async (id) => {

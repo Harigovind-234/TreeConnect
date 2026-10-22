@@ -17,12 +17,16 @@ const FAKE_MOCK_IDS = new Set([
   'tl_tc_teak_01', 'tl_tc_teak_02', 'tl_tc_rose_03', 'tl_tc_rub_04', 'tl_tc_mah_05',
   'neg_101', 'neg_102', 'neg_tc_101', 'neg_tc_102',
   'ORD-2026-901', 'ORD-2026-882', 'ORD-2026-874', 'ORD-2026-855', 'ORD-2026-081',
-  'tl_1792519666286_955'
+  'tl_1792519666286_955',
+  'neg_1792525172176_219', // Stale duplicate negotiation
+  'neg_1792558834750_747'  // Removed negotiation
 ]);
 
 const isNotFake = (item) => {
-  if (!item || !item.id) return false;
-  if (FAKE_MOCK_IDS.has(item.id)) return false;
+  if (!item) return false;
+  const idStr = String(item.id || item._id || '');
+  if (FAKE_MOCK_IDS.has(idStr)) return false;
+  if (idStr === 'neg_1792525172176_219' || idStr === 'neg_1792558834750_747') return false;
   if (item.buyerName === 'Pacific Lumber Mills' || item.sellerEmail === 'landowner@treeconnect.com') return false;
   return true;
 };
@@ -39,7 +43,20 @@ export const marketplaceService = {
       ]);
 
       const realListings = Array.isArray(listRes.data) ? listRes.data.filter(isNotFake) : [];
-      const realNegs = Array.isArray(negRes.data) ? negRes.data.filter(isNotFake) : [];
+      const validListingIds = new Set();
+      realListings.forEach(l => {
+        if (l.id) validListingIds.add(String(l.id).trim());
+        if (l._id) validListingIds.add(String(l._id).trim());
+        if (l.harvestOperationId) validListingIds.add(String(l.harvestOperationId).trim());
+        if (l.treeInventoryId) validListingIds.add(String(l.treeInventoryId).trim());
+      });
+
+      const rawNegs = Array.isArray(negRes.data) ? negRes.data.filter(isNotFake) : [];
+      // Filter out any orphaned negotiations whose listing no longer exists
+      const realNegs = rawNegs.filter(n => {
+        const lid = String(n.listingId || '').trim();
+        return lid && validListingIds.has(lid);
+      });
       const realOrders = Array.isArray(ordRes.data) ? ordRes.data.filter(isNotFake) : [];
 
       localStorage.setItem(LISTINGS_KEY, JSON.stringify(realListings));
@@ -219,16 +236,79 @@ export const marketplaceService = {
 
   deleteListing: async (id) => {
     try {
+      if (!id) return false;
+      const idStr = String(id).trim();
+
+      // 1. Delete from primary LISTINGS_KEY and collect all alias IDs
       const currentListings = marketplaceService.getListings();
-      const nextListings = currentListings.filter(l => l.id !== id);
+      const targetListing = currentListings.find(l => {
+        const lId = String(l?.id || l?._id || '').trim();
+        return lId === idStr || l?.id === id || l?._id === id;
+      });
+
+      const matchingIds = new Set([idStr, String(id)]);
+      if (targetListing) {
+        if (targetListing.id) matchingIds.add(String(targetListing.id).trim());
+        if (targetListing._id) matchingIds.add(String(targetListing._id).trim());
+        if (targetListing.harvestOperationId) matchingIds.add(String(targetListing.harvestOperationId).trim());
+        if (targetListing.treeInventoryId) matchingIds.add(String(targetListing.treeInventoryId).trim());
+      }
+
+      const nextListings = currentListings.filter(l => {
+        const lId = String(l?.id || l?._id || '').trim();
+        return !matchingIds.has(lId) && lId !== idStr && l?.id !== id && l?._id !== id;
+      });
       localStorage.setItem(LISTINGS_KEY, JSON.stringify(nextListings));
 
+      // 2. Comprehensive cleanup: purge from ALL user-specific listing keys in localStorage
       try {
-        await api.delete(`/marketplace/listings/${id}`).catch(() => {});
+        const keysToClean = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('treeconnect_timber_listings') || key.startsWith('treeconnect_completed_harvests'))) {
+            keysToClean.push(key);
+          }
+        }
+        keysToClean.forEach(key => {
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                const filtered = list.filter(l => {
+                  const lId = String(l?.id || l?._id || '').trim();
+                  return !matchingIds.has(lId) && lId !== idStr && l?.id !== id && l?._id !== id;
+                });
+                localStorage.setItem(key, JSON.stringify(filtered));
+              }
+            }
+          } catch (_) {}
+        });
       } catch (_) {}
 
+      // 3. Remove associated negotiations
+      try {
+        const rawNegs = localStorage.getItem(NEGOTIATIONS_KEY);
+        if (rawNegs) {
+          const negs = JSON.parse(rawNegs);
+          if (Array.isArray(negs)) {
+            const filteredNegs = negs.filter(n => {
+              const nListingId = String(n?.listingId || '').trim();
+              return !matchingIds.has(nListingId) && nListingId !== idStr && n?.listingId !== id;
+            });
+            localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(filteredNegs));
+          }
+        }
+      } catch (_) {}
+
+      // 4. Delete from backend MongoDB API
+      try {
+        await api.delete(`/marketplace/listings/${encodeURIComponent(idStr)}`).catch(() => {});
+      } catch (_) {}
+
+      // 5. Broadcast update event so all listeners immediately refresh
       window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
-        detail: { type: 'listing_deleted', id }
+        detail: { type: 'listing_deleted', id: idStr }
       }));
       return true;
     } catch (e) {
@@ -261,12 +341,44 @@ export const marketplaceService = {
 
   getNegotiations: () => {
     try {
+      const activeListings = marketplaceService.getListings();
+      const validListingIds = new Set();
+      activeListings.forEach(l => {
+        if (l.id) validListingIds.add(String(l.id).trim());
+        if (l._id) validListingIds.add(String(l._id).trim());
+        if (l.harvestOperationId) validListingIds.add(String(l.harvestOperationId).trim());
+        if (l.treeInventoryId) validListingIds.add(String(l.treeInventoryId).trim());
+      });
+
       const raw = localStorage.getItem(NEGOTIATIONS_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           const realOnly = parsed.filter(isNotFake);
-          return realOnly;
+          // Only keep negotiations whose parent listing exists
+          const withoutOrphans = realOnly.filter(item => {
+            const lId = String(item.listingId || '').trim();
+            if (validListingIds.size === 0) return false;
+            return validListingIds.has(lId);
+          });
+
+          // Deduplicate by listingId + buyerEmail, keeping the latest one
+          const deduped = [];
+          const seen = new Set();
+          for (const item of withoutOrphans) {
+            const lId = String(item.listingId || '').trim();
+            const bEmail = String(item.buyerEmail || '').toLowerCase().trim();
+            const key = lId && bEmail ? `${lId}__${bEmail}` : String(item.id || item._id || '');
+            if (seen.has(key)) {
+              continue;
+            }
+            seen.add(key);
+            deduped.push(item);
+          }
+          if (deduped.length !== parsed.length) {
+            localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(deduped));
+          }
+          return deduped;
         }
       }
       return [];
@@ -284,41 +396,79 @@ export const marketplaceService = {
       const buyerName = user?.contactPerson || user?.name || user?.full_name || offerData.buyerName || 'Buyer';
       const buyerEmail = (user?.email || offerData.buyerEmail || '').toLowerCase().trim();
 
-      const newNegotiation = {
-        id: `neg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        listingId: offerData.listingId,
-        timberTitle: listing?.title || offerData.timberTitle || 'Timber Lot',
-        timberSpecies: listing?.timberSpecies || offerData.timberSpecies || 'Commercial Wood',
-        listingVolume: listing?.volume || offerData.requestedVolume,
-        sellerRole: listing?.sellerRole || offerData.sellerRole || 'landowner',
-        sellerName: listing?.sellerName || offerData.sellerName || 'Verified Seller',
-        sellerEmail: (listing?.sellerEmail || offerData.sellerEmail || '').toLowerCase().trim(),
-        buyerName,
-        buyerEmail,
-        buyerPhone: user?.phone || user?.contactPhone || offerData.buyerPhone || '+91 98470 00000',
-        buyerCompany: offerData.buyerCompany || user?.company_name || user?.companyName || 'Procurement Buyer Corp',
-        originalPricePerM3: listing?.pricePerM3 || offerData.originalPricePerM3 || 0,
-        offeredPricePerM3: Number(offerData.offeredPricePerM3) || 0,
-        requestedVolume: Number(offerData.requestedVolume) || 10,
-        totalOffered: (Number(offerData.offeredPricePerM3) || 0) * (Number(offerData.requestedVolume) || 10),
-        deliveryPreference: offerData.deliveryPreference || 'Buyer Arranged Pickup',
-        surveyVisitDate: offerData.surveyVisitDate || offerData.surveyDate || '',
-        surveyTimeSlot: offerData.surveyTimeSlot || 'Morning (09:00 AM - 12:00 PM)',
-        notes: offerData.notes || '',
-        status: 'Pending Review',
-        counterOffer: null,
-        timeline: [
-          {
-            sender: 'Buyer',
-            senderName: buyerName,
-            message: `Offered ₹${Number(offerData.offeredPricePerM3).toLocaleString('en-IN')}/m³ for ${offerData.requestedVolume} m³ • Proposed Timber Survey on ${offerData.surveyVisitDate || 'TBD'} (${offerData.surveyTimeSlot || 'Morning'})`,
-            date: new Date().toISOString().split('T')[0]
-          }
-        ],
-        createdAt: new Date().toISOString().split('T')[0]
-      };
+      // Check if negotiation already exists for this listing and buyer
+      const existingIdx = current.findIndex(n =>
+        n.listingId === offerData.listingId &&
+        (n.buyerEmail || '').toLowerCase().trim() === buyerEmail
+      );
 
-      const updated = [newNegotiation, ...current];
+      let savedNegotiation;
+      let updated;
+
+      if (existingIdx !== -1) {
+        // Update existing negotiation
+        const existing = current[existingIdx];
+        const newTimelineEntry = {
+          sender: 'Buyer',
+          senderName: buyerName,
+          message: `Updated Offer: ₹${Number(offerData.offeredPricePerM3).toLocaleString('en-IN')}/m³ for ${offerData.requestedVolume} m³ • Proposed Timber Survey on ${offerData.surveyVisitDate || 'TBD'} (${offerData.surveyTimeSlot || 'Morning'})`,
+          date: new Date().toISOString().split('T')[0]
+        };
+
+        savedNegotiation = {
+          ...existing,
+          offeredPricePerM3: Number(offerData.offeredPricePerM3) || existing.offeredPricePerM3,
+          requestedVolume: Number(offerData.requestedVolume) || existing.requestedVolume,
+          totalOffered: (Number(offerData.offeredPricePerM3) || 0) * (Number(offerData.requestedVolume) || 1),
+          deliveryPreference: offerData.deliveryPreference || existing.deliveryPreference,
+          surveyVisitDate: offerData.surveyVisitDate || existing.surveyVisitDate,
+          surveyTimeSlot: offerData.surveyTimeSlot || existing.surveyTimeSlot,
+          destinationMill: offerData.destinationMill || existing.destinationMill,
+          notes: offerData.notes || existing.notes,
+          status: 'Pending Review',
+          timeline: [newTimelineEntry, ...(existing.timeline || []).filter(t => !t.message?.startsWith('Updated Offer:'))]
+        };
+
+        updated = current.map((n, idx) => idx === existingIdx ? savedNegotiation : n);
+      } else {
+        savedNegotiation = {
+          id: `neg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          listingId: offerData.listingId,
+          timberTitle: listing?.title || offerData.timberTitle || 'Timber Lot',
+          timberSpecies: listing?.timberSpecies || offerData.timberSpecies || 'Commercial Wood',
+          listingVolume: listing?.volume || offerData.requestedVolume,
+          sellerRole: listing?.sellerRole || offerData.sellerRole || 'landowner',
+          sellerName: listing?.sellerName || offerData.sellerName || 'Verified Seller',
+          sellerEmail: (listing?.sellerEmail || offerData.sellerEmail || '').toLowerCase().trim(),
+          buyerName,
+          buyerEmail,
+          buyerPhone: user?.phone || user?.contactPhone || offerData.buyerPhone || '+91 98470 00000',
+          buyerCompany: offerData.buyerCompany || user?.company_name || user?.companyName || 'Procurement Buyer Corp',
+          originalPricePerM3: listing?.pricePerM3 || offerData.originalPricePerM3 || 0,
+          offeredPricePerM3: Number(offerData.offeredPricePerM3) || 0,
+          requestedVolume: Number(offerData.requestedVolume) || 10,
+          totalOffered: (Number(offerData.offeredPricePerM3) || 0) * (Number(offerData.requestedVolume) || 10),
+          deliveryPreference: offerData.deliveryPreference || 'Buyer Arranged Pickup',
+          surveyVisitDate: offerData.surveyVisitDate || offerData.surveyDate || '',
+          surveyTimeSlot: offerData.surveyTimeSlot || 'Morning (09:00 AM - 12:00 PM)',
+          destinationMill: offerData.destinationMill || 'Ernakulam Timber Mill Yard #2',
+          notes: offerData.notes || '',
+          status: 'Pending Review',
+          counterOffer: null,
+          timeline: [
+            {
+              sender: 'Buyer',
+              senderName: buyerName,
+              message: `Offered ₹${Number(offerData.offeredPricePerM3).toLocaleString('en-IN')}/m³ for ${offerData.requestedVolume} m³ • Proposed Timber Survey on ${offerData.surveyVisitDate || 'TBD'} (${offerData.surveyTimeSlot || 'Morning'})`,
+              date: new Date().toISOString().split('T')[0]
+            }
+          ],
+          createdAt: new Date().toISOString().split('T')[0]
+        };
+
+        updated = [savedNegotiation, ...current];
+      }
+
       localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(updated));
 
       // Mark listing status as Under Negotiation
@@ -327,14 +477,14 @@ export const marketplaceService = {
       }
 
       try {
-        await api.post('/marketplace/negotiations', newNegotiation).catch(() => {});
+        await api.post('/marketplace/negotiations', savedNegotiation).catch(() => {});
       } catch (_) {}
 
       window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
-        detail: { type: 'negotiation_created', negotiation: newNegotiation }
+        detail: { type: 'negotiation_created', negotiation: savedNegotiation }
       }));
 
-      return newNegotiation;
+      return savedNegotiation;
     } catch (e) {
       console.error('Error creating timber negotiation:', e);
       throw e;
@@ -370,17 +520,35 @@ export const marketplaceService = {
         });
       } else if (action === 'counter') {
         updatedStatus = 'Counter-Offer';
+        const counterRate = Number(payload.pricePerM3) || target.originalPricePerM3;
+        const totalDeal = Math.round(counterRate * (Number(target.requestedVolume) || 1));
+
         counterOffer = {
-          pricePerM3: Number(payload.pricePerM3) || target.originalPricePerM3,
-          totalAmount: (Number(payload.pricePerM3) || target.originalPricePerM3) * target.requestedVolume,
-          message: payload.message || 'Counter-proposal submitted',
-          date: today
+          pricePerM3: counterRate,
+          counterTarget: Number(payload.counterTarget || counterRate),
+          suggestedTarget: Number(payload.suggestedTarget || counterRate),
+          adjustmentReason: payload.adjustmentReason || '',
+          totalAmount: totalDeal,
+          verifiedVolume: target.requestedVolume,
+          harvestSettlementNote: 'Harvest contract (₹1,10,000) fully settled; 0 deductions applied.',
+          message: payload.message || 'Counter-proposal submitted based on verified timber specifications.',
+          date: today,
+          timestamp: new Date().toISOString()
         };
+
+        const reasonNote = payload.adjustmentReason ? ` • Reason: ${payload.adjustmentReason}` : '';
+        const msgNote = payload.message ? ` • ${payload.message}` : '';
+
         nextTimeline.push({
           sender: payload.sender || 'Seller',
           senderName: payload.senderName || target.sellerName,
-          message: `Counter-offered at ₹${Number(payload.pricePerM3).toLocaleString('en-IN')}/m³: ${payload.message || ''}`,
-          date: today
+          action: 'Counter-Offer',
+          counterRate,
+          totalAmount: totalDeal,
+          adjustmentReason: payload.adjustmentReason || '',
+          message: `Counter-Target: ₹${counterRate.toLocaleString('en-IN')}/m³ for ${target.requestedVolume} m³ (Gross Deal: ₹${totalDeal.toLocaleString('en-IN')})${reasonNote}${msgNote}`,
+          date: today,
+          timestamp: new Date().toISOString()
         });
       }
 
@@ -407,6 +575,493 @@ export const marketplaceService = {
     } catch (e) {
       console.error('Error responding to timber negotiation:', e);
       throw e;
+    }
+  },
+
+  // ==================== SITE INSPECTION & SURVEY LIFECYCLE ====================
+
+  requestInspection: async (inspectionData, user = null) => {
+    try {
+      const current = marketplaceService.getNegotiations();
+      const listing = marketplaceService.getListingById(inspectionData.listingId);
+
+      const buyerName = user?.contactPerson || user?.name || user?.full_name || inspectionData.buyerName || 'Arun K';
+      const buyerEmail = (user?.email || inspectionData.buyerEmail || 'arunbuyer@gmail.com').toLowerCase().trim();
+      const buyerPhone = user?.phone || user?.contactPhone || inspectionData.buyerPhone || '+91 97467 94654';
+
+      const existingIdx = current.findIndex(n =>
+        n.listingId === inspectionData.listingId &&
+        (n.buyerEmail || '').toLowerCase().trim() === buyerEmail
+      );
+
+      const visitDate = inspectionData.surveyVisitDate || new Date().toISOString().split('T')[0];
+      const timeSlot = inspectionData.surveyTimeSlot || 'Morning (09:00 AM - 12:00 PM)';
+      const reqVol = Number(inspectionData.requestedVolume) || Number(listing?.volume) || 1.7;
+
+      let savedRecord;
+      const today = new Date().toISOString().split('T')[0];
+
+      const newTimelineEntry = {
+        sender: 'Buyer',
+        senderName: buyerName,
+        action: 'Inspection Requested',
+        message: `Requested on-site timber survey visit on ${visitDate} (${timeSlot}). Purpose: Verify log dimensions, heartwood quality, debarking, and transit clearance before submitting price offer.`,
+        date: today
+      };
+
+      if (existingIdx !== -1) {
+        const existing = current[existingIdx];
+        savedRecord = {
+          ...existing,
+          surveyVisitDate: visitDate,
+          surveyTimeSlot: timeSlot,
+          requestedVolume: reqVol,
+          buyerCompany: inspectionData.buyerCompany || existing.buyerCompany || 'timberbuyers',
+          localBody: inspectionData.localBody || existing.localBody || 'Meenadom Panchayat',
+          notes: inspectionData.notes || existing.notes,
+          status: 'Inspection Requested',
+          statusStep: 'inspection_requested',
+          timeline: [newTimelineEntry, ...(existing.timeline || [])]
+        };
+        current[existingIdx] = savedRecord;
+      } else {
+        savedRecord = {
+          id: `neg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          listingId: inspectionData.listingId,
+          timberTitle: listing?.title || inspectionData.timberTitle || `${listing?.timberSpecies || 'Teak'} Sawlogs`,
+          timberSpecies: listing?.timberSpecies || inspectionData.timberSpecies || 'Teak',
+          listingVolume: listing?.volume || reqVol,
+          sellerRole: listing?.sellerRole || inspectionData.sellerRole || 'landowner',
+          sellerName: listing?.sellerName || inspectionData.sellerName || 'Verified Seller',
+          sellerEmail: (listing?.sellerEmail || inspectionData.sellerEmail || '').toLowerCase().trim(),
+          sellerPhone: listing?.sellerPhone || '+91 94471 28901',
+          buyerName,
+          buyerEmail,
+          buyerPhone,
+          buyerCompany: inspectionData.buyerCompany || user?.company_name || 'timberbuyers',
+          localBody: inspectionData.localBody || listing?.localBody || listing?.panchayat || 'Meenadom Panchayat',
+          originalPricePerM3: listing?.pricePerM3 || 147695,
+          offeredPricePerM3: 0,
+          requestedVolume: reqVol,
+          totalOffered: 0,
+          surveyVisitDate: visitDate,
+          surveyTimeSlot: timeSlot,
+          deliveryPreference: inspectionData.deliveryPreference || 'Seller Contractor Hauling to Mill',
+          destinationMill: inspectionData.destinationMill || 'Ernakulam Timber Mill Yard #2',
+          notes: inspectionData.notes || 'Buyer requests on-site inspection visit.',
+          status: 'Inspection Requested',
+          statusStep: 'inspection_requested',
+          surveyCompleted: false,
+          timeline: [newTimelineEntry],
+          createdAt: today
+        };
+        current.unshift(savedRecord);
+      }
+
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(current));
+      try {
+        await api.post('/marketplace/negotiations', savedRecord).catch(() => {});
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'inspection_requested', record: savedRecord }
+      }));
+
+      return savedRecord;
+    } catch (e) {
+      console.error('Error requesting timber inspection:', e);
+      throw e;
+    }
+  },
+
+  approveInspectionDate: async (negotiationId, user = null) => {
+    try {
+      const current = marketplaceService.getNegotiations();
+      const target = current.find(n => n.id === negotiationId);
+      if (!target) throw new Error('Record not found');
+
+      const today = new Date().toISOString().split('T')[0];
+      const updated = {
+        ...target,
+        status: 'Inspection Scheduled',
+        statusStep: 'inspection_scheduled',
+        approvedInspectionDate: target.surveyVisitDate,
+        approvedTimeSlot: target.surveyTimeSlot,
+        timeline: [
+          {
+            sender: 'Landowner',
+            senderName: user?.name || target.sellerName,
+            action: 'Inspection Approved',
+            message: `Landowner approved on-site timber inspection for ${target.surveyVisitDate} (${target.surveyTimeSlot}). On-site log yard ready for buyer inspection.`,
+            date: today
+          },
+          ...(target.timeline || [])
+        ],
+        updatedAt: today
+      };
+
+      const nextList = current.map(n => n.id === negotiationId ? updated : n);
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(nextList));
+
+      try {
+        const { _id, ...cleanUpdated } = updated;
+        await api.put(`/marketplace/negotiations/${negotiationId}`, cleanUpdated).catch((err) => {
+          console.warn('Backend negotiation update failed:', err);
+        });
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'inspection_approved', record: updated }
+      }));
+      return updated;
+    } catch (e) {
+      console.error('Error approving inspection date:', e);
+      throw e;
+    }
+  },
+
+  suggestAlternativeDate: async (negotiationId, { newDate, newTimeSlot, reason }, user = null) => {
+    try {
+      const current = marketplaceService.getNegotiations();
+      const target = current.find(n => n.id === negotiationId);
+      if (!target) throw new Error('Record not found');
+
+      const today = new Date().toISOString().split('T')[0];
+      const updated = {
+        ...target,
+        status: 'Date Rescheduled by Landowner',
+        statusStep: 'date_rescheduled',
+        suggestedDate: newDate,
+        suggestedTimeSlot: newTimeSlot || target.surveyTimeSlot,
+        rescheduleReason: reason || 'Landowner proposed alternate date for on-site availability.',
+        timeline: [
+          {
+            sender: 'Landowner',
+            senderName: user?.name || target.sellerName,
+            action: 'Date Rescheduled',
+            message: `Landowner proposed alternate inspection date: ${newDate} (${newTimeSlot || target.surveyTimeSlot}). Reason: ${reason || 'Schedule adjustment.'}`,
+            date: today
+          },
+          ...(target.timeline || [])
+        ],
+        updatedAt: today
+      };
+
+      const nextList = current.map(n => n.id === negotiationId ? updated : n);
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(nextList));
+
+      try {
+        const { _id, ...cleanUpdated } = updated;
+        await api.put(`/marketplace/negotiations/${negotiationId}`, cleanUpdated).catch((err) => {
+          console.warn('Backend negotiation update failed:', err);
+        });
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'inspection_rescheduled', record: updated }
+      }));
+      return updated;
+    } catch (e) {
+      console.error('Error suggesting alternative date:', e);
+      throw e;
+    }
+  },
+
+  acceptRescheduledDate: async (negotiationId, user = null) => {
+    try {
+      const current = marketplaceService.getNegotiations();
+      const target = current.find(n => n.id === negotiationId);
+      if (!target) throw new Error('Record not found');
+
+      const today = new Date().toISOString().split('T')[0];
+      const newDate = target.suggestedDate || target.surveyVisitDate;
+      const newSlot = target.suggestedTimeSlot || target.surveyTimeSlot;
+
+      const updated = {
+        ...target,
+        status: 'Inspection Scheduled',
+        statusStep: 'inspection_scheduled',
+        surveyVisitDate: newDate,
+        surveyTimeSlot: newSlot,
+        approvedInspectionDate: newDate,
+        approvedTimeSlot: newSlot,
+        timeline: [
+          {
+            sender: 'Buyer',
+            senderName: user?.name || target.buyerName,
+            action: 'Accepted Rescheduled Date',
+            message: `Buyer accepted new inspection date: ${newDate} (${newSlot}). Survey visit confirmed.`,
+            date: today
+          },
+          ...(target.timeline || [])
+        ],
+        updatedAt: today
+      };
+
+      const nextList = current.map(n => n.id === negotiationId ? updated : n);
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(nextList));
+
+      try {
+        const { _id, ...cleanUpdated } = updated;
+        await api.put(`/marketplace/negotiations/${negotiationId}`, cleanUpdated).catch((err) => {
+          console.warn('Backend negotiation update failed:', err);
+        });
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'rescheduled_date_accepted', record: updated }
+      }));
+      return updated;
+    } catch (e) {
+      console.error('Error accepting rescheduled date:', e);
+      throw e;
+    }
+  },
+
+  submitSurveyDetailsAndOffer: async (negotiationId, surveyData, user = null) => {
+    try {
+      const current = marketplaceService.getNegotiations();
+      const target = current.find(n => n.id === negotiationId);
+      if (!target) throw new Error('Record not found');
+
+      const today = new Date().toISOString().split('T')[0];
+      const verifiedVol = Number(surveyData.verifiedVolume) || Number(target.requestedVolume) || 1.7;
+      const offeredRate = Number(surveyData.offeredPricePerM3) || 138833;
+      const totalOffered = Number(surveyData.totalOffered) || Math.round(verifiedVol * offeredRate);
+
+      const surveyDetails = {
+        verifiedVolume: verifiedVol,
+        logCount: surveyData.logCount || 2,
+        observedGrade: surveyData.observedGrade || 'Grade A Prime Export',
+        heartwoodQuality: surveyData.heartwoodQuality || 'Verified High Density Heartwood Girth',
+        transitClearanceVerified: surveyData.transitClearanceVerified !== false,
+        storageCondition: surveyData.storageCondition || 'Debarked & Stenciled at Estate Yard',
+        surveyDate: surveyData.surveyDate || target.surveyVisitDate || today,
+        surveyorName: user?.name || target.buyerName || 'Buyer Technical Surveyor'
+      };
+
+      const updated = {
+        ...target,
+        status: 'Pending Review',
+        statusStep: 'offer_submitted',
+        surveyCompleted: true,
+        surveyDetails,
+        verifiedVolume: verifiedVol,
+        requestedVolume: verifiedVol,
+        offeredPricePerM3: offeredRate,
+        totalOffered,
+        deliveryPreference: surveyData.deliveryPreference || target.deliveryPreference,
+        destinationMill: surveyData.destinationMill || target.destinationMill,
+        notes: surveyData.notes || target.notes,
+        timeline: [
+          {
+            sender: 'Buyer',
+            senderName: user?.name || target.buyerName,
+            action: 'Survey Completed & Offer Submitted',
+            message: `Completed on-site timber survey: Verified ${verifiedVol} m³ (${surveyDetails.observedGrade}). Submitted purchase offer of ₹${offeredRate.toLocaleString('en-IN')}/m³ (Total: ₹${totalOffered.toLocaleString('en-IN')}).`,
+            date: today
+          },
+          ...(target.timeline || [])
+        ],
+        updatedAt: today
+      };
+
+      const nextList = current.map(n => n.id === negotiationId ? updated : n);
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(nextList));
+
+      try {
+        const { _id, ...cleanUpdated } = updated;
+        await api.put(`/marketplace/negotiations/${negotiationId}`, cleanUpdated).catch((err) => {
+          console.warn('Backend negotiation update failed:', err);
+        });
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'survey_offer_submitted', record: updated }
+      }));
+      return updated;
+    } catch (e) {
+      console.error('Error submitting survey details and offer:', e);
+      throw e;
+    }
+  },
+
+  acceptOfferAndCreateOrder: async (negotiationId, user = null) => {
+    try {
+      const current = marketplaceService.getNegotiations();
+      const target = current.find(n => n.id === negotiationId);
+      if (!target) throw new Error('Negotiation not found');
+
+      const today = new Date().toISOString().split('T')[0];
+      const finalRate = target.counterOffer ? Number(target.counterOffer.pricePerM3) : Number(target.offeredPricePerM3 || 138833);
+      const finalVol = Number(target.verifiedVolume || target.requestedVolume || 1.7);
+      const totalAmount = Math.round(finalRate * finalVol);
+
+      const updatedNeg = {
+        ...target,
+        status: 'Accepted',
+        statusStep: 'deal_accepted',
+        timeline: [
+          {
+            sender: 'Landowner',
+            senderName: user?.name || target.sellerName,
+            action: 'Offer Accepted',
+            message: `Landowner accepted survey offer at ₹${finalRate.toLocaleString('en-IN')}/m³ for ${finalVol} m³. Official timber purchase contract generated. Ready for payment.`,
+            date: today
+          },
+          ...(target.timeline || [])
+        ],
+        updatedAt: today
+      };
+
+      const nextNegs = current.map(n => n.id === negotiationId ? updatedNeg : n);
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(nextNegs));
+
+      try {
+        const { _id, ...cleanUpdated } = updatedNeg;
+        await api.put(`/marketplace/negotiations/${negotiationId}`, cleanUpdated).catch((err) => {
+          console.warn('Backend negotiation update failed:', err);
+        });
+      } catch (_) {}
+
+      // Automatically create the Purchase Order!
+      const newOrder = await marketplaceService.createOrder({
+        negotiationId: target.id,
+        listingId: target.listingId,
+        timberItem: target.timberTitle,
+        species: target.timberSpecies,
+        volume: finalVol,
+        unitPrice: finalRate,
+        sellerRole: target.sellerRole,
+        sellerName: target.sellerName,
+        sellerEmail: target.sellerEmail,
+        buyerName: target.buyerName,
+        buyerEmail: target.buyerEmail,
+        destinationMill: target.destinationMill || 'Ernakulam Timber Mill Yard #2',
+        paymentTerms: 'TreeConnect Escrow Payment Required',
+        notes: target.notes || 'Purchase order generated following approved on-site survey inspection.'
+      }, user);
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'deal_accepted', negotiation: updatedNeg, order: newOrder }
+      }));
+
+      return { negotiation: updatedNeg, order: newOrder };
+    } catch (e) {
+      console.error('Error accepting offer and creating order:', e);
+      throw e;
+    }
+  },
+
+  recordOrderPayment: async (orderId, paymentData, user = null) => {
+    try {
+      const currentOrders = marketplaceService.getOrders();
+      const targetOrder = currentOrders.find(o => o.id === orderId);
+      if (!targetOrder) throw new Error('Order not found');
+
+      const today = new Date().toISOString().split('T')[0];
+      const payRef = paymentData.paymentRef || `PAY-TC-${Date.now().toString().slice(-6)}`;
+      const amountPaid = Number(paymentData.amount) || targetOrder.totalNum;
+
+      const updatedOrder = {
+        ...targetOrder,
+        status: 'Paid & Purchased - Transferred to Landowner',
+        paymentStatus: 'PAID',
+        paidAmount: amountPaid,
+        paymentRef: payRef,
+        paymentMethod: paymentData.paymentMethod || 'Direct Payment to Landowner (UPI/NetBanking)',
+        paidAt: new Date().toISOString()
+      };
+
+      const nextOrders = currentOrders.map(o => o.id === orderId ? updatedOrder : o);
+      localStorage.setItem(ORDERS_KEY, JSON.stringify(nextOrders));
+
+      try {
+        await api.put(`/marketplace/orders/${orderId}`, updatedOrder).catch(() => {});
+      } catch (_) {}
+
+      // Also mark associated negotiation if any
+      if (targetOrder.negotiationId) {
+        try {
+          const negs = marketplaceService.getNegotiations();
+          const neg = negs.find(n => n.id === targetOrder.negotiationId);
+          if (neg) {
+            neg.paymentStatus = 'PAID';
+            neg.paymentRef = payRef;
+            neg.status = 'Payment Completed';
+            neg.timeline = [
+              {
+                sender: 'Buyer',
+                senderName: user?.name || targetOrder.buyerName,
+                action: 'Payment Completed',
+                message: `Payment of ₹${amountPaid.toLocaleString('en-IN')} confirmed via ${paymentData.paymentMethod || 'Escrow'} (Ref: ${payRef}). Log hauling and dispatch authorized.`,
+                date: today
+              },
+              ...(neg.timeline || [])
+            ];
+            localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(negs));
+            await api.put(`/marketplace/negotiations/${neg.id}`, neg).catch(() => {});
+          }
+        } catch (_) {}
+      }
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'order_paid', order: updatedOrder }
+      }));
+
+      return updatedOrder;
+    } catch (e) {
+      console.error('Error recording order payment:', e);
+      throw e;
+    }
+  },
+
+  deleteNegotiation: async (id) => {
+    try {
+      const idStr = String(id || '').trim();
+      const current = marketplaceService.getNegotiations();
+      const filtered = current.filter(n => {
+        const nId = String(n?.id || n?._id || '').trim();
+        return nId !== idStr && n?.id !== id && n?._id !== id;
+      });
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(filtered));
+
+      try {
+        await api.delete(`/marketplace/negotiations/${encodeURIComponent(idStr)}`).catch(() => {});
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'negotiation_deleted', id: idStr }
+      }));
+      return true;
+    } catch (e) {
+      console.error('Error deleting timber negotiation:', e);
+      return false;
+    }
+  },
+
+  clearNegotiations: async (buyerEmail = null) => {
+    try {
+      const current = marketplaceService.getNegotiations();
+      let filtered = [];
+      if (buyerEmail) {
+        const bEmail = buyerEmail.toLowerCase().trim();
+        filtered = current.filter(n => (n?.buyerEmail || '').toLowerCase().trim() !== bEmail);
+      }
+      localStorage.setItem(NEGOTIATIONS_KEY, JSON.stringify(filtered));
+
+      try {
+        const url = buyerEmail ? `/marketplace/negotiations?buyer_email=${encodeURIComponent(buyerEmail)}` : '/marketplace/negotiations';
+        await api.delete(url).catch(() => {});
+      } catch (_) {}
+
+      window.dispatchEvent(new CustomEvent('treeconnect_marketplace_updated', {
+        detail: { type: 'negotiations_cleared' }
+      }));
+      return true;
+    } catch (e) {
+      console.error('Error clearing timber negotiations:', e);
+      return false;
     }
   },
 

@@ -400,6 +400,21 @@ export const LandownerProvider = ({ children }) => {
         } catch (e) { }
     }, [timberListings, currentEmail]);
 
+    // Synchronize marketplace deletions across context
+    useEffect(() => {
+        const handleMarketplaceUpdate = (e) => {
+            if (e?.detail?.type === 'listing_deleted') {
+                const deletedId = String(e.detail.id || '').trim();
+                setTimberListings(prev => prev.filter(l => {
+                    const lId = String(l?.id || l?._id || '').trim();
+                    return lId !== deletedId && l?.id !== deletedId && l?._id !== deletedId;
+                }));
+            }
+        };
+        window.addEventListener('treeconnect_marketplace_updated', handleMarketplaceUpdate);
+        return () => window.removeEventListener('treeconnect_marketplace_updated', handleMarketplaceUpdate);
+    }, []);
+
     // Handlers
     const addProperty = async (newProp) => {
         const photosList = newProp.photos || [];
@@ -641,6 +656,37 @@ export const LandownerProvider = ({ children }) => {
         setTimberListings(prev => prev.map(l => l.id === id ? { ...l, status: newStatus } : l));
     };
 
+    const deleteTimberListing = async (id) => {
+        const idStr = String(id || '').trim();
+        try {
+            await marketplaceService.deleteListing(idStr);
+        } catch (_) {}
+
+        setTimberListings(prev => {
+            const updated = prev.filter(l => {
+                const lId = String(l?.id || l?._id || '').trim();
+                return lId !== idStr && l?.id !== id && l?._id !== id;
+            });
+            try {
+                if (currentEmail) {
+                    localStorage.setItem(`treeconnect_timber_listings_${currentEmail}`, JSON.stringify(updated));
+                }
+                const globalRaw = localStorage.getItem('treeconnect_timber_listings');
+                const globalList = globalRaw ? JSON.parse(globalRaw) : [];
+                const otherListings = Array.isArray(globalList)
+                    ? globalList.filter(l => {
+                        const lId = String(l?.id || l?._id || '').trim();
+                        const isOwner = (l?.sellerEmail || '').toLowerCase().trim() === currentEmail;
+                        if (isOwner && (lId === idStr || l?.id === id || l?._id === id)) return false;
+                        return lId !== idStr && l?.id !== id && l?._id !== id;
+                    })
+                    : [];
+                localStorage.setItem('treeconnect_timber_listings', JSON.stringify(otherListings));
+            } catch (e) {}
+            return updated;
+        });
+    };
+
     const updateProperty = async (id, updatedFields) => {
         try {
             await propertyService.updateProperty(id, updatedFields);
@@ -817,6 +863,8 @@ export const LandownerProvider = ({ children }) => {
                 assignContractorToRequest,
                 addTimberListing,
                 updateListingStatus,
+                deleteTimberListing,
+                deleteListing: deleteTimberListing,
                 setHarvestRequests
             }}
         >

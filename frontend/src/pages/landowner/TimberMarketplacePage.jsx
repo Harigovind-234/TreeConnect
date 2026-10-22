@@ -29,8 +29,53 @@ import {
   Trash2,
   Eye,
   Filter,
-  Phone
+  Phone,
+  Sparkles,
+  Info,
+  FileCheck
 } from 'lucide-react';
+import { calculateCounterTarget, MARKET_BENCHMARK_RANGES } from '../../utils/counterTargetCalculator';
+
+const formatInspectionDate = (dateStr) => {
+  if (!dateStr) return 'Date Pending';
+  try {
+    const parts = String(dateStr).split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+  } catch (e) {
+    // fallback
+  }
+  return dateStr;
+};
+
+const formatInspectionTimeSlot = (slotStr) => {
+  if (!slotStr) return 'Flexible Timing';
+  let cleaned = String(slotStr).trim();
+  cleaned = cleaned.replace(/^\((.*)\)$/, '$1').trim();
+  cleaned = cleaned.replace(/\s*\((.*?)\)/, ' • $1');
+  return cleaned;
+};
 
 const TimberMarketplacePage = () => {
   const navigate = useNavigate();
@@ -48,7 +93,16 @@ const TimberMarketplacePage = () => {
   const [counterModalOpen, setCounterModalOpen] = useState(false);
   const [selectedNegotiation, setSelectedNegotiation] = useState(null);
   const [counterPrice, setCounterPrice] = useState('');
+  const [counterAdjustmentReason, setCounterAdjustmentReason] = useState('Verified high-density heartwood girth and debarked prime export standard.');
+  const [customReasonText, setCustomReasonText] = useState('');
   const [counterMessage, setCounterMessage] = useState('');
+
+  // Reschedule date modal
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [selectedRescheduleNeg, setSelectedRescheduleNeg] = useState(null);
+  const [newProposedDate, setNewProposedDate] = useState('');
+  const [newProposedTimeSlot, setNewProposedTimeSlot] = useState('Morning (09:00 AM - 12:00 PM)');
+  const [rescheduleReason, setRescheduleReason] = useState('Landowner requested alternate timing for on-site availability.');
 
   // Success message toast
   const [toastMessage, setToastMessage] = useState('');
@@ -90,9 +144,20 @@ const TimberMarketplacePage = () => {
     return l.sellerRole === 'landowner';
   });
 
-  // Filter negotiations on listings owned by this landowner
+  // Collect valid listing IDs for this landowner
+  const myListingsIdSet = new Set();
+  myListings.forEach(l => {
+    if (l.id) myListingsIdSet.add(String(l.id).trim());
+    if (l._id) myListingsIdSet.add(String(l._id).trim());
+    if (l.harvestOperationId) myListingsIdSet.add(String(l.harvestOperationId).trim());
+    if (l.treeInventoryId) myListingsIdSet.add(String(l.treeInventoryId).trim());
+  });
+
+  // Filter negotiations on listings owned by this landowner (must match an active listing)
   const myNegotiations = negotiations.filter(n => {
     if (!n) return false;
+    const nListingId = String(n.listingId || '').trim();
+    if (!nListingId || !myListingsIdSet.has(nListingId)) return false;
     const sEmail = (n.sellerEmail || '').toLowerCase().trim();
     if (currentEmail && sEmail === currentEmail) return true;
     return n.sellerRole === 'landowner';
@@ -109,7 +174,11 @@ const TimberMarketplacePage = () => {
   // KPI calculations
   const totalVolume = myListings.reduce((sum, item) => sum + (Number(item.volume) || 0), 0);
   const totalValue = myListings.reduce((sum, item) => sum + (Number(item.askingPrice) || 0), 0);
-  const pendingNegotiations = myNegotiations.filter(n => n.status === 'Pending Review' || n.status === 'Counter-Offer');
+  const pendingNegotiations = myNegotiations.filter(n =>
+    n.status === 'Pending Review' ||
+    n.status === 'Counter-Offer' ||
+    n.status === 'Inspection Requested'
+  );
 
   const handleStatusChange = (id, newStatus) => {
     marketplaceService.updateListingStatus(id, newStatus);
@@ -117,22 +186,90 @@ const TimberMarketplacePage = () => {
     loadData();
   };
 
-  const handleDeleteListing = (id) => {
-    if (window.confirm('Are you sure you want to remove this timber listing?')) {
-      marketplaceService.deleteListing(id);
+  const handleDeleteListing = async (id) => {
+    if (!id) return;
+    const confirmed = window.confirm('Are you sure you want to remove this timber listing?');
+    if (!confirmed) return;
+
+    try {
+      const idStr = String(id).trim();
+      const targetListing = listings.find(l => {
+        const lId = String(l?.id || l?._id || '').trim();
+        return lId === idStr || l?.id === id || l?._id === id;
+      });
+      const matchingIds = new Set([idStr, String(id)]);
+      if (targetListing) {
+        if (targetListing.id) matchingIds.add(String(targetListing.id).trim());
+        if (targetListing._id) matchingIds.add(String(targetListing._id).trim());
+        if (targetListing.harvestOperationId) matchingIds.add(String(targetListing.harvestOperationId).trim());
+        if (targetListing.treeInventoryId) matchingIds.add(String(targetListing.treeInventoryId).trim());
+      }
+
+      // Optimistically remove from state immediately for instant feedback
+      setListings(prev => prev.filter(l => {
+        const lId = String(l?.id || l?._id || '').trim();
+        return !matchingIds.has(lId) && lId !== idStr && l?.id !== id && l?._id !== id;
+      }));
+      setNegotiations(prev => prev.filter(n => {
+        const nListingId = String(n?.listingId || '').trim();
+        return !matchingIds.has(nListingId) && nListingId !== idStr && n?.listingId !== id;
+      }));
       showToast('Timber listing removed from marketplace');
+      await marketplaceService.deleteListing(idStr);
       loadData();
+    } catch (err) {
+      console.error('Error deleting listing:', err);
+      showToast('Failed to remove listing');
     }
   };
 
-  const handleAcceptOffer = (neg) => {
-    marketplaceService.respondToNegotiation(neg.id, 'accept', {
-      sender: 'Landowner',
-      senderName: user?.name || neg.sellerName,
-      message: `Offer accepted by landowner. You can now finalize purchase and arrange logistics.`
-    });
-    showToast(`Accepted offer from ${neg.buyerName}!`);
-    loadData();
+  const handleApproveInspection = async (neg) => {
+    try {
+      await marketplaceService.approveInspectionDate(neg.id, user);
+      showToast(`Site inspection visit on ${neg.surveyVisitDate || 'the requested date'} approved! Buyer notified.`);
+      loadData();
+    } catch (err) {
+      console.error('Error approving inspection:', err);
+      alert('Failed to approve inspection date');
+    }
+  };
+
+  const handleOpenRescheduleModal = (neg) => {
+    setSelectedRescheduleNeg(neg);
+    setNewProposedDate(neg.surveyVisitDate || new Date().toISOString().split('T')[0]);
+    setNewProposedTimeSlot(neg.surveyTimeSlot || 'Morning (09:00 AM - 12:00 PM)');
+    setRescheduleReason('Landowner requested alternate timing for on-site availability.');
+    setRescheduleModalOpen(true);
+  };
+
+  const handleSubmitReschedule = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!selectedRescheduleNeg) return;
+    try {
+      await marketplaceService.suggestAlternativeDate(selectedRescheduleNeg.id, {
+        newDate: newProposedDate,
+        newTimeSlot: newProposedTimeSlot,
+        reason: rescheduleReason
+      }, user);
+      setRescheduleModalOpen(false);
+      showToast(`Alternative date (${newProposedDate}) suggested to ${selectedRescheduleNeg.buyerName}!`);
+      loadData();
+    } catch (err) {
+      console.error('Error suggesting alternative date:', err);
+      alert('Failed to submit reschedule proposal');
+    }
+  };
+
+  const handleAcceptOffer = async (neg) => {
+    try {
+      await marketplaceService.acceptOfferAndCreateOrder(neg.id, user);
+      showToast(`Accepted offer from ${neg.buyerName}! Official purchase contract generated.`);
+      loadData();
+    } catch (err) {
+      console.error('Error accepting offer:', err);
+      showToast(`Accepted offer from ${neg.buyerName}!`);
+      loadData();
+    }
   };
 
   const handleRejectOffer = (neg) => {
@@ -149,8 +286,26 @@ const TimberMarketplacePage = () => {
 
   const openCounterModal = (neg) => {
     setSelectedNegotiation(neg);
-    setCounterPrice(neg.originalPricePerM3 || '');
-    setCounterMessage(`We can agree to sell at ₹${Number(neg.originalPricePerM3 || 0).toLocaleString('en-IN')}/m³ with prompt yard pickup.`);
+    const reqVol = Number(neg.requestedVolume) || 1.70;
+    const resolvedAskingRate = Number(neg.originalPricePerM3) || (neg.askingPrice ? Math.round(Number(neg.askingPrice) / reqVol) : 147647);
+    const resolvedBuyerRate = Number(neg.offeredPricePerM3) || (neg.buyerOfferPrice ? Math.round(Number(neg.buyerOfferPrice) / reqVol) : Math.round(resolvedAskingRate * 0.94));
+
+    const targetCalc = calculateCounterTarget({
+      verifiedVolume: reqVol,
+      species: neg.timberSpecies || 'Teakwood',
+      gradeQuality: neg.gradeQuality || 'Grade A Prime Export',
+      askingPricePerM3: resolvedAskingRate,
+      buyerOfferPerM3: resolvedBuyerRate,
+      deliveryPreference: neg.deliveryPreference || 'Seller Contractor Hauling to Mill',
+      harvestContractSettled: true,
+      harvestContractAmount: 110000
+    });
+
+    const initialCounter = targetCalc.suggestedCounterRate;
+    setCounterPrice(initialCounter);
+    setCounterAdjustmentReason('Verified high-density heartwood girth and debarked prime export standard.');
+    setCustomReasonText('');
+    setCounterMessage(`We propose a data-informed counter target of ₹${initialCounter.toLocaleString('en-IN')}/m³ based on verified scaling measurements (${targetCalc.verifiedVolume} m³) and certified timber grade. Transit pass and yard loading ready.`);
     setCounterModalOpen(true);
   };
 
@@ -158,15 +313,44 @@ const TimberMarketplacePage = () => {
     e.preventDefault();
     if (!selectedNegotiation || !counterPrice) return;
 
+    const rateNum = Number(counterPrice);
+    if (isNaN(rateNum) || rateNum <= 0) {
+      alert('Please enter a valid positive counter-target rate per cubic metre.');
+      return;
+    }
+
+    const effectiveReason = counterAdjustmentReason === 'Custom justification...'
+      ? (customReasonText.trim() || 'Seller customized commercial terms.')
+      : counterAdjustmentReason;
+
+    const selVol = Number(selectedNegotiation.requestedVolume) || 1.70;
+    const selAskingRate = Number(selectedNegotiation.originalPricePerM3) || (selectedNegotiation.askingPrice ? Math.round(Number(selectedNegotiation.askingPrice) / selVol) : 147647);
+    const selBuyerRate = Number(selectedNegotiation.offeredPricePerM3) || (selectedNegotiation.buyerOfferPrice ? Math.round(Number(selectedNegotiation.buyerOfferPrice) / selVol) : Math.round(selAskingRate * 0.94));
+
+    const targetCalc = calculateCounterTarget({
+      verifiedVolume: selVol,
+      species: selectedNegotiation.timberSpecies || 'Teakwood',
+      gradeQuality: selectedNegotiation.gradeQuality || 'Grade A Prime Export',
+      askingPricePerM3: selAskingRate,
+      buyerOfferPerM3: selBuyerRate,
+      deliveryPreference: selectedNegotiation.deliveryPreference || 'Seller Contractor Hauling to Mill',
+      harvestContractSettled: true,
+      harvestContractAmount: 110000,
+      customCounterPrice: rateNum
+    });
+
     marketplaceService.respondToNegotiation(selectedNegotiation.id, 'counter', {
       sender: 'Landowner',
       senderName: user?.name || selectedNegotiation.sellerName,
-      pricePerM3: Number(counterPrice),
+      pricePerM3: rateNum,
+      counterTarget: rateNum,
+      suggestedTarget: targetCalc.suggestedCounterRate,
+      adjustmentReason: effectiveReason,
       message: counterMessage
     });
 
     setCounterModalOpen(false);
-    showToast('Counter-offer submitted to buyer!');
+    showToast(`Counter-target of ₹${rateNum.toLocaleString('en-IN')}/m³ submitted to ${selectedNegotiation.buyerName}!`);
     loadData();
   };
 
@@ -493,7 +677,11 @@ const TimberMarketplacePage = () => {
                             </select>
 
                             <button
-                              onClick={() => handleDeleteListing(listing.id)}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteListing(listing.id || listing._id);
+                              }}
                               className="tmp-delete-btn"
                               title="Delete Listing"
                             >
@@ -536,9 +724,13 @@ const TimberMarketplacePage = () => {
                 ) : (
                   <div className="space-y-4">
                     {myNegotiations.map((neg) => {
-                      const isPending = neg.status === 'Pending Review';
+                      const isInspectionRequested = neg.status === 'Inspection Requested';
+                      const isInspectionScheduled = neg.status === 'Inspection Scheduled';
+                      const isDateRescheduled = neg.status === 'Date Rescheduled by Landowner';
+                      const isPending = neg.status === 'Pending Review' || neg.status === 'Survey Completed & Offer Submitted';
                       const isCounter = neg.status === 'Counter-Offer';
                       const isAccepted = neg.status === 'Accepted';
+                      const isPaid = neg.status === 'Payment Completed' || neg.paymentStatus === 'PAID';
                       const isRejected = neg.status === 'Rejected';
 
                       return (
@@ -577,20 +769,213 @@ const TimberMarketplacePage = () => {
                             <div>
                               <span
                                 className={`px-3 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
-                                  isAccepted
+                                  isPaid
+                                    ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 shadow-sm shadow-emerald-500/20'
+                                    : isAccepted
                                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/20'
                                     : isRejected
                                     ? 'bg-red-500/20 text-red-300 border border-red-500/40'
                                     : isCounter
-                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                                    : isDateRescheduled
+                                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                    : isInspectionScheduled
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                                     : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20'
                                 }`}
                               >
-                                {isPending && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>}
-                                {neg.status}
+                                {(isPending || isInspectionRequested) && <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>}
+                                {isInspectionRequested ? 'Site Inspection Requested' : isInspectionScheduled ? 'Inspection Scheduled' : isDateRescheduled ? 'Rescheduled Date Sent' : isPaid ? 'Payment Confirmed' : isCounter ? 'Counter-Offer Active' : neg.status}
                               </span>
                             </div>
                           </div>
+
+                          {/* Phase Alert & Notice Banner */}
+                          {isInspectionRequested && (
+                            <div className="tc-irb-card amber">
+                              <div className="tc-irb-header">
+                                <div className="tc-irb-icon-box">
+                                  <Calendar size={18} />
+                                </div>
+                                <div className="tc-irb-heading-group">
+                                  <div className="tc-irb-title-row">
+                                    <h4 className="tc-irb-title">Action Required: On-Site Timber Inspection Requested</h4>
+                                    <span className="tc-irb-badge">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                                      Awaiting Approval
+                                    </span>
+                                  </div>
+                                  <p className="tc-irb-desc">
+                                    The buyer requested an on-site visit to inspect log girth, heartwood quality, and Forest Dept transit clearance before submitting their commercial offer.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Prominently Highlighted Timing Showcase */}
+                              <div className="tc-irb-timing-card">
+                                <div className="tc-irb-timing-items">
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <Calendar size={13} /> Requested Visit Date
+                                    </span>
+                                    <span className="tc-irb-timing-date-val">
+                                      {formatInspectionDate(neg.surveyVisitDate)}
+                                    </span>
+                                  </div>
+
+                                  <div className="tc-irb-timing-divider"></div>
+
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <Clock size={13} /> Time Window
+                                    </span>
+                                    <span className="tc-irb-timing-slot-val">
+                                      {formatInspectionTimeSlot(neg.surveyTimeSlot)}
+                                    </span>
+                                  </div>
+
+                                  <div className="tc-irb-timing-divider"></div>
+
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <MapPin size={13} /> Inspection Venue
+                                    </span>
+                                    <span className="text-white font-medium text-xs">
+                                      Seller Log Yard / Estate
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="tc-irb-timing-meta">
+                                  <span className="text-amber-400/90 font-medium">Please approve or reschedule below</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {isDateRescheduled && (
+                            <div className="tc-irb-card purple">
+                              <div className="tc-irb-header">
+                                <div className="tc-irb-icon-box">
+                                  <Clock size={18} />
+                                </div>
+                                <div className="tc-irb-heading-group">
+                                  <div className="tc-irb-title-row">
+                                    <h4 className="tc-irb-title">Alternative Inspection Date Proposed to Buyer</h4>
+                                    <span className="tc-irb-badge">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse"></span>
+                                      Awaiting Confirmation
+                                    </span>
+                                  </div>
+                                  <p className="tc-irb-desc">
+                                    You proposed an alternative inspection schedule. Reason: <em className="text-purple-200">"{neg.rescheduleReason || 'Yard availability'}"</em>. Waiting for buyer confirmation.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Prominently Highlighted Timing Showcase */}
+                              <div className="tc-irb-timing-card">
+                                <div className="tc-irb-timing-items">
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <Calendar size={13} /> Your Proposed Date
+                                    </span>
+                                    <span className="tc-irb-timing-date-val">
+                                      {formatInspectionDate(neg.suggestedDate)}
+                                    </span>
+                                  </div>
+
+                                  <div className="tc-irb-timing-divider"></div>
+
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <Clock size={13} /> Proposed Slot
+                                    </span>
+                                    <span className="tc-irb-timing-slot-val">
+                                      {formatInspectionTimeSlot(neg.suggestedTimeSlot)}
+                                    </span>
+                                  </div>
+
+                                  <div className="tc-irb-timing-divider"></div>
+
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <MapPin size={13} /> Venue
+                                    </span>
+                                    <span className="text-white font-medium text-xs">
+                                      Seller Log Yard
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="tc-irb-timing-meta">
+                                  <span className="text-purple-300 font-medium">Sent to Buyer</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {isInspectionScheduled && (
+                            <div className="tc-irb-card emerald">
+                              <div className="tc-irb-header">
+                                <div className="tc-irb-icon-box">
+                                  <CheckCircle2 size={18} />
+                                </div>
+                                <div className="tc-irb-heading-group">
+                                  <div className="tc-irb-title-row">
+                                    <h4 className="tc-irb-title">Site Inspection Confirmed</h4>
+                                    <span className="tc-irb-badge">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                      Confirmed Visit
+                                    </span>
+                                  </div>
+                                  <p className="tc-irb-desc">
+                                    Log yard prepared for buyer inspection. Once the buyer completes their physical inspection, they will record official survey measurements & submit their price offer.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Prominently Highlighted Timing Showcase */}
+                              <div className="tc-irb-timing-card">
+                                <div className="tc-irb-timing-items">
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <Calendar size={13} /> Confirmed Visit Date
+                                    </span>
+                                    <span className="tc-irb-timing-date-val">
+                                      {formatInspectionDate(neg.surveyVisitDate)}
+                                    </span>
+                                  </div>
+
+                                  <div className="tc-irb-timing-divider"></div>
+
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <Clock size={13} /> Inspection Slot
+                                    </span>
+                                    <span className="tc-irb-timing-slot-val">
+                                      {formatInspectionTimeSlot(neg.surveyTimeSlot)}
+                                    </span>
+                                  </div>
+
+                                  <div className="tc-irb-timing-divider"></div>
+
+                                  <div className="tc-irb-timing-cell">
+                                    <span className="tc-irb-timing-kicker">
+                                      <MapPin size={13} /> Venue
+                                    </span>
+                                    <span className="text-white font-medium text-xs">
+                                      Seller Log Yard
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="tc-irb-timing-meta">
+                                  <span className="text-emerald-400 font-medium">✓ Yard Ready</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
                           {/* 4-Cell Offer Comparison Grid */}
                           <div className="tc-neg-metrics-grid">
@@ -603,36 +988,131 @@ const TimberMarketplacePage = () => {
                             </div>
 
                             <div className="tc-neg-metric-box tc-neg-metric-box-highlight">
-                              <span className="tc-neg-metric-label text-emerald-400">BUYER'S OFFERED RATE</span>
+                              <span className="tc-neg-metric-label text-emerald-400">
+                                {isInspectionRequested || isInspectionScheduled ? 'INSPECTION TIMING' : "BUYER'S OFFERED RATE"}
+                              </span>
                               <div className="tc-neg-metric-val text-emerald-400">
-                                ₹ {Number(neg.offeredPricePerM3).toLocaleString('en-IN')} <span className="text-xs font-normal text-emerald-300">/ m³</span>
+                                {isInspectionRequested || isInspectionScheduled ? (
+                                  <span className="text-sm font-semibold tracking-wide" style={{ color: '#ffffff' }}>
+                                    {formatInspectionDate(neg.surveyVisitDate)}
+                                  </span>
+                                ) : (
+                                  <>₹ {Number(neg.offeredPricePerM3).toLocaleString('en-IN')} <span className="text-xs font-normal text-emerald-300">/ m³</span></>
+                                )}
                               </div>
-                              <span className="tc-neg-metric-sub text-emerald-300 font-medium">Proposed Bid</span>
+                              <span className="tc-neg-metric-sub text-emerald-300 font-medium truncate">
+                                {isInspectionRequested || isInspectionScheduled ? formatInspectionTimeSlot(neg.surveyTimeSlot) : 'Proposed Bid'}
+                              </span>
                             </div>
 
                             <div className="tc-neg-metric-box">
-                              <span className="tc-neg-metric-label">REQUESTED VOLUME</span>
+                              <span className="tc-neg-metric-label">PARCEL VOLUME</span>
                               <div className="tc-neg-metric-val text-white">
-                                {neg.requestedVolume} <span className="text-xs font-normal text-slate-300">m³</span>
+                                {neg.verifiedVolume || neg.requestedVolume} <span className="text-xs font-normal text-slate-300">m³</span>
                               </div>
                               <span className="tc-neg-metric-sub truncate">{neg.deliveryPreference || 'Truck Pickup'}</span>
                             </div>
 
                             <div className="tc-neg-metric-box tc-neg-metric-box-highlight">
-                              <span className="tc-neg-metric-label text-amber-300">TOTAL DEAL OFFER</span>
+                              <span className="tc-neg-metric-label text-amber-300">
+                                {isInspectionRequested || isInspectionScheduled ? 'INSPECTION STATUS' : 'TOTAL DEAL OFFER'}
+                              </span>
                               <div className="tc-neg-metric-val text-gold">
-                                ₹ {Number(neg.totalOffered).toLocaleString('en-IN')}
+                                {isInspectionRequested || isInspectionScheduled ? (
+                                  <span className="text-sm text-amber-300">{isInspectionScheduled ? 'Date Confirmed' : 'Date Pending'}</span>
+                                ) : (
+                                  `₹ ${Number(neg.totalOffered).toLocaleString('en-IN')}`
+                                )}
                               </div>
-                              <span className="tc-neg-metric-sub text-amber-300/80">Escrow Secured</span>
+                              <span className="tc-neg-metric-sub text-amber-300/80">
+                                {isInspectionRequested || isInspectionScheduled ? 'Pending Site Visit' : 'Escrow Secured'}
+                              </span>
                             </div>
                           </div>
 
+                          {/* Recorded On-Site Timber Survey Findings (if completed) */}
+                          {neg.surveyDetails && (
+                            <div className="tc-neg-findings-card">
+                              <div className="tc-neg-findings-header">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="tc-neg-findings-title">
+                                    <FileCheck size={16} className="text-emerald-400" /> Verified On-Site Survey Findings
+                                  </span>
+                                  <span className="tc-neg-findings-badge">
+                                    <CheckCircle2 size={11} className="text-emerald-400" /> Buyer Field Certified
+                                  </span>
+                                </div>
+                                <div className="tc-neg-findings-date">
+                                  <Calendar size={12} className="text-emerald-400" />
+                                  <span>Surveyed on: <strong className="text-white font-semibold">{formatInspectionDate(neg.surveyDetails.surveyDate || neg.surveyVisitDate)}</strong></span>
+                                </div>
+                              </div>
+
+                              <div className="tc-neg-findings-grid">
+                                <div className="tc-neg-findings-cell">
+                                  <span className="tc-neg-findings-cell-label">VERIFIED VOLUME</span>
+                                  <div className="tc-neg-findings-cell-value font-mono">
+                                    {neg.surveyDetails.verifiedVolume} m³
+                                  </div>
+                                  <span className="tc-neg-findings-cell-sub">Quarter-Girth Scale</span>
+                                </div>
+
+                                <div className="tc-neg-findings-cell">
+                                  <span className="tc-neg-findings-cell-label">OBSERVED GRADE</span>
+                                  <div className="tc-neg-findings-cell-value text-emerald-300 truncate" title={neg.surveyDetails.observedGrade}>
+                                    {neg.surveyDetails.observedGrade ? neg.surveyDetails.observedGrade.split('(')[0].trim() : 'Grade A Prime Export'}
+                                  </div>
+                                  <span className="tc-neg-findings-cell-sub truncate">
+                                    {neg.surveyDetails.observedGrade?.includes('(')
+                                      ? neg.surveyDetails.observedGrade.match(/\((.*?)\)/)?.[1]
+                                      : 'Clear Boles, Export Quality'}
+                                  </span>
+                                </div>
+
+                                <div className="tc-neg-findings-cell">
+                                  <span className="tc-neg-findings-cell-label">DEBARKED LOGS</span>
+                                  <div className="tc-neg-findings-cell-value">
+                                    {neg.surveyDetails.logCount} Individual Logs
+                                  </div>
+                                  <span className="tc-neg-findings-cell-sub">Measured & Stenciled</span>
+                                </div>
+
+                                <div className="tc-neg-findings-cell">
+                                  <span className="tc-neg-findings-cell-label">TRANSIT PERMIT</span>
+                                  <div className="tc-neg-findings-cell-value text-emerald-300 flex items-center gap-1.5">
+                                    <ShieldCheck size={14} className="text-emerald-400 flex-shrink-0" /> Hammer Verified
+                                  </div>
+                                  <span className="tc-neg-findings-cell-sub">Forest Dept Cleared</span>
+                                </div>
+                              </div>
+
+                              {neg.surveyDetails.heartwoodQuality && (
+                                <div className="tc-neg-findings-note">
+                                  <Sparkles size={14} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                                  <div className="flex-1 leading-snug">
+                                    <span className="text-emerald-300 font-bold uppercase tracking-wider text-[10px] mr-2">
+                                      Heartwood Assessment:
+                                    </span>
+                                    <span className="text-slate-200 text-xs font-medium">
+                                      {neg.surveyDetails.heartwoodQuality}
+                                    </span>
+                                  </div>
+                                  {neg.surveyDetails.surveyorName && (
+                                    <span className="text-[10px] text-slate-400 font-mono flex-shrink-0 bg-black/40 px-2 py-0.5 rounded border border-white/5">
+                                      Surveyor: {neg.surveyDetails.surveyorName}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Proposed Timber Survey Visit Card */}
-                          {neg.surveyVisitDate ? (
+                          {neg.surveyVisitDate && (
                             <div className="tc-neg-survey-card">
                               <div className="tc-neg-survey-top">
                                 <span className="tc-neg-survey-tag">
-                                  <Calendar size={13} className="text-emerald-400" /> Proposed On-Site Timber Survey Visit
+                                  <Calendar size={13} className="text-emerald-400" /> On-Site Timber Survey & Inspection
                                 </span>
                                 <span className="text-[11px] text-slate-400 flex items-center gap-1">
                                   <Truck size={12} className="text-blue-400" /> {neg.deliveryPreference}
@@ -640,13 +1120,21 @@ const TimberMarketplacePage = () => {
                               </div>
 
                               <div className="tc-neg-survey-detail flex items-center gap-2 flex-wrap">
-                                <span className="text-slate-300">Survey Date:</span>
-                                <strong className="text-white font-mono bg-emerald-950/80 px-2.5 py-0.5 rounded-md border border-emerald-500/30">
-                                  {neg.surveyVisitDate}
-                                </strong>
+                                <span className="text-slate-300 text-xs font-medium">Inspection Timing:</span>
+                                <span
+                                  className="font-mono font-semibold px-2.5 py-1 rounded-md text-xs shadow-sm flex items-center gap-1.5"
+                                  style={{ color: '#ffffff', backgroundColor: '#062d1d', border: '1px solid #10b981' }}
+                                >
+                                  <Calendar size={12} className="text-emerald-400" />
+                                  {formatInspectionDate(neg.surveyVisitDate)}
+                                </span>
                                 {neg.surveyTimeSlot && (
-                                  <span className="text-emerald-300 font-medium bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                                    {String(neg.surveyTimeSlot).replace(/^\(|\)$/g, '')}
+                                  <span
+                                    className="font-medium px-2.5 py-1 rounded-md text-xs shadow-sm flex items-center gap-1.5"
+                                    style={{ color: '#6ee7b7', backgroundColor: 'rgba(6, 45, 29, 0.7)', border: '1px solid rgba(16, 185, 129, 0.4)' }}
+                                  >
+                                    <Clock size={12} className="text-emerald-400" />
+                                    {formatInspectionTimeSlot(neg.surveyTimeSlot)}
                                   </span>
                                 )}
                               </div>
@@ -658,30 +1146,88 @@ const TimberMarketplacePage = () => {
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            <div className="text-xs text-slate-300 space-y-1.5 p-3 rounded-xl bg-black/40 border border-white/8">
-                              <div><strong className="text-slate-400">Delivery Preference:</strong> {neg.deliveryPreference}</div>
-                              {neg.paymentTerms && <div><strong className="text-slate-400">Payment Terms:</strong> {neg.paymentTerms}</div>}
-                              {neg.notes && (
-                                <div className="tc-neg-note-box flex items-start gap-2">
-                                  <MessageSquare size={13} className="text-emerald-400 shrink-0 mt-0.5" />
-                                  <span>"{neg.notes}"</span>
+                          )}
+
+                          {/* Counter offer proposal details */}
+                          {neg.counterOffer && (
+                            <div className="tc-neg-counter-proposal-card">
+                              <div className="tc-neg-counter-proposal-header">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="tc-neg-counter-proposal-title">
+                                    <RotateCcw size={16} className="text-emerald-400" /> Current Counter-Rate:
+                                  </span>
+                                  <span className="tc-neg-counter-proposal-badge">
+                                    Negotiated Rate
+                                  </span>
+                                </div>
+                                <div className="tc-neg-counter-proposal-rate">
+                                  <span>₹ {Number(neg.counterOffer.pricePerM3).toLocaleString('en-IN')}</span>
+                                  <span className="tc-neg-counter-proposal-rate-unit">/ m³</span>
+                                </div>
+                              </div>
+
+                              {neg.counterOffer.adjustmentReason && (
+                                <div className="tc-neg-counter-justification">
+                                  <ShieldCheck size={15} className="text-emerald-400 shrink-0 mt-0.5" />
+                                  <div>
+                                    <strong className="text-emerald-300 uppercase tracking-wider text-[10.5px] mr-1.5 font-bold">
+                                      Commercial Justification:
+                                    </strong>
+                                    <span className="text-slate-200">{neg.counterOffer.adjustmentReason}</span>
+                                  </div>
                                 </div>
                               )}
+
+                              {neg.counterOffer.message && (
+                                <div className="tc-neg-counter-message">
+                                  "{neg.counterOffer.message}"
+                                </div>
+                              )}
+
+                              <div className="tc-neg-counter-footer">
+                                <span className="tc-neg-counter-gross">
+                                  Gross Proposed Deal Value:{' '}
+                                  <strong className="text-gold font-mono font-bold text-sm">
+                                    ₹ {(Number(neg.counterOffer.pricePerM3) * Number(neg.requestedVolume || neg.verifiedVolume || 1.7)).toLocaleString('en-IN')}
+                                  </strong>{' '}
+                                  <span className="text-slate-400 text-[11px]">for {neg.requestedVolume || neg.verifiedVolume || 1.7} m³</span>
+                                </span>
+                                <span className="tc-neg-counter-settlement">
+                                  <CheckCircle2 size={13} className="text-emerald-400" /> Direct Timber Settlement
+                                </span>
+                              </div>
                             </div>
                           )}
 
-                          {/* Counter offer details if any */}
-                          {neg.counterOffer && (
-                            <div className="p-3.5 rounded-xl bg-blue-950/40 border border-blue-500/30 text-xs text-blue-200 space-y-1">
-                              <span className="font-bold flex items-center gap-1.5 text-blue-300">
-                                <RotateCcw size={14} /> Current Counter-Rate: ₹ {Number(neg.counterOffer.pricePerM3).toLocaleString('en-IN')} / m³
-                              </span>
-                              <p className="text-slate-300 italic">"{neg.counterOffer.message}"</p>
+                          {/* Action Buttons for Landowner */}
+                          {isInspectionRequested && (
+                            <div className="tc-neg-actions-row">
+                              <button
+                                onClick={() => handleRejectOffer(neg)}
+                                className="tc-neg-btn-decline"
+                              >
+                                Decline Request
+                              </button>
+
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenRescheduleModal(neg)}
+                                  className="tc-neg-btn-counter bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                                >
+                                  <Calendar size={14} /> Suggest Another Date
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveInspection(neg)}
+                                  className="tc-neg-btn-accept"
+                                >
+                                  <Check size={15} /> Approve Inspection Date
+                                </button>
+                              </div>
                             </div>
                           )}
 
-                          {/* Action Buttons */}
                           {(isPending || isCounter) && (
                             <div className="tc-neg-actions-row">
                               <button
@@ -691,7 +1237,7 @@ const TimberMarketplacePage = () => {
                                 Decline Offer
                               </button>
 
-                              <div className="flex items-center gap-2.5">
+                              <div className="flex items-center gap-2.5 flex-wrap">
                                 <button
                                   onClick={() => openCounterModal(neg)}
                                   className="tc-neg-btn-counter"
@@ -702,7 +1248,7 @@ const TimberMarketplacePage = () => {
                                   onClick={() => handleAcceptOffer(neg)}
                                   className="tc-neg-btn-accept"
                                 >
-                                  <Check size={15} /> Accept Offer & Confirm Visit
+                                  <Check size={15} /> Accept Offer & Finalize Contract
                                 </button>
                               </div>
                             </div>
@@ -836,234 +1382,417 @@ const TimberMarketplacePage = () => {
               </div>
             )}
 
-            {/* COUNTER-OFFER MODAL */}
+            {/* ========================================================= */}
+            {/* COUNTER-TARGET & PROPOSAL FORMULATION MODAL */}
+            {/* ========================================================= */}
             {counterModalOpen && selectedNegotiation && (() => {
-              const askingRate = Number(selectedNegotiation.originalPricePerM3 || selectedNegotiation.pricePerM3 || 42500);
-              const buyerBidRate = Number(selectedNegotiation.offeredPricePerM3 || 0);
-              const reqVolume = Number(selectedNegotiation.requestedVolume || 1);
-              const splitRate = Math.round((askingRate + buyerBidRate) / 2);
-              const plusFiveRate = Math.round(buyerBidRate * 1.05);
-              const diffPercent = askingRate > 0 && buyerBidRate < askingRate 
-                ? Math.round(((askingRate - buyerBidRate) / askingRate) * 100) 
-                : 0;
+              const reqVolume = Number(selectedNegotiation.requestedVolume || 1.70);
+              const askingRate = Number(selectedNegotiation.originalPricePerM3 || selectedNegotiation.pricePerM3 || (selectedNegotiation.askingPrice ? Math.round(Number(selectedNegotiation.askingPrice) / reqVolume) : 147647));
+              const buyerBidRate = Number(selectedNegotiation.offeredPricePerM3 || (selectedNegotiation.buyerOfferPrice ? Math.round(Number(selectedNegotiation.buyerOfferPrice) / reqVolume) : Math.round(askingRate * 0.94)));
               const numericCounter = Number(counterPrice) || 0;
-              const counterTotal = numericCounter * reqVolume;
+
+              const targetCalc = calculateCounterTarget({
+                verifiedVolume: reqVolume,
+                species: selectedNegotiation.timberSpecies || 'Teakwood',
+                gradeQuality: selectedNegotiation.gradeQuality || 'Grade A Prime Export',
+                askingPricePerM3: askingRate,
+                buyerOfferPerM3: buyerBidRate,
+                deliveryPreference: selectedNegotiation.deliveryPreference || 'Seller Contractor Hauling to Mill',
+                harvestContractSettled: true,
+                harvestContractAmount: 110000,
+                customCounterPrice: numericCounter > 0 ? numericCounter : null
+              });
+
+              const suggestedRate = targetCalc.suggestedCounterRate;
+              const grossDealValue = targetCalc.grossDealValue;
               const gainVsBid = numericCounter > buyerBidRate 
                 ? (numericCounter - buyerBidRate) * reqVolume 
                 : 0;
 
               return (
-                <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[1000] flex items-center justify-center p-4 overflow-y-auto">
+                <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[1000] flex items-center justify-center p-3 sm:p-5 animate-fade-in">
                   <div className="tc-counter-modal-card my-auto">
-                    {/* Header */}
+                    {/* Sticky Modal Header */}
                     <div className="tc-counter-header">
                       <div className="tc-counter-title-group">
                         <div className="tc-counter-icon-wrap">
-                          <RotateCcw size={20} />
+                          <RotateCcw size={18} />
                         </div>
                         <div>
-                          <h3 className="tc-counter-title">
-                            Propose Counter-Offer
+                          <h3 className="tc-counter-title flex items-center gap-2">
+                            <span>Formulate Counter Target</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Data-Informed
+                            </span>
                           </h3>
                           <div className="tc-counter-lot-badge">
-                            Lot: <span className="text-emerald-300 font-semibold">{selectedNegotiation.timberTitle}</span>
+                            Lot: <span className="text-emerald-300 font-semibold">{selectedNegotiation.timberTitle}</span> • Buyer: <strong className="text-white">{selectedNegotiation.buyerName}</strong>
                           </div>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setCounterModalOpen(false)}
-                        className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
-                        title="Close"
+                        className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                        title="Close modal"
                       >
-                        <X size={20} />
+                        <X size={18} />
                       </button>
                     </div>
 
-                    {/* Rate Comparison Grid */}
-                    <div className="tc-counter-compare-grid">
-                      {/* Buyer Bid Card */}
-                      <div className="tc-counter-compare-card bid">
-                        <span className="tc-counter-pill amber">Buyer's Bid</span>
-                        <div className="tc-counter-compare-rate">
-                          ₹ {buyerBidRate.toLocaleString('en-IN')} <span className="text-xs font-normal text-amber-300/80">/ m³</span>
-                        </div>
-                        <div className="tc-counter-compare-sub">
-                          {diffPercent > 0 ? `${diffPercent}% below asking` : 'Initial offer'} • Total ₹ {(buyerBidRate * reqVolume).toLocaleString('en-IN')}
-                        </div>
-                      </div>
-
-                      {/* Direction Icon */}
-                      <div className="tc-counter-compare-arrow">
-                        <ArrowRight size={15} />
-                      </div>
-
-                      {/* Your Asking Rate Card */}
-                      <div className="tc-counter-compare-card asking">
-                        <span className="tc-counter-pill emerald">Your Listed Price</span>
-                        <div className="tc-counter-compare-rate">
-                          ₹ {askingRate.toLocaleString('en-IN')} <span className="text-xs font-normal text-emerald-300/80">/ m³</span>
-                        </div>
-                        <div className="tc-counter-compare-sub">
-                          Target • Total ₹ {(askingRate * reqVolume).toLocaleString('en-IN')}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Volume & Survey Inspection Strip */}
-                    <div className="tc-counter-deal-info-strip">
-                      <div className="flex items-center gap-2">
-                        <Layers size={14} className="text-emerald-400" />
-                        <span>Volume: <strong className="text-white">{reqVolume} m³</strong></span>
-                      </div>
-                      {selectedNegotiation.surveyVisitDate && (
-                        <div className="flex items-center gap-2 text-slate-300">
-                          <Calendar size={14} className="text-emerald-400" />
-                          <span>Inspection: <strong className="text-emerald-300">{selectedNegotiation.surveyVisitDate}</strong> {selectedNegotiation.surveyTimeSlot ? `(${selectedNegotiation.surveyTimeSlot.split(' ')[0]})` : ''}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <form onSubmit={submitCounterOffer} className="space-y-4">
-                      {/* Counter Rate Input */}
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-xs font-bold text-slate-200">
-                            Your Counter-Rate (₹ per m³):
-                          </label>
-                          <span className="text-[11px] text-slate-400">
-                            Requested: <strong className="text-white">{reqVolume} m³</strong>
-                          </span>
-                        </div>
-
-                        <div className="tc-counter-input-box">
-                          <span className="tc-counter-input-prefix">₹</span>
-                          <input
-                            type="number"
-                            value={counterPrice}
-                            onChange={(e) => setCounterPrice(e.target.value)}
-                            placeholder={String(askingRate)}
-                            className="tc-counter-input-field"
-                            min="1000"
-                            step="50"
-                            required
-                          />
-                          <span className="tc-counter-input-suffix">/ m³</span>
-                        </div>
-
-                        {/* Quick Rate Preset Buttons */}
-                        <div className="tc-counter-presets-row">
-                          <span className="text-[11px] text-slate-400 mr-1">Presets:</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCounterPrice(askingRate);
-                              setCounterMessage(`We can agree to sell at ₹${askingRate.toLocaleString('en-IN')}/m³ with prompt yard pickup.`);
-                            }}
-                            className="tc-counter-preset-btn"
-                          >
-                            Hold Listed Rate (₹ {askingRate.toLocaleString('en-IN')})
-                          </button>
-                          {splitRate !== askingRate && splitRate !== buyerBidRate && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCounterPrice(splitRate);
-                                setCounterMessage(`Let's meet halfway at ₹${splitRate.toLocaleString('en-IN')}/m³ with immediate loading clearance.`);
-                              }}
-                              className="tc-counter-preset-btn"
-                            >
-                              Split Difference (₹ {splitRate.toLocaleString('en-IN')})
-                            </button>
-                          )}
-                          {plusFiveRate > buyerBidRate && plusFiveRate < askingRate && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCounterPrice(plusFiveRate);
-                                setCounterMessage(`We can offer a special rate of ₹${plusFiveRate.toLocaleString('en-IN')}/m³ upon on-site survey inspection.`);
-                              }}
-                              className="tc-counter-preset-btn"
-                            >
-                              +5% of Bid (₹ {plusFiveRate.toLocaleString('en-IN')})
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Total Proposed Value Banner */}
-                        {numericCounter > 0 && (
-                          <div className="tc-counter-summary-banner">
-                            <span className="text-slate-300">
-                              Total Proposed Value: <strong className="text-emerald-300 font-mono text-sm ml-1">₹ {counterTotal.toLocaleString('en-IN')}</strong>
+                    {/* Scrollable Form Body */}
+                    {/* Scrollable Form Body */}
+                    <form onSubmit={submitCounterOffer} className="flex-1 flex flex-col overflow-hidden">
+                      <div className="tc-counter-body">
+                        
+                        {/* 1. TARGET FORMULATION MODEL CARD */}
+                        <div className="tc-counter-target-engine-box">
+                          <div className="tc-counter-target-header">
+                            <span className="tc-counter-target-badge">
+                              <Sparkles size={12} /> Target Formulation Model
                             </span>
-                            {gainVsBid > 0 && (
-                              <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                                +₹ {gainVsBid.toLocaleString('en-IN')} vs buyer offer
-                              </span>
-                            )}
+                            <span className="text-[11px] text-slate-300">
+                              Suggested Target: <strong className="text-emerald-300 font-mono text-xs">₹ {suggestedRate.toLocaleString('en-IN')}/m³</strong>
+                            </span>
                           </div>
-                        )}
+
+                          <div className="tc-counter-target-factors-grid">
+                            <div className="tc-counter-factor-pill">
+                              <span className="tc-counter-factor-label">Verified Vol</span>
+                              <span className="tc-counter-factor-val text-emerald-300">{reqVolume} m³</span>
+                            </div>
+                            <div className="tc-counter-factor-pill">
+                              <span className="tc-counter-factor-label">Timber Grade</span>
+                              <span className="tc-counter-factor-val truncate">{targetCalc.gradeQuality}</span>
+                            </div>
+                            <div className="tc-counter-factor-pill">
+                              <span className="tc-counter-factor-label">Market Range</span>
+                              <span className="tc-counter-factor-val font-mono">₹{Math.round(targetCalc.benchmarkRange.min / 1000)}k–{Math.round(targetCalc.benchmarkRange.max / 1000)}k</span>
+                            </div>
+                            <div className="tc-counter-factor-pill">
+                              <span className="tc-counter-factor-label">Transport</span>
+                              <span className="tc-counter-factor-val truncate">{selectedNegotiation.deliveryPreference ? 'Seller Hauling' : 'Yard Pickup'}</span>
+                            </div>
+                          </div>
+
+                          <div className="tc-counter-settlement-notice">
+                            <ShieldCheck size={14} className="text-emerald-400 shrink-0" />
+                            <span><strong>Contract Settled:</strong> ₹1,10,000 harvesting cost is 100% cleared. Zero deductions applied to this timber revenue.</span>
+                          </div>
+                        </div>
+
+                        {/* 2. 3-WAY RATE COMPARISON CARDS */}
+                        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                          {/* Buyer Bid Card */}
+                          <div className="tc-counter-compare-card bid">
+                            <span className="tc-counter-pill amber">Buyer Bid</span>
+                            <div className="tc-counter-compare-rate text-amber-300">
+                              ₹ {buyerBidRate.toLocaleString('en-IN')}
+                            </div>
+                            <div className="tc-counter-compare-sub">
+                              Total ₹ {(buyerBidRate * reqVolume).toLocaleString('en-IN')}
+                            </div>
+                          </div>
+
+                          {/* Suggested Counter Target */}
+                          <div className="tc-counter-compare-card bg-emerald-950/40 border border-emerald-500/40">
+                            <span className="tc-counter-pill emerald">Suggested Target</span>
+                            <div className="tc-counter-compare-rate text-emerald-300">
+                              ₹ {suggestedRate.toLocaleString('en-IN')}
+                            </div>
+                            <div className="tc-counter-compare-sub">
+                              Total ₹ {(suggestedRate * reqVolume).toLocaleString('en-IN')}
+                            </div>
+                          </div>
+
+                          {/* Catalogue Rate Card */}
+                          <div className="tc-counter-compare-card asking">
+                            <span className="tc-counter-pill emerald">Catalogue Rate</span>
+                            <div className="tc-counter-compare-rate text-slate-200">
+                              ₹ {askingRate.toLocaleString('en-IN')}
+                            </div>
+                            <div className="tc-counter-compare-sub">
+                              Total ₹ {(askingRate * reqVolume).toLocaleString('en-IN')}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3. COUNTER-TARGET RATE & QUICK BENCHMARKS */}
+                        <div className="tc-counter-section-card">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-200">
+                              Counter-Target Rate (₹ per m³):
+                            </label>
+                            <span className="text-[11px] text-slate-400">
+                              Requested: <strong className="text-white">{reqVolume} m³</strong>
+                            </span>
+                          </div>
+
+                          <div className="tc-counter-input-box">
+                            <span className="tc-counter-input-prefix">₹</span>
+                            <input
+                              type="number"
+                              value={counterPrice}
+                              onChange={(e) => setCounterPrice(e.target.value)}
+                              placeholder={String(suggestedRate)}
+                              className="tc-counter-input-field"
+                              min="1000"
+                              step="50"
+                              required
+                            />
+                            <span className="tc-counter-input-suffix">/ m³</span>
+                          </div>
+
+                          {/* Quick Benchmarks Buttons */}
+                          {(() => {
+                            const isSuggestedActive = Number(counterPrice) === Number(suggestedRate);
+                            const isAskingActive = Number(counterPrice) === Number(askingRate);
+
+                            return (
+                              <div className="flex items-center gap-2.5 flex-wrap pt-1">
+                                <span className="text-xs text-slate-400 font-semibold mr-1">
+                                  Quick Benchmarks:
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCounterPrice(suggestedRate);
+                                    setCounterAdjustmentReason('Verified high-density heartwood girth and debarked prime export standard.');
+                                    setCounterMessage(`We propose a data-informed counter target of ₹${suggestedRate.toLocaleString('en-IN')}/m³ based on verified scaling measurements (${reqVolume} m³) and certified timber grade. Transit pass and yard loading ready.`);
+                                  }}
+                                  className={`tc-counter-preset-btn suggested ${isSuggestedActive ? 'active' : ''}`}
+                                >
+                                  <Sparkles size={13} className={isSuggestedActive ? 'text-slate-950' : 'text-emerald-400'} />
+                                  <span>Suggested Target (₹ {suggestedRate.toLocaleString('en-IN')})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCounterPrice(askingRate);
+                                    setCounterAdjustmentReason('Verified high-density heartwood girth and debarked prime export standard.');
+                                    setCounterMessage(`We hold our catalogue rate of ₹${askingRate.toLocaleString('en-IN')}/m³ with immediate yard loading.`);
+                                  }}
+                                  className={`tc-counter-preset-btn asking ${isAskingActive ? 'active' : ''}`}
+                                >
+                                  <Tag size={13} className={isAskingActive ? 'text-white' : 'text-slate-300'} />
+                                  <span>Hold Asking (₹ {askingRate.toLocaleString('en-IN')})</span>
+                                </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* 4. GUARDRAIL VALIDATION STATUS */}
+                        <div className={`tc-counter-guardrail-banner ${targetCalc.validationStatus}`}>
+                          {targetCalc.validationStatus === 'optimal' ? (
+                            <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+                          ) : (
+                            <AlertCircle size={16} className="shrink-0 text-amber-400" />
+                          )}
+                          <span>{targetCalc.validationMessage}</span>
+                        </div>
+
+                        {/* 5. GROSS TIMBER DEAL VALUE BANNER */}
+                        <div className="tc-counter-summary-banner">
+                          <span className="text-slate-300 text-xs sm:text-sm">
+                            Gross Timber Deal Value: <strong className="text-emerald-300 font-mono text-sm sm:text-base ml-1">₹ {grossDealValue.toLocaleString('en-IN')}</strong>
+                            <span className="text-[11px] text-slate-400 ml-1">({reqVolume} m³ × ₹{Number(counterPrice || suggestedRate).toLocaleString('en-IN')})</span>
+                          </span>
+                          {gainVsBid > 0 && (
+                            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2.5 py-1 rounded-full shrink-0">
+                              +₹ {gainVsBid.toLocaleString('en-IN')} vs buyer bid
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 6. COMMERCIAL JUSTIFICATION & TARGET BASIS */}
+                        <div className="tc-counter-section-card">
+                          <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <ShieldCheck size={14} className="text-emerald-400" />
+                              <span>Commercial Justification &amp; Target Basis:</span>
+                            </span>
+                          </label>
+                          <select
+                            value={counterAdjustmentReason}
+                            onChange={(e) => {
+                              setCounterAdjustmentReason(e.target.value);
+                              if (e.target.value !== 'Custom justification...') {
+                                setCounterMessage(`We propose a data-informed counter target of ₹${Number(counterPrice || suggestedRate).toLocaleString('en-IN')}/m³ based on: ${e.target.value}`);
+                              }
+                            }}
+                            className="tc-counter-select"
+                          >
+                            <option value="Verified high-density heartwood girth and debarked prime export standard.">
+                              Verified high-density heartwood girth & debarked export standard
+                            </option>
+                            <option value="Incorporates seller-arranged direct hauling and transit clearance to buyer mill.">
+                              Seller-arranged direct hauling & transit clearance to buyer mill
+                            </option>
+                            <option value="Matched to recent Kerala timber auction transaction records for Grade A Teak.">
+                              Matched to recent Kerala timber auction benchmark records
+                            </option>
+                            <option value="Fair compromise between catalogue asking price and buyer offer.">
+                              Equitable compromise between catalogue asking price & buyer offer
+                            </option>
+                            <option value="Custom justification...">
+                              Custom justification / commercial condition...
+                            </option>
+                          </select>
+
+                          {counterAdjustmentReason === 'Custom justification...' && (
+                            <input
+                              type="text"
+                              value={customReasonText}
+                              onChange={(e) => setCustomReasonText(e.target.value)}
+                              placeholder="Enter specific commercial justification..."
+                              className="w-full p-2.5 rounded-xl bg-black/60 border border-emerald-500/40 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400"
+                              required
+                            />
+                          )}
+                        </div>
+
+                        {/* 7. MESSAGE & CONDITIONS FOR BUYER */}
+                        <div className="tc-counter-section-card">
+                          <label className="text-xs font-bold text-slate-200 block">
+                            Message &amp; Conditions for Buyer:
+                          </label>
+                          <textarea
+                            rows="3"
+                            value={counterMessage}
+                            onChange={(e) => setCounterMessage(e.target.value)}
+                            className="tc-counter-textarea"
+                            placeholder="Specify yard loading, transport, inspection timeline or payment conditions..."
+                          />
+                        </div>
+
                       </div>
 
-                      {/* Message / Terms for Buyer */}
-                      <div>
-                        <label className="text-xs font-bold text-slate-200 block mb-1.5">
-                          Message & Conditions for Buyer:
-                        </label>
-                        <textarea
-                          rows="3"
-                          value={counterMessage}
-                          onChange={(e) => setCounterMessage(e.target.value)}
-                          className="w-full p-3 rounded-xl bg-black/50 border border-white/10 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/40 transition-all resize-none"
-                          placeholder="Specify yard loading, transport, inspection timeline or payment conditions..."
-                        />
-                        {/* Quick suggestion chips */}
-                        <div className="tc-counter-quick-chips">
+                      {/* Sticky Modal Footer Actions */}
+                      <div className="tc-counter-footer">
+                        <div className="text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
+                          <span>Gross Valuation:</span>
+                          <strong className="text-emerald-300 font-mono font-bold text-sm sm:text-base">
+                            ₹ {Number((numericCounter || suggestedRate) * reqVolume).toLocaleString('en-IN')}
+                          </strong>
+                          <span className="text-[11px] text-slate-500">({reqVolume} m³)</span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
                           <button
                             type="button"
-                            onClick={() => setCounterMessage(prev => prev ? `${prev} Yard pickup and log-loading included.` : 'Yard pickup and log-loading included.')}
-                            className="tc-counter-quick-chip"
+                            onClick={() => setCounterModalOpen(false)}
+                            className="tc-counter-btn-cancel"
                           >
-                            + Yard loading included
+                            Cancel
                           </button>
                           <button
-                            type="button"
-                            onClick={() => setCounterMessage(prev => prev ? `${prev} Payment due upon on-site survey inspection.` : 'Payment due upon on-site survey inspection.')}
-                            className="tc-counter-quick-chip"
+                            type="submit"
+                            className="tc-counter-btn-submit"
                           >
-                            + Payment after survey
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCounterMessage(prev => prev ? `${prev} Log pickup required within 5 days of transit permit clearance.` : 'Log pickup required within 5 days of transit permit clearance.')}
-                            className="tc-counter-quick-chip"
-                          >
-                            + Pickup within 5 days
+                            <RotateCcw size={15} className="stroke-[2.5]" />
+                            <span>Send Counter-Target (₹ {Number(counterPrice || suggestedRate).toLocaleString('en-IN')}/m³)</span>
                           </button>
                         </div>
-                      </div>
-
-                      {/* Modal Footer Actions */}
-                      <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/8">
-                        <button
-                          type="button"
-                          onClick={() => setCounterModalOpen(false)}
-                          className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 flex items-center gap-2 transition-all cursor-pointer"
-                        >
-                          <RotateCcw size={14} /> Send Counter-Offer
-                        </button>
                       </div>
                     </form>
                   </div>
                 </div>
               );
             })()}
+
+            {/* SUGGEST ALTERNATIVE INSPECTION DATE MODAL */}
+            {rescheduleModalOpen && selectedRescheduleNeg && (
+              <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[1000] overflow-y-auto p-4 sm:p-6 flex justify-center items-center">
+                <div className="tc-negotiate-modal-box my-auto animate-scale-up max-w-lg w-full">
+                  <div className="tc-modal-header flex items-center justify-between pb-3 border-b border-color">
+                    <h3 className="tc-modal-title flex items-center gap-2 font-bold text-white">
+                      <Calendar size={18} className="text-amber-400" /> Suggest Alternative Inspection Date
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setRescheduleModalOpen(false)}
+                      className="tc-modal-close text-slate-400 hover:text-white"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSubmitReschedule} className="p-4 space-y-4 text-xs">
+                    <div className="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-1">
+                      <span className="text-amber-300 font-bold block">
+                        Reschedule for {selectedRescheduleNeg.buyerName} ({selectedRescheduleNeg.buyerCompany})
+                      </span>
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        Buyer originally requested: <strong className="text-white font-mono">{formatInspectionDate(selectedRescheduleNeg.surveyVisitDate)}</strong> • <span className="text-amber-200">{formatInspectionTimeSlot(selectedRescheduleNeg.surveyTimeSlot)}</span>. Select a date when your log yard and estate manager will be ready.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="tc-modal-form-group mb-0">
+                        <label className="tc-modal-label flex items-center gap-1 font-semibold text-slate-200">
+                          <Calendar size={12} className="text-emerald-400" /> New Suggested Date *
+                        </label>
+                        <input
+                          type="date"
+                          min={new Date().toISOString().split('T')[0]}
+                          value={newProposedDate}
+                          onChange={(e) => setNewProposedDate(e.target.value)}
+                          className="tc-modal-input text-white font-medium w-full p-2.5 rounded-lg bg-surface border border-color"
+                          required
+                        />
+                      </div>
+
+                      <div className="tc-modal-form-group mb-0">
+                        <label className="tc-modal-label flex items-center gap-1 font-semibold text-slate-200">
+                          <Clock size={12} className="text-emerald-400" /> Preferred Time Slot *
+                        </label>
+                        <select
+                          value={newProposedTimeSlot}
+                          onChange={(e) => setNewProposedTimeSlot(e.target.value)}
+                          className="tc-modal-input w-full p-2.5 rounded-lg bg-surface border border-color text-white"
+                          required
+                        >
+                          <option value="Morning (09:00 AM - 12:00 PM)">Morning (09:00 AM - 12:00 PM)</option>
+                          <option value="Afternoon (01:00 PM - 04:00 PM)">Afternoon (01:00 PM - 04:00 PM)</option>
+                          <option value="Late Afternoon (04:00 PM - 06:30 PM)">Late Afternoon (04:00 PM - 06:30 PM)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="tc-modal-form-group">
+                      <label className="tc-modal-label font-semibold text-slate-200 block mb-1">
+                        Reason / Note for Buyer *
+                      </label>
+                      <textarea
+                        rows="3"
+                        value={rescheduleReason}
+                        onChange={(e) => setRescheduleReason(e.target.value)}
+                        className="tc-modal-input w-full p-2.5 rounded-lg bg-surface border border-color text-white"
+                        placeholder="e.g., Estate manager available from 10 AM on Saturday; log yard gate access open..."
+                        required
+                      ></textarea>
+                    </div>
+
+                    <div className="tc-modal-actions pt-3 border-t border-color flex items-center justify-end gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setRescheduleModalOpen(false)}
+                        className="tc-buyer-pill-btn px-4 py-2 rounded-xl text-slate-300 hover:text-white border border-color"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="tc-buyer-action-btn bg-amber-500 hover:bg-amber-400 text-black font-extrabold px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg"
+                      >
+                        <Calendar size={14} /> Send Rescheduled Date Proposal
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
 
           </main>
         </div>

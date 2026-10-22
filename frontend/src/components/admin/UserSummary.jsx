@@ -8,25 +8,38 @@ const UserSummary = ({ onManageUsers }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchUserStats = async () => {
+    let isSubscribed = true;
+
+    const fetchUserStats = async (isBackground = false) => {
       try {
-        setLoading(true);
+        if (!isBackground) setLoading(true);
         const res = await api.get('/admin/users');
-        if (res.data && Array.isArray(res.data.users)) {
+        if (isSubscribed && res.data && Array.isArray(res.data.users)) {
           const dbUsers = res.data.users.filter((u) => u.role !== 'admin');
           setUsers(dbUsers);
-        } else {
-          setUsers([]);
         }
       } catch (err) {
         console.error('Error fetching live user summary:', err);
-        setUsers([]);
       } finally {
-        setLoading(false);
+        if (isSubscribed && !isBackground) setLoading(false);
       }
     };
 
-    fetchUserStats();
+    fetchUserStats(false);
+
+    // Background live refresh every 5 seconds
+    const interval = setInterval(() => fetchUserStats(true), 5000);
+
+    const handleSync = () => fetchUserStats(true);
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
   }, []);
 
   const totalUsers = users.length;

@@ -1,13 +1,56 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Truck, ShoppingBag, DollarSign, ArrowRight, Clock, CheckCircle2, FileText, AlertCircle, ShieldAlert } from 'lucide-react';
 import { operationsOverviewData } from '../../data/adminMockData';
+import api from '../../services/api';
 
 const OperationsOverview = ({
   onViewHarvests,
   onViewMarketplace,
   onViewTransactions
 }) => {
-  const { harvestOperations, timberMarketplace, transactionsSummary } = operationsOverviewData;
+  const [data, setData] = useState(operationsOverviewData);
+  const [isLive, setIsLive] = useState(true);
+
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const fetchLiveOperations = async () => {
+      try {
+        const res = await api.get('/admin/overview');
+        if (isSubscribed && res.data?.operationsOverview) {
+          setData(res.data.operationsOverview);
+          setIsLive(true);
+        }
+      } catch (e) {
+        console.error('Error fetching live operations overview:', e);
+      }
+    };
+
+    fetchLiveOperations();
+
+    // Real-time polling every 3.5 seconds
+    const interval = setInterval(fetchLiveOperations, 3500);
+
+    // Cross-tab and in-app synchronization event listeners
+    const handleSync = () => fetchLiveOperations();
+    window.addEventListener('treeconnect_marketplace_updated', handleSync);
+    window.addEventListener('treeconnect_harvest_updated', handleSync);
+    window.addEventListener('treeconnect_payments_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+      window.removeEventListener('treeconnect_marketplace_updated', handleSync);
+      window.removeEventListener('treeconnect_harvest_updated', handleSync);
+      window.removeEventListener('treeconnect_payments_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
+  }, []);
+
+  const { harvestOperations, timberMarketplace, transactionsSummary } = data;
 
   return (
     <div className="space-y-6">
@@ -17,12 +60,18 @@ const OperationsOverview = ({
         <section className="admin-card space-y-4">
           <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
             <div>
-              <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5">
-                <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40">
-                  <Truck size={18} />
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2.5">
+                  <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                    <Truck size={18} />
+                  </span>
+                  <span>HARVEST OPERATIONS</span>
+                </h2>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  LIVE
                 </span>
-                <span>HARVEST OPERATIONS</span>
-              </h2>
+              </div>
               <p className="text-xs text-slate-400 mt-1">Status pipeline across active logging operations</p>
             </div>
             <button
@@ -96,12 +145,18 @@ const OperationsOverview = ({
         <section className="dashboard-section card border border-slate-800/90 bg-slate-950/90 backdrop-blur-md rounded-2xl p-5 shadow-xl space-y-4">
           <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
             <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-blue-950/80 text-blue-400 border border-blue-800/80">
-                  <ShoppingBag size={16} />
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-blue-950/80 text-blue-400 border border-blue-800/80">
+                    <ShoppingBag size={16} />
+                  </span>
+                  <span>TIMBER MARKETPLACE</span>
+                </h2>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                  LIVE
                 </span>
-                <span>TIMBER MARKETPLACE</span>
-              </h2>
+              </div>
               <p className="text-xs text-slate-400 mt-0.5">Commercial timber log trading activity</p>
             </div>
             <button

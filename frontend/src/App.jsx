@@ -19,6 +19,9 @@ import UsersPage from './pages/admin/UsersPage';
 import UserDetailPage from './pages/admin/UserDetailPage';
 import AdminPropertiesPage from './pages/admin/AdminPropertiesPage';
 import PropertyDetailPage from './pages/admin/PropertyDetailPage';
+import AdminHarvestOperationsPage from './pages/admin/AdminHarvestOperationsPage';
+import AdminMarketplacePage from './pages/admin/AdminMarketplacePage';
+import AdminPaymentsPage from './pages/admin/AdminPaymentsPage';
 import LandownerDashboard from './pages/landowner/Dashboard';
 import LandownerPaymentsPage from './pages/landowner/PaymentsPage';
 import ContractorDashboard from './pages/contractor/Dashboard';
@@ -96,6 +99,46 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <PropertyDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/harvest-operations"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminHarvestOperationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/harvests"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminHarvestOperationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/marketplace"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminMarketplacePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/payments"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminPaymentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/transactions"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminPaymentsPage />
                 </ProtectedRoute>
               }
             />
@@ -341,14 +384,6 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['buyer']}>
                   <BuyerOrdersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/buyer/analytics"
-              element={
-                <ProtectedRoute allowedRoles={['buyer']}>
-                  <BuyerDashboard />
                 </ProtectedRoute>
               }
             />

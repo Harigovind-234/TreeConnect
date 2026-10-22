@@ -4,13 +4,24 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useAuth } from '../context/AuthContext';
-import { authService } from '../services/authService';
-import api from '../services/api';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { LogIn, Key, Mail, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import {
+  LogIn,
+  Key,
+  Mail,
+  ShieldAlert,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Loader2,
+  ShieldCheck,
+  AlertCircle
+} from 'lucide-react';
+import './Login.css';
 
-// Zod Schema Definition for Live Login Validation
+// Zod Schema Definition for Login Validation
 const loginSchema = z.object({
   email: z
     .string()
@@ -22,6 +33,7 @@ const loginSchema = z.object({
 const Login = () => {
   const [authError, setAuthError] = useState('');
   const [resetSuccessMessage, setResetSuccessMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,67 +42,16 @@ const Login = () => {
     register,
     handleSubmit,
     setValue,
-    watch,
-    formState: { errors, isSubmitting, touchedFields }
+    formState: { errors, isSubmitting }
   } = useForm({
     resolver: zodResolver(loginSchema),
-    mode: 'onChange',
+    mode: 'onSubmit',
     reValidateMode: 'onChange',
     defaultValues: {
       email: '',
       password: ''
     }
   });
-
-  const watchEmail = watch('email', '');
-  const isEmailValidFormat = watchEmail && /\S+@\S+\.\S+/.test(watchEmail);
-
-  // State for live approved registered accounts from DB
-  const [approvedUsersList, setApprovedUsersList] = useState([]);
-
-  const isRegisteredUser = isEmailValidFormat && (
-    approvedUsersList.some(u => u.email?.toLowerCase() === watchEmail.toLowerCase().trim()) ||
-    authService.isUserRegistered(watchEmail)
-  );
-
-  useEffect(() => {
-    const fetchApprovedUsers = async () => {
-      try {
-        let list = [];
-        try {
-          const res = await api.get('/auth/approved-users', { timeout: 5000 });
-          if (res.data && Array.isArray(res.data.users) && res.data.users.length > 0) {
-            list = res.data.users;
-          }
-        } catch (apiErr) {
-          console.warn('API error fetching approved users, checking local storage fallback:', apiErr);
-          const registeredUsersObj = authService.getRegisteredUsers();
-          list = Object.values(registeredUsersObj).filter(
-            (u) => u && u.email && (u.role === 'admin' || (u.status === 'Active' && u.isVerified))
-          );
-        }
-
-        // Filter out any mock/example accounts
-        list = list.filter(u => u && u.email && !u.email.includes('@example.com'));
-
-        setApprovedUsersList(list);
-      } catch (err) {
-        console.error('Error setting approved users list:', err);
-      }
-    };
-
-    fetchApprovedUsers();
-  }, []);
-
-  // Suggestions dropdown state
-  const [isEmailFocused, setIsEmailFocused] = useState(false);
-
-  const matchingEmails = approvedUsersList.filter(
-    (u) =>
-      !watchEmail ||
-      u.email?.toLowerCase().includes(watchEmail.toLowerCase()) ||
-      (u.name && u.name.toLowerCase().includes(watchEmail.toLowerCase()))
-  );
 
   useEffect(() => {
     if (location.state?.passwordReset) {
@@ -106,7 +67,7 @@ const Login = () => {
     setResetSuccessMessage('');
     try {
       const res = await login(data);
-      const role = res.user?.role;
+      const role = res?.user?.role;
       if (role === 'admin') navigate('/admin/dashboard');
       else if (role === 'landowner') navigate('/landowner/dashboard');
       else if (role === 'contractor') navigate('/contractor/dashboard');
@@ -118,151 +79,137 @@ const Login = () => {
   };
 
   return (
-    <div className="page-wrapper min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="login-page-root">
       <Navbar />
 
-      <main className="auth-container">
-        <div className="auth-card">
-          <div className="auth-header">
-            <div className="auth-icon-circle">
+      <main className="login-main-container">
+        <div className="login-card">
+          
+          {/* Header */}
+          <div className="login-header">
+            <div className="login-emblem-wrapper">
               <LogIn size={26} />
             </div>
-            <h2>Welcome Back</h2>
-            <p>Sign in to access your TreeConnect ecosystem portal</p>
+            <h2 className="login-title">Welcome Back</h2>
+            <p className="login-subtitle">
+              Sign in to access your TreeConnect ecosystem portal
+            </p>
           </div>
 
+          {/* Password Reset Success Alert */}
           {resetSuccessMessage && (
-            <div className="p-3 bg-emerald-950/90 border border-emerald-700 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2 mb-3 animate-fade-in">
-              <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+            <div className="login-alert login-alert-success">
+              <CheckCircle2 size={16} className="shrink-0" />
               <span>{resetSuccessMessage}</span>
             </div>
           )}
 
+          {/* Authentication Error Alert */}
           {authError && (
-            <div className="error-banner">
-              <ShieldAlert size={18} />
+            <div className="login-alert login-alert-error">
+              <ShieldAlert size={18} className="shrink-0" />
               <span>{authError}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} method="post" action="#" autoComplete="on" className="auth-form">
-            {/* Email Field with Live Registered User Validation */}
-            <div className="form-group relative">
-              <label htmlFor="email">Email Address *</label>
-              <div className="input-icon-wrapper">
-                <Mail className="input-icon" size={18} />
+          <form onSubmit={handleSubmit(onSubmit)} noValidate className="login-form">
+            {/* Email Field */}
+            <div className="login-field">
+              <div className="login-field-header">
+                <label htmlFor="login-email" className="login-label">
+                  Email Address<span className="login-required">*</span>
+                </label>
+              </div>
+              <div className="login-input-wrap">
+                <Mail className="login-input-icon" size={18} />
                 <input
-                  id="email"
-                  name="email"
+                  id="login-email"
                   type="email"
                   autoComplete="email"
                   placeholder="name@company.com"
-                  className={errors.email ? 'form-input-error' : ''}
+                  className={`login-input ${errors.email ? 'login-input-has-error' : ''}`}
                   {...register('email')}
-                  onFocus={() => setIsEmailFocused(true)}
-                  onBlur={() => setTimeout(() => setIsEmailFocused(false), 200)}
                 />
               </div>
-
-              {/* Interactive Email Auto-Suggestions Dropdown (Only Approved Accounts from DB) */}
-              {isEmailFocused && matchingEmails.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-2 bg-slate-900/98 backdrop-blur-2xl border border-emerald-500/30 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden max-h-64 overflow-y-auto animate-fade-in custom-scrollbar">
-                  <div className="sticky top-0 z-10 px-4 py-2.5 bg-slate-950/95 border-b border-slate-800 text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>Approved Registered Accounts:</span>
-                    <span className="text-[10px] text-slate-400 font-normal">{matchingEmails.length} available</span>
-                  </div>
-                  {matchingEmails.map((u) => (
-                    <button
-                      key={u.email}
-                      type="button"
-                      className="w-full text-left px-4 py-3 bg-slate-900/60 hover:bg-slate-800/90 flex items-center justify-between gap-3 border-b border-slate-800/50 last:border-0 cursor-pointer transition-all group"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setValue('email', u.email, { shouldValidate: true });
-                        setValue('password', u.password || 'password123', { shouldValidate: true });
-                        setIsEmailFocused(false);
-                      }}
-                    >
-                      <div className="flex flex-col min-w-0 pr-1">
-                        <span className="text-xs font-bold text-white group-hover:text-emerald-400 truncate transition-colors">
-                          {u.email}
-                        </span>
-                        <span className="text-[11px] text-slate-400 truncate">{u.name || u.fullName || u.email}</span>
-                      </div>
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border shrink-0 ${
-                        u.role === 'admin' ? 'bg-amber-950/80 text-amber-300 border-amber-800' :
-                        u.role === 'contractor' ? 'bg-orange-950/60 text-orange-400 border-orange-800' :
-                        u.role === 'buyer' ? 'bg-blue-950/80 text-blue-300 border-blue-800' :
-                        'bg-emerald-950/80 text-emerald-300 border-emerald-800'
-                      }`}>
-                        {u.role}
-                      </span>
-                    </button>
-                  ))}
+              {errors.email && (
+                <div className="login-error-text">
+                  <AlertCircle size={14} className="shrink-0" />
+                  <span>{errors.email.message}</span>
                 </div>
-              )}
-
-              {/* Live Error or Success Messages */}
-              {errors.email ? (
-                <p className="text-xs text-red-400 font-medium mt-1">
-                  {errors.email.message}
-                </p>
-              ) : isRegisteredUser ? (
-                <p className="text-xs text-emerald-400 font-medium mt-1 flex items-center gap-1">
-                  <CheckCircle2 size={13} className="text-emerald-400 inline-block" />
-                  <span>Registered account verified</span>
-                </p>
-              ) : (
-                <p className="text-[11px] text-slate-500 font-normal mt-1">
-                  Enter your registered account email address.
-                </p>
               )}
             </div>
 
             {/* Password Field */}
-            <div className="form-group">
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="password" className="mb-0">Password *</label>
-                <Link
-                  to="/forgot-password"
-                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
+            <div className="login-field">
+              <div className="login-field-header">
+                <label htmlFor="login-password" className="login-label">
+                  Password<span className="login-required">*</span>
+                </label>
+                <Link to="/forgot-password" className="login-forgot-link">
                   Forgot password?
                 </Link>
               </div>
-              <div className="input-icon-wrapper">
-                <Key className="input-icon" size={18} />
+              <div className="login-input-wrap">
+                <Key className="login-input-icon" size={18} />
                 <input
-                  id="password"
-                  name="password"
-                  type="password"
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className={errors.password ? 'form-input-error' : ''}
+                  className={`login-input login-input-password ${errors.password ? 'login-input-has-error' : ''}`}
                   {...register('password')}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="login-toggle-btn"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-red-400 font-medium mt-1">
-                  {errors.password.message}
-                </p>
+                <div className="login-error-text">
+                  <AlertCircle size={14} className="shrink-0" />
+                  <span>{errors.password.message}</span>
+                </div>
               )}
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="btn btn-primary btn-block btn-lg cursor-pointer"
+              className="login-submit-btn"
             >
-              {isSubmitting ? 'Authenticating...' : 'Sign In'}
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  <span>Signing In...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="auth-footer-text">
+          {/* Divider & Footer Links */}
+          <div className="login-divider" />
+
+          <div className="login-footer-text">
             Don't have an account?{' '}
-            <Link to="/register" className="font-bold text-emerald-400 hover:text-emerald-300 underline transition-colors">
+            <Link to="/register" className="login-register-link">
               Create an Account
             </Link>
+          </div>
+
+          <div className="login-trust-badge">
+            <ShieldCheck size={13} />
+            <span>256-bit Encrypted Secure Authentication</span>
           </div>
         </div>
       </main>

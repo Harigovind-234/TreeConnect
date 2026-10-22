@@ -12,8 +12,16 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
 
   const handleSelectMetric = (metricId) => {
-    if (metricId === 'total_users') {
+    if (metricId === 'total_users' || metricId === 'pending_contractors') {
       navigate('/admin/users');
+    } else if (metricId === 'active_properties') {
+      navigate('/admin/properties');
+    } else if (metricId === 'harvest_requests') {
+      navigate('/admin/harvest-operations');
+    } else if (metricId === 'timber_listings') {
+      navigate('/admin/marketplace');
+    } else if (metricId === 'transactions') {
+      navigate('/admin/payments');
     }
   };
 
@@ -43,7 +51,11 @@ const AdminDashboard = () => {
       <div id="harvests">
         <div id="marketplace">
           <div id="transactions">
-            <OperationsOverview />
+            <OperationsOverview
+              onViewHarvests={() => navigate('/admin/harvest-operations')}
+              onViewMarketplace={() => navigate('/admin/marketplace')}
+              onViewTransactions={() => navigate('/admin/payments')}
+            />
           </div>
         </div>
       </div>

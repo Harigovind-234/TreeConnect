@@ -84,9 +84,20 @@ const ContractorTimberMarketplacePage = () => {
     return l.sellerRole === 'contractor';
   });
 
-  // Filter negotiations on contractor timber
+  // Collect valid listing IDs for contractor
+  const myContractorListingsIdSet = new Set();
+  myContractorListings.forEach(l => {
+    if (l.id) myContractorListingsIdSet.add(String(l.id).trim());
+    if (l._id) myContractorListingsIdSet.add(String(l._id).trim());
+    if (l.harvestOperationId) myContractorListingsIdSet.add(String(l.harvestOperationId).trim());
+    if (l.treeInventoryId) myContractorListingsIdSet.add(String(l.treeInventoryId).trim());
+  });
+
+  // Filter negotiations on contractor timber (must match an active listing)
   const myNegotiations = negotiations.filter(n => {
     if (!n) return false;
+    const nListingId = String(n.listingId || '').trim();
+    if (!nListingId || !myContractorListingsIdSet.has(nListingId)) return false;
     const sEmail = (n.sellerEmail || '').toLowerCase().trim();
     if (currentEmail && sEmail === currentEmail) return true;
     return n.sellerRole === 'contractor';
@@ -110,11 +121,39 @@ const ContractorTimberMarketplacePage = () => {
     loadData();
   };
 
-  const handleDeleteListing = (id) => {
-    if (window.confirm('Are you sure you want to remove this timber listing?')) {
-      marketplaceService.deleteListing(id);
+  const handleDeleteListing = async (id) => {
+    if (!id) return;
+    const confirmed = window.confirm('Are you sure you want to remove this timber listing?');
+    if (!confirmed) return;
+
+    try {
+      const idStr = String(id).trim();
+      const targetListing = listings.find(l => {
+        const lId = String(l?.id || l?._id || '').trim();
+        return lId === idStr || l?.id === id || l?._id === id;
+      });
+      const matchingIds = new Set([idStr, String(id)]);
+      if (targetListing) {
+        if (targetListing.id) matchingIds.add(String(targetListing.id).trim());
+        if (targetListing._id) matchingIds.add(String(targetListing._id).trim());
+        if (targetListing.harvestOperationId) matchingIds.add(String(targetListing.harvestOperationId).trim());
+        if (targetListing.treeInventoryId) matchingIds.add(String(targetListing.treeInventoryId).trim());
+      }
+
+      setListings(prev => prev.filter(l => {
+        const lId = String(l?.id || l?._id || '').trim();
+        return !matchingIds.has(lId) && lId !== idStr && l?.id !== id && l?._id !== id;
+      }));
+      setNegotiations(prev => prev.filter(n => {
+        const nListingId = String(n?.listingId || '').trim();
+        return !matchingIds.has(nListingId) && nListingId !== idStr && n?.listingId !== id;
+      }));
       showToast('Timber listing removed from marketplace');
+      await marketplaceService.deleteListing(idStr);
       loadData();
+    } catch (err) {
+      console.error('Error deleting listing:', err);
+      showToast('Failed to remove listing');
     }
   };
 
@@ -491,7 +530,11 @@ const ContractorTimberMarketplacePage = () => {
                             </select>
 
                             <button
-                              onClick={() => handleDeleteListing(listing.id)}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteListing(listing.id || listing._id);
+                              }}
                               className="p-1.5 text-muted hover:text-red-400 transition-colors"
                               title="Delete Listing"
                             >

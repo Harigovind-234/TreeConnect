@@ -9,11 +9,12 @@ import {
   ShoppingBag,
   Handshake,
   Truck,
-  TrendingUp,
   ShieldCheck,
   ArrowRight,
   Award,
   Building,
+  Building2,
+  Landmark,
   FileText,
   CheckCircle2,
   Trees,
@@ -31,7 +32,10 @@ const BuyerDashboard = () => {
   const buyerName = user?.contactPerson || user?.name || user?.full_name || 'Arun K';
   const buyerCompany = user?.companyName || user?.company_name || 'timberbuyers';
   const buyerEmail = (user?.email || 'arunbuyer@gmail.com').toLowerCase().trim();
-  const buyerPhone = user?.phone || user?.contactPhone || '+91 97465 12243';
+  const buyerPhone = user?.phone || user?.contactPhone || '6548565485';
+  const buyerLocalBody = user?.localBody || user?.panchayat || user?.jurisdiction || 'Meenadom Panchayat';
+  const buyerAddress = user?.address || user?.physical_address || 'buyer_address';
+  const buyerPin = user?.pinCode || user?.pincode || '686516';
 
   // Live real-time data states
   const [listings, setListings] = useState([]);
@@ -129,6 +133,39 @@ const BuyerDashboard = () => {
                   <span className="tc-buyer-pill-btn">
                     <Mail size={13} /> {buyerEmail}
                   </span>
+                </div>
+              </div>
+
+              {/* Enterprise Registration & Physical Jurisdiction Strip */}
+              <div className="tc-buyer-enterprise-strip">
+                <div className="tc-buyer-ent-item">
+                  <div className="tc-buyer-ent-icon">
+                    <Building2 size={16} />
+                  </div>
+                  <div className="tc-buyer-ent-content">
+                    <span className="tc-buyer-ent-label">BUYER ENTERPRISE / FIRM</span>
+                    <span className="tc-buyer-ent-value">{buyerCompany}</span>
+                  </div>
+                </div>
+
+                <div className="tc-buyer-ent-item">
+                  <div className="tc-buyer-ent-icon">
+                    <Landmark size={16} />
+                  </div>
+                  <div className="tc-buyer-ent-content">
+                    <span className="tc-buyer-ent-label">LOCAL BODY / JURISDICTION</span>
+                    <span className="tc-buyer-ent-value">{buyerLocalBody}</span>
+                  </div>
+                </div>
+
+                <div className="tc-buyer-ent-item tc-buyer-ent-item-address">
+                  <div className="tc-buyer-ent-icon">
+                    <MapPin size={16} />
+                  </div>
+                  <div className="tc-buyer-ent-content">
+                    <span className="tc-buyer-ent-label">REGISTERED PHYSICAL ADDRESS</span>
+                    <span className="tc-buyer-ent-value">{buyerAddress} — PIN {buyerPin}</span>
+                  </div>
                 </div>
               </div>
 
@@ -350,7 +387,7 @@ const BuyerDashboard = () => {
                 </div>
 
                 {/* CARD 3: PURCHASE ORDERS & LOGISTICS */}
-                <div className="tc-buyer-card tc-buyer-card-blue">
+                <div className="tc-buyer-card tc-buyer-card-blue col-span-1 lg:col-span-2">
                   <div className="tc-buyer-header">
                     <div className="tc-buyer-user-info">
                       <div className="tc-buyer-avatar-badge text-blue-400 bg-blue-500/15 border-blue-500/30">
@@ -404,68 +441,6 @@ const BuyerDashboard = () => {
                       <Link to="/buyer/orders" className="tc-buyer-action-btn w-full justify-center">
                         <Truck size={15} /> Track Shipments & Passes →
                       </Link>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CARD 4: MARKET TRENDS & INTELLIGENCE */}
-                <div className="tc-buyer-card">
-                  <div className="tc-buyer-header">
-                    <div className="tc-buyer-user-info">
-                      <div className="tc-buyer-avatar-badge text-purple-400 bg-purple-500/15 border-purple-500/30">
-                        <TrendingUp size={22} />
-                      </div>
-                      <div className="tc-buyer-title-group">
-                        <div className="tc-buyer-title-row">
-                          <span className="tc-buyer-title">Market Trends & Rates</span>
-                          <span className="tc-buyer-verified-badge">
-                            Live Kerala Index
-                          </span>
-                        </div>
-                        <p className="tc-buyer-subtitle">
-                          District-wise timber benchmark rates, quarterly auction trends, and species price charts across Kerala depots.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="tc-buyer-metrics-grid">
-                    <div className="tc-buyer-metric-cell">
-                      <span className="tc-buyer-metric-label">TEAKWOOD BENCHMARK</span>
-                      <div className="tc-buyer-metric-val text-emerald">₹ 42,500/m³</div>
-                      <span className="tc-buyer-metric-hint">+2.4% this quarter</span>
-                    </div>
-                    <div className="tc-buyer-metric-cell">
-                      <span className="tc-buyer-metric-label">ROSEWOOD BENCHMARK</span>
-                      <div className="tc-buyer-metric-val text-emerald">₹ 58,000/m³</div>
-                      <span className="tc-buyer-metric-hint">Prime Veneer Grade</span>
-                    </div>
-                    <div className="tc-buyer-metric-cell">
-                      <span className="tc-buyer-metric-label">RUBBERWOOD RATE</span>
-                      <div className="tc-buyer-metric-val">₹ 12,800/m³</div>
-                      <span className="tc-buyer-metric-hint">Industrial Furniture</span>
-                    </div>
-                    <div className="tc-buyer-metric-cell">
-                      <span className="tc-buyer-metric-label">MAHOGANY RATE</span>
-                      <div className="tc-buyer-metric-val">₹ 24,000/m³</div>
-                      <span className="tc-buyer-metric-hint">Commercial Joinery</span>
-                    </div>
-                  </div>
-
-                  <div className="tc-buyer-bottom-grid">
-                    <div className="tc-buyer-highlight-cell col-span-1 sm:col-span-2">
-                      <span className="tc-buyer-metric-label">INTELLIGENCE SCOPE</span>
-                      <div className="text-sm font-semibold text-slate-200">
-                        Official benchmark rates for Wayanad, Palakkad & Ernakulam
-                      </div>
-                    </div>
-                    <div className="col-span-1 sm:col-span-2 flex items-center justify-end">
-                      <button
-                        onClick={() => alert('Market intelligence report: Kerala Forest Dept hardwood auction indices update quarterly. Use these benchmark rates during your price negotiations.')}
-                        className="tc-buyer-pill-btn w-full justify-center"
-                      >
-                        <TrendingUp size={15} /> View Price Guidelines →
-                      </button>
                     </div>
                   </div>
                 </div>

@@ -16,32 +16,53 @@ const PlatformOverview = ({ onSelectMetric }) => {
   const [metrics, setMetrics] = useState(platformOverviewMetrics);
 
   useEffect(() => {
-    const fetchLiveUserCount = async () => {
+    let isSubscribed = true;
+
+    const fetchLiveMetrics = async () => {
       try {
-        const res = await api.get('/admin/users');
-        if (res.data && Array.isArray(res.data.users)) {
-          const liveUserCount = res.data.users.filter((u) => u.role !== 'admin').length;
-          setMetrics((prev) =>
-            prev.map((m) =>
-              m.id === 'total_users'
-                ? { ...m, value: liveUserCount.toString(), subtext: 'Live MongoDB count' }
-                : m
-            )
-          );
+        const res = await api.get('/admin/overview');
+        if (isSubscribed && res.data && Array.isArray(res.data.metrics)) {
+          setMetrics(res.data.metrics);
         }
       } catch (e) {
-        console.error('Error fetching live platform user count:', e);
+        console.error('Error fetching live platform overview metrics:', e);
       }
     };
 
-    fetchLiveUserCount();
+    fetchLiveMetrics();
+
+    // Poll every 3.5 seconds for real-time updates
+    const interval = setInterval(fetchLiveMetrics, 3500);
+
+    const handleSync = () => fetchLiveMetrics();
+    window.addEventListener('treeconnect_marketplace_updated', handleSync);
+    window.addEventListener('treeconnect_harvest_updated', handleSync);
+    window.addEventListener('treeconnect_payments_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleSync);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+      window.removeEventListener('treeconnect_marketplace_updated', handleSync);
+      window.removeEventListener('treeconnect_harvest_updated', handleSync);
+      window.removeEventListener('treeconnect_payments_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleSync);
+    };
   }, []);
 
   return (
     <section className="admin-card space-y-4">
       <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
         <div>
-          <h2 className="text-xl font-extrabold text-white tracking-wide">Platform Overview</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-extrabold text-white tracking-wide">Platform Overview</h2>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              LIVE
+            </span>
+          </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Key ecosystem performance and governance indicators across TreeConnect
           </p>

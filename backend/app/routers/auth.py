@@ -577,68 +577,10 @@ def update_user_profile(payload: dict, authorization: Optional[str] = Header(Non
 
 @router.get("/approved-users")
 def get_approved_users():
-    try:
-        approved_users = []
-        emails_seen = set()
-
-        if db is not None:
-            try:
-                # Query verified and active users directly from MongoDB
-                db_users = list(db.users.find({
-                    "$or": [
-                        {"status": "Active"},
-                        {"role": "admin"}
-                    ]
-                }).max_time_ms(4000))
-
-                for u in db_users:
-                    email = u.get("email", "").strip().lower()
-                    if not email or email in emails_seen or "@example.com" in email:
-                        continue
-                    role = u.get("role", "landowner").lower()
-                    status_val = u.get("status", "Active")
-                    is_verified = u.get("isVerified", True)
-
-                    # Include platform admin or accounts approved by admin
-                    if role == "admin" or (status_val == "Active" and is_verified):
-                        name = u.get("fullName") or u.get("companyName") or u.get("contactPerson") or u.get("name") or email.split("@")[0]
-                        approved_users.append({
-                            "id": str(u.get("_id", "")),
-                            "name": name,
-                            "email": email,
-                            "role": role,
-                            "status": status_val,
-                            "isVerified": is_verified
-                        })
-                        emails_seen.add(email)
-            except Exception as query_err:
-                print(f"[WARN] db.users query in get_approved_users timed out or failed: {query_err}")
-
-        # Fallback if admin is somehow missing from DB query
-        admin_email = "admintc@gmail.com"
-        if admin_email not in emails_seen:
-            approved_users.insert(0, {
-                "id": "usr_admin_01",
-                "name": "TreeConnect Admin",
-                "email": admin_email,
-                "role": "admin",
-                "status": "Active",
-                "isVerified": True
-            })
-
-        # Role priority ordering: Admin first, Landowner, Contractor, Buyer
-        role_priority = {"admin": 0, "landowner": 1, "contractor": 2, "buyer": 3}
-        approved_users.sort(key=lambda x: (role_priority.get(x.get("role", "").lower(), 99), x.get("name", "").lower()))
-
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"users": approved_users}
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"users": approved_users}
-        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"users": []}
+    )
 
 @router.put("/user-profile/fleet")
 def update_user_fleet(request: dict, authorization: Optional[str] = Header(None)):

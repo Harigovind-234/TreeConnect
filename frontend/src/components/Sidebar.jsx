@@ -14,10 +14,10 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
-  TrendingUp,
   Truck,
   Compass,
   FileText,
+  FileCheck,
   Menu,
   X,
   ChevronRight,
@@ -92,17 +92,11 @@ const Sidebar = () => {
       ]
     },
     {
-      group: 'FINANCE',
+      group: 'FINANCE & ACCOUNT',
       items: [
-        { path: '/landowner/payments', label: 'Payments', icon: CreditCard },
-        { path: '#reports', label: 'Reports', icon: BarChart3 },
-      ]
-    },
-    {
-      group: 'ACCOUNT',
-      items: [
+        { path: '/landowner/payments', label: 'Bills & Payments', icon: CreditCard },
+        { path: '/landowner/harvest-operations#agreements', label: 'Harvest Agreements', icon: FileCheck },
         { path: '#notifications', label: 'Notifications', icon: Bell },
-        { path: '#settings', label: 'Settings', icon: Settings },
       ]
     }
   ];
@@ -126,17 +120,9 @@ const Sidebar = () => {
     {
       group: 'OPERATIONS & MARKET',
       items: [
-        { path: '/admin/dashboard#harvests', label: 'Harvest Operations', icon: Truck },
-        { path: '/admin/dashboard#marketplace', label: 'Timber Marketplace', icon: ShoppingBag },
-        { path: '/admin/dashboard#transactions', label: 'Payments & Escrow', icon: CreditCard }
-      ]
-    },
-    {
-      group: 'SYSTEM & REPORTS',
-      items: [
-        { path: '/admin/dashboard#reports', label: 'Reports & Analytics', icon: BarChart3 },
-        { path: '/admin/dashboard#alerts', label: 'System Alerts', icon: Bell },
-        { path: '/admin/dashboard#settings', label: 'Platform Settings', icon: Settings }
+        { path: '/admin/harvest-operations', label: 'Harvest Operations', icon: Truck },
+        { path: '/admin/marketplace', label: 'Timber Marketplace', icon: ShoppingBag },
+        { path: '/admin/payments', label: 'Payments & Escrow', icon: CreditCard }
       ]
     }
   ];
@@ -156,7 +142,6 @@ const Sidebar = () => {
       { path: '/buyer/marketplace', label: 'Timber Marketplace', icon: ShoppingBag },
       { path: '/buyer/negotiations', label: 'My Negotiations', icon: Handshake },
       { path: '/buyer/orders', label: 'Purchase Orders', icon: FileText },
-      { path: '/buyer/analytics', label: 'Market Trends', icon: TrendingUp },
     ]
   };
 

@@ -25,7 +25,10 @@ import {
   Calendar,
   Layers,
   Eye,
-  Clock
+  Clock,
+  FileText,
+  FileCheck,
+  RotateCcw
 } from 'lucide-react';
 
 const TimberMarketplacePage = () => {
@@ -48,6 +51,8 @@ const TimberMarketplacePage = () => {
   // Negotiation Modal State
   const [negotiateModalOpen, setNegotiateModalOpen] = useState(false);
   const [targetListing, setTargetListing] = useState(null);
+  const [buyerNegotiations, setBuyerNegotiations] = useState([]);
+
   // Default survey date (+2 days)
   const getInitialSurveyDate = () => {
     const d = new Date();
@@ -70,6 +75,15 @@ const TimberMarketplacePage = () => {
   const loadData = () => {
     const all = marketplaceService.getListings();
     setListings(all);
+
+    const allNegs = marketplaceService.getNegotiations();
+    const myNegs = allNegs.filter(n => {
+      if (!n || n.id === 'neg_1792525172176_219' || n.id === 'neg_1792558834750_747') return false;
+      const bEmail = (n.buyerEmail || '').toLowerCase().trim();
+      const bName = (n.buyerName || '').toLowerCase().trim();
+      return (buyerEmail && bEmail === buyerEmail) || (bName && bName === buyerName.toLowerCase().trim());
+    });
+    setBuyerNegotiations(myNegs);
   };
 
   useEffect(() => {
@@ -82,63 +96,77 @@ const TimberMarketplacePage = () => {
       window.removeEventListener('treeconnect_marketplace_updated', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
-  }, []);
+  }, [buyerEmail, buyerName]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 4000);
   };
 
-  // Open negotiation modal for a listing
+  // Open inspection visit request modal for a listing
   const handleOpenNegotiate = (listing) => {
     setTargetListing(listing);
-    const defaultOfferedRate = Math.round((Number(listing.pricePerM3) || 35000) * 0.92);
+    const existingNeg = buyerNegotiations.find(n => n.listingId === listing.id);
     const initialDate = getInitialSurveyDate();
-    setNegotiateForm({
-      offeredPricePerM3: defaultOfferedRate,
-      requestedVolume: listing.volume || 25,
-      deliveryPreference: listing.transportAvailable ? 'Seller Contractor Hauling to Mill' : 'Buyer Logistics / Mill Truck Dispatch',
-      destinationMill: 'Ernakulam Timber Mill Yard #2',
-      surveyVisitDate: initialDate,
-      surveyTimeSlot: 'Morning (09:00 AM - 12:00 PM)',
-      notes: `Requesting to survey this lot of ${listing.timberSpecies} on site to inspect log girth, quality, and verify transit clearance before final dispatch.`
-    });
+
+    if (existingNeg) {
+      setNegotiateForm({
+        offeredPricePerM3: existingNeg.offeredPricePerM3 || 0,
+        requestedVolume: existingNeg.requestedVolume || listing.volume || 1.7,
+        deliveryPreference: existingNeg.deliveryPreference || (listing.transportAvailable ? 'Seller Contractor Hauling to Mill' : 'Buyer Logistics / Mill Truck Dispatch'),
+        destinationMill: existingNeg.destinationMill || 'Ernakulam Timber Mill Yard #2',
+        surveyVisitDate: existingNeg.surveyVisitDate || initialDate,
+        surveyTimeSlot: existingNeg.surveyTimeSlot || 'Morning (09:00 AM - 12:00 PM)',
+        notes: existingNeg.notes || `Requesting to inspect this lot of ${listing.timberSpecies} on site to verify log dimensions, heartwood density, debarking, and transit clearance before submitting price offer.`
+      });
+    } else {
+      setNegotiateForm({
+        offeredPricePerM3: 0,
+        requestedVolume: listing.volume || 1.7,
+        deliveryPreference: listing.transportAvailable ? 'Seller Contractor Hauling to Mill' : 'Buyer Logistics / Mill Truck Dispatch',
+        destinationMill: 'Ernakulam Timber Mill Yard #2',
+        surveyVisitDate: initialDate,
+        surveyTimeSlot: 'Morning (09:00 AM - 12:00 PM)',
+        notes: `Requesting to inspect this lot of ${listing.timberSpecies} on site to verify log dimensions, heartwood density, debarking, and transit clearance before submitting price offer.`
+      });
+    }
     setNegotiateModalOpen(true);
   };
 
-  // Submit negotiation
-  const handleSubmitNegotiation = (e) => {
-    e.preventDefault();
+  // Submit site inspection request
+  const handleSubmitNegotiation = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (!targetListing) return;
 
     try {
-      marketplaceService.createNegotiation({
+      await marketplaceService.requestInspection({
         listingId: targetListing.id,
         timberTitle: targetListing.title || `${targetListing.timberSpecies} Sawlogs`,
         timberSpecies: targetListing.timberSpecies,
         sellerRole: targetListing.sellerRole,
         sellerName: targetListing.sellerName,
         sellerEmail: targetListing.sellerEmail,
+        sellerPhone: targetListing.sellerPhone,
         buyerName,
         buyerEmail,
-        buyerCompany,
-        originalPricePerM3: targetListing.pricePerM3,
-        offeredPricePerM3: Number(negotiateForm.offeredPricePerM3),
-        requestedVolume: Number(negotiateForm.requestedVolume),
+        buyerCompany: buyerCompany || 'timberbuyers',
+        localBody: targetListing.localBody || targetListing.panchayat || 'Meenadom Panchayat',
+        requestedVolume: Number(negotiateForm.requestedVolume) || targetListing.volume || 1.7,
         deliveryPreference: negotiateForm.deliveryPreference,
+        destinationMill: negotiateForm.destinationMill,
         surveyVisitDate: negotiateForm.surveyVisitDate,
         surveyTimeSlot: negotiateForm.surveyTimeSlot,
         notes: negotiateForm.notes
       }, user);
 
       setNegotiateModalOpen(false);
-      showToast(`Survey visit request & offer submitted to ${targetListing.sellerName}! Redirecting to Negotiations...`);
+      showToast(`Site inspection visit requested for ${negotiateForm.surveyVisitDate}! Redirecting to Negotiations...`);
       setTimeout(() => {
         navigate('/buyer/negotiations');
-      }, 1200);
+      }, 900);
     } catch (err) {
-      console.error(err);
-      alert('Failed to submit negotiation offer');
+      console.error('Error submitting inspection request:', err);
+      alert('Failed to submit inspection request');
     }
   };
 
@@ -365,6 +393,11 @@ const TimberMarketplacePage = () => {
                               <span className="tc-buyer-verified-badge tc-buyer-verified-badge-amber">
                                 {item.negotiable === 'Yes' ? 'Price Negotiable' : 'Fixed Price'}
                               </span>
+                              {buyerNegotiations.some(n => n.listingId === item.id) && (
+                                <span className="tc-buyer-verified-badge border-emerald-500/50 bg-emerald-950/70 text-emerald-300 font-bold">
+                                  <CheckCircle2 size={11} className="text-emerald-400" /> Offer Submitted
+                                </span>
+                              )}
                             </div>
                             <p className="tc-buyer-subtitle">
                               Seller: <strong className="text-white">{item.sellerName}</strong> • Origin: <strong className="text-slate-300">{item.storageLocation || item.propertyName || item.district}</strong>, {item.district}, Kerala.
@@ -385,12 +418,70 @@ const TimberMarketplacePage = () => {
                           >
                             <Eye size={14} /> View Entire Details
                           </button>
-                          <button
-                            onClick={() => handleOpenNegotiate(item)}
-                            className="tc-buyer-action-btn"
-                          >
-                            <Handshake size={14} /> Negotiate Price
-                          </button>
+                          {(() => {
+                            const existingNeg = buyerNegotiations.find(n => n.listingId === item.id);
+                            if (!existingNeg) {
+                              return (
+                                <button
+                                  onClick={() => handleOpenNegotiate(item)}
+                                  className="tc-buyer-action-btn"
+                                >
+                                  <Calendar size={14} /> Schedule Site Inspection
+                                </button>
+                              );
+                            }
+                            if (existingNeg.status === 'Inspection Requested') {
+                              return (
+                                <button
+                                  onClick={() => navigate('/buyer/negotiations')}
+                                  className="tc-buyer-action-btn bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                                  title="Inspection requested. Waiting for landowner date approval."
+                                >
+                                  <Clock size={14} className="text-amber-400 animate-pulse" /> Inspection Requested ({existingNeg.surveyVisitDate})
+                                </button>
+                              );
+                            }
+                            if (existingNeg.status === 'Date Rescheduled by Landowner') {
+                              return (
+                                <button
+                                  onClick={() => navigate('/buyer/negotiations')}
+                                  className="tc-buyer-action-btn bg-blue-500/20 text-blue-300 border-blue-500/40 hover:bg-blue-500/30"
+                                  title="Landowner proposed alternate date. Click to review."
+                                >
+                                  <RotateCcw size={14} className="text-blue-400" /> Date Rescheduled — Review →
+                                </button>
+                              );
+                            }
+                            if (existingNeg.status === 'Inspection Scheduled') {
+                              return (
+                                <button
+                                  onClick={() => navigate('/buyer/negotiations')}
+                                  className="tc-buyer-action-btn bg-emerald-600/30 text-emerald-300 border-emerald-500/50 hover:bg-emerald-600/40"
+                                  title="Inspection visit approved! Click to record survey and offer."
+                                >
+                                  <FileCheck size={14} className="text-emerald-400" /> Inspection Approved — Record Offer →
+                                </button>
+                              );
+                            }
+                            if (existingNeg.status === 'Accepted' || existingNeg.status === 'Payment Completed') {
+                              return (
+                                <button
+                                  onClick={() => navigate('/buyer/negotiations')}
+                                  className="tc-buyer-action-btn bg-emerald-500 text-black font-extrabold hover:bg-emerald-400"
+                                >
+                                  <CheckCircle2 size={14} /> Deal Agreed — Pay / View →
+                                </button>
+                              );
+                            }
+                            return (
+                              <button
+                                onClick={() => navigate('/buyer/negotiations')}
+                                className="tc-buyer-action-btn bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30"
+                              >
+                                <CheckCircle2 size={14} className="text-emerald-400" /> View Negotiation Status →
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -633,7 +724,15 @@ const TimberMarketplacePage = () => {
                         }}
                         className="tc-buyer-action-btn"
                       >
-                        <Handshake size={14} /> Negotiate Price / Place Offer
+                        {buyerNegotiations.some(n => n.listingId === selectedLotDetails.id) ? (
+                          <>
+                            <CheckCircle2 size={14} className="text-emerald-400" /> View Submitted Offer
+                          </>
+                        ) : (
+                          <>
+                            <Handshake size={14} /> Negotiate Price / Place Offer
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -645,13 +744,23 @@ const TimberMarketplacePage = () => {
             {/* NEGOTIATION & TIMBER SURVEY VISIT MODAL */}
             {/* ========================================================= */}
             {negotiateModalOpen && targetListing && (
-              <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[1000] overflow-y-auto p-4 sm:p-6 flex justify-center items-start sm:items-center">
+              <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[1000] overflow-y-auto p-4 sm:p-6 flex justify-center items-center">
                 <div className="tc-negotiate-modal-box my-auto animate-scale-up">
-                  {/* Modal Header (Sticky) */}
+                  {/* Modal Header */}
                   <div className="tc-modal-header">
-                    <h3 className="tc-modal-title">
-                      <Calendar size={18} className="text-amber-400" /> Schedule Timber Survey & Price Offer
-                    </h3>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                        <Calendar size={18} />
+                      </div>
+                      <div>
+                        <h3 className="tc-modal-title text-base font-bold text-white leading-tight">
+                          Schedule Timber Site Inspection Visit
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Phase 1 of 3: Propose inspection date before submitting commercial price offer
+                        </p>
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setNegotiateModalOpen(false)}
@@ -662,72 +771,95 @@ const TimberMarketplacePage = () => {
                     </button>
                   </div>
 
-                  <form onSubmit={handleSubmitNegotiation} className="flex flex-col flex-1">
+                  <form onSubmit={handleSubmitNegotiation} className="flex flex-col flex-1 min-h-0 overflow-hidden">
                     {/* Modal Body */}
                     <div className="tc-modal-body text-xs">
-                      {/* Lot Snapshot Bar */}
-                      <div className="tc-modal-snapshot space-y-1.5">
-                        <div className="flex items-center justify-between font-bold text-white text-xs">
-                          <span>{targetListing.title || targetListing.timberSpecies}</span>
-                          <span className="text-emerald">{targetListing.volume} m³ Available</span>
+                      {/* Workflow Information Banner */}
+                      <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 flex items-start gap-3 shadow-sm">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0 mt-0.5">
+                          <Clock size={15} />
                         </div>
-                        <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                          <span>Seller: <strong className="text-slate-200">{targetListing.sellerName}</strong> ({targetListing.sellerRole})</span>
-                          <span>Asking: <strong className="text-emerald font-mono">₹ {Number(targetListing.pricePerM3).toLocaleString('en-IN')}/m³</strong></span>
-                        </div>
-                        <div className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5 pt-0.5 border-t border-emerald-500/15">
-                          <MapPin size={11} /> Survey Yard: <span className="text-slate-200">{targetListing.storageLocation || targetListing.propertyName || targetListing.district}, {targetListing.district}, Kerala</span>
-                        </div>
-                      </div>
-
-                      {/* Rate and Volume */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="tc-modal-form-group">
-                          <label className="tc-modal-label">Your Offered Rate (₹ / m³) *</label>
-                          <input
-                            type="number"
-                            value={negotiateForm.offeredPricePerM3}
-                            onChange={(e) => setNegotiateForm({ ...negotiateForm, offeredPricePerM3: e.target.value })}
-                            className="tc-modal-input font-bold font-mono text-emerald"
-                            required
-                          />
-                        </div>
-
-                        <div className="tc-modal-form-group">
-                          <label className="tc-modal-label">Requested Volume (m³) *</label>
-                          <input
-                            type="number"
-                            step="0.5"
-                            max={targetListing.volume}
-                            value={negotiateForm.requestedVolume}
-                            onChange={(e) => setNegotiateForm({ ...negotiateForm, requestedVolume: e.target.value })}
-                            className="tc-modal-input font-bold font-mono text-white"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      {/* Computed Deal Amount */}
-                      <div className="tc-modal-deal-card">
-                        <span className="text-xs text-slate-300 font-medium">Total Proposed Deal Value:</span>
-                        <span className="tc-modal-deal-val">
-                          ₹ {((Number(negotiateForm.offeredPricePerM3) || 0) * (Number(negotiateForm.requestedVolume) || 0)).toLocaleString('en-IN')}
-                        </span>
-                      </div>
-
-                      {/* Dedicated On-Site Timber Survey Section */}
-                      <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
-                            <Calendar size={13} /> On-Site Timber Survey & Inspection Visit
+                        <div className="space-y-1 text-xs">
+                          <span className="font-bold text-emerald-300 block text-[11.5px] uppercase tracking-wider">
+                            Pre-Purchase Physical Verification
                           </span>
-                          <span className="text-[10px] text-slate-400">At Seller Log Yard</span>
+                          <p className="text-slate-300 text-[11px] leading-relaxed">
+                            Select a date to inspect debarked logs in person at the estate yard. Once the landowner approves this visit, you will verify log girth, timber grade, and Forest Dept transit pass on site, then formulate your commercial offer.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Active Offer / Inspection Already Submitted Banner */}
+                      {buyerNegotiations.some(n => n.listingId === targetListing.id) && (() => {
+                        const existing = buyerNegotiations.find(n => n.listingId === targetListing.id);
+                        return (
+                          <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 flex items-start gap-3 shadow-lg animate-fade-in">
+                            <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0 mt-0.5" />
+                            <div className="space-y-1 text-xs flex-1">
+                              <div className="font-bold text-white flex items-center justify-between gap-2 flex-wrap">
+                                <span className="flex items-center gap-1.5 text-emerald-300">
+                                  Current Status with {targetListing.sellerName}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                  {existing.status || 'Inspection Requested'}
+                                </span>
+                              </div>
+                              <p className="text-slate-300 text-[11px] leading-relaxed">
+                                Inspection Date: <strong className="text-white font-mono">{existing.surveyVisitDate || 'Scheduled'} ({existing.surveyTimeSlot})</strong>.
+                                {existing.offeredPricePerM3 ? ` Recorded Offer: ₹${Number(existing.offeredPricePerM3).toLocaleString('en-IN')}/m³ for ${existing.requestedVolume} m³.` : ' Price offer to be formulated after physical verification.'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Lot Snapshot Card */}
+                      <div className="p-3.5 rounded-xl bg-black/60 border border-emerald-500/25 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-extrabold text-white text-xs sm:text-sm">
+                            {targetListing.title || targetListing.timberSpecies}
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            {targetListing.volume} m³ Available
+                          </span>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="tc-modal-form-group mb-0">
-                            <label className="tc-modal-label flex items-center gap-1">
-                              <Calendar size={11} className="text-emerald" /> Date to Survey Timber *
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-500/15 text-[11px]">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Seller</span>
+                            <strong className="text-slate-200">{targetListing.sellerName}</strong> <span className="text-slate-400 text-[10px]">({targetListing.sellerRole})</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Asking Benchmark</span>
+                            <strong className="text-emerald font-mono font-bold">₹ {Number(targetListing.pricePerM3).toLocaleString('en-IN')}/m³</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Buyer Enterprise</span>
+                            <strong className="text-amber-300">{buyerCompany || user?.company_name || 'timberbuyers'}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Local Jurisdiction</span>
+                            <div className="flex items-center gap-1 text-slate-200 truncate">
+                              <MapPin size={11} className="text-emerald flex-shrink-0" />
+                              <span className="truncate">{targetListing.localBody || targetListing.panchayat || 'Meenadom Panchayat'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 1. Proposed Inspection Schedule */}
+                      <div className="tc-modal-card-section">
+                        <div className="tc-modal-card-title pb-1 border-b border-emerald-500/15">
+                          <span className="flex items-center gap-2">
+                            <Calendar size={13} className="text-emerald" /> 1. Proposed Inspection Schedule
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal">At Seller Log Yard</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div className="tc-modal-form-group">
+                            <label className="tc-modal-label">
+                              <Calendar size={12} className="text-emerald" /> Date to Survey Timber *
                             </label>
                             <input
                               type="date"
@@ -739,14 +871,15 @@ const TimberMarketplacePage = () => {
                             />
                           </div>
 
-                          <div className="tc-modal-form-group mb-0">
-                            <label className="tc-modal-label flex items-center gap-1">
-                              <Clock size={11} className="text-emerald" /> Preferred Time Slot
+                          <div className="tc-modal-form-group">
+                            <label className="tc-modal-label">
+                              <Clock size={12} className="text-emerald" /> Preferred Time Slot *
                             </label>
                             <select
                               value={negotiateForm.surveyTimeSlot}
                               onChange={(e) => setNegotiateForm({ ...negotiateForm, surveyTimeSlot: e.target.value })}
                               className="tc-modal-input"
+                              required
                             >
                               <option value="Morning (09:00 AM - 12:00 PM)">Morning (09:00 AM - 12:00 PM)</option>
                               <option value="Afternoon (01:00 PM - 04:00 PM)">Afternoon (01:00 PM - 04:00 PM)</option>
@@ -754,64 +887,138 @@ const TimberMarketplacePage = () => {
                             </select>
                           </div>
                         </div>
-
-                        <p className="text-[10.5px] text-slate-300 leading-normal">
-                          Buyer survey team will visit to inspect debarked logs, verify girth/density, and review Forest Dept transit clearance before finalizing hauling.
-                        </p>
                       </div>
 
-                      {/* Logistics & Delivery */}
-                      <div className="tc-modal-form-group">
-                        <label className="tc-modal-label">Haulage & Logistics Preference</label>
-                        <select
-                          value={negotiateForm.deliveryPreference}
-                          onChange={(e) => setNegotiateForm({ ...negotiateForm, deliveryPreference: e.target.value })}
-                          className="tc-modal-input"
-                        >
-                          <option value="Seller Contractor Hauling to Mill">Seller Arranged Transport to Buyer Mill</option>
-                          <option value="Buyer Arranged Truck Pickup from Yard">Buyer Self-Pickup (We Dispatch Trucks to Yard)</option>
-                          <option value="Shared Freight 50/50">Shared Freight Costs</option>
-                        </select>
+                      {/* 2. Volume of Interest & Logistics */}
+                      <div className="tc-modal-card-section">
+                        <div className="tc-modal-card-title pb-1 border-b border-emerald-500/15">
+                          <span className="flex items-center gap-2">
+                            <Trees size={13} className="text-emerald" /> 2. Desired Volume & Logistics Preference
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal">Preliminary Estimates</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                          <div className="tc-modal-form-group">
+                            <label className="tc-modal-label">
+                              Estimated Volume of Interest (m³) *
+                            </label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0.1"
+                              max={targetListing.volume}
+                              value={negotiateForm.requestedVolume}
+                              onChange={(e) => setNegotiateForm({ ...negotiateForm, requestedVolume: e.target.value })}
+                              className="tc-modal-input font-bold font-mono text-white"
+                              required
+                            />
+                            <span className="text-[10.5px] text-slate-400">
+                              Available in lot: <strong className="text-emerald">{targetListing.volume} m³</strong>. Confirmed upon site survey.
+                            </span>
+                          </div>
+
+                          <div className="tc-modal-form-group">
+                            <label className="tc-modal-label">
+                              Haulage & Logistics Preference
+                            </label>
+                            <select
+                              value={negotiateForm.deliveryPreference}
+                              onChange={(e) => setNegotiateForm({ ...negotiateForm, deliveryPreference: e.target.value })}
+                              className="tc-modal-input"
+                            >
+                              <option value="Seller Contractor Hauling to Mill">Seller Arranged Transport to Buyer Mill</option>
+                              <option value="Buyer Arranged Truck Pickup from Yard">Buyer Self-Pickup (We Dispatch Trucks)</option>
+                              <option value="Shared Freight 50/50">Shared Freight Costs</option>
+                            </select>
+                            <span className="text-[10.5px] text-slate-400">
+                              Hauling terms finalized post-inspection
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Buyer Enterprise & Local Body / Jurisdiction */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1 border-t border-emerald-500/15">
+                          <div className="tc-modal-form-group">
+                            <label className="tc-modal-label">
+                              <Building size={12} className="text-emerald" /> Buyer Enterprise / Firm
+                            </label>
+                            <div className="tc-modal-input font-bold text-white bg-black/60 flex items-center justify-between border border-emerald-500/30">
+                              <span>{buyerCompany || user?.company_name || 'timberbuyers'}</span>
+                              <span className="text-[10px] text-emerald-400 font-mono px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-500/40">
+                                Verified Buyer
+                              </span>
+                            </div>
+                            <span className="text-[10.5px] text-slate-400">
+                              Procurement enterprise account
+                            </span>
+                          </div>
+
+                          <div className="tc-modal-form-group">
+                            <label className="tc-modal-label">
+                              <MapPin size={12} className="text-emerald" /> Local Body / Jurisdiction
+                            </label>
+                            <div className="tc-modal-input font-bold text-white bg-black/60 flex items-center justify-between border border-emerald-500/30">
+                              <span>{targetListing?.localBody || targetListing?.panchayat || 'Meenadom Panchayat'}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">LSGD Kottayam</span>
+                            </div>
+                            <span className="text-[10.5px] text-slate-400">
+                              Timber lot site local body jurisdiction
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="tc-modal-form-group">
-                        <label className="tc-modal-label">Destination Mill Yard</label>
-                        <input
-                          type="text"
-                          value={negotiateForm.destinationMill}
-                          onChange={(e) => setNegotiateForm({ ...negotiateForm, destinationMill: e.target.value })}
-                          className="tc-modal-input"
-                          placeholder="e.g., Ernakulam Timber Mill Yard #2"
-                        />
-                      </div>
+                      {/* 3. Inspection Focus & Notes */}
+                      <div className="tc-modal-card-section">
+                        <div className="tc-modal-card-title pb-1 border-b border-emerald-500/15">
+                          <span className="flex items-center gap-2">
+                            <FileText size={13} className="text-emerald" /> 3. Inspection Focus & Notes to Landowner
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                        </div>
 
-                      <div className="tc-modal-form-group">
-                        <label className="tc-modal-label">Note to Seller</label>
-                        <textarea
-                          rows="2"
-                          value={negotiateForm.notes}
-                          onChange={(e) => setNegotiateForm({ ...negotiateForm, notes: e.target.value })}
-                          className="tc-modal-input"
-                          placeholder="State any specific inspection tools or notes for survey..."
-                        ></textarea>
+                        <div className="tc-modal-form-group">
+                          <textarea
+                            rows="2"
+                            value={negotiateForm.notes}
+                            onChange={(e) => setNegotiateForm({ ...negotiateForm, notes: e.target.value })}
+                            className="tc-modal-input text-xs leading-relaxed"
+                            placeholder="e.g., Requesting to inspect log girth with forest caliper, verify end-seals, and check Forest Dept transit pass stamping before formulating price offer..."
+                          ></textarea>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Modal Footer Actions (Sticky) */}
+                    {/* Modal Footer Actions */}
                     <div className="tc-modal-actions">
                       <button
                         type="button"
                         onClick={() => setNegotiateModalOpen(false)}
-                        className="tc-buyer-pill-btn"
+                        className="tc-buyer-pill-btn px-4 py-2"
                       >
                         Cancel
                       </button>
-                      <button
-                        type="submit"
-                        className="tc-buyer-action-btn"
-                      >
-                        <Calendar size={15} /> Submit Offer & Book Survey Visit
-                      </button>
+
+                      {buyerNegotiations.some(n => n.listingId === targetListing.id) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNegotiateModalOpen(false);
+                            navigate('/buyer/negotiations');
+                          }}
+                          className="tc-buyer-action-btn bg-emerald-600/90 hover:bg-emerald-500 text-white flex items-center gap-2 shadow-lg cursor-pointer px-5 py-2.5"
+                        >
+                          <CheckCircle2 size={15} className="text-white" /> View in Negotiations Tracker →
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          className="tc-buyer-action-btn flex items-center gap-2 px-6 py-2.5 shadow-xl font-bold"
+                        >
+                          <Calendar size={15} /> Submit Inspection Visit Request
+                        </button>
+                      )}
                     </div>
                   </form>
                 </div>

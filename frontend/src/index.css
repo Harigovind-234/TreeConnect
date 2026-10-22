@@ -1067,27 +1067,59 @@ a {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
-.input-icon {
+.input-icon-wrapper .input-icon {
   position: absolute;
   left: 14px;
   color: var(--text-muted);
+  pointer-events: none;
+  z-index: 2;
+  transition: color 0.2s ease;
+}
+
+.input-icon-wrapper:focus-within .input-icon {
+  color: var(--primary-emerald);
 }
 
 .input-icon-wrapper input {
   width: 100%;
-  padding: 12px 14px 12px 42px;
-  background: var(--bg-dark);
+  padding: 12px 14px 12px 44px !important;
+  background: var(--bg-dark) !important;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-main);
   font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
 
-.auth-form .form-group input:not([type="checkbox"]):not([type="radio"]),
+.input-icon-wrapper input.has-suffix-btn {
+  padding-right: 44px !important;
+}
+
+.input-icon-wrapper .input-suffix-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s;
+  z-index: 2;
+}
+
+.input-icon-wrapper .input-suffix-btn:hover {
+  color: var(--primary-emerald);
+}
+
+.auth-form .form-group input:not([type="checkbox"]):not([type="radio"]):not(.input-icon-input),
 .select-input {
   width: 100%;
   padding: 12px 14px;
@@ -1104,6 +1136,18 @@ a {
 .auth-form .form-group input:focus,
 .select-input:focus {
   border-color: var(--primary-emerald);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+/* Prevent Chrome / Safari / Edge autofill from turning backgrounds bright white/blue */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #0a0f0d inset !important;
+  -webkit-text-fill-color: #f3f4f6 !important;
+  caret-color: #f3f4f6 !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 .role-selector-group {
