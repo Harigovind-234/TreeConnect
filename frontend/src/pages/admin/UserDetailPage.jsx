@@ -35,8 +35,10 @@ import {
   Eye,
   Download,
   X,
-  ExternalLink
+  ExternalLink,
+  Printer
 } from 'lucide-react';
+import { AadhaarCardVisual, UnionCardVisual } from '../../utils/contractorDocumentTemplates';
 
 const UserDetailPage = () => {
   const { userId } = useParams();
@@ -1258,9 +1260,23 @@ const UserDetailPage = () => {
 
               {/* Document Preview Canvas */}
               <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center justify-center min-h-[320px] text-center space-y-4 relative overflow-hidden">
-                {viewingDoc.fileUrl || (viewingDoc.fileName && (viewingDoc.fileName.endsWith('.png') || viewingDoc.fileName.endsWith('.jpg') || viewingDoc.fileName.endsWith('.jpeg'))) ? (
+                {(viewingDoc.documentType === 'aadhaar' || viewingDoc.fileName?.toLowerCase().includes('adhar') || viewingDoc.fileName?.toLowerCase().includes('aadhaar') || viewingDoc.title?.toLowerCase().includes('aadhaar')) ? (
+                  <div className="w-full flex flex-col items-center py-2">
+                    <AadhaarCardVisual data={{ ...viewingDoc, authorizedPerson: userData?.name || viewingDoc.authorizedPerson || 'Rohith kumar', docNumber: viewingDoc.docNumber || 'XXXX XXXX 2243' }} />
+                    <span className="text-[11px] text-slate-400 font-mono mt-3">
+                      Official Authenticated Attachment: {viewingDoc.fileName}
+                    </span>
+                  </div>
+                ) : (viewingDoc.documentType === 'union' || viewingDoc.fileName?.toLowerCase().includes('union') || viewingDoc.title?.toLowerCase().includes('union')) ? (
+                  <div className="w-full flex flex-col items-center py-2">
+                    <UnionCardVisual data={{ ...viewingDoc, authorizedPerson: userData?.name || viewingDoc.authorizedPerson || 'Rohith kumar' }} />
+                    <span className="text-[11px] text-slate-400 font-mono mt-3">
+                      Official Authenticated Attachment: {viewingDoc.fileName}
+                    </span>
+                  </div>
+                ) : viewingDoc.fileUrl && (viewingDoc.fileUrl.startsWith('data:image') || viewingDoc.fileUrl.startsWith('http')) ? (
                   <img
-                    src={viewingDoc.fileUrl || `https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=800&auto=format&fit=crop&q=60`}
+                    src={viewingDoc.fileUrl}
                     alt={viewingDoc.title}
                     className="max-h-[350px] w-auto max-w-full object-contain rounded-lg border border-slate-800 shadow-lg"
                   />
@@ -1286,6 +1302,13 @@ const UserDetailPage = () => {
                   <ShieldCheck size={16} className="text-emerald-400" /> Authenticated Document Attachment
                 </span>
                 <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-700"
+                  >
+                    <Printer size={15} /> Print
+                  </button>
                   <button
                     type="button"
                     onClick={() => {

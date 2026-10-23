@@ -901,14 +901,14 @@ const NotificationBell = ({ className = '', dropdownAlign = 'right' }) => {
               onClick={() => {
                 setIsOpen(false);
                 if (isLandowner) {
-                  navigate('/landowner/harvest-requests');
+                  navigate('/landowner/notifications');
                 } else {
                   navigate('/contractor/assigned-jobs');
                 }
               }}
               className="w-full py-2 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-xs font-bold text-emerald-300 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              <span>{isLandowner ? 'View All Harvest Requests' : 'View All Assigned Jobs'}</span>
+              <span>{isLandowner ? 'Open Notification Center' : 'View All Assigned Jobs'}</span>
               <ExternalLink size={12} />
             </button>
           </div>

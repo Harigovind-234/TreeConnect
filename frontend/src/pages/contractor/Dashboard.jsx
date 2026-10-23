@@ -174,10 +174,41 @@ const filterAndEnrichAssignedRequests = (combinedRequests, currentUser) => {
   }));
 };
 
+// Curated forestry equipment image resolver with realistic fallbacks
+const getEquipmentImage = (eq) => {
+  if (eq?.imageUrl) return eq.imageUrl;
+  if (eq?.image) return eq.image;
+  if (eq?.photo) return eq.photo;
+
+  const text = `${eq?.name || ''} ${eq?.model || ''} ${eq?.category || ''}`.toLowerCase();
+
+  if (text.includes('chainsaw') || text.includes('saw') || text.includes('stihl') || text.includes('husqvarna')) {
+    return 'https://images.unsplash.com/photo-1590496793929-36417d3117de?auto=format&fit=crop&w=600&q=80';
+  }
+  if (text.includes('bull rope') || text.includes('bull') || text.includes('rope') || text.includes('rigging') || text.includes('cable') || text.includes('sling') || text.includes('pulley')) {
+    return 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=600&q=80';
+  }
+  if (text.includes('winch') || text.includes('pulling')) {
+    return 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80';
+  }
+  if (text.includes('truck') || text.includes('hauler') || text.includes('tipper') || text.includes('lorry') || text.includes('vehicle')) {
+    return 'https://images.unsplash.com/photo-1519003722824-194d4455a60c?auto=format&fit=crop&w=600&q=80';
+  }
+  if (text.includes('tractor') || text.includes('skidder')) {
+    return 'https://images.unsplash.com/photo-1530267981375-f0de937f5f13?auto=format&fit=crop&w=600&q=80';
+  }
+  if (text.includes('crane') || text.includes('loader') || text.includes('excavator') || text.includes('feller') || text.includes('harvester')) {
+    return 'https://images.unsplash.com/photo-1579829366248-204fe8413f31?auto=format&fit=crop&w=600&q=80';
+  }
+  return 'https://images.unsplash.com/photo-1508873696983-2df5293cb325?auto=format&fit=crop&w=600&q=80';
+};
+
 const ContractorDashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const contractorName = user?.fullName || user?.name || user?.companyName || 'Apex Harvesting Co.';
+
+  const [previewEquipmentImage, setPreviewEquipmentImage] = useState(null);
 
   // Assigned harvest requests - cache-first for instantaneous 0ms display!
   const [assignedRequests, setAssignedRequests] = useState(() => {
@@ -633,20 +664,22 @@ const ContractorDashboard = () => {
                     </p>
                   </div>
 
-                  {/* ASSIGNED JOBS ACTION */}
-                  <div className="flex items-center gap-3 shrink-0 self-start md:self-center">
+                  {/* HERO ACTION BUTTONS */}
+                  <div className="hero-action-buttons self-start md:self-center">
                     <button
                       onClick={() => navigate('/contractor/marketplace')}
-                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                      className="hero-btn-marketplace"
+                      title="Access Contractor Timber Marketplace & Log Trading"
                     >
-                      <ShoppingBag size={14} />
+                      <ShoppingBag size={17} />
                       <span>Timber Marketplace</span>
                     </button>
                     <button
                       onClick={() => navigate('/contractor/assigned-jobs')}
-                      className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md"
+                      className="hero-btn-assigned"
+                      title="View Assigned Harvesting Operations & Site Specs"
                     >
-                      <FileText size={14} />
+                      <FileText size={17} />
                       <span>Assigned Jobs</span>
                     </button>
                   </div>
@@ -1240,7 +1273,7 @@ const ContractorDashboard = () => {
                     <thead>
                       <tr>
                         <th>Machinery Model</th>
-                        <th>Asset Tag</th>
+                        <th>Equipment Image</th>
                         <th>Category</th>
                         <th>Quantity</th>
                         <th>Status</th>
@@ -1251,10 +1284,10 @@ const ContractorDashboard = () => {
                     <tbody>
                       {fleetEquipment.map((eq) => {
                         const qty = Math.max(1, parseInt(eq.quantity, 10) || 1);
-                        const tag = eq.regNumber || eq.reg_number || eq.assetTag;
                         const isAvail = eq.status === 'Available';
                         const isInUse = eq.status === 'In Use' || eq.status === 'In Operation' || eq.status === 'Active';
                         const isMaint = eq.status === 'Under Maintenance' || eq.status === 'Maintenance';
+                        const equipImg = getEquipmentImage(eq);
 
                         return (
                           <tr key={eq.id}>
@@ -1262,11 +1295,33 @@ const ContractorDashboard = () => {
                               <div>{eq.name || eq.model}</div>
                             </td>
                             <td>
-                              {tag ? (
-                                <span className="font-mono text-emerald-400 text-xs font-semibold">{tag}</span>
-                              ) : (
-                                <span className="text-slate-500 text-xs italic">—</span>
-                              )}
+                              <div
+                                onClick={() => setPreviewEquipmentImage({
+                                  name: eq.name || eq.model,
+                                  category: eq.category || 'Forestry Equipment',
+                                  url: equipImg
+                                })}
+                                className="w-12 h-12 rounded-xl overflow-hidden border border-emerald-500/30 bg-black/60 flex items-center justify-center relative group cursor-pointer hover:border-emerald-400 transition-all shadow-sm hover:shadow-emerald-500/20"
+                                title="Click to view equipment photo"
+                              >
+                                <img
+                                  src={equipImg}
+                                  alt={eq.name || eq.model}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextSibling) {
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                                <div className="hidden w-full h-full items-center justify-center text-emerald-400">
+                                  <Wrench size={18} />
+                                </div>
+                                <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 flex items-center justify-center text-emerald-300 transition-opacity duration-200">
+                                  <ZoomIn size={14} />
+                                </div>
+                              </div>
                             </td>
                             <td><span className="dash-tag">{eq.category || 'Machinery'}</span></td>
                             <td className="font-mono text-xs font-bold text-white">
@@ -1658,6 +1713,53 @@ const ContractorDashboard = () => {
                 className="cd-btn-primary px-4 py-2 text-sm"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EQUIPMENT PHOTO LIGHTBOX PREVIEW MODAL */}
+      {previewEquipmentImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewEquipmentImage(null)}
+        >
+          <div
+            className="bg-[#0b1c13] border border-emerald-500/40 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 flex items-center justify-between border-b border-emerald-500/20 bg-black/40">
+              <div>
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  <Wrench size={16} className="text-emerald-400" />
+                  <span>{previewEquipmentImage.name}</span>
+                </h3>
+                <span className="text-xs text-emerald-300 font-semibold">{previewEquipmentImage.category}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewEquipmentImage(null)}
+                className="w-8 h-8 rounded-xl bg-emerald-500/10 text-slate-300 hover:text-white hover:bg-emerald-500/20 flex items-center justify-center transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-4 bg-black/50 flex items-center justify-center">
+              <img
+                src={previewEquipmentImage.url}
+                alt={previewEquipmentImage.name}
+                className="max-h-[360px] w-full object-contain rounded-xl border border-emerald-500/25 shadow-lg bg-black/40"
+              />
+            </div>
+            <div className="p-3 bg-black/30 flex items-center justify-between border-t border-emerald-500/15">
+              <span className="text-[11px] text-slate-400 font-medium">TreeConnect Forestry Machinery Registry</span>
+              <button
+                type="button"
+                onClick={() => setPreviewEquipmentImage(null)}
+                className="px-4 py-1.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs hover:bg-emerald-400 transition-all cursor-pointer shadow-sm"
+              >
+                Close
               </button>
             </div>
           </div>

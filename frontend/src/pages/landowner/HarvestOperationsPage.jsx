@@ -1169,7 +1169,7 @@ const HarvestOperationsPage = () => {
                   </div>
 
                   {/* 5. DIGITAL HARVEST AGREEMENT & COMMERCIAL DETAILS BAR */}
-                  <div className="pt-2 border-t border-emerald-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
+                  <div id="agreements" className="pt-2 border-t border-emerald-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-400">
                     <div className="flex items-center gap-2 flex-wrap">
                       <FileCheck size={14} className="text-emerald-400" />
                       <span>Agreement ID: <strong className="text-slate-200 font-mono">{agreementId}</strong></span>
@@ -1185,10 +1185,10 @@ const HarvestOperationsPage = () => {
                       )}
                     </div>
 
-                    {req.digital_agreement && (
+                    {(req.digital_agreement || req.assigned_contractor_name || req.is_advance_verified) && (
                       <button
                         type="button"
-                        onClick={() => setSelectedAgreementModal({ req, agreement: req.digital_agreement })}
+                        onClick={() => setSelectedAgreementModal({ req, agreement: req.digital_agreement || {} })}
                         className="text-xs font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         <ExternalLink size={13} />

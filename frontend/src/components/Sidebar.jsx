@@ -24,12 +24,15 @@ import {
   Handshake
 } from 'lucide-react';
 
+import useNotifications from '../hooks/useNotifications';
+
 const Sidebar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const role = user?.role || 'landowner';
   const [isOpen, setIsOpen] = useState(false);
+  const { unreadCount } = useNotifications();
 
   const handleLogout = () => {
     setIsOpen(false);
@@ -95,8 +98,8 @@ const Sidebar = () => {
       group: 'FINANCE & ACCOUNT',
       items: [
         { path: '/landowner/payments', label: 'Bills & Payments', icon: CreditCard },
-        { path: '/landowner/harvest-operations#agreements', label: 'Harvest Agreements', icon: FileCheck },
-        { path: '#notifications', label: 'Notifications', icon: Bell },
+        { path: '/landowner/harvest-agreements', label: 'Harvest Agreements', icon: FileCheck },
+        { path: '/landowner/notifications', label: 'Notifications', icon: Bell, badgeCount: unreadCount },
       ]
     }
   ];
@@ -254,15 +257,23 @@ const Sidebar = () => {
                     );
                   }
                   const isActive = checkIsActive(item.path);
+                  const showBadge = (item.badgeCount > 0) || (item.label === 'Notifications' && unreadCount > 0);
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
                       onClick={() => setIsOpen(false)}
-                      className={`sidebar-item ${isActive ? 'active' : ''}`}
+                      className={`sidebar-item ${isActive ? 'active' : ''} flex items-center justify-between`}
                     >
-                      <Icon size={18} className="sidebar-icon" />
-                      <span>{item.label}</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Icon size={18} className="sidebar-icon shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {showBadge && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/35 shrink-0 shadow-sm shadow-emerald-500/10">
+                          {item.badgeCount || unreadCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

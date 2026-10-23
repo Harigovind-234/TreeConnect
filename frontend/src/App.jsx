@@ -43,6 +43,8 @@ import TreeInventoryPage from './pages/landowner/TreeInventoryPage';
 import HarvestRequestsPage from './pages/landowner/HarvestRequestsPage';
 import HarvestOperationsPage from './pages/landowner/HarvestOperationsPage';
 import TimberMarketplacePage from './pages/landowner/TimberMarketplacePage';
+import HarvestAgreementsPage from './pages/landowner/HarvestAgreementsPage';
+import NotificationsPage from './pages/landowner/NotificationsPage';
 import ContractorTimberMarketplacePage from './pages/contractor/ContractorTimberMarketplacePage';
 import FleetEquipmentPage from './pages/contractor/FleetEquipmentPage';
 import ProfilePage from './pages/ProfilePage';
@@ -237,6 +239,30 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={['landowner']}>
                   <LandownerPaymentsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/landowner/harvest-agreements"
+              element={
+                <ProtectedRoute allowedRoles={['landowner']}>
+                  <HarvestAgreementsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/landowner/agreements"
+              element={
+                <ProtectedRoute allowedRoles={['landowner']}>
+                  <HarvestAgreementsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/landowner/notifications"
+              element={
+                <ProtectedRoute allowedRoles={['landowner']}>
+                  <NotificationsPage />
                 </ProtectedRoute>
               }
             />

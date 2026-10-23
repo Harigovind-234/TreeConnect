@@ -1,113 +1,922 @@
-/* src/pages/landowner/LandownerPayments.css */
+/* ==========================================================================
+   LANDOWNER FINANCIAL OVERVIEW & DISBURSEMENT LEDGER (LandownerPayments.css)
+   TreeConnect Design System - Modern Dark Glassmorphism Aesthetic
+   ========================================================================== */
 
-.lp-metric-card {
-  background: linear-gradient(135deg, rgba(5, 15, 10, 0.8) 0%, rgba(8, 22, 15, 0.9) 100%);
+/* Workspace Layout */
+.lopay-container {
+  max-width: 1240px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 1. Hero Header Banner */
+.lopay-hero-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(16, 32, 24, 0.85) 0%, rgba(9, 18, 14, 0.95) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 20px;
+  padding: 28px 32px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+@media (min-width: 900px) {
+  .lopay-hero-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 30px 36px;
+  }
+}
+
+.lopay-hero-card::after {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+  filter: blur(20px);
+}
+
+.lopay-hero-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 700px;
+  z-index: 1;
+}
+
+.lopay-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.lopay-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: lopayPulse 2s infinite ease-in-out;
+}
+
+@keyframes lopayPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+.lopay-hero-heading {
+  font-size: 1.85rem;
+  font-weight: 900;
+  color: #f3f4f6;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .lopay-hero-heading {
+    font-size: 2.2rem;
+  }
+}
+
+.lopay-hero-subtext {
+  font-size: 0.92rem;
+  color: #9ca3af;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.lopay-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  z-index: 1;
+}
+
+.lopay-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+  transition: all 0.2s ease;
+}
+
+.lopay-btn-primary:hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
+}
+
+.lopay-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: rgba(14, 28, 20, 0.85);
   border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: 14px;
-  padding: 24px;
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lopay-btn-secondary:hover {
+  background: rgba(22, 44, 32, 0.95);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #ffffff;
+}
+
+/* 2. Top Summary Metric Cards */
+.lopay-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+@media (min-width: 768px) {
+  .lopay-metrics-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.lopay-metric-card {
+  position: relative;
+  border-radius: 20px;
+  padding: 22px 24px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-  transition: all 0.3s ease;
-  height: 100%;
+  min-height: 145px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 
-.lp-metric-card:hover {
-  border-color: rgba(16, 185, 129, 0.45);
-  box-shadow: 0 10px 35px rgba(16, 185, 129, 0.1);
+.lopay-metric-card:hover {
   transform: translateY(-2px);
 }
 
-.lp-filter-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 8px;
+.lopay-metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
 }
 
-.lp-contractor-chip {
-  background: rgba(10, 22, 16, 0.7);
-  border: 1px solid rgba(51, 65, 85, 0.8);
-  border-radius: 9999px;
-  padding: 10px 20px;
+/* Metric 1: Total Paid */
+.lopay-card-emerald {
+  background: linear-gradient(145deg, rgba(12, 34, 22, 0.85) 0%, rgba(6, 18, 12, 0.95) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.lopay-card-emerald:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.12);
+}
+
+.lopay-card-emerald::before {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+/* Metric 2: Pending/Committed */
+.lopay-card-amber {
+  background: linear-gradient(145deg, rgba(34, 25, 10, 0.85) 0%, rgba(16, 12, 4, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.lopay-card-amber:hover {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(245, 158, 11, 0.12);
+}
+
+.lopay-card-amber::before {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+/* Metric 3: Total Count */
+.lopay-card-blue {
+  background: linear-gradient(145deg, rgba(14, 28, 42, 0.85) 0%, rgba(7, 14, 24, 0.95) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.lopay-card-blue:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(59, 130, 246, 0.12);
+}
+
+.lopay-card-blue::before {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.lopay-metric-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: max-content;
+  margin-bottom: 12px;
 }
 
-.lp-contractor-chip:hover {
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.08);
-}
-
-.lp-contractor-chip.active {
-  border-color: rgba(16, 185, 129, 0.8);
-  background: rgba(16, 185, 129, 0.15);
-  box-shadow: inset 0 0 12px rgba(16, 185, 129, 0.15);
-}
-
-.lp-radio-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid rgba(148, 163, 184, 0.5);
+.lopay-icon-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.lopay-icon-emerald {
+  background: rgba(16, 185, 129, 0.16);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.lopay-icon-amber {
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+}
+
+.lopay-icon-blue {
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+}
+
+.lopay-metric-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.lopay-metric-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 2.1rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #ffffff;
+  margin: 4px 0 10px 0;
+}
+
+.lopay-metric-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9ca3af;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 10px;
+}
+
+/* 3. Milestone Cashflow Progress Banner */
+.lopay-flow-card {
+  background: linear-gradient(145deg, rgba(12, 24, 18, 0.6) 0%, rgba(6, 14, 10, 0.9) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lopay-flow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lopay-flow-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #34d399;
+  margin: 0;
+}
+
+.lopay-flow-steps {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .lopay-flow-steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.lopay-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(8, 20, 14, 0.75);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 14px;
+  padding: 14px 16px;
+  position: relative;
+}
+
+.lopay-step-item.completed {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(12, 34, 22, 0.6);
+}
+
+.lopay-step-item.active {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(30, 22, 8, 0.6);
+}
+
+.lopay-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.lopay-step-item.completed .lopay-step-num {
+  background: #10b981;
+  color: #042013;
+}
+
+.lopay-step-item.active .lopay-step-num {
+  background: #f59e0b;
+  color: #1a1002;
+}
+
+.lopay-step-item.upcoming .lopay-step-num {
+  background: rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+}
+
+.lopay-step-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lopay-step-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f3f4f6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lopay-step-desc {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* 4. Filter & Search Controls Bar */
+.lopay-controls-card {
+  background: rgba(11, 22, 16, 0.85);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 16px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lopay-controls-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .lopay-controls-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.lopay-search-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 440px;
+}
+
+.lopay-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.lopay-search-input {
+  width: 100%;
+  background: rgba(6, 14, 10, 0.9);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 12px;
+  padding: 10px 38px 10px 40px;
+  color: #f3f4f6;
+  font-size: 13.5px;
+  outline: none;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.lopay-search-input:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+.lopay-search-clear {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lopay-search-clear:hover {
+  color: #ffffff;
+}
+
+.lopay-contractor-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.lopay-contractor-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.lopay-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: rgba(6, 16, 11, 0.85);
+  color: #9ca3af;
+  cursor: pointer;
+  white-space: nowrap;
   transition: all 0.2s ease;
 }
 
-.lp-contractor-chip.active .lp-radio-dot {
+.lopay-pill-btn:hover {
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #ffffff;
+  background: rgba(10, 26, 18, 0.95);
+}
+
+.lopay-pill-btn.active {
+  background: rgba(16, 185, 129, 0.16);
   border-color: #10b981;
+  color: #34d399;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.15);
 }
 
-.lp-contractor-chip.active .lp-radio-dot::after {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: #10b981;
+.lopay-pill-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
 }
 
-.lp-table-container {
-  background: rgba(5, 15, 10, 0.8);
-  border: 1px solid rgba(51, 65, 85, 0.6);
+.lopay-pill-count {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+/* 5. Transactions Section & Cards */
+.lopay-transactions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lopay-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.lopay-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #f3f4f6;
+  margin: 0;
+}
+
+.lopay-card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(14, 28, 20, 0.9) 0%, rgba(8, 17, 12, 0.95) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 18px;
+  padding: 22px 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.lopay-card:hover {
+  border-color: rgba(16, 185, 129, 0.48);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Card Top Row */
+.lopay-card-top {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 640px) {
+  .lopay-card-top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.lopay-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.lopay-card-avatar {
+  width: 46px;
+  height: 46px;
   border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.12) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.lp-table-header {
-  background: rgba(15, 23, 42, 0.4);
-  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+.lopay-card-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.lp-status-badge {
+.lopay-card-title {
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.lopay-card-subline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #9ca3af;
+  flex-wrap: wrap;
+}
+
+.lopay-contractor-tag {
+  color: #34d399;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lopay-card-amount-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+@media (min-width: 640px) {
+  .lopay-card-amount-block {
+    align-items: flex-end;
+  }
+}
+
+.lopay-card-amount-val {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.65rem;
+  font-weight: 900;
+  color: #34d399;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.lopay-status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 4px 12px;
   border-radius: 9999px;
   font-size: 11.5px;
-  font-weight: 700;
-  white-space: nowrap;
+  font-weight: 800;
+  width: fit-content;
 }
 
-.lp-status-completed {
-  border: 1px solid rgba(16, 185, 129, 0.6);
+.lopay-status-completed {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
   color: #34d399;
-  background: rgba(16, 185, 129, 0.08);
 }
 
-.lp-status-pending {
-  border: 1px solid rgba(245, 158, 11, 0.6);
+.lopay-status-pending {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
   color: #fbbf24;
-  background: rgba(245, 158, 11, 0.08);
+}
+
+/* Card Info Grid */
+.lopay-card-details-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  background: rgba(6, 16, 11, 0.7);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+@media (min-width: 640px) {
+  .lopay-card-details-grid {
+    grid-template-columns: repeat(3, 1fr);
+    align-items: center;
+  }
+}
+
+.lopay-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lopay-info-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+}
+
+.lopay-info-value {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #e5e7eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lopay-ref-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(12, 28, 20, 0.8);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: fit-content;
+}
+
+.lopay-ref-copy-btn:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #34d399;
+}
+
+/* Project Progress Bar inside card */
+.lopay-job-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.lopay-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.lopay-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #10b981, #34d399);
+  transition: width 0.4s ease;
+}
+
+/* Card Actions */
+.lopay-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.lopay-btn-settle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.25) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #34d399;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lopay-btn-settle:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(5, 150, 105, 0.4) 100%);
+  border-color: #10b981;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.lopay-btn-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: rgba(14, 28, 20, 0.7);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lopay-btn-receipt:hover {
+  background: rgba(20, 42, 30, 0.9);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #34d399;
+}
+
+.lopay-btn-details {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: rgba(14, 28, 20, 0.7);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lopay-btn-details:hover {
+  background: rgba(20, 36, 52, 0.9);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #60a5fa;
+}
+
+/* Empty State */
+.lopay-empty-card {
+  background: rgba(10, 22, 16, 0.65);
+  border: 1px dashed rgba(16, 185, 129, 0.25);
+  border-radius: 20px;
+  padding: 56px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.lopay-empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Print Styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-receipt-container,
+  .print-receipt-container * {
+    visibility: visible;
+  }
+  .print-receipt-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 20px !important;
+  }
 }

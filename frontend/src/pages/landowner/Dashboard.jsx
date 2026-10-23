@@ -480,6 +480,13 @@ const LandownerDashboard = () => {
   // 2. Categorize operations & contractor bids
   const completedOperations = (harvestRequests || []).filter(r => r.status === 'COMPLETED');
   const inProgressOperations = (harvestRequests || []).filter(r => r.status === 'IN_PROGRESS' || r.status === 'OPERATION_READY');
+  const activeFellingContracts = (harvestRequests || []).filter(r =>
+    r.status === 'IN_PROGRESS' ||
+    r.status === 'OPERATION_READY' ||
+    r.status === 'ACCEPTED' ||
+    Boolean(r.digital_agreement) ||
+    Boolean(r.harvest_stages)
+  );
   const activeBidsList = (harvestRequests || []).filter(r => {
     const isFinished = r.status === 'COMPLETED' || r.status === 'CANCELLED' || r.status === 'REJECTED';
     if (isFinished) return false;
@@ -3827,84 +3834,7 @@ const LandownerDashboard = () => {
             );
           })()}
 
-          {/* ACTIVE FLEET INVENTORY & MACHINERY (AVAILABLE TO LANDOWNER) */}
-          {activeFellingContracts.length === 0 && !activeSpotlight && (
-            <section className="ld-card space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-500/15">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Truck size={18} className="text-emerald-400" />
-                    <h2 className="text-base sm:text-lg font-bold text-white">Active Fleet Inventory &amp; Machinery</h2>
-                    <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
-                      Certified Forestry Fleet
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Mechanized logging equipment and certified extraction vehicles available for timber harvesting in Kerala
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate('/landowner/request-harvest')}
-                  className="text-xs font-bold text-[#03140c] bg-gradient-to-r from-emerald-400 to-teal-300 hover:from-emerald-300 hover:to-teal-200 px-4 py-2 rounded-xl transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
-                >
-                  <Plus size={14} /> Request Harvesting Fleet
-                </button>
-              </div>
 
-              {/* 4 Stat Cards with Real Values */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                <div className="ld-subcard p-4">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Fleet Units</span>
-                  <p className="text-2xl font-bold text-white mt-1 font-mono">{getStoredFleet().length > 0 ? getStoredFleet().length : 4} Units</p>
-                  <span className="text-[10px] text-emerald-400 font-semibold block mt-0.5">Mechanized Forestry Rigs</span>
-                </div>
-                <div className="ld-subcard p-4">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Field Crew</span>
-                  <p className="text-2xl font-bold text-emerald-400 mt-1 font-mono">10 Workers</p>
-                  <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Certified Riggers &amp; Fellers</span>
-                </div>
-                <div className="ld-subcard p-4">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Experience</span>
-                  <p className="text-2xl font-bold text-amber-300 mt-1 font-mono">1-3 Years</p>
-                  <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Forest Board Clearance</span>
-                </div>
-                <div className="ld-subcard p-4">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Territories</span>
-                  <p className="text-2xl font-bold text-blue-300 mt-1 font-mono">3 Districts</p>
-                  <span className="text-[10px] text-slate-400 font-semibold block mt-0.5 truncate">Kottayam, Idukki, Ernakulam</span>
-                </div>
-              </div>
-
-              {/* Itemized equipment list */}
-              <div className="space-y-2 pt-1">
-                <span className="text-xs font-semibold text-slate-400 px-1 block">Mechanized Logging Equipment Ready for Deployment</span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-3.5 rounded-xl bg-[#06140d] border border-emerald-500/20 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Hydraulic Log Loader</h4>
-                      <p className="text-xs text-slate-400 mt-0.5 font-mono">Heavy Crane • High-Tonnage Winch</p>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">Available</span>
-                  </div>
-                  <div className="p-3.5 rounded-xl bg-[#06140d] border border-emerald-500/20 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Heavy Timber Hauler</h4>
-                      <p className="text-xs text-slate-400 mt-0.5 font-mono">10-Wheeler Extraction Transit</p>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/25">Ready</span>
-                  </div>
-                  <div className="p-3.5 rounded-xl bg-[#06140d] border border-emerald-500/20 flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-white">Precision Chainsaw Rigs</h4>
-                      <p className="text-xs text-slate-400 mt-0.5 font-mono">2x Directional Felling Kits</p>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">Certified</span>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
 
           {/* 6. REGISTERED PROPERTIES PORTFOLIO */}
           <section className="ld-card space-y-4">
